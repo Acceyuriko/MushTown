@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MushTown.Shared", "MushTown.Shared\MushTown.Shared.csproj", "{7F50D3C8-FF34-4041-A10E-E82F1C8FF322}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MushTown.Server", "MushTown.Server\MushTown.Server.csproj", "{362639FB-B56E-4083-AEC9-2AA52A20033B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MushTown.Exporter", "MushTown.Exporter\MushTown.Exporter.csproj", "{DF7DA0AD-9EBD-4502-AECE-5993F3BC36AB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MushTown.Client", "MushTown.Client\MushTown.Client.csproj", "{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7F50D3C8-FF34-4041-A10E-E82F1C8FF322}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F50D3C8-FF34-4041-A10E-E82F1C8FF322}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F50D3C8-FF34-4041-A10E-E82F1C8FF322}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F50D3C8-FF34-4041-A10E-E82F1C8FF322}.Release|Any CPU.Build.0 = Release|Any CPU
+		{362639FB-B56E-4083-AEC9-2AA52A20033B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{362639FB-B56E-4083-AEC9-2AA52A20033B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{362639FB-B56E-4083-AEC9-2AA52A20033B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{362639FB-B56E-4083-AEC9-2AA52A20033B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DF7DA0AD-9EBD-4502-AECE-5993F3BC36AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DF7DA0AD-9EBD-4502-AECE-5993F3BC36AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DF7DA0AD-9EBD-4502-AECE-5993F3BC36AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DF7DA0AD-9EBD-4502-AECE-5993F3BC36AB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
