@@ -18,7 +18,6 @@ public sealed class MapInfo
     public int VrTop { get; set; }
     public int VrRight { get; set; }
     public int VrBottom { get; set; }
-    public int Town { get; set; }
 
     // Where the player appears. SpawnY is the ground under the spawn portal.
     public int SpawnX { get; set; }
@@ -27,12 +26,29 @@ public sealed class MapInfo
 
 public sealed class BackItem
 {
+    // Draw position of the image top-left corner: the WZ origin is already taken off.
+    // It is a parallax anchor, not a world position (see Type).
     public int X { get; set; }
     public int Y { get; set; }
     public string Image { get; set; } = "";
 
     // True when the background is drawn in front of the map and characters.
     public bool Front { get; set; }
+
+    // Mirrored horizontally (WZ "f").
+    public bool Flip { get; set; }
+
+    // WZ "type": 0 none, 1 tile horizontal, 2 tile vertical, 3 both,
+    // 4/6 = horizontal axis drifts with time, 5/7 = vertical axis does.
+    public int Type { get; set; }
+
+    // Tile step in pixels (WZ "cx"/"cy"); 0 means "the image's own size".
+    public int Cx { get; set; }
+    public int Cy { get; set; }
+
+    // Parallax rate in percent (WZ "rx"/"ry"): 0 = pinned to the screen, -100 = pinned to the map.
+    public int Rx { get; set; }
+    public int Ry { get; set; }
 }
 
 public sealed class TileItem
@@ -41,13 +57,26 @@ public sealed class TileItem
     public int X { get; set; }
     public int Y { get; set; }
     public string Image { get; set; } = "";
+
+    // Map layer 0-7 (WZ layer group). Layers are drawn in order, 0 first.
+    public int Layer { get; set; }
+
+    // Image layer inside the map layer (WZ "z"); bigger Z is drawn later.
+    public int Z { get; set; }
 }
 
+// One map object: same Layer/Z rules as TileItem.
 public sealed class ObjItem
 {
     public int X { get; set; }
     public int Y { get; set; }
     public string Image { get; set; } = "";
+
+    // Mirrored horizontally (WZ "f").
+    public bool Flip { get; set; }
+
+    public int Layer { get; set; }
+    public int Z { get; set; }
 }
 
 // One ground line segment. Layer groups footholds (higher layer = drawn in front).

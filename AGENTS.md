@@ -18,11 +18,20 @@
 - 单 exe 双身份（本机开房 / 加入主机）：Server 是被客户端托管的类库，不写 Console 输出、不碰 UI，日志走回调写滚动文件。
 - 快捷键一个都不分给调试工具，日志面板用鼠标点开。
 - `WzComparerR2/` 是 git 子模块，锁定 commit；要改解析器先 fork，不要就地大改。
+- 客户端**内部固定按 1366×768 渲染**（GameWidth/GameHeight），再整幅按比例放大到无边框全屏；不是扩大相机范围。窗口尺寸变化要跟着当前屏幕重新适配。
 
 ## 常用命令
 
+命令都在仓库根目录下运行（`assets/`、`logs/` 等相对路径都按当前目录解析）。
+
 ```sh
-dotnet build MushTown.sln                                # 全量编译
-dotnet run --project MushTown.Exporter -- <Data路径>      # WzLib 冒烟测试
-git clone --recurse-submodules <仓库>                     # 克隆要带子模块
+dotnet build MushTown.sln                                  # 全量编译
+dotnet run --project MushTown.Exporter -- smoke [Data路径]   # WzLib 冒烟测试
+dotnet run --project MushTown.Exporter -- dump [路径] [深度]  # 看 Base 树的节点结构（缺路径=整棵树）
+dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度]  # 看分类 wz 的节点
+dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录]  # 导出 assets/
+dotnet run --project MushTown.Exporter -- find <节点名>      # 按名字定位 WZ 节点
+dotnet run --project MushTown.Client                        # 打开游戏窗口
+dotnet run --project MushTown.Client -- --shot logs/x.png   # 截图后退出（验收用）
+git clone --recurse-submodules <仓库>                       # 克隆要带子模块
 ```

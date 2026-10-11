@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MushTown.Exporter", "MushTo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MushTown.Client", "MushTown.Client\MushTown.Client.csproj", "{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "WzComparerR2", "WzComparerR2", "{469D3FD4-DD3A-44DE-B66D-BE8E2E4110E7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WzComparerR2.WzLib", "WzComparerR2\WzComparerR2.WzLib\WzComparerR2.WzLib.csproj", "{23882FB6-D8F4-463A-9689-FAACCB3DDF05}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +40,12 @@ Global
 		{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ABD833AB-AC5D-43F4-8BA1-6EC441E9D3C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{23882FB6-D8F4-463A-9689-FAACCB3DDF05}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{23882FB6-D8F4-463A-9689-FAACCB3DDF05}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{23882FB6-D8F4-463A-9689-FAACCB3DDF05}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{23882FB6-D8F4-463A-9689-FAACCB3DDF05}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{23882FB6-D8F4-463A-9689-FAACCB3DDF05} = {469D3FD4-DD3A-44DE-B66D-BE8E2E4110E7}
 	EndGlobalSection
 EndGlobal

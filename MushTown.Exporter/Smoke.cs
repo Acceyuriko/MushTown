@@ -20,6 +20,7 @@ public static class Smoke
         Console.WriteLine();
 
         var loaded = new Dictionary<string, Wz_Structure>();
+        bool ok = true;
 
         foreach (string name in Folders)
         {
@@ -27,6 +28,7 @@ public static class Smoke
             if (!File.Exists(entry))
             {
                 Console.WriteLine($"{name,-12} MISSING");
+                ok = false;
                 continue;
             }
 
@@ -56,6 +58,7 @@ public static class Smoke
             catch (Exception ex)
             {
                 Console.WriteLine($"{name,-12} FAIL {ex.GetType().Name}: {ex.Message}");
+                ok = false;
             }
         }
 
@@ -64,10 +67,10 @@ public static class Smoke
         {
             foreach (var (folder, st) in loaded)
             {
-                var hit = FindPath(st.WzNode, target);
+                var hit = WzRoot.FindAll(st.WzNode, target).FirstOrDefault();
                 if (hit != null)
                 {
-                    Console.WriteLine($"[locate] {target,-16} -> {folder}:{hit}");
+                    Console.WriteLine($"[locate] {target,-16} -> {folder}:{hit.FullPath}");
                     break;
                 }
             }
@@ -76,66 +79,45 @@ public static class Smoke
         Console.WriteLine();
         if (loaded.TryGetValue("Base", out var baseWz))
         {
-            ProbeCharacter(baseWz);
-            ProbeMap(baseWz);
+            bool characterOk = ProbeCharacter(baseWz);
+            bool mapOk = ProbeMap(baseWz);
+            ok &= characterOk && mapOk;
         }
+        else
+        {
+            ok = false;
+        }
+
+        if (!ok) Environment.ExitCode = 1;
     }
 
-    private static void ProbeCharacter(Wz_Structure baseWz)
+    private static bool ProbeCharacter(Wz_Structure baseWz)
     {
-        var body = FindNode(baseWz.WzNode, "00002000.img");
+        var body = WzRoot.FindAll(baseWz.WzNode, "00002000.img").FirstOrDefault();
         if (body?.Value is Wz_Image bodyImg && bodyImg.TryExtract())
         {
             string[] actions = bodyImg.Node.Nodes.Where(n => n.Text != "info").Select(n => n.Text).ToArray();
             Console.WriteLine($"[Base] 00002000.img actions = {actions.Length}: {string.Join(", ", actions.Take(15))} ...");
+            return true;
         }
-        else Console.WriteLine("[Base] 00002000.img extract FAILED");
+        Console.WriteLine("[Base] 00002000.img extract FAILED");
+        return false;
     }
 
-    private static void ProbeMap(Wz_Structure baseWz)
+    private static bool ProbeMap(Wz_Structure baseWz)
     {
         // Several nodes share a map id: the ones under _Canvas are minimaps.
-        foreach (var cand in FindAll(baseWz.WzNode, "100000000.img"))
+        foreach (var cand in WzRoot.FindAll(baseWz.WzNode, "100000000.img"))
         {
             if (cand.Value is not Wz_Image img || !img.TryExtract()) continue;
             string[] keys = img.Node.Nodes.Select(n => n.Text).ToArray();
             if (keys.Contains("foothold"))
             {
                 Console.WriteLine($"[Base] real map 100000000 sections = {keys.Length}: {string.Join(", ", keys)}");
-                return;
+                return true;
             }
         }
         Console.WriteLine("[Base] real map 100000000 NOT FOUND");
-    }
-
-    private static string? FindPath(Wz_Node node, string name)
-    {
-        foreach (Wz_Node child in node.Nodes)
-        {
-            if (child.Text == name) return child.Text;
-            var sub = FindPath(child, name);
-            if (sub != null) return child.Text + "\\" + sub;
-        }
-        return null;
-    }
-
-    private static Wz_Node? FindNode(Wz_Node node, string name)
-    {
-        foreach (Wz_Node child in node.Nodes)
-        {
-            if (child.Text == name) return child;
-            var sub = FindNode(child, name);
-            if (sub != null) return sub;
-        }
-        return null;
-    }
-
-    private static IEnumerable<Wz_Node> FindAll(Wz_Node node, string name)
-    {
-        foreach (Wz_Node child in node.Nodes)
-        {
-            if (child.Text == name) yield return child;
-            foreach (Wz_Node sub in FindAll(child, name)) yield return sub;
-        }
+        return false;
     }
 }

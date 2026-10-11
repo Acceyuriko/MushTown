@@ -15,17 +15,13 @@ public sealed class WzRoot
 {
     public Wz_Structure Structure { get; }
 
-    // Last loaded Base tree, so link strings like "Map/Tile/_Canvas/..." can be resolved.
-    public static WzRoot LastBase { get; private set; }
-
     private WzRoot(Wz_Structure structure) => Structure = structure;
 
     public static WzRoot LoadBase(string dataDir)
     {
         var structure = new Wz_Structure();
         structure.LoadKMST1125DataWz(Path.Combine(dataDir, "Base", "Base.wz"));
-        LastBase = new WzRoot(structure);
-        return LastBase;
+        return new WzRoot(structure);
     }
 
     // Loads a category file directly (e.g. Map.wz) - some content lives only there.
@@ -39,14 +35,20 @@ public sealed class WzRoot
     // Paths may use '/' or '\' as separator.
     public Wz_Node? Find(string path) =>
         Structure.WzNode.FindNodeByPath(true, path.Split('/', '\\'));
-    public IEnumerable<Wz_Node> FindAll(string name) => Walk(Structure.WzNode, name);
 
-    private static IEnumerable<Wz_Node> Walk(Wz_Node node, string name)
+    public IEnumerable<Wz_Node> FindAll(string name) => FindAll(Structure.WzNode, name);
+
+    // Pre-order search by node name, for trees not wrapped in a WzRoot.
+    public static IEnumerable<Wz_Node> FindAll(Wz_Node node, string name) =>
+        Walk(node).Where(n => n.Text == name);
+
+    // Every descendant of node, top-down. Used by FindAll.
+    public static IEnumerable<Wz_Node> Walk(Wz_Node node)
     {
         foreach (Wz_Node child in node.Nodes)
         {
-            if (child.Text == name) yield return child;
-            foreach (Wz_Node sub in Walk(child, name)) yield return sub;
+            yield return child;
+            foreach (Wz_Node sub in Walk(child)) yield return sub;
         }
     }
 }

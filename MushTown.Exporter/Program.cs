@@ -2,36 +2,66 @@ using MushTown.Exporter;
 
 // Subcommands:
 //   smoke    [DataDir]                        WzLib open test (default)
-//   dump     <path-under-Base> [depth]       print WZ node structure
-//   catdump  <Category> <path> [depth]       same, inside a category wz
-//   export   [DataDir] [OutDir]              export map + character assets
+//   dump     <path-under-Base> [depth]        print WZ node structure
+//   catdump  <Category> <path> [depth]        same, inside a category wz
+//   find     <node name>                      locate nodes by name under Base
+//   export   [DataDir] [OutDir]               export map + character assets
+// Only smoke and export take a DataDir; the others always read the default one,
+// so their first argument is their own.
 string cmd = args.Length > 0 ? args[0] : "smoke";
 
-if (cmd == "dump")
+switch (cmd)
 {
-    string path = args.Length > 1 ? args[1] : "";
-    int depth = args.Length > 2 && int.TryParse(args[2], out int d) ? d : 3;
-    Dump.Run(WzRoot.LoadBase(ExporterPaths.DataDir), path, depth);
-    return;
+    case "smoke":
+        Smoke.Run(Arg(1, ExporterPaths.DataDir));
+        return;
+
+    case "export":
+        Export.Run(Arg(1, ExporterPaths.DataDir), Arg(2, ExporterPaths.OutDir));
+        return;
+
+    case "dump":
+        if (!TryDepth(2, out int dumpDepth)) return;
+        Environment.ExitCode = Dump.Run(WzRoot.LoadBase(ExporterPaths.DataDir), Arg(1, ""), dumpDepth) ? 0 : 1;
+        return;
+
+    case "catdump":
+        if (args.Length < 3)
+        {
+            Console.WriteLine("usage: catdump <Category> <path> [depth]");
+            Environment.ExitCode = 1;
+            return;
+        }
+        if (!TryDepth(3, out int catDepth)) return;
+        Environment.ExitCode = Dump.Run(WzRoot.LoadCategory(ExporterPaths.DataDir, args[1]), args[2], catDepth) ? 0 : 1;
+        return;
+
+    case "find":
+        if (args.Length < 2)
+        {
+            Console.WriteLine("usage: find <name>");
+            Environment.ExitCode = 1;
+            return;
+        }
+        Environment.ExitCode = Dump.Find(WzRoot.LoadBase(ExporterPaths.DataDir), args[1]) ? 0 : 1;
+        return;
+
+    default:
+        Console.WriteLine($"unknown command: {cmd}");
+        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | export [DataDir] [OutDir]");
+        Environment.ExitCode = 1;
+        return;
 }
 
-if (cmd == "catdump")
+string Arg(int i, string fallback) => args.Length > i ? args[i] : fallback;
+
+// An unparsable depth is a bad argument, not something to silently ignore.
+bool TryDepth(int i, out int depth)
 {
-    // catdump <Category> <path-under-that-category> [depth]
-    string category = args.Length > 1 ? args[1] : "";
-    string path = args.Length > 2 ? args[2] : "";
-    int depth = args.Length > 3 && int.TryParse(args[3], out int d2) ? d2 : 3;
-    Dump.Run(WzRoot.LoadCategory(ExporterPaths.DataDir, category), path, depth);
-    return;
+    depth = 3;
+    if (args.Length <= i) return true;
+    if (int.TryParse(args[i], out depth)) return true;
+    Console.WriteLine($"bad depth: {args[i]}");
+    Environment.ExitCode = 1;
+    return false;
 }
-
-string dataDir = args.Length > 1 ? args[1] : ExporterPaths.DataDir;
-
-if (cmd == "export")
-{
-    string outDir = args.Length > 2 ? args[2] : ExporterPaths.OutDir;
-    Export.Run(dataDir, outDir);
-    return;
-}
-
-Smoke.Run(dataDir);
