@@ -25,14 +25,21 @@
 
 ## 当前状态
 
-**W1 已完成：WzLib 冒烟测试。** 15 个数据目录全部解析成功（KMST 1205+ 新加密格式），
-角色 / 地图 / 怪物图片均可解密。下一周（W2）：导出器把第一张地图和第一个角色角色导出到
-PNG + JSON，并在客户端窗口里画出来。
+**W2 已完成：真实的冒险岛地图 + 角色进窗口。** 导出器从本机客户端的 WZ 数据里
+导出冒险岛地图 100000000（背景 16 / 地块 1439 / 物件 206 / 落脚点 356）和角色
+stand2 站姿动作（3 帧，body/arm/hand 按骨头合成），客户端 MonoGame 窗口按相机裁剪
+绘制，角色站在出生点地面上。下一周（W3）：纸娃娃动画播放（walk/alert/jump + 帧延迟）。
 
-## 运行冒烟测试
+## 常用命令
 
 ```sh
-dotnet run --project MushTown.Exporter -- <你的 MapleStory\appdata\Data 路径>
+dotnet build MushTown.sln                                          # 全量编译
+dotnet run --project MushTown.Exporter -- smoke                     # WzLib 冒烟测试（默认）
+dotnet run --project MushTown.Exporter -- dump <路径> [深度]         # 看 WZ 节点结构
+dotnet run --project MushTown.Exporter -- export                    # 导出 assets/
+dotnet run --project MushTown.Client                                # 打开游戏窗口
+dotnet run --project MushTown.Client -- --shot logs/w2_acceptance.png  # 截图后退出
+git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```
 
 导出产物写到 `assets/`、账号数据写到 `data/`、日志写到 `logs/`，三者都在 `.gitignore` 里：

@@ -1,6 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\MushTown.Shared\MushTown.Shared.csproj" />
     <ProjectReference Include="..\WzComparerR2\WzComparerR2.WzLib\WzComparerR2.WzLib.csproj" />
   </ItemGroup>
 
