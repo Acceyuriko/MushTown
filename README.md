@@ -14,6 +14,7 @@
 | `MushTown.Server` | 类库：账号、世界、怪物、战斗（无 UI、无 Console 输出） |
 | `MushTown.Client` | MonoGame 主程序（窗口 / 渲染 / 输入；开房时托管 Server） |
 | `MushTown.Exporter` | 开发工具：把 WZ 资源导出成 PNG + JSON |
+| `MushTown.Tests` | MSTest 单元测试 |
 | `WzComparerR2/` | git 子模块，MIT 协议，WZ 解析库（WzLib） |
 
 ## 前置条件
@@ -38,6 +39,7 @@ stand2 站姿动作（3 帧，身体/手臂/手/头/耳/脸/头发 7 个部件�
 
 ```sh
 dotnet build MushTown.sln                                          # 全量编译
+dotnet test MushTown.sln                                           # 跑单元测试
 dotnet run --project MushTown.Exporter -- smoke [Data路径]           # WzLib 冒烟测试（默认子命令）
 dotnet run --project MushTown.Exporter -- dump [路径] [深度]         # 看 Base 树里的 WZ 节点结构（缺路径=整棵树）
 dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度] # 看某个分类 wz（如 Character）里的节点

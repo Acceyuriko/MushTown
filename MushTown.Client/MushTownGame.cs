@@ -56,8 +56,8 @@ public class MushTownGame : Game
         _layers = _map.Tiles.Select(t => t.Layer).Concat(_map.Objs.Select(o => o.Layer)).Distinct().OrderBy(l => l).ToList();
 
         // camera: character around 70% down the screen, clamped to map bounds
-        _cameraX = Math.Clamp(_map.Info.SpawnX - GameWidth / 2, _map.Info.VrLeft, Math.Max(_map.Info.VrLeft, _map.Info.VrRight - GameWidth));
-        _cameraY = Math.Clamp(_map.Info.SpawnY - (int)(GameHeight * 0.7), _map.Info.VrTop, Math.Max(_map.Info.VrTop, _map.Info.VrBottom - GameHeight));
+        _cameraX = SceneMath.ClampCamera(_map.Info.SpawnX - GameWidth / 2, _map.Info.VrLeft, _map.Info.VrRight, GameWidth);
+        _cameraY = SceneMath.ClampCamera(_map.Info.SpawnY - (int)(GameHeight * 0.7), _map.Info.VrTop, _map.Info.VrBottom, GameHeight);
 
         base.Initialize();
     }
@@ -126,16 +126,14 @@ public class MushTownGame : Game
     {
         int screenW = GraphicsDevice.PresentationParameters.BackBufferWidth;
         int screenH = GraphicsDevice.PresentationParameters.BackBufferHeight;
-        float scale = Math.Min((float)screenW / GameWidth, (float)screenH / GameHeight);
-        int w = (int)(GameWidth * scale);
-        int h = (int)(GameHeight * scale);
+        var (bx, by, w, h) = SceneMath.BlitRect(screenW, screenH, GameWidth, GameHeight);
 
         // the bars left over when the screen is not 1366x768-shaped
         GraphicsDevice.Clear(Color.Black);
 
         // Point sampling on purpose: the magnified pixels stay sharp instead of blurring.
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
-        _spriteBatch.Draw(_scene, new Rectangle((screenW - w) / 2, (screenH - h) / 2, w, h), Color.White);
+        _spriteBatch.Draw(_scene, new Rectangle(bx, by, w, h), Color.White);
         _spriteBatch.End();
     }
 
@@ -167,56 +165,17 @@ public class MushTownGame : Game
     }
 
     // One background: parallax on the axes that do not scroll, then tile it over the
-    // camera rect. Mirrors FrmMapRender2.SceneRendering.cs:845-903.
+    // camera rect.
     private void DrawBack(BackItem b)
     {
         var tex = _textures[b.Image];
-        var (tileH, tileV, scrollH, scrollV) = BackTileMode(b.Type);
-
-        int cx = b.Cx, cy = b.Cy;
-        if ((tileH || tileV) && (cx == 0 || cy == 0))
-        {
-            if (cx == 0) cx = tex.Width;
-            if (cy == 0) cy = tex.Height;
-        }
-
-        // a distant background is placed near the camera center and then moves slower
-        // than the map; a scrolling axis drifts with time instead, and W2 exports one
-        // still frame, so it stays at offset 0
-        float centerX = _cameraX + GameWidth / 2f;
-        float centerY = _cameraY + GameHeight / 2f;
-        int x = (int)Math.Floor(b.X + (scrollH ? 0f : centerX * (100 + b.Rx) / 100f));
-        int y = (int)Math.Floor(b.Y + (scrollV ? 0f : centerY * (100 + b.Ry) / 100f));
-
-        int left = 0, right = 1, top = 0, bottom = 1;
-        if (tileH && cx > 0)
-        {
-            left = (int)Math.Floor((_cameraX - x - tex.Width) / (float)cx) - 1;
-            right = (int)Math.Ceiling((_cameraX + GameWidth - x) / (float)cx) + 2;
-        }
-        if (tileV && cy > 0)
-        {
-            top = (int)Math.Floor((_cameraY - y - tex.Height) / (float)cy) - 1;
-            bottom = (int)Math.Ceiling((_cameraY + GameHeight - y) / (float)cy) + 2;
-        }
+        var (x, y, cx, cy, left, right, top, bottom) =
+            SceneMath.BackLayout(b, tex.Width, tex.Height, _cameraX, _cameraY, GameWidth, GameHeight);
 
         for (int j = top; j < bottom; j++)
             for (int i = left; i < right; i++)
                 DrawTexture(b.Image, x + i * cx, y + j * cy, b.Flip);
     }
-
-    // WZ back "type" (Patches2/BackItem.cs:77-91) as four flags.
-    private static (bool TileH, bool TileV, bool ScrollH, bool ScrollV) BackTileMode(int type) => type switch
-    {
-        1 => (true, false, false, false),
-        2 => (false, true, false, false),
-        3 => (true, true, false, false),
-        4 => (true, false, true, false),
-        5 => (false, true, false, true),
-        6 => (true, true, true, false),
-        7 => (true, true, false, true),
-        _ => (false, false, false, false)
-    };
 
     private void DrawTexture(string image, int worldX, int worldY, bool flip)
     {

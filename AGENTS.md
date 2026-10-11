@@ -24,6 +24,7 @@
 
 ```sh
 dotnet build MushTown.sln                                  # 全量编译
+dotnet test MushTown.sln                                   # 跑单元测试
 dotnet run --project MushTown.Exporter -- smoke [Data路径]   # WzLib 冒烟测试
 dotnet run --project MushTown.Exporter -- dump [路径] [深度]  # 看 Base 树的节点结构（缺路径=整棵树）
 dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度]  # 看分类 wz 的节点

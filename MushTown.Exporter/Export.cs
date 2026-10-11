@@ -97,28 +97,13 @@ public static class Export
         }
 
         // ground under spawn: foothold covering spawnX, below the portal, closest to its y
-        int groundY = int.MaxValue;
-        int bestDist = int.MaxValue;
-        foreach (var f in map.Footholds)
-        {
-            int minX = Math.Min(f.X1, f.X2), maxX = Math.Max(f.X1, f.X2);
-            if (spawnX < minX || spawnX > maxX || f.X1 == f.X2) continue;
-            int y = f.Y1 == f.Y2 ? f.Y1
-                : f.Y1 + (int)Math.Round((f.Y2 - f.Y1) * (double)(spawnX - f.X1) / (f.X2 - f.X1));
-            if (y < spawnY) continue; // a foothold above the portal is not the ground
-            int dist = y - spawnY;
-            if (dist < bestDist)
-            {
-                bestDist = dist;
-                groundY = y;
-            }
-        }
-        if (groundY == int.MaxValue)
+        int? groundY = SceneMath.SpawnGroundY(map.Footholds, spawnX, spawnY);
+        if (groundY == null)
             Console.WriteLine($"map {mapId}: no foothold under spawn x={spawnX}, keeping portal y={spawnY}");
         else
         {
-            map.Info.SpawnY = groundY;
-            Console.WriteLine($"map {mapId}: spawn ground y={groundY}");
+            map.Info.SpawnY = groundY.Value;
+            Console.WriteLine($"map {mapId}: spawn ground y={groundY.Value}");
         }
 
         int missing = 0;     // an image we should have read but could not: export fails
