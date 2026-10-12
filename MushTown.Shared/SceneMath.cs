@@ -87,26 +87,80 @@ public static class SceneMath
             _ => true
         };
 
-    // Ground under spawn: foothold covering spawnX, below the portal, closest to its y.
-    // Null when no foothold is under the spawn point.
-    public static int? SpawnGroundY(List<FootholdItem> footholds, int spawnX, int portalY)
+    // Y of a foothold line at x. The foothold must be non-vertical and cover x.
+    public static int FootholdY(FootholdItem f, int x) => f.Y1 == f.Y2 ? f.Y1
+        : f.Y1 + (int)Math.Round((f.Y2 - f.Y1) * (double)(x - f.X1) / (f.X2 - f.X1));
+
+    // Nearest foothold at or below y covering x. Null when none is at or below.
+    public static FootholdItem? GroundBelow(List<FootholdItem> footholds, int x, int y)
     {
-        int groundY = int.MaxValue;
-        int bestDist = int.MaxValue;
+        FootholdItem? best = null;
+        int bestY = int.MaxValue;
         foreach (var f in footholds)
         {
             int minX = Math.Min(f.X1, f.X2), maxX = Math.Max(f.X1, f.X2);
-            if (spawnX < minX || spawnX > maxX || f.X1 == f.X2) continue;
-            int y = f.Y1 == f.Y2 ? f.Y1
-                : f.Y1 + (int)Math.Round((f.Y2 - f.Y1) * (double)(spawnX - f.X1) / (f.X2 - f.X1));
-            if (y < portalY) continue; // a foothold above the portal is not the ground
-            int dist = y - portalY;
-            if (dist < bestDist)
-            {
-                bestDist = dist;
-                groundY = y;
-            }
+            if (x < minX || x > maxX || f.X1 == f.X2) continue;
+            int fy = FootholdY(f, x);
+            if (fy < y || fy >= bestY) continue;
+            bestY = fy;
+            best = f;
         }
-        return groundY == int.MaxValue ? null : groundY;
+        return best;
+    }
+
+    // Ground under spawn: foothold covering spawnX, at or below the portal, closest to its y.
+    // Null when no foothold is at or under the spawn point.
+    public static int? SpawnGroundY(List<FootholdItem> footholds, int spawnX, int portalY)
+    {
+        var g = GroundBelow(footholds, spawnX, portalY);
+        return g == null ? null : FootholdY(g, spawnX);
+    }
+
+    // Nearest foothold covering x within 1px of y. Prefers same level, then a
+    // 1px rise, then a 1px drop. Anything further counts as walked off the edge.
+    // Null when the player truly walked off the edge.
+    public static FootholdItem? StepTo(List<FootholdItem> footholds, int x, int y)
+    {
+        FootholdItem? best = null;
+        int bestRank = 3;
+        foreach (var f in footholds)
+        {
+            int minX = Math.Min(f.X1, f.X2), maxX = Math.Max(f.X1, f.X2);
+            if (x < minX || x > maxX || f.X1 == f.X2) continue;
+            int fy = FootholdY(f, x);
+            int rank = fy == y ? 0 : fy == y - 1 ? 1 : fy == y + 1 ? 2 : -1;
+            if (rank < 0 || rank >= bestRank) continue;
+            bestRank = rank;
+            best = f;
+        }
+        return best;
+    }
+
+    // Frame timer: add dt, walk past spent delays, loop. Delays are checked > 0
+    // at load (the exporter fails, the client throws), so this loop always ends.
+    public static (int frame, float timer) AdvanceFrame(int frame, float timer, float dtMs, List<int> delays)
+    {
+        timer += dtMs;
+        while (timer >= delays[frame])
+        {
+            timer -= delays[frame];
+            frame = (frame + 1) % delays.Count;
+        }
+        return (frame, timer);
+    }
+
+    // Left edge of a part mirrored around feetX (DrawTexture flips inside the rect).
+    public static int FlipDrawX(int feetX, int partX, int texWidth) => feetX - partX - texWidth;
+
+    // Camera viscosity: critically damped spring (Damp = 2*sqrt(Stiff)), so the
+    // camera lags about 70 px while walking and settles without overshoot.
+    // Hand-tuned feel.
+    private const float CamStiff = 16f;
+    private const float CamDamp = 8f;
+    public static (float x, float v) SpringStep(float x, float v, float target, float dt)
+    {
+        v += ((target - x) * CamStiff - v * CamDamp) * dt;
+        x += v * dt;
+        return (x, v);
     }
 }

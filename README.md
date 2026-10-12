@@ -34,7 +34,11 @@
 **W3 已完成：纸娃娃穿上装备。** 角色从裸体 4 件套变成 11 个 img
 （身体/头/脸/头发 + 帽子/上衣/裤子/鞋/手套/披风/武器），stand2 站姿 3 帧、每帧 16 个
 部件按 zmap 图层排序画对（披风在后、衣服盖住身体、武器在前）。客户端逻辑不用改（只改了一行注释）。
-下一周（W4）：动画播放器 + 测试平地移动。
+
+**W4 已完成：角色会动了。** 导出 stand2/walk2/jump 三个动作（每帧 16/16/17 个
+部件），客户端按 delay 切帧：左右走（walk2）、Alt 跳（jump）、站立（stand2），
+朝向左右翻转，相机跟随，平地跳跃落地。截图加 `--action/--frame/--facing` 参数。
+下一周（W5）：服务端 TCP + 双客户端同步。
 
 ## 常用命令
 
@@ -49,7 +53,7 @@ dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度] # �
 dotnet run --project MushTown.Exporter -- find <节点名>              # 按名字定位节点
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录] # 导出 assets/
 dotnet run --project MushTown.Client                                # 打开游戏窗口
-dotnet run --project MushTown.Client -- --shot logs/w2_acceptance.png  # 截图后退出
+dotnet run --project MushTown.Client -- --shot logs/x.png [--action walk2] [--frame 2] [--facing left]  # 截图后退出（frame 从 0 数）
 git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```
 

@@ -31,6 +31,6 @@ dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度]  # 
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录]  # 导出 assets/
 dotnet run --project MushTown.Exporter -- find <节点名>      # 按名字定位 WZ 节点
 dotnet run --project MushTown.Client                        # 打开游戏窗口
-dotnet run --project MushTown.Client -- --shot logs/x.png   # 截图后退出（验收用）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--action walk2] [--frame 2] [--facing left]  # 截图后退出（验收用，frame 从 0 数）
 git clone --recurse-submodules <仓库>                       # 克隆要带子模块
 ```

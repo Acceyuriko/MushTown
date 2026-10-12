@@ -6,24 +6,32 @@ namespace MushTown.Exporter;
 
 // Writes assets/ from the local MapleStory client data:
 //   assets/maps/{id}.json + tiles/back/obj png files
-//   assets/chara/body/stand2.json + part png files
+//   assets/chara/body/{action}.json + part png files
 // Usage: export [DataDir] [OutDir]
 public static class Export
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
-    // W2 exports one map and one action. Later weeks make both parameters.
+    // W2 exports one map. W4 needs stand2/walk2/jump actions for the player.
     private const int StartMapId = 100000000;
-    private const string StartAction = "stand2";
+    private static readonly string[] CharaActions = new[] { "stand2", "walk2", "jump" };
 
     public static void Run(string dataDir, string outDir)
     {
         var baseRoot = WzRoot.LoadBase(dataDir);
-        if (!ExportMap(baseRoot, StartMapId, outDir) ||
-            !ExportCharacter(baseRoot, WzRoot.LoadCategory(dataDir, "Character"), outDir))
+        if (!ExportMap(baseRoot, StartMapId, outDir))
         {
             Environment.ExitCode = 1;
             return;
+        }
+        var chara = WzRoot.LoadCategory(dataDir, "Character");
+        foreach (string action in CharaActions)
+        {
+            if (!ExportCharacter(baseRoot, chara, outDir, action))
+            {
+                Environment.ExitCode = 1;
+                return;
+            }
         }
         Console.WriteLine("export done -> " + Path.GetFullPath(outDir));
     }
@@ -240,8 +248,10 @@ public static class Export
     private const string HairImg = @"Hair\00030000.img";
     private const string FaceImg = @"Face\00020000.img";
 
-    // Beginner gear on top of the naked body. The 4 base imgs above plus these 7
-    // all carry stand2 frames 0,1,2 in the same layout; every one must resolve.
+    // Beginner gear on top of the naked body. The body, head and hair imgs above
+    // plus these 7 all carry the same action/frame layout for stand2, walk2 and
+    // jump; every one must resolve. Face is special: one default emotion node
+    // shared by every frame.
     private static readonly string[] CharaEquips = new[]
     {
         @"Cap\01000000.img",
@@ -254,22 +264,22 @@ public static class Export
     };
 
     // img/action/frame with a uol resolved at both levels (AvatarCanvas.cs:1203-1226)
-    private static Wz_Node? FindImgFrame(WzRoot looseRoot, string img, int frameIdx)
+    private static Wz_Node? FindImgFrame(WzRoot looseRoot, string img, string action, int frameIdx)
     {
-        var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{img}\{StartAction}"));
+        var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{img}\{action}"));
         return WzNodeUtil.ResolveUol(actionNode?.Nodes[frameIdx.ToString()]);
     }
 
     private static string ImgId(string img) => Path.GetFileNameWithoutExtension(img);
 
-    private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir)
+    private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir, string action)
     {
         // loose tree (Character.wz) holds origin/map/z; png bytes live in Base _Canvas
         List<string> zNames = new();
         var zmap = baseRoot.Find("zmap.img");
         if (zmap == null || zmap.Nodes.Count == 0)
         {
-            Console.WriteLine(@"Base\zmap.img missing");
+            Console.WriteLine($@"character {action}: Base\zmap.img missing");
             return false;
         }
         foreach (Wz_Node z in zmap.Nodes) zNames.Add(z.Text);
@@ -282,64 +292,69 @@ public static class Export
         var faceNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{FaceImg}\default"));
         if (faceNode == null)
         {
-            Console.WriteLine($"character {StartAction}: {FaceImg} node not found");
+            Console.WriteLine($"character {action}: {FaceImg} node not found");
             return false;
         }
 
         // frames run 0,1,2... and stop at the first gap (AvatarCanvas.cs:511-522)
         for (int frameIdx = 0; ; frameIdx++)
         {
-            var bodyFrame = FindImgFrame(looseRoot, BodyImg, frameIdx);
+            var bodyFrame = FindImgFrame(looseRoot, BodyImg, action, frameIdx);
             if (bodyFrame == null)
             {
                 // a real gap ends the action; a dangling frame uol is loud
-                var action = WzNodeUtil.ResolveUol(looseRoot.Find($@"{BodyImg}\{StartAction}"));
-                if (action?.Nodes[frameIdx.ToString()] != null)
+                var bodyAction = WzNodeUtil.ResolveUol(looseRoot.Find($@"{BodyImg}\{action}"));
+                if (bodyAction?.Nodes[frameIdx.ToString()] != null)
                 {
-                    Console.WriteLine($"character frame {frameIdx}: {BodyImg} frame uol is broken");
+                    Console.WriteLine($"character {action} frame {frameIdx}: {BodyImg} frame uol is broken");
                     return false;
                 }
                 break;
             }
-            if (!BodyFrameStatic(frameIdx, bodyFrame)) return false;
+            if (!BodyFrameStatic(action, frameIdx, bodyFrame)) return false;
 
-            var headFrame = FindImgFrame(looseRoot, HeadImg, frameIdx);
+            var headFrame = FindImgFrame(looseRoot, HeadImg, action, frameIdx);
             if (headFrame == null)
             {
-                Console.WriteLine($"character frame {frameIdx}: {HeadImg} node not found");
+                Console.WriteLine($"character {action} frame {frameIdx}: {HeadImg} node not found");
                 return false;
             }
-            var hairFrame = FindImgFrame(looseRoot, HairImg, frameIdx);
+            var hairFrame = FindImgFrame(looseRoot, HairImg, action, frameIdx);
             if (hairFrame == null)
             {
-                Console.WriteLine($"character frame {frameIdx}: {HairImg} node not found");
+                Console.WriteLine($"character {action} frame {frameIdx}: {HairImg} node not found");
                 return false;
             }
 
             var outFrame = new CharaFrame { Delay = Int(bodyFrame, "delay", 120) };
+            if (outFrame.Delay <= 0)
+            {
+                Console.WriteLine($"character {action} frame {frameIdx}: {BodyImg} bad delay {outFrame.Delay}");
+                return false;
+            }
             var bones = new BoneSet(); // y down, feet at (0,0)
             bool face = Int(bodyFrame, "face", 1) != 0;
 
             // body first (it defines the neck/navel bones), then head, face, hair, gear
-            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(BodyImg), bodyFrame, outDir, frameIdx, saved, zNames, face);
-            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(HeadImg), headFrame, outDir, frameIdx, saved, zNames, face);
+            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(BodyImg), bodyFrame, outDir, frameIdx, saved, zNames, face, action);
+            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(HeadImg), headFrame, outDir, frameIdx, saved, zNames, face, action);
             if (face) // back-facing frames drop the whole face img (AvatarCanvas.cs:1111-1117)
-                missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(FaceImg), faceNode, outDir, frameIdx, saved, zNames, face);
-            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(HairImg), hairFrame, outDir, frameIdx, saved, zNames, face);
+                missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(FaceImg), faceNode, outDir, frameIdx, saved, zNames, face, action);
+            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(HairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action);
             foreach (string img in CharaEquips)
             {
-                var equipFrame = FindImgFrame(looseRoot, img, frameIdx);
+                var equipFrame = FindImgFrame(looseRoot, img, action, frameIdx);
                 if (equipFrame == null)
                 {
-                    Console.WriteLine($"character frame {frameIdx}: {img} node not found");
+                    Console.WriteLine($"character {action} frame {frameIdx}: {img} node not found");
                     return false;
                 }
-                missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(img), equipFrame, outDir, frameIdx, saved, zNames, face);
+                missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(img), equipFrame, outDir, frameIdx, saved, zNames, face, action);
             }
 
             if (outFrame.Parts.Count == 0)
             {
-                Console.WriteLine($"character frame {frameIdx}: no parts exported");
+                Console.WriteLine($"character {action} frame {frameIdx}: no parts exported");
                 return false;
             }
 
@@ -352,24 +367,24 @@ public static class Export
 
         if (data.Frames.Count == 0)
         {
-            Console.WriteLine($"character {StartAction} has no frames");
+            Console.WriteLine($"character {action} has no frames");
             return false;
         }
 
-        Console.WriteLine($"chara {StartAction}: {data.Frames.Count} frames, " +
+        Console.WriteLine($"character {action}: {data.Frames.Count} frames, " +
                           $"parts [{string.Join(",", data.Frames.Select(f => f.Parts.Count))}]");
         if (missing > 0)
         {
-            Console.WriteLine($"  missing {missing} character part(s)");
+            Console.WriteLine($"  missing {action} {missing} character part(s)");
             return false;
         }
-        WriteJson(Path.Combine(outDir, "chara", "body", $"{StartAction}.json"), data);
+        WriteJson(Path.Combine(outDir, "chara", "body", $"{action}.json"), data);
         return true;
     }
 
     // Adds the png parts of one frame node and returns how many images were missing.
     private static int AddFrameParts(WzRoot baseRoot, CharaFrame outFrame, BoneSet bones, string imgId,
-        Wz_Node frame, string outDir, int frameIdx, HashSet<string> saved, List<string> zNames, bool face)
+        Wz_Node frame, string outDir, int frameIdx, HashSet<string> saved, List<string> zNames, bool face, string action)
     {
         int missing = 0;
         foreach (Wz_Node raw in frame.Nodes)
@@ -390,7 +405,7 @@ public static class Export
                 if (visible)
                 {
                     missing++;
-                    Console.WriteLine($"  missing {imgId} {name} image in frame {frameIdx}");
+                    Console.WriteLine($"  character {action} frame {frameIdx}: missing {imgId} {name} image");
                 }
                 continue;
             }
@@ -405,12 +420,12 @@ public static class Export
                 if (part.Value is Wz_Png || part.Nodes.Count > 0)
                 {
                     missing++;
-                    Console.WriteLine($"  missing {imgId} {name} image in frame {frameIdx}");
+                    Console.WriteLine($"  character {action} frame {frameIdx}: missing {imgId} {name} image");
                 }
                 continue;
             }
 
-            string img = $"chara/body/{StartAction}/{frameIdx}_{imgId}_{name}.png";
+            string img = $"chara/body/{action}/{frameIdx}_{imgId}_{name}.png";
             SaveOnce(png, Path.Combine(outDir, img), saved);
 
             // a part without a "map" bone hangs on the root (AvatarCanvas.cs:791-794)
@@ -517,16 +532,16 @@ public static class Export
     private static int Int(Wz_Node? node, string name, int defaultValue = 0) =>
         node?.Nodes[name]?.GetValueEx<int>(defaultValue) ?? defaultValue;
 
-    // W3 bakes static poses; a body frame carrying flip/move/rotate needs W4
-    // playback. Only the body frame is checked: the reference plays these from
-    // the body action alone (AvatarCanvas.cs:617), ignoring other imgs' values.
-    private static bool BodyFrameStatic(int frameIdx, Wz_Node frame)
+    // Poses are baked static; a body frame carrying flip/move/rotate fails the
+    // export (no W4 action uses them). Only the body frame is checked: the
+    // reference plays these from the body action alone (AvatarCanvas.cs:617), ignoring other imgs' values.
+    private static bool BodyFrameStatic(string action, int frameIdx, Wz_Node frame)
     {
         var move = frame.Nodes["move"]?.GetValueEx<Wz_Vector>(new Wz_Vector(0, 0));
         int mx = move?.X ?? 0, my = move?.Y ?? 0;
         if (Int(frame, "flip") == 0 && Int(frame, "rotate") == 0 && mx == 0 && my == 0)
             return true;
-        Console.WriteLine($"character frame {frameIdx}: {BodyImg} has flip/move/rotate (needs W4)");
+        Console.WriteLine($"character {action} frame {frameIdx}: {BodyImg} has flip/move/rotate");
         return false;
     }
 

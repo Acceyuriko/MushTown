@@ -244,4 +244,179 @@ public class SceneMathTests
         Assert.IsTrue(SceneMath.PartVisible("body", true, 0, false, false, 0, false));
         Assert.IsTrue(SceneMath.PartVisible("mail", true, 0, false, false, 0, false));
     }
+
+    [TestMethod]
+    public void FootholdY_Flat_ReturnsLineY()
+    {
+        var f = new FootholdItem { X1 = 0, Y1 = 100, X2 = 50, Y2 = 100 };
+        Assert.AreEqual(100, SceneMath.FootholdY(f, 25));
+    }
+
+    [TestMethod]
+    public void FootholdY_Slope_Interpolates()
+    {
+        var f = new FootholdItem { X1 = 0, Y1 = 0, X2 = 10, Y2 = 10 };
+        Assert.AreEqual(3, SceneMath.FootholdY(f, 3));
+        Assert.AreEqual(5, SceneMath.FootholdY(f, 5));
+    }
+
+    [TestMethod]
+    public void FootholdY_Half_RoundsToEven()
+    {
+        var f = new FootholdItem { X1 = 0, Y1 = 0, X2 = 4, Y2 = 1 };
+        Assert.AreEqual(0, SceneMath.FootholdY(f, 2)); // 0.5 -> 0, kept from the original
+    }
+
+    [TestMethod]
+    public void GroundBelow_PicksNearestBelow()
+    {
+        var low = new FootholdItem { X1 = 0, Y1 = 200, X2 = 100, Y2 = 200 };
+        var high = new FootholdItem { X1 = 0, Y1 = 100, X2 = 100, Y2 = 100 };
+        List<FootholdItem> fs = [low, high];
+        Assert.AreSame(high, SceneMath.GroundBelow(fs, 50, 50));
+    }
+
+    [TestMethod]
+    public void GroundBelow_SkipsAboveAndVertical()
+    {
+        List<FootholdItem> fs =
+        [
+            new() { X1 = 10, Y1 = 0, X2 = 10, Y2 = 100 }, // vertical: skip
+            new() { X1 = 0, Y1 = 0, X2 = 100, Y2 = 0 },   // above: skip
+        ];
+        Assert.IsNull(SceneMath.GroundBelow(fs, 10, 50));
+    }
+
+    [TestMethod]
+    public void GroundBelow_Tie_KeepsFirst()
+    {
+        var a = new FootholdItem { X1 = 0, Y1 = 60, X2 = 100, Y2 = 60 };
+        var b = new FootholdItem { X1 = 0, Y1 = 60, X2 = 100, Y2 = 60 };
+        List<FootholdItem> fs = [a, b];
+        Assert.AreSame(a, SceneMath.GroundBelow(fs, 50, 50));
+    }
+
+    [TestMethod]
+    public void AdvanceFrame_TimerBelowDelay_Stays()
+    {
+        Assert.AreEqual((0, 100f), SceneMath.AdvanceFrame(0, 0, 100, [180, 180]));
+    }
+
+    [TestMethod]
+    public void AdvanceFrame_TimerPastDelay_AdvancesAndLoops()
+    {
+        Assert.AreEqual((0, 10f), SceneMath.AdvanceFrame(1, 170, 20, [180, 180]));
+    }
+
+    [TestMethod]
+    public void AdvanceFrame_BigDt_AdvancesMany()
+    {
+        Assert.AreEqual((2, 140f), SceneMath.AdvanceFrame(0, 0, 500, [180, 180, 180, 180]));
+    }
+
+    [TestMethod]
+    public void FlipDrawX_MirrorsRectAroundFeet()
+    {
+        Assert.AreEqual(80, SceneMath.FlipDrawX(100, -10, 30)); // [90,120] -> [80,110]
+        Assert.AreEqual(80, SceneMath.FlipDrawX(100, 0, 20));   // [100,120] -> [80,100]
+    }
+
+    [TestMethod]
+    public void StepTo_SameLevel_PicksIt()
+    {
+        var same = new FootholdItem { X1 = 90, Y1 = 100, X2 = 200, Y2 = 100 };
+        List<FootholdItem> fs = [same];
+        Assert.AreSame(same, SceneMath.StepTo(fs, 95, 100));
+    }
+
+    [TestMethod]
+    public void StepTo_OnePixelRise_PicksIt()
+    {
+        var rise = new FootholdItem { X1 = 90, Y1 = 99, X2 = 200, Y2 = 99 };
+        List<FootholdItem> fs = [rise];
+        Assert.AreSame(rise, SceneMath.StepTo(fs, 95, 100));
+    }
+
+    [TestMethod]
+    public void StepTo_TwoPixelRise_ReturnsNull()
+    {
+        var rise = new FootholdItem { X1 = 90, Y1 = 98, X2 = 200, Y2 = 98 };
+        var below = new FootholdItem { X1 = 90, Y1 = 110, X2 = 200, Y2 = 110 };
+        List<FootholdItem> fs = [rise, below];
+        Assert.IsNull(SceneMath.StepTo(fs, 95, 100));
+    }
+
+    [TestMethod]
+    public void StepTo_OnePixelDrop_PicksIt()
+    {
+        var drop = new FootholdItem { X1 = 90, Y1 = 101, X2 = 200, Y2 = 101 };
+        List<FootholdItem> fs = [drop];
+        Assert.AreSame(drop, SceneMath.StepTo(fs, 95, 100));
+    }
+
+    [TestMethod]
+    public void StepTo_SameBeatsDrop()
+    {
+        var drop = new FootholdItem { X1 = 90, Y1 = 101, X2 = 200, Y2 = 101 };
+        var same = new FootholdItem { X1 = 90, Y1 = 100, X2 = 200, Y2 = 100 };
+        List<FootholdItem> fs = [drop, same];
+        Assert.AreSame(same, SceneMath.StepTo(fs, 95, 100));
+    }
+
+    [TestMethod]
+    public void StepTo_RiseBeatsDrop()
+    {
+        var drop = new FootholdItem { X1 = 90, Y1 = 101, X2 = 200, Y2 = 101 };
+        var rise = new FootholdItem { X1 = 90, Y1 = 99, X2 = 200, Y2 = 99 };
+        List<FootholdItem> fs = [drop, rise];
+        Assert.AreSame(rise, SceneMath.StepTo(fs, 95, 100));
+    }
+
+    [TestMethod]
+    public void StepTo_SameBeatsRise()
+    {
+        var rise = new FootholdItem { X1 = 90, Y1 = 99, X2 = 200, Y2 = 99 };
+        var same = new FootholdItem { X1 = 90, Y1 = 100, X2 = 200, Y2 = 100 };
+        List<FootholdItem> fs = [rise, same];
+        Assert.AreSame(same, SceneMath.StepTo(fs, 95, 100));
+    }
+
+    [TestMethod]
+    public void StepTo_Tie_KeepsFirst()
+    {
+        var a = new FootholdItem { X1 = 90, Y1 = 100, X2 = 200, Y2 = 100 };
+        var b = new FootholdItem { X1 = 90, Y1 = 100, X2 = 200, Y2 = 100 };
+        List<FootholdItem> fs = [a, b];
+        Assert.AreSame(a, SceneMath.StepTo(fs, 95, 100));
+    }
+
+    [TestMethod]
+    public void SpringStep_FirstStep_MovesTowardTarget()
+    {
+        var (x, v) = SceneMath.SpringStep(0, 0, 100, 1f / 60);
+        Assert.IsTrue(x > 0 && x < 100);
+        Assert.IsTrue(v > 0);
+    }
+
+    [TestMethod]
+    public void SpringStep_HoldsStill_AtTarget()
+    {
+        var (x, v) = SceneMath.SpringStep(100, 0, 100, 1f / 60);
+        Assert.AreEqual(100, x);
+        Assert.AreEqual(0, v);
+    }
+
+    [TestMethod]
+    public void SpringStep_ManySteps_SettlesNearTarget()
+    {
+        float x = 0, v = 0, prev = 0;
+        for (int i = 0; i < 60 * 10; i++)
+        {
+            (x, v) = SceneMath.SpringStep(x, v, 100, 1f / 60);
+            Assert.IsTrue(x >= prev && x <= 100.01f, $"step {i}: x={x}"); // no backtrack, no overshoot
+            prev = x;
+        }
+        Assert.IsTrue(Math.Abs(x - 100) < 1);
+        Assert.IsTrue(Math.Abs(v) < 5);
+    }
 }
