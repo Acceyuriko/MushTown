@@ -1,10 +1,11 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--action <name>] [--frame <n 0-based>] [--facing left|right]]
+// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means solo play.
 // Anything else is a mistake, not something to ignore.
 string? shotPath = null;
+int shotMap = 10000;
 string shotAction = "stand2";
 int shotFrame = 0;
 bool shotFacingRight = false;
@@ -22,6 +23,7 @@ if (rest.Count >= 2 && rest[0] == "--shot")
     {
         if (i + 1 >= rest.Count) ok = false;
         else if (rest[i] == "--action") shotAction = rest[i + 1];
+        else if (rest[i] == "--map") ok = int.TryParse(rest[i + 1], out shotMap);
         else if (rest[i] == "--frame") ok = int.TryParse(rest[i + 1], out shotFrame) && shotFrame >= 0;
         else if (rest[i] == "--facing" && rest[i + 1] == "left") shotFacingRight = false;
         else if (rest[i] == "--facing" && rest[i + 1] == "right") shotFacingRight = true;
@@ -31,14 +33,14 @@ if (rest.Count >= 2 && rest[0] == "--shot")
 if (shotPath != null && (host || join != null)) ok = false;
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--action <name>] [--frame <n 0-based>] [--facing left|right]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right]]");
     Environment.ExitCode = 1;
     return;
 }
 
 try
 {
-    using var game = new MushTownGame(shotPath, shotAction, shotFrame, shotFacingRight, host, join);
+    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join);
     game.Run();
 }
 catch (InvalidDataException ex)

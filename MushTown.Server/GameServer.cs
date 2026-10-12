@@ -5,8 +5,10 @@ using MushTown.Shared;
 
 namespace MushTown.Server;
 
-// Listen server: assigns ids, relays State frames to everyone else, sends a
-// newcomer the last state of each peer, and broadcasts Leave on disconnect.
+// Listen server: assigns ids and relays State frames to every other client;
+// a map switch sends Leave to all, a disconnect too. Clients filter states
+// by their own map (the server cannot: a newcomer has no map yet, so a
+// server-side filter would leave it hearing nothing).
 // All socket work runs on background tasks; the host only calls Start/Dispose.
 public sealed class GameServer : IDisposable
 {
@@ -22,7 +24,7 @@ public sealed class GameServer : IDisposable
     private CancellationTokenSource? _cts;
     private int _nextId;
     private readonly ConcurrentDictionary<int, Client> _clients = new();
-    private readonly ConcurrentDictionary<int, byte[]> _lastState = new();
+    private readonly ConcurrentDictionary<int, int> _clientMap = new();
 
     public GameServer(Action<string> log, int port = Net.Port)
     {
@@ -64,7 +66,8 @@ public sealed class GameServer : IDisposable
             _clients[id] = client;
             _log($"client {id} connected");
             Send(client, Net.Encode(Net.Welcome, w => w.Write(id)));
-            foreach (var kv in _lastState) Send(client, kv.Value);
+            // the newcomer's map is unknown until its first State; live states
+            // fill peers in within a frame, so no history is sent here
             _ = Task.Run(() => ReadLoop(id, client, ct), ct);
         }
     }
@@ -92,20 +95,23 @@ public sealed class GameServer : IDisposable
             _log($"client {id} error: {ex.Message}");
         }
         _clients.TryRemove(id, out _);
-        _lastState.TryRemove(id, out _);
+        _clientMap.TryRemove(id, out _);
         client.Tcp.Close();
         Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
         _log($"client {id} left");
     }
 
     // Clients only ever send State; anything else means a foreign client.
+    // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
-        if (payload[0] != Net.State)
+        if (payload[0] != Net.State || payload.Length != 20)
             throw new InvalidDataException($"bad message type {payload[0]}");
-        byte[] frame = Net.Frame(payload);
-        _lastState[id] = frame;
-        Broadcast(frame, id);
+        int map = BitConverter.ToInt32(payload, 5);
+        if (_clientMap.TryGetValue(id, out int oldMap) && oldMap != map)
+            Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
+        _clientMap[id] = map;
+        Broadcast(Net.Frame(payload), id);
     }
 
     private void Broadcast(byte[] frame, int exceptId = -1)

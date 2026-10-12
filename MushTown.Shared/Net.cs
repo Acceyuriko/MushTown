@@ -7,12 +7,42 @@ public static class Net
     public const int Port = 16631;
 
     public const byte Welcome = 2; // server -> client: int id ("you are N")
-    public const byte State = 3;   // both ways: int id, float x, float y, byte action, byte frame, byte facing
+    public const byte State = 3;   // both ways: int id, int map, float x, float y, byte action, byte frame, byte facing
     public const byte Leave = 4;   // server -> client: int id (a peer is gone)
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
     public const byte ActJump = 2;
+    public const byte ActLadder = 3;
+    public const byte ActRope = 4;
+    public const byte ActProne = 5;
+
+    // Every character action, in load order. Exporter and client init reuse
+    // this so a new action needs one list edit (plus its code switch arms).
+    public static readonly string[] Actions = { "stand2", "walk2", "jump", "ladder", "rope", "prone" };
+
+    // Action name <-> code. Both throw on bad input (fail loud, never guess).
+    public static byte ActionCode(string action) => action switch
+    {
+        "stand2" => ActStand,
+        "walk2" => ActWalk,
+        "jump" => ActJump,
+        "ladder" => ActLadder,
+        "rope" => ActRope,
+        "prone" => ActProne,
+        _ => throw new InvalidDataException($"bad action name {action}"),
+    };
+
+    public static string ActionName(byte action) => action switch
+    {
+        ActStand => "stand2",
+        ActWalk => "walk2",
+        ActJump => "jump",
+        ActLadder => "ladder",
+        ActRope => "rope",
+        ActProne => "prone",
+        _ => throw new InvalidDataException($"bad action code {action}"),
+    };
 
     // One send-ready frame: length header + type byte + body.
     public static byte[] Encode(byte type, Action<BinaryWriter> writeBody)
@@ -37,7 +67,7 @@ public static class Net
 // One event from the network for the game loop: a peer's fresh state,
 // or Gone when a peer left (then only Id means anything).
 public readonly record struct RemoteEvent(
-    bool Gone, int Id, float X, float Y, byte Action, byte Frame, bool FacingRight);
+    bool Gone, int Id, int Map, float X, float Y, byte Action, byte Frame, bool FacingRight);
 
 // Accumulates raw TCP bytes and yields whole payloads (header eaten).
 // TCP splits and merges at will, so one Feed can yield zero, one, or more.

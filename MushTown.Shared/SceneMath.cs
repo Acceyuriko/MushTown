@@ -19,9 +19,11 @@ public static class SceneMath
 
     // Where one background lands: parallax anchor (X, Y), tile step (Cx, Cy),
     // and the tile index range that covers the camera rect.
-    // Mirrors FrmMapRender2.SceneRendering.cs:807-814,845-903.
+    // Mirrors FrmMapRender2.SceneRendering.cs:807-814,845-903. A scrolling axis
+    // drifts with time (rate * 100 * ms / 20000, wrapped by tile step) instead
+    // of following the camera (SceneRendering.cs:816-824).
     public static (int X, int Y, int Cx, int Cy, int Left, int Right, int Top, int Bottom) BackLayout(
-        BackItem b, int imgW, int imgH, int cameraX, int cameraY, int viewW, int viewH)
+        BackItem b, int imgW, int imgH, int cameraX, int cameraY, int viewW, int viewH, double timeMs)
     {
         var (tileH, tileV, scrollH, scrollV) = BackTileMode(b.Type);
 
@@ -32,13 +34,10 @@ public static class SceneMath
             if (cy == 0) cy = imgH;
         }
 
-        // a distant background sits near the camera center and moves slower than the
-        // map; a scrolling axis drifts with time instead, and W2 exports one still
-        // frame, so it stays at offset 0
         float centerX = cameraX + viewW / 2f;
         float centerY = cameraY + viewH / 2f;
-        int x = (int)Math.Floor(b.X + (scrollH ? 0f : centerX * (100 + b.Rx) / 100f));
-        int y = (int)Math.Floor(b.Y + (scrollV ? 0f : centerY * (100 + b.Ry) / 100f));
+        int x = (int)Math.Floor(b.X + (scrollH ? ScrollOffset(b.Rx, cx, timeMs) : centerX * (100 + b.Rx) / 100f));
+        int y = (int)Math.Floor(b.Y + (scrollV ? ScrollOffset(b.Ry, cy, timeMs) : centerY * (100 + b.Ry) / 100f));
 
         int left = 0, right = 1, top = 0, bottom = 1;
         if (tileH && cx > 0)
@@ -53,6 +52,56 @@ public static class SceneMath
         }
 
         return (x, y, cx, cy, left, right, top, bottom);
+    }
+
+    // Time drift of one scrolling back axis, wrapped by tile step.
+    public static float ScrollOffset(int rate, int tile, double timeMs) =>
+        tile <= 0 ? 0f : (float)(rate * 100.0 * timeMs / 20000.0 % tile);
+
+    // Arrival ground shared by exporter proof and client landing: the ground
+    // at/below the portal, searched from above the portal point.
+    public static FootholdItem? ArrivalGround(List<FootholdItem> footholds, int x, int y) =>
+        GroundBelow(footholds, x, y - PortalRules.ArrivalLookUp);
+
+    // Portal catch for a fresh Up press: skips NoTarget tms (boat scripts and
+    // other non-walkable portals), nearest in x wins. Ranges cover the exported
+    // geometry (portals sit 0-4px above their ground).
+    public static PortalItem? FindPortal(List<PortalItem> portals, float px, float py)
+    {
+        PortalItem? best = null;
+        foreach (var p in portals)
+        {
+            if (p.Tm == PortalRules.NoTarget) continue;
+            if (Math.Abs(px - p.X) > 25 || Math.Abs(py - p.Y) > 30) continue;
+            if (best != null && Math.Abs(px - p.X) >= Math.Abs(px - best.X)) continue;
+            best = p;
+        }
+        return best;
+    }
+
+    // Ladder catch for a held Up/Down key, nearest in x wins. The y range
+    // covers standing at the foot/top (grounds sit 2px off each end) and
+    // grabbing mid-air after a jump.
+    public static LadderItem? FindLadder(List<LadderItem> ladders, float px, float py)
+    {
+        LadderItem? best = null;
+        foreach (var l in ladders)
+        {
+            if (Math.Abs(px - l.X) > 10) continue;
+            if (py < l.Y1 - 10 || py > l.Y2 + 10) continue;
+            if (best != null && Math.Abs(px - l.X) >= Math.Abs(px - best.X)) continue;
+            best = l;
+        }
+        return best;
+    }
+
+    // Ladder-top mount: the platform at the top sits ~2px above Y1. Mounts
+    // only when the nearest ground at/below Y1-10 lands within [Y1-10, Y1+2];
+    // ground farther below (or none) means no mount.
+    public static FootholdItem? MountTop(List<FootholdItem> footholds, int x, int y1)
+    {
+        var g = GroundBelow(footholds, x, y1 - 10);
+        return g != null && FootholdY(g, x) <= y1 + 2 ? g : null;
     }
 
     // Camera clamp that also works when the map is smaller than the view.

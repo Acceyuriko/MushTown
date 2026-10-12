@@ -31,8 +31,8 @@ public class SceneMathTests
     public void BackLayout_RxMinus100_PinnedToMap()
     {
         var b = new BackItem { X = 50, Y = 60, Rx = -100, Ry = -100 };
-        var a = SceneMath.BackLayout(b, 100, 100, 370, -203, ViewW, ViewH);
-        var c = SceneMath.BackLayout(b, 100, 100, 0, 0, ViewW, ViewH);
+        var a = SceneMath.BackLayout(b, 100, 100, 370, -203, ViewW, ViewH, 0);
+        var c = SceneMath.BackLayout(b, 100, 100, 0, 0, ViewW, ViewH, 0);
         Assert.AreEqual(50, a.X);
         Assert.AreEqual(60, a.Y);
         Assert.AreEqual(a.X, c.X);
@@ -43,8 +43,8 @@ public class SceneMathTests
     public void BackLayout_RxZero_PinnedToScreen()
     {
         var b = new BackItem { X = 10, Y = 20, Rx = 0, Ry = 0 };
-        var a = SceneMath.BackLayout(b, 100, 100, 370, -203, ViewW, ViewH);
-        var c = SceneMath.BackLayout(b, 100, 100, 0, 0, ViewW, ViewH);
+        var a = SceneMath.BackLayout(b, 100, 100, 370, -203, ViewW, ViewH, 0);
+        var c = SceneMath.BackLayout(b, 100, 100, 0, 0, ViewW, ViewH, 0);
         // screen pos must not move when the camera moves
         Assert.AreEqual(a.X - 370, c.X - 0);
         Assert.AreEqual(a.Y - -203, c.Y - 0);
@@ -57,7 +57,7 @@ public class SceneMathTests
     {
         var b = new BackItem { X = 0, Y = 0, Type = 3, Rx = -100, Ry = -100 };
         int imgW = 100, imgH = 50, camX = 370, camY = -203;
-        var l = SceneMath.BackLayout(b, imgW, imgH, camX, camY, ViewW, ViewH);
+        var l = SceneMath.BackLayout(b, imgW, imgH, camX, camY, ViewW, ViewH, 0);
         Assert.IsTrue(l.X + l.Left * l.Cx <= camX);
         Assert.IsTrue(l.X + (l.Right - 1) * l.Cx + imgW >= camX + ViewW);
         Assert.IsTrue(l.Y + l.Top * l.Cy <= camY);
@@ -72,7 +72,7 @@ public class SceneMathTests
     public void BackLayout_TilingWithZeroStep_FallsBackToImageSize()
     {
         var b = new BackItem { Type = 3 };
-        var l = SceneMath.BackLayout(b, 100, 50, 0, 0, ViewW, ViewH);
+        var l = SceneMath.BackLayout(b, 100, 50, 0, 0, ViewW, ViewH, 0);
         Assert.AreEqual(100, l.Cx);
         Assert.AreEqual(50, l.Cy);
     }
@@ -81,7 +81,7 @@ public class SceneMathTests
     public void BackLayout_NoTiling_DrawsOnce()
     {
         var b = new BackItem { Type = 0 };
-        var l = SceneMath.BackLayout(b, 100, 50, 370, -203, ViewW, ViewH);
+        var l = SceneMath.BackLayout(b, 100, 50, 370, -203, ViewW, ViewH, 0);
         Assert.AreEqual(0, l.Left);
         Assert.AreEqual(1, l.Right);
         Assert.AreEqual(0, l.Top);
@@ -95,13 +95,117 @@ public class SceneMathTests
     {
         var h = new BackItem { X = 30, Type = 4, Rx = 0 };
         var v = new BackItem { Y = 40, Type = 5, Ry = 0 };
-        var hl = SceneMath.BackLayout(h, 100, 50, 370, -203, ViewW, ViewH);
-        var vl = SceneMath.BackLayout(v, 100, 50, 370, -203, ViewW, ViewH);
+        var hl = SceneMath.BackLayout(h, 100, 50, 370, -203, ViewW, ViewH, 0);
+        var vl = SceneMath.BackLayout(v, 100, 50, 370, -203, ViewW, ViewH, 0);
         Assert.AreEqual(30, hl.X);
         Assert.AreEqual(40, vl.Y);
         // the other axis still has parallax: screen pos = own offset + half view
         Assert.AreEqual(0 + ViewH / 2, hl.Y + 203);
         Assert.AreEqual(0 + ViewW / 2, vl.X - 370);
+    }
+
+    [TestMethod]
+    public void ScrollOffset_MovesWithTimeAndWrapsByTile()
+    {
+        Assert.AreEqual(0f, SceneMath.ScrollOffset(-2, 100, 0));
+        Assert.AreEqual(-10f, SceneMath.ScrollOffset(-2, 100, 1000)); // -2*100*1000/20000
+        Assert.AreEqual(-10f, SceneMath.ScrollOffset(-2, 100, 11000)); // wraps by 100
+        Assert.AreEqual(0f, SceneMath.ScrollOffset(-2, 0, 1000)); // no tile, no drift
+    }
+
+    [TestMethod]
+    public void BackLayout_ScrollAxis_DriftsWithTime()
+    {
+        var b = new BackItem { X = 0, Type = 4, Rx = -2, Cx = 100 };
+        var a = SceneMath.BackLayout(b, 100, 50, 370, -203, ViewW, ViewH, 0);
+        var c = SceneMath.BackLayout(b, 100, 50, 370, -203, ViewW, ViewH, 1000);
+        Assert.AreEqual(0, a.X);
+        Assert.AreEqual(-10, c.X);
+    }
+
+    [TestMethod]
+    public void FindPortal_SkipsDeadPortals_PicksNearestInRange()
+    {
+        var portals = new List<PortalItem>
+        {
+            new() { Pn = "dead", X = 100, Y = 200, Tm = PortalRules.NoTarget, Tn = "" },
+            new() { Pn = "far", X = 200, Y = 200, Tm = 1, Tn = "x" },
+            new() { Pn = "near", X = 110, Y = 205, Tm = 1, Tn = "y" },
+        };
+        Assert.AreEqual("near", SceneMath.FindPortal(portals, 100, 200)?.Pn);
+        Assert.IsNull(SceneMath.FindPortal(portals, 1000, 2000));
+        Assert.IsNotNull(SceneMath.FindPortal(portals, 135, 205)); // dx 25, edge in
+        Assert.IsNull(SceneMath.FindPortal(portals, 136, 205)); // dx 26, out
+        Assert.IsNotNull(SceneMath.FindPortal(portals, 110, 235)); // dy 30, edge in
+        Assert.IsNull(SceneMath.FindPortal(portals, 110, 236)); // dy 31, out
+    }
+
+    [TestMethod]
+    public void FindLadder_CoversFootTopAndAir_PicksNearest()
+    {
+        var ladders = new List<LadderItem>
+        {
+            new() { X = 100, Y1 = 0, Y2 = 100, Ladder = true },
+            new() { X = 500, Y1 = 0, Y2 = 100, Ladder = false },
+        };
+        var l = ladders[0];
+        Assert.AreSame(l, SceneMath.FindLadder(ladders, 100, 102)); // at the foot
+        Assert.AreSame(l, SceneMath.FindLadder(ladders, 100, -2)); // at the top
+        Assert.AreSame(l, SceneMath.FindLadder(ladders, 105, 50)); // mid-air grab
+        Assert.AreSame(l, SceneMath.FindLadder(ladders, 100, -10)); // 10 above top, edge in
+        Assert.IsNull(SceneMath.FindLadder(ladders, 100, -11)); // 11 above top, out
+        Assert.IsNull(SceneMath.FindLadder(ladders, 111, 50)); // dx 11, out
+        Assert.IsNull(SceneMath.FindLadder(ladders, 100, 111)); // 11 below foot, out
+    }
+
+    [TestMethod]
+    public void MountTop_MountsNearPlatform_IgnoresFarOrNone()
+    {
+        var near = new List<FootholdItem> { new() { X1 = 0, Y1 = 98, X2 = 200, Y2 = 98 } };
+        Assert.IsNotNull(SceneMath.MountTop(near, 100, 100)); // platform at Y1-2
+        var far = new List<FootholdItem> { new() { X1 = 0, Y1 = 150, X2 = 200, Y2 = 150 } };
+        Assert.IsNull(SceneMath.MountTop(far, 100, 100)); // 50 below: no mount
+        var above = new List<FootholdItem> { new() { X1 = 0, Y1 = 50, X2 = 200, Y2 = 50 } };
+        Assert.IsNull(SceneMath.MountTop(above, 100, 100)); // 50 above: not below, no mount
+        Assert.IsNull(SceneMath.MountTop(new List<FootholdItem>(), 100, 100)); // air: no mount
+    }
+
+    [TestMethod]
+    public void StepTo_SlopeChain_PixelWalkNeverDetaches()
+    {
+        // chain-A shape (map 10000): 90px runs at 0.67, exact joints
+        var fhs = new List<FootholdItem>
+        {
+            new() { X1 = 45, Y1 = 245, X2 = 135, Y2 = 305 },
+            new() { X1 = 225, Y1 = 365, X2 = 135, Y2 = 305 }, // same line, reversed
+            new() { X1 = 225, Y1 = 365, X2 = 315, Y2 = 425 },
+        };
+        var g = fhs[0];
+        int py = 245;
+        for (int x = 45; x <= 315; x++) // downhill, pixel by pixel like the client
+        {
+            if (x < Math.Min(g.X1, g.X2) || x > Math.Max(g.X1, g.X2))
+            {
+                var step = SceneMath.StepTo(fhs, x, py);
+                Assert.IsNotNull(step, $"detach downhill at x={x}");
+                g = step!;
+            }
+            py = SceneMath.FootholdY(g, x);
+        }
+        Assert.AreEqual(425, py);
+        g = fhs[2];
+        py = 425;
+        for (int x = 315; x >= 45; x--) // back uphill
+        {
+            if (x < Math.Min(g.X1, g.X2) || x > Math.Max(g.X1, g.X2))
+            {
+                var step = SceneMath.StepTo(fhs, x, py);
+                Assert.IsNotNull(step, $"detach uphill at x={x}");
+                g = step!;
+            }
+            py = SceneMath.FootholdY(g, x);
+        }
+        Assert.AreEqual(245, py);
     }
 
     [TestMethod]

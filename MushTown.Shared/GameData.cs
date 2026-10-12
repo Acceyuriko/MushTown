@@ -9,6 +9,8 @@ public sealed class MapData
     public List<TileItem> Tiles { get; set; } = new();
     public List<ObjItem> Objs { get; set; } = new();
     public List<FootholdItem> Footholds { get; set; } = new();
+    public List<PortalItem> Portals { get; set; } = new();
+    public List<LadderItem> Ladders { get; set; } = new();
 }
 
 public sealed class MapInfo
@@ -87,6 +89,44 @@ public sealed class FootholdItem
     public int X2 { get; set; }
     public int Y2 { get; set; }
     public int Layer { get; set; }
+}
+
+// Portal number rules shared by exporter proof and client use (the two must
+// agree, so they live here, not as magic numbers at each site).
+public static class PortalRules
+{
+    public const int NoTarget = 999999999; // tm with no target (spawns, one-way entrances)
+    public const int ArrivalLookUp = 10; // arrival search starts this far above the portal point
+}
+
+// One portal: ↑ walks into (Tm, Tn), unless Tm is NoTarget (a dead end).
+// Live portals also carry art frames; dead ones have no Frames.
+public sealed class PortalItem
+{
+    public string Pn { get; set; } = "";
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Tm { get; set; }
+    public string Tn { get; set; } = "";
+    public List<PortalFrame> Frames { get; set; } = new();
+}
+
+public sealed class PortalFrame
+{
+    public string Image { get; set; } = "";
+    public int Dx { get; set; }
+    public int Dy { get; set; }
+    public int Delay { get; set; }
+}
+
+// One climbable ladder or rope: a vertical bar from Y1 to Y2 at X.
+// Ladder is true for ladders (climb pose), false for ropes (hang pose).
+public sealed class LadderItem
+{
+    public int X { get; set; }
+    public int Y1 { get; set; }
+    public int Y2 { get; set; }
+    public bool Ladder { get; set; }
 }
 
 // Exported character action: assets/chara/{body}/{action}.json

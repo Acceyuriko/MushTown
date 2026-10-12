@@ -12,20 +12,34 @@ public static class Export
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
-    // W2 exports one map. W4 needs stand2/walk2/jump actions for the player.
-    private const int StartMapId = 100000000;
-    private static readonly string[] CharaActions = new[] { "stand2", "walk2", "jump" };
+    // W6 exports the Maple Island chain. Every map must resolve here: WZ dir
+    // rule is not id/1e8, so FindMapImg searches Map0..Map9.
+    private static readonly int[] MapIds = new[] { 10000, 20000, 1000000, 1010000, 1020000, 2000000 };
 
     public static void Run(string dataDir, string outDir)
     {
         var baseRoot = WzRoot.LoadBase(dataDir);
-        if (!ExportMap(baseRoot, StartMapId, outDir))
+        var saved = new HashSet<string>(); // png names are global: one set for all maps
+        var maps = new Dictionary<int, MapData>();
+        foreach (int mapId in MapIds)
+        {
+            var map = ExportMap(baseRoot, mapId, outDir, saved);
+            if (map == null)
+            {
+                Environment.ExitCode = 1;
+                return;
+            }
+            maps[mapId] = map;
+        }
+        if (!VerifyLinks(maps))
         {
             Environment.ExitCode = 1;
             return;
         }
+        foreach (var map in maps.Values)
+            WriteJson(Path.Combine(outDir, "maps", $"{map.MapId}.json"), map);
         var chara = WzRoot.LoadCategory(dataDir, "Character");
-        foreach (string action in CharaActions)
+        foreach (string action in Net.Actions)
         {
             if (!ExportCharacter(baseRoot, chara, outDir, action))
             {
@@ -36,47 +50,143 @@ public static class Export
         Console.WriteLine("export done -> " + Path.GetFullPath(outDir));
     }
 
+    // Every portal with a real target must land on an exported map and a
+    // portal name that exists there ( Tn matches the target's Pn ).
+    private static bool VerifyLinks(Dictionary<int, MapData> maps)
+    {
+        foreach (var map in maps.Values)
+            foreach (var p in map.Portals)
+            {
+                if (p.Tm == PortalRules.NoTarget) continue;
+                if (!maps.TryGetValue(p.Tm, out var target))
+                {
+                    Console.WriteLine($"map {map.MapId} portal {p.Pn}: target map {p.Tm} not exported");
+                    return false;
+                }
+                // arrival lands on the ground at/below the target portal (top00/top0
+                // platforms sit ~1px above their portal point, so look from y - ArrivalLookUp)
+                var land = target.Portals.FirstOrDefault(q => q.Pn == p.Tn);
+                if (land == null)
+                {
+                    Console.WriteLine($"map {map.MapId} portal {p.Pn}: target portal '{p.Tn}' missing on map {p.Tm}");
+                    return false;
+                }
+                if (SceneMath.ArrivalGround(target.Footholds, land.X, land.Y) == null)
+                {
+                    Console.WriteLine($"map {map.MapId} portal {p.Pn}: no ground below '{p.Tn}' on map {p.Tm}");
+                    return false;
+                }
+            }
+        return true;
+    }
+
     // ---------- map ----------
 
-    private static bool ExportMap(WzRoot root, int mapId, string outDir)
+    // img file names are zero-padded (000010000.img); the MapN dir is not
+    // derivable from the id, so search all ten.
+    private static Wz_Node? FindMapImg(WzRoot root, int mapId)
     {
-        var scene = root.Find($@"Map\Map\Map1\{mapId}.img");
+        for (int n = 0; n <= 9; n++)
+        {
+            var node = root.Find($@"Map\Map\Map{n}\{mapId:D9}.img");
+            if (node != null) return node;
+        }
+        return null;
+    }
+
+    // Portal art, same source as the simulator (MapData.cs:840): game art by
+    // type name (7 looks like 2), image 0 means "default". A portalContinue
+    // node holds the loop, else the frames sit directly under the node (the
+    // simulator's start/exit states are skipped: the loop always shows).
+    private static bool ExportPortalArt(WzRoot root, int mapId, Wz_Node p, PortalItem item, string outDir, HashSet<string> saved)
+    {
+        int pt = Int(p, "pt");
+        string? type = pt switch { 2 => "pv", 7 => "pv", 10 => "ph", _ => null };
+        if (type == null)
+        {
+            Console.WriteLine($"map {mapId} portal {item.Pn}: live type {pt} has no art rule");
+            return false;
+        }
+        if (Int(p, "delay") != 0 || Int(p, "onlyOnce") != 0)
+        {
+            Console.WriteLine($"map {mapId} portal {item.Pn}: delay/onlyOnce portals are not supported");
+            return false;
+        }
+        int image = Int(p, "image");
+        string img = image == 0 ? "default" : image.ToString();
+        var node = root.Find($@"Map\MapHelper.img\portal\game\{type}\{img}");
+        if (node == null)
+        {
+            Console.WriteLine($"map {mapId} portal {item.Pn}: portal art {type}/{img} not found");
+            return false;
+        }
+        var frames = node.Nodes["portalContinue"] ?? node;
+        for (int i = 0; ; i++)
+        {
+            var f = frames.Nodes[i.ToString()];
+            if (f == null) break;
+            var (png, origin) = WzNodeUtil.ReadCanvas(root, f);
+            if (png == null)
+            {
+                Console.WriteLine($"map {mapId} portal {item.Pn}: portal art {type}/{img} frame {i} has no png");
+                return false;
+            }
+            string path = $"portal/{type}/{img}/{i}.png";
+            SaveOnce(png, Path.Combine(outDir, path), saved);
+            int delay = Int(f, "delay", 100);
+            if (delay <= 0)
+            {
+                Console.WriteLine($"map {mapId} portal {item.Pn}: portal art {type}/{img} frame {i} bad delay {delay}");
+                return false;
+            }
+            item.Frames.Add(new PortalFrame { Image = path, Dx = -(origin?.X ?? 0), Dy = -(origin?.Y ?? 0), Delay = delay });
+        }
+        if (item.Frames.Count == 0)
+        {
+            Console.WriteLine($"map {mapId} portal {item.Pn}: portal art {type}/{img} has no frames");
+            return false;
+        }
+        return true;
+    }
+
+    private static MapData? ExportMap(WzRoot root, int mapId, string outDir, HashSet<string> saved)
+    {
+        var scene = FindMapImg(root, mapId);
         if (scene == null)
         {
             Console.WriteLine($"map {mapId} not found");
-            return false;
+            return null;
         }
 
         var map = new MapData { MapId = mapId };
-        var saved = new HashSet<string>();
 
         // info
         var info = scene.Nodes["info"];
         if (info == null)
         {
             Console.WriteLine($"map {mapId}: info node not found");
-            return false;
+            return null;
         }
         map.Info.VrLeft = Int(info, "VRLeft");
         map.Info.VrTop = Int(info, "VRTop");
         map.Info.VrRight = Int(info, "VRRight");
         map.Info.VrBottom = Int(info, "VRBottom");
 
-        // spawn portal: node "0" ("sp") when it has tm == 999999999, else the first
-        // portal in file order with tm == 999999999 (this map has 12 of them)
+        // spawn portal: node "0" ("sp") when it has tm == NoTarget, else the first
+        // portal in file order with tm == NoTarget
         var portalNode = scene.Nodes["portal"];
         Wz_Node? spawnPortal = portalNode?.Nodes["0"];
-        if (spawnPortal == null || Int(spawnPortal, "tm") != 999999999)
+        if (spawnPortal == null || Int(spawnPortal, "tm") != PortalRules.NoTarget)
         {
             spawnPortal = null;
             if (portalNode != null)
                 foreach (Wz_Node p in portalNode.Nodes)
-                    if (Int(p, "tm") == 999999999) { spawnPortal = p; break; }
+                    if (Int(p, "tm") == PortalRules.NoTarget) { spawnPortal = p; break; }
         }
         if (spawnPortal == null)
         {
-            Console.WriteLine($"map {mapId}: no spawn portal (tm == 999999999)");
-            return false;
+            Console.WriteLine($"map {mapId}: no spawn portal (tm == {PortalRules.NoTarget})");
+            return null;
         }
         int spawnX = Int(spawnPortal, "x"), spawnY = Int(spawnPortal, "y");
         map.Info.SpawnX = spawnX;
@@ -107,12 +217,42 @@ public static class Export
         // ground under spawn: foothold covering spawnX, below the portal, closest to its y
         int? groundY = SceneMath.SpawnGroundY(map.Footholds, spawnX, spawnY);
         if (groundY == null)
-            Console.WriteLine($"map {mapId}: no foothold under spawn x={spawnX}, keeping portal y={spawnY}");
+        {
+            Console.WriteLine($"map {mapId}: no foothold under spawn x={spawnX}");
+            return null;
+        }
         else
         {
             map.Info.SpawnY = groundY.Value;
             Console.WriteLine($"map {mapId}: spawn ground y={groundY.Value}");
         }
+
+        // portals + ladders (cross-map Tn links are verified after all maps load)
+        if (portalNode != null)
+            foreach (Wz_Node p in portalNode.Nodes)
+            {
+                var item = new PortalItem
+                {
+                    Pn = Str(p, "pn"),
+                    X = Int(p, "x"),
+                    Y = Int(p, "y"),
+                    Tm = Int(p, "tm"),
+                    Tn = Str(p, "tn")
+                };
+                if (item.Tm != PortalRules.NoTarget && !ExportPortalArt(root, mapId, p, item, outDir, saved))
+                    return null;
+                map.Portals.Add(item);
+            }
+        var ladderNode = scene.Nodes["ladderRope"];
+        if (ladderNode != null)
+            foreach (Wz_Node l in ladderNode.Nodes)
+                map.Ladders.Add(new LadderItem
+                {
+                    X = Int(l, "x"),
+                    Y1 = Int(l, "y1"),
+                    Y2 = Int(l, "y2"),
+                    Ladder = Int(l, "l") != 0
+                });
 
         int missing = 0;     // an image we should have read but could not: export fails
         int unsupported = 0; // Spine/ani node: has no png by design, only printed
@@ -125,10 +265,16 @@ public static class Export
             {
                 string no = Str(b, "no");
                 string bS = Str(b, "bS");
-                string path = $@"Map\Back\{bS}.img\back\{no}";
+                // ani backs keep frames under ani\{no}; like objs, W6 freezes frame 0
+                // (the back\{no} node is a 1x1 placeholder, not a frame)
+                string path = Int(b, "ani") != 0
+                    ? $@"Map\Back\{bS}.img\ani\{no}\0"
+                    : $@"Map\Back\{bS}.img\back\{no}";
                 var (png, origin) = WzNodeUtil.ReadCanvas(root, root.Find(path));
                 if (png == null) { missing++; Console.WriteLine($"  missing {path}"); continue; }
-                string img = $"back/{bS}_{no}.png";
+                // png paths mirror the WZ tree (back/{set}/{no}), so one file per
+                // source node and no clashes between sets sharing a number
+                string img = $"back/{bS}/{no}.png";
                 SaveOnce(png, Path.Combine(outDir, img), saved);
                 int ox = origin?.X ?? 0, oy = origin?.Y ?? 0;
                 bool flip = Int(b, "f") != 0;
@@ -168,7 +314,7 @@ public static class Export
                     var node = root.Find(path);
                     var (png, origin) = WzNodeUtil.ReadCanvas(root, node);
                     if (png == null) { missing++; Console.WriteLine($"  missing {path}"); continue; }
-                    string img = $"tiles/{tS}_{u}_{no}.png";
+                    string img = $"tiles/{tS}/{u}/{no}.png";
                     SaveOnce(png, Path.Combine(outDir, img), saved);
                     int ox = origin?.X ?? 0, oy = origin?.Y ?? 0;
                     map.Tiles.Add(new TileItem
@@ -212,7 +358,7 @@ public static class Export
                         if (png == null) { missing++; Console.WriteLine($"  missing {path} (frame 0 has no png)"); continue; }
                     }
 
-                    string img = $"obj/{oS}_{l0}_{l1}_{l2}.png";
+                    string img = $"obj/{oS}/{l0}/{l1}/{l2}.png";
                     SaveOnce(png, Path.Combine(outDir, img), saved);
                     int ox = origin?.X ?? 0, oy = origin?.Y ?? 0;
                     bool flip = Int(o, "f") != 0;
@@ -230,15 +376,16 @@ public static class Export
         }
 
         Console.WriteLine($"map {mapId}: {map.Backs.Count} back, {map.Tiles.Count} tile, " +
-                          $"{map.Objs.Count} obj, {map.Footholds.Count} foothold, spawn ({spawnX},{map.Info.SpawnY})");
+                          $"{map.Objs.Count} obj, {map.Footholds.Count} foothold, " +
+                          $"{map.Portals.Count} portal, {map.Ladders.Count} ladder, " +
+                          $"spawn ({spawnX},{map.Info.SpawnY})");
         if (unsupported > 0) Console.WriteLine($"  unsupported {unsupported} map item(s) (spine/ani, no image)");
         if (missing > 0)
         {
             Console.WriteLine($"  missing {missing} map item(s)");
-            return false;
+            return null;
         }
-        WriteJson(Path.Combine(outDir, "maps", $"{mapId}.json"), map);
-        return true;
+        return map;
     }
 
     // ---------- character ----------
@@ -248,10 +395,9 @@ public static class Export
     private const string HairImg = @"Hair\00030000.img";
     private const string FaceImg = @"Face\00020000.img";
 
-    // Beginner gear on top of the naked body. The body, head and hair imgs above
-    // plus these 7 all carry the same action/frame layout for stand2, walk2 and
-    // jump; every one must resolve. Face is special: one default emotion node
-    // shared by every frame.
+    // Beginner gear on top of the naked body. Body, head and hair must carry
+    // every action; gear without the art falls back to its stand2 frame (face
+    // stays special: one default emotion node shared by every frame).
     private static readonly string[] CharaEquips = new[]
     {
         @"Cap\01000000.img",
@@ -346,8 +492,15 @@ public static class Export
                 var equipFrame = FindImgFrame(looseRoot, img, action, frameIdx);
                 if (equipFrame == null)
                 {
-                    Console.WriteLine($"character {action} frame {frameIdx}: {img} node not found");
-                    return false;
+                    // equips without this art (weapon/glove climb frames) reuse
+                    // their stand2 frame; body/head/hair stay strict above
+                    equipFrame = FindImgFrame(looseRoot, img, "stand2", frameIdx);
+                    if (equipFrame == null)
+                    {
+                        Console.WriteLine($"character {action} frame {frameIdx}: {img} node not found");
+                        return false;
+                    }
+                    Console.WriteLine($"character {action} frame {frameIdx}: {img} falls back to stand2");
                 }
                 missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(img), equipFrame, outDir, frameIdx, saved, zNames, face, action);
             }

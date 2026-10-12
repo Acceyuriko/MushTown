@@ -77,7 +77,7 @@ public sealed class NetClient : IDisposable
         _log($"connected to {host}:{port} as player {PlayerId}");
     }
 
-    public void SendState(float x, float y, byte action, byte frame, bool facingRight)
+    public void SendState(int map, float x, float y, byte action, byte frame, bool facingRight)
     {
         if (!Connected) return;
         try
@@ -86,6 +86,7 @@ public sealed class NetClient : IDisposable
                 _tcp!.GetStream().Write(Net.Encode(Net.State, w =>
                 {
                     w.Write(PlayerId);
+                    w.Write(map);
                     w.Write(x);
                     w.Write(y);
                     w.Write(action);
@@ -127,12 +128,13 @@ public sealed class NetClient : IDisposable
 
     private void Enqueue(byte[] p)
     {
-        if (p[0] == Net.State && p.Length == 16 && p[13] <= Net.ActJump)
+        if (p[0] == Net.State && p.Length == 20 && p[17] < Net.Actions.Length)
             _events.Enqueue(new RemoteEvent(false,
-                BitConverter.ToInt32(p, 1), BitConverter.ToSingle(p, 5), BitConverter.ToSingle(p, 9),
-                p[13], p[14], p[15] != 0));
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),
+                BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13),
+                p[17], p[18], p[19] != 0));
         else if (p[0] == Net.Leave && p.Length == 5)
-            _events.Enqueue(new RemoteEvent(true, BitConverter.ToInt32(p, 1), 0, 0, 0, 0, false));
+            _events.Enqueue(new RemoteEvent(true, BitConverter.ToInt32(p, 1), 0, 0, 0, 0, 0, false));
         else if (p[0] != Net.Welcome)
             _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
     }
