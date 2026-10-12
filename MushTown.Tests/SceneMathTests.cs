@@ -189,4 +189,59 @@ public class SceneMathTests
         List<FootholdItem> fs = [new() { X1 = 600, Y1 = 297, X2 = 800, Y2 = 297 }];
         Assert.AreEqual(297, SceneMath.SpawnGroundY(fs, 698, 297));
     }
+
+    [TestMethod]
+    public void PartVisible_EarRules()
+    {
+        // humanEar always draws; the other three follow EarType
+        Assert.IsTrue(SceneMath.PartVisible("humanEar", true, 0, false, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("humanEar", true, 2, false, false, 0, false));
+        Assert.IsFalse(SceneMath.PartVisible("ear", true, 0, false, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("ear", true, 1, false, false, 0, false));
+        Assert.IsFalse(SceneMath.PartVisible("lefEar", true, 1, false, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("lefEar", true, 2, false, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("highlefEar", true, 3, false, false, 0, false));
+        Assert.IsFalse(SceneMath.PartVisible("highlefEar", true, 0, false, false, 0, false));
+    }
+
+    [TestMethod]
+    public void PartVisible_HairRules()
+    {
+        // hair out: over-head layers draw, under-cap layers hide
+        Assert.IsTrue(SceneMath.PartVisible("hairOverHead", true, 0, false, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("backHair", true, 0, false, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("backHairOverCape", true, 0, false, false, 0, false));
+        Assert.IsFalse(SceneMath.PartVisible("hair", true, 0, false, false, 0, false));
+        Assert.IsFalse(SceneMath.PartVisible("backHairBelowCap", true, 0, false, false, 0, false));
+        // hair covered (hat): flipped
+        Assert.IsFalse(SceneMath.PartVisible("hairOverHead", true, 0, true, false, 0, false));
+        Assert.IsFalse(SceneMath.PartVisible("backHairOverCape", true, 0, true, false, 0, false));
+        Assert.IsFalse(SceneMath.PartVisible("backHair", true, 0, true, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("backHairBelowCap", true, 0, true, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("hair", true, 0, true, false, 0, false));
+        // shade follows its own flag
+        Assert.IsFalse(SceneMath.PartVisible("hairShade", true, 0, false, false, 0, false));
+        // true needs the hairShade/child-0 lookup before any caller may pass it
+        Assert.IsTrue(SceneMath.PartVisible("hairShade", true, 0, false, true, 0, false));
+    }
+
+    [TestMethod]
+    public void PartVisible_FaceWeaponAndPlainNames()
+    {
+        Assert.IsTrue(SceneMath.PartVisible("face", true, 0, false, false, 0, false));
+        Assert.IsFalse(SceneMath.PartVisible("face", false, 0, false, false, 0, false));
+        // single weapon: every weapon part draws
+        Assert.IsTrue(SceneMath.PartVisible("weapon", true, 0, false, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("weapon1", true, 0, false, false, 0, false));
+        // multi weapon: only the picked index draws
+        Assert.IsTrue(SceneMath.PartVisible("weapon", true, 0, false, false, 0, true));
+        Assert.IsFalse(SceneMath.PartVisible("weapon1", true, 0, false, false, 0, true));
+        Assert.IsFalse(SceneMath.PartVisible("weapon", true, 0, false, false, 1, true));
+        Assert.IsTrue(SceneMath.PartVisible("weapon1", true, 0, false, false, 1, true));
+        Assert.IsTrue(SceneMath.PartVisible("weapon2", true, 0, false, false, 2, true));
+        Assert.IsFalse(SceneMath.PartVisible("weapon0", true, 0, false, false, 0, true));
+        // anything else always draws
+        Assert.IsTrue(SceneMath.PartVisible("body", true, 0, false, false, 0, false));
+        Assert.IsTrue(SceneMath.PartVisible("mail", true, 0, false, false, 0, false));
+    }
 }

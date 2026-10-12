@@ -69,6 +69,24 @@ public static class SceneMath
         return ((screenW - w) / 2, (screenH - h) / 2, w, h);
     }
 
+    // Which part names survive, per AvatarCanvas.cs:718-745. A beginner calls it
+    // with face from the body frame, earType 0, no hair cover, no shade, weapon 0.
+    public static bool PartVisible(string name, bool face, int earType, bool hairCover,
+        bool showHairShade, int weaponIndex, bool multiWeapon) => name switch
+        {
+            "face" => face,
+            "ear" => earType == 1,
+            "lefEar" => earType == 2,
+            "highlefEar" => earType == 3,
+            "hairOverHead" or "backHairOverCape" or "backHair" => !hairCover,
+            "hair" or "backHairBelowCap" => hairCover,
+            // showHairShade=true also needs the hairShade/child-0 lookup (AvatarCanvas.cs:707-714)
+            "hairShade" => showHairShade,
+            _ when multiWeapon && name.StartsWith("weapon") =>
+                name == "weapon" + (weaponIndex == 0 ? "" : weaponIndex.ToString()),
+            _ => true
+        };
+
     // Ground under spawn: foothold covering spawnX, below the portal, closest to its y.
     // Null when no foothold is under the spawn point.
     public static int? SpawnGroundY(List<FootholdItem> footholds, int spawnX, int portalY)

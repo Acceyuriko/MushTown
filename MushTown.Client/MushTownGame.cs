@@ -154,7 +154,7 @@ public class MushTownGame : Game
             foreach (var item in _map.Tiles) { if (item.Layer == layer) DrawTexture(item.Image, item.X, item.Y, false); }
         }
 
-        // standing still on the spawn ground (frame 0 only until W3 animation)
+        // standing still on the spawn ground (frame 0 only until W4 animation)
         foreach (var part in _chara.Frames[0].Parts)
             DrawTexture(part.Image, _map.Info.SpawnX + part.X, _map.Info.SpawnY + part.Y, false);
 
