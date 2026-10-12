@@ -38,7 +38,9 @@
 **W4 已完成：角色会动了。** 导出 stand2/walk2/jump 三个动作（每帧 16/16/17 个
 部件），客户端按 delay 切帧：左右走（walk2）、Alt 跳（jump）、站立（stand2），
 朝向左右翻转，相机跟随，平地跳跃落地。截图加 `--action/--frame/--facing` 参数。
-下一周（W5）：服务端 TCP + 双客户端同步。
+
+**W5 已完成：双人同屏。** 一个开房（`--host`）、一个加入（`--join <ip>`），
+互相看到对方跑/跳（TCP + 长度头二进制消息，服务端中转状态）。不带参数还是单机。
 
 ## 常用命令
 
@@ -52,7 +54,9 @@ dotnet run --project MushTown.Exporter -- dump [路径] [深度]         # 看 B
 dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度] # 看某个分类 wz（如 Character）里的节点
 dotnet run --project MushTown.Exporter -- find <节点名>              # 按名字定位节点
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录] # 导出 assets/
-dotnet run --project MushTown.Client                                # 打开游戏窗口
+dotnet run --project MushTown.Client                                # 打开游戏窗口（单机）
+dotnet run --project MushTown.Client -- --host                       # 开房（本机当主机）
+dotnet run --project MushTown.Client -- --join <ip>                   # 加入主机（本机双开用 127.0.0.1）
 dotnet run --project MushTown.Client -- --shot logs/x.png [--action walk2] [--frame 2] [--facing left]  # 截图后退出（frame 从 0 数）
 git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```

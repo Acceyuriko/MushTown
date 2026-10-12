@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MushTown.Shared\MushTown.Shared.csproj" />
+    <ProjectReference Include="..\MushTown.Server\MushTown.Server.csproj" />
   </ItemGroup>
 
 </Project>

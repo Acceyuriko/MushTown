@@ -26,6 +26,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MushTown.Shared\MushTown.Shared.csproj" />
+    <ProjectReference Include="..\MushTown.Server\MushTown.Server.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.6" />

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using MushTown.Server;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -25,6 +26,8 @@ public class MushTownGame : Game
     private readonly string _shotAction;
     private readonly int _shotFrame;
     private readonly bool _shotFacingRight;
+    private readonly bool _host;
+    private readonly string? _joinHost;
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
@@ -47,15 +50,24 @@ public class MushTownGame : Game
     private float _timerMs;
     private bool _facingRight, _jumpWasDown;
 
-    public MushTownGame(string? shotPath, string shotAction, int shotFrame, bool shotFacingRight)
+    // Net peers, keyed by server id. Empty in solo play and shot mode.
+    private GameServer? _server;
+    private NetClient? _net;
+    private readonly Dictionary<int, RemoteEvent> _remotes = new();
+
+    public MushTownGame(string? shotPath, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost)
     {
         _shotPath = shotPath;
         _shotAction = shotAction;
         _shotFrame = shotFrame;
         _shotFacingRight = shotFacingRight;
+        _host = host;
+        _joinHost = joinHost;
         _assetsDir = FindAssetsDir();
         _graphics = new GraphicsDeviceManager(this);
         IsMouseVisible = true;
+        // net play often runs two instances on one PC; keep the unfocused one at full speed
+        if (host || joinHost != null) InactiveSleepTime = TimeSpan.Zero;
 
         // borderless fullscreen at desktop resolution; the game image itself
         // keeps its own size and gets scaled up to fill the screen
@@ -64,6 +76,8 @@ public class MushTownGame : Game
         _graphics.IsFullScreen = true;
         _graphics.PreferredBackBufferWidth = mode.Width;
         _graphics.PreferredBackBufferHeight = mode.Height;
+
+        Exiting += (_, _) => { _net?.Dispose(); _server?.Dispose(); };
     }
 
     protected override void Initialize()
@@ -99,6 +113,25 @@ public class MushTownGame : Game
 
         // camera starts snapped on target (no opening swoop); Update eases it after moves
         SnapCamera();
+
+        if (_host || _joinHost != null)
+        {
+            var log = new RollLog(Path.Combine("logs", $"net-{Environment.ProcessId}.log"));
+            if (_host)
+            {
+                _server = new GameServer(log.Write);
+                try
+                {
+                    _server.Start();
+                }
+                catch (Exception ex)
+                {
+                    throw new IOException($"cannot host: port {Net.Port} busy? ({ex.Message})", ex);
+                }
+            }
+            _net = new NetClient(log.Write);
+            _net.Connect(_host ? "127.0.0.1" : _joinHost!);
+        }
 
         if (_shotPath != null)
         {
@@ -248,8 +281,38 @@ public class MushTownGame : Game
         _cameraX = (int)Math.Round(_camX);
         _cameraY = (int)Math.Round(_camY);
 
+        // peers: send our state every frame (20 bytes x 60Hz is nothing on LAN,
+        // so no timers), apply theirs as-is (no interpolation yet in W5)
+        if (_net != null)
+        {
+            if (_net.Connected)
+                _net.SendState(_px, _py, ActionCode(_action), (byte)_frame, _facingRight);
+            while (_net.TryTake(out var e))
+                if (e.Gone)
+                    _remotes.Remove(e.Id);
+                else if (e.Frame < _charas[ActionName(e.Action)].Frames.Count)
+                    _remotes[e.Id] = e; // bad frame: not ours, drop it
+            if (!_net.Connected && _remotes.Count > 0)
+                _remotes.Clear(); // link lost: peers vanish, we keep playing solo
+        }
+
         base.Update(gameTime);
     }
+
+    private static byte ActionCode(string action) => action switch
+    {
+        "walk2" => Net.ActWalk,
+        "jump" => Net.ActJump,
+        _ => Net.ActStand,
+    };
+
+    private static string ActionName(byte action) => action switch
+    {
+        Net.ActWalk => "walk2",
+        Net.ActJump => "jump",
+        Net.ActStand => "stand2",
+        _ => throw new InvalidDataException($"bad action code {action}"),
+    };
 
     // character around 70% down the screen, clamped to map bounds
     private (int x, int y) CameraTarget() => (
@@ -326,12 +389,24 @@ public class MushTownGame : Game
             foreach (var item in _map.Tiles) { if (item.Layer == layer) DrawTexture(item.Image, item.X, item.Y, false); }
         }
 
-        // the player: current action frame, mirrored around the feet when facing right
-        var frame = _charas[_action].Frames[_frame];
+        // the player, then each peer: current action frame, mirrored around the
+        // feet when facing right (peers by id, so overlap order never flickers)
         int feetX = (int)Math.Floor(_px), feetY = (int)Math.Floor(_py);
-        foreach (var part in frame.Parts)
+        DrawAvatar(feetX, feetY, _action, _frame, _facingRight);
+        foreach (var r in _remotes.Values.OrderBy(r => r.Id))
+            DrawAvatar((int)Math.Floor(r.X), (int)Math.Floor(r.Y), ActionName(r.Action), r.Frame, r.FacingRight);
+
+        // front backgrounds cover the scene
+        foreach (var item in _map.Backs) { if (item.Front) DrawBack(item); }
+
+        _spriteBatch.End();
+    }
+
+    private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight)
+    {
+        foreach (var part in _charas[action].Frames[frame].Parts)
         {
-            if (_facingRight)
+            if (facingRight)
             {
                 var tex = _textures[part.Image];
                 DrawTexture(part.Image, SceneMath.FlipDrawX(feetX, part.X, tex.Width), feetY + part.Y, true);
@@ -341,11 +416,6 @@ public class MushTownGame : Game
                 DrawTexture(part.Image, feetX + part.X, feetY + part.Y, false);
             }
         }
-
-        // front backgrounds cover the scene
-        foreach (var item in _map.Backs) { if (item.Front) DrawBack(item); }
-
-        _spriteBatch.End();
     }
 
     // One background: parallax on the axes that do not scroll, then tile it over the

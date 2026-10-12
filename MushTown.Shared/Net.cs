@@ -1,0 +1,65 @@
+namespace MushTown.Shared;
+
+// W5 net protocol: TCP, one 4-byte little-endian length header, then a payload
+// of type byte + body. Both ends run the same build, so no versioning yet.
+public static class Net
+{
+    public const int Port = 16631;
+
+    public const byte Welcome = 2; // server -> client: int id ("you are N")
+    public const byte State = 3;   // both ways: int id, float x, float y, byte action, byte frame, byte facing
+    public const byte Leave = 4;   // server -> client: int id (a peer is gone)
+
+    public const byte ActStand = 0;
+    public const byte ActWalk = 1;
+    public const byte ActJump = 2;
+
+    // One send-ready frame: length header + type byte + body.
+    public static byte[] Encode(byte type, Action<BinaryWriter> writeBody)
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(type);
+        writeBody(w);
+        return Frame(ms.ToArray());
+    }
+
+    // Wrap a bare payload (type byte + body) with the length header.
+    public static byte[] Frame(byte[] payload)
+    {
+        byte[] frame = new byte[4 + payload.Length];
+        BitConverter.GetBytes(payload.Length).CopyTo(frame, 0);
+        payload.CopyTo(frame, 4);
+        return frame;
+    }
+}
+
+// One event from the network for the game loop: a peer's fresh state,
+// or Gone when a peer left (then only Id means anything).
+public readonly record struct RemoteEvent(
+    bool Gone, int Id, float X, float Y, byte Action, byte Frame, bool FacingRight);
+
+// Accumulates raw TCP bytes and yields whole payloads (header eaten).
+// TCP splits and merges at will, so one Feed can yield zero, one, or more.
+public sealed class NetReader
+{
+    private readonly List<byte> _buf = new();
+
+    public List<byte[]> Feed(byte[] chunk, int count)
+    {
+        _buf.AddRange(new ArraySegment<byte>(chunk, 0, count));
+        var out_ = new List<byte[]>();
+        while (_buf.Count >= 4)
+        {
+            int len = _buf[0] | (_buf[1] << 8) | (_buf[2] << 16) | (_buf[3] << 24);
+            if (len < 1 || len > 1024)
+                throw new InvalidDataException($"bad net frame length: {len}");
+            if (_buf.Count < 4 + len) break;
+            byte[] payload = new byte[len];
+            _buf.CopyTo(4, payload, 0, len);
+            _buf.RemoveRange(0, 4 + len);
+            out_.Add(payload);
+        }
+        return out_;
+    }
+}
