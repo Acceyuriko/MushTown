@@ -2,7 +2,7 @@ using MushTown.Client;
 
 // [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel|inv|use|stat|hud] [--hit]]
 // --host runs a server plus this client; --join connects to a host. Net and
-// --shot never mix (a screenshot has no peers). No argument means solo play.
+// --shot never mix (a screenshot has no peers). No argument means menus.
 // --hit plants the player mid-swing next to the first mob (game shots only).
 // Anything else is a mistake, not something to ignore.
 string? shotPath = null;

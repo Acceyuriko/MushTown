@@ -75,14 +75,14 @@ public partial class MushTownGame : Game
     private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal, _ctrlWasDown;
     private float _attackLock; // ms of swing left: movement frozen until it hits 0
 
-    // Net peers, keyed by server id. Empty in solo play and shot mode.
+    // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
     private GameServer? _server;
     private NetClient? _net;
     private readonly Dictionary<int, RemoteEvent> _remotes = new();
 
-    // Mobs, keyed by server uid. Solo play drives a local MobWorld; net play
-    // applies server events; shot mode shows a frozen local world.
-    private MobWorld? _soloWorld;
+    // Mobs, keyed by server uid. Shot mode and dropped links drive a local
+    // MobWorld; net play applies server events.
+    private MobWorld? _localWorld;
     private readonly Dictionary<int, MobView> _mobs = new();
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<DamageNumber> _numbers = new();
@@ -270,9 +270,9 @@ public partial class MushTownGame : Game
     // to the first mob and lands one real strike (numbers and all).
     private void SetupShotMobs()
     {
-        StartSoloWorld();
+        StartLocalWorld();
         if (!_shotHit) return;
-        var world = _soloWorld!; // StartSoloWorld just built it
+        var world = _localWorld!; // StartLocalWorld just built it
         var first = world.MobsOn(_mapId).FirstOrDefault()
             ?? throw new InvalidDataException($"--hit needs mobs, map {_mapId} has none");
         _px = first.X - 50;
@@ -359,15 +359,15 @@ public partial class MushTownGame : Game
         _ctrlWasDown = ctrl;
 
         // Ctrl swings the polearm (not on a ladder): the swing locks movement
-        // for one playthrough; net play sends it, solo judges it right here.
+        // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
         if (freshCtrl && _climb == null && _attackLock <= 0 &&
-            ((_net != null && _net.Connected) || _soloWorld != null))
+            ((_net != null && _net.Connected) || _localWorld != null))
         {
             _attackLock = _delays["swingP1"].Sum();
             if (_net != null && _net.Connected) _net.SendAttack();
-            else if (_soloWorld != null)
-                foreach (var h in _soloWorld.Strike(_mapId, _px, _py, _facingRight, Random.Shared))
+            else if (_localWorld != null)
+                foreach (var h in _localWorld.Strike(_mapId, _px, _py, _facingRight, Random.Shared))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft);
         }
 
@@ -556,9 +556,9 @@ public partial class MushTownGame : Game
                 else ApplyHit(m.Uid, m.Damage, m.HpLeft);
             }
             if (!_net.Connected && _remotes.Count > 0)
-                _remotes.Clear(); // link lost: peers vanish, we keep playing solo
-            if (!_net.Connected && _soloWorld == null)
-                StartSoloWorld(); // link lost: a fresh local world keeps the mobs working (kills come back: the drop resets the session)
+                _remotes.Clear(); // link lost: peers vanish, the local world takes over
+            if (!_net.Connected && _localWorld == null)
+                StartLocalWorld(); // link lost: a fresh local world keeps the mobs working (kills come back: the drop resets the session)
         }
 
         base.Update(gameTime);
@@ -622,7 +622,7 @@ public partial class MushTownGame : Game
             LoadMapData(tm);
             LoadMapTextures();
             _remotes.Clear(); // peers stay on the old map; their live states refill this one
-            if (_soloWorld != null) RefreshSoloMobs(); // solo re-lists the new map
+            if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
             else { _mobs.Clear(); _numbers.Clear(); } // net: the server re-pushes them
             _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
         }
@@ -826,7 +826,7 @@ public partial class MushTownGame : Game
         _mobData[mob].Actions.FirstOrDefault(a => a.Name == state)?.Frames
             ?? throw new InvalidDataException($"mob {mob} has no {state} action");
 
-    // A spawn the server pushed (or the solo world listed): the view starts
+    // A spawn the server pushed (or the local world listed): the view starts
     // at the live HP, so late joiners see wounded mobs as wounded.
     private void ApplySpawn(int uid, int mob, float x, float y, int maxHp, int hp)
     {
@@ -834,7 +834,7 @@ public partial class MushTownGame : Game
         _mobs[uid] = new MobView { Mob = mob, X = x, Y = y, Hp = hp, MaxHp = maxHp, Action = idle };
     }
 
-    // A hit the server judged (or the solo world struck): flinch or die, plus
+    // A hit the server judged (or the local world struck): flinch or die, plus
     // a number. A hit for a view we never saw is dropped: a kill in flight
     // across a remap, or a join racing a swing on another thread.
     private void ApplyHit(int uid, int damage, int hpLeft)
@@ -848,20 +848,21 @@ public partial class MushTownGame : Game
         _numbers.Add(new DamageNumber { Text = damage.ToString(), X = m.X, Y = headY });
     }
 
-    // Solo mobs: a fresh world once per session, then re-list the view (map
-    // switches re-list; kills stay dead until the session ends).
-    private void StartSoloWorld()
+    // Local mobs (shots and dropped links): a fresh world once per session,
+    // then re-list the view (map switches re-list; kills stay dead until
+    // the session ends).
+    private void StartLocalWorld()
     {
-        _soloWorld = new MobWorld(_assetsDir);
-        RefreshSoloMobs();
+        _localWorld = new MobWorld(_assetsDir);
+        RefreshLocalMobs();
     }
 
-    private void RefreshSoloMobs()
+    private void RefreshLocalMobs()
     {
         _mobs.Clear();
         _numbers.Clear();
-        _soloWorld!.EnterMap(_mapId);
-        foreach (var s in _soloWorld.MobsOn(_mapId))
+        _localWorld!.EnterMap(_mapId);
+        foreach (var s in _localWorld.MobsOn(_mapId))
             ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);
     }
 

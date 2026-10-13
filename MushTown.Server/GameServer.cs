@@ -28,6 +28,7 @@ public sealed class GameServer : IDisposable
     private readonly Dictionary<int, (int map, float x, float y, bool facing)> _pos = new();
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
+    private DiscoverResponder? _responder; // answers LAN scans while we run (same lifetime as the listener)
     private int _nextId;
     private readonly ConcurrentDictionary<int, Client> _clients = new();
 
@@ -43,6 +44,7 @@ public sealed class GameServer : IDisposable
         _cts = new CancellationTokenSource();
         _listener = new TcpListener(IPAddress.Any, _port);
         _listener.Start();
+        _responder = new DiscoverResponder(tcpPort: _port);
         _log($"server listening on port {_port}");
         _ = Task.Run(() => AcceptLoop(_cts.Token));
     }
@@ -204,6 +206,7 @@ public sealed class GameServer : IDisposable
     {
         _cts?.Cancel();
         _listener?.Stop();
+        _responder?.Dispose();
         foreach (var kv in _clients) kv.Value.Tcp.Close();
     }
 }

@@ -102,14 +102,13 @@ public sealed class AccountStore
     }
 }
 
-// Saved login: who is in plus the last server pick, so the next launch
+// Saved login: who is in plus the last host pick, so the next launch
 // opens on characters. A cache, not data: missing/unreadable file or bad
 // JSON means logged out, where AccountStore.Load would throw.
 public sealed class Session
 {
     public string? User { get; set; }
-    public int Server { get; set; }
-    public string? Ip { get; set; }
+    public string? Host { get; set; } // null = this PC (host here); else the LAN IP to join. Old files lack it (null = own).
 
     public static Session? TryLoad(string path)
     {

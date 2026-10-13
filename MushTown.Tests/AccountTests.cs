@@ -205,13 +205,12 @@ public class AccountTests
         string path = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
         try
         {
-            new Session { User = "bob", Server = 2, Ip = "10.0.0.5" }.Save(path);
+            new Session { User = "bob", Host = "10.0.0.5" }.Save(path);
             Assert.IsFalse(File.Exists(path + ".tmp")); // atomic write leaves no tmp behind
             var back = Session.TryLoad(path);
             Assert.IsNotNull(back);
             Assert.AreEqual("bob", back.User);
-            Assert.AreEqual(2, back.Server);
-            Assert.AreEqual("10.0.0.5", back.Ip);
+            Assert.AreEqual("10.0.0.5", back.Host);
         }
         finally
         {
@@ -237,13 +236,31 @@ public class AccountTests
     }
 
     [TestMethod]
+    public void Session_OldFormat_LoadsAsOwnHost()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, """{"User":"bob","Server":1,"Ip":"127.0.0.1"}""");
+            var back = Session.TryLoad(path);
+            Assert.IsNotNull(back);
+            Assert.AreEqual("bob", back.User);
+            Assert.IsNull(back.Host); // unknown props ignored: old picks become this PC
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void Session_Save_MissingDirectory_CreatesIt()
     {
         string dir = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}");
         string path = Path.Combine(dir, "session.json");
         try
         {
-            new Session { User = "bob", Server = 0 }.Save(path); // first run: data/ does not exist yet
+            new Session { User = "bob" }.Save(path); // first run: data/ does not exist yet (null host = this PC)
             Assert.AreEqual("bob", Session.TryLoad(path)!.User);
         }
         finally

@@ -20,13 +20,15 @@ public partial class MushTownGame
     private string _sessionPath = "";
     private Account? _account;
     private int _slot;
-    private int _serverPick; // 0 solo, 1 host, 2 join
-    private bool _joinOpen; // join-IP popup (solo/host go straight in, no popup)
+    private string? _hostPick; // null = this PC (host here), else the LAN IP to join
+    private Task<List<FoundHost>>? _scanTask; // a running LAN scan (UpdateServer collects it; shots never start one)
+    private List<FoundHost> _hosts = new();
+    private bool _rWasDown;
     private bool _registerOpen;
     private bool _jobPicked;
     private bool _deleteOpen;
     private string _focus = "";
-    private string _user = "", _pass = "", _name = "", _ip = "127.0.0.1";
+    private string _user = "", _pass = "", _name = "";
     private string _error = "";
     private bool _mouseWasDown, _enterWasDown, _escWasDown, _backWasDown;
     private float _backTimer;
@@ -69,9 +71,6 @@ public partial class MushTownGame
     private static Rectangle RegGoRect() => new(513, 428, 165, 48);
     private static Rectangle RegBackRect() => new(688, 428, 165, 48);
     private static Rectangle ServerRowRect(int i) => new(1184, 12 + i * 50, 170, 50);
-    private static Rectangle JoinPanelRect() => new(459, 210, 448, 290);
-    private static Rectangle JoinIpRect() => new(583, 350, 200, 40);
-    private static Rectangle JoinBtnRect() => new(608, 400, 150, 44);
     private static Rectangle CharInfoRect() => new(1135, 336, 200, 292);
     private static Rectangle StartBtnRect() => new(1145, 554, 180, 61);
     private static Rectangle WorldPillRect() => new(1135, 33, 200, 57);
@@ -92,12 +91,10 @@ public partial class MushTownGame
     private static Rectangle LogButtonRect() => new(1266, 708, 80, 40);
     private static Rectangle LogPanelRect() => new(900, 228, 446, 470);
 
-    private static readonly string[] ServerNames = new[] { "Solo", "Host", "Join" };
+    // Mode for StartGame: null pick = host here, else join that IP.
+    private string ServerMode() => _hostPick == null ? "host" : _hostPick;
 
-    // Mode for StartGame: null = solo, "host" = host, else join that ip.
-    private string? ServerMode() => _serverPick == 0 ? null : _serverPick == 1 ? "host" : _ip;
-
-    private string ServerLabel() => _serverPick == 0 ? "Solo" : _serverPick == 1 ? $"Host {Net.Port}" : _ip;
+    private string ServerLabel() => _hostPick == null ? $"Host {Net.Port}" : _hostPick;
 
     private void InitializeMenu(string? shotScreen)
     {
@@ -132,7 +129,6 @@ public partial class MushTownGame
             if (shotScreen == "register") _registerOpen = true; // the two modal states get their own shots
             if (shotScreen == "delete") _deleteOpen = true;
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
-            if (_screen == Screen.Server) { _joinOpen = true; _focus = "ip"; } // the join popup proves popups render
             if (_screen == Screen.Setup) { _name = "newhero"; _focus = "name"; }
             if (shotScreen == "register") _focus = "user"; // shots mirror real focus (gold borders included)
             _panelOpen = shotScreen == "panel"; // art shots stay clean; the panel shot pairs with chars (Start sits under it)
@@ -209,7 +205,6 @@ public partial class MushTownGame
         if (id == "user" && _user.Length < 12 && AccountStore.IsIdChar(c)) _user += c;
         else if (id == "pass" && _pass.Length < 32) _pass += c;
         else if (id == "name" && _name.Length < 12 && AccountStore.IsIdChar(c)) _name += c;
-        else if (id == "ip" && _ip.Length < 15 && (char.IsDigit(c) || c == '.')) _ip += c;
     }
 
     // One hit test for clicks and hovers (the menu Update keeps a short closure over this).
@@ -220,7 +215,6 @@ public partial class MushTownGame
     private bool FocusBelongs() => _screen switch
     {
         Screen.Login => _focus is "user" or "pass",
-        Screen.Server => _focus == "ip",
         Screen.Setup => _focus == "name",
         _ => false,
     };
@@ -254,7 +248,9 @@ public partial class MushTownGame
         _enterWasDown = kb.IsKeyDown(Keys.Enter);
         bool esc = kb.IsKeyDown(Keys.Escape) && !_escWasDown;
         _escWasDown = kb.IsKeyDown(Keys.Escape);
-        if (click || enter || esc) _error = ""; // old errors die on the next click, Enter, or Esc
+        bool r = kb.IsKeyDown(Keys.R) && !_rWasDown;
+        _rWasDown = kb.IsKeyDown(Keys.R);
+        if (click || enter || esc || r) _error = ""; // old errors die on the next click, key, or Esc
 
         // backspace with key repeat (fresh press deletes one at once)
         bool back = kb.IsKeyDown(Keys.Back);
@@ -271,7 +267,7 @@ public partial class MushTownGame
         switch (_screen)
         {
             case Screen.Login: UpdateLogin(click, enter, esc, hit); break;
-            case Screen.Server: UpdateServer(click, enter, esc, hit); break;
+            case Screen.Server: UpdateServer(click, enter, esc, hit, r); break;
             case Screen.Chars: UpdateChars(click, enter, esc, hit); break;
             case Screen.Job: UpdateJob(click, enter, esc, hit); break;
             case Screen.Setup: UpdateSetup(click, enter, esc, hit); break;
@@ -287,7 +283,7 @@ public partial class MushTownGame
             else if (click && hit(RegPassRect())) _focus = "pass";
             else if ((click && hit(RegGoRect())) || enter) DoRegister();
             else if (click && hit(RegBackRect())) CloseRegister();
-            else if (click && !hit(RegPanelRect())) CloseRegister(); // outside click closes (popup/delete do the same)
+            else if (click && !hit(RegPanelRect())) CloseRegister(); // outside click closes (delete does the same)
             return;
         }
         if (click && hit(IdRect())) _focus = "user";
@@ -304,36 +300,31 @@ public partial class MushTownGame
         _focus = "user";
     }
 
-    private void UpdateServer(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
+    // This PC first, then every host the LAN scan found. Enter picks this
+    // PC (the default row); R re-scans while waiting for a host to appear.
+    private void UpdateServer(bool click, bool enter, bool esc, Func<Rectangle, bool> hit, bool r)
     {
+        if (_scanTask != null && _scanTask.IsCompleted) { _hosts = _scanTask.Result; _scanTask = null; }
         if (esc || (click && hit(CancelBtnRect())))
         {
-            if (_joinOpen) { CloseJoin(); return; } // Esc/Cancel closes the popup first (register/delete do the same)
             _screen = Screen.Chars; // back to characters: logout is its own button now (quitting with Esc used to log out)
             _focus = "";
             return;
         }
-        if (!_joinOpen) // the open popup is modal: rows wait until it closes
-        {
-            for (int i = 0; i < 3; i++)
-                if (click && hit(ServerRowRect(i)))
-                {
-                    if (i == 2) { _joinOpen = true; _focus = "ip"; } // join needs an IP first
-                    else EnterChars(i);
-                    return;
-                }
-            if (click && hit(LogoutTextRect())) Logout();
-        }
-        if (!_joinOpen) return;
-        if (click && hit(JoinIpRect())) { _focus = "ip"; return; }
-        if ((click && hit(JoinBtnRect())) || enter) EnterChars(2);
-        else if (click && !hit(JoinPanelRect())) CloseJoin(); // a closed popup takes its focus with it
+        if (enter) { EnterChars(null); return; }
+        for (int i = 0; i < 1 + _hosts.Count; i++)
+            if (click && hit(ServerRowRect(i))) { EnterChars(i == 0 ? null : _hosts[i - 1].Ip); return; }
+        if (click && hit(LogoutTextRect())) Logout();
+        if (r && _scanTask == null) _scanTask = Discovery.ScanAsync();
     }
 
-    private void CloseJoin()
+    // Reaching the server list always re-scans: the LAN may have changed.
+    private void EnterServer()
     {
-        _joinOpen = false;
+        _screen = Screen.Server;
         _focus = "";
+        _hosts = new();
+        _scanTask = Discovery.ScanAsync();
     }
 
     private void UpdateChars(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
@@ -345,7 +336,7 @@ public partial class MushTownGame
             else if (click && !hit(DeletePanelRect())) _deleteOpen = false;
             return;
         }
-        if (esc || (click && hit(CancelBtnRect()))) { _screen = Screen.Server; _focus = ""; return; }
+        if (esc || (click && hit(CancelBtnRect()))) { EnterServer(); return; }
         try
         {
             if (((click && hit(StartBtnRect())) || enter) && _account!.Slots[_slot] != null)
@@ -396,7 +387,6 @@ public partial class MushTownGame
         if (_focus == "user" && _user.Length > 0) _user = _user[..^1];
         else if (_focus == "pass" && _pass.Length > 0) _pass = _pass[..^1];
         else if (_focus == "name" && _name.Length > 0) _name = _name[..^1];
-        else if (_focus == "ip" && _ip.Length > 0) _ip = _ip[..^1];
     }
 
     private void DoLogin()
@@ -404,11 +394,10 @@ public partial class MushTownGame
         try
         {
             _account = _store.Login(_user, _pass);
-            _serverPick = 0;
+            _hostPick = null;
             SaveSession();
             _pass = "";
-            _focus = "";
-            _screen = Screen.Server;
+            EnterServer();
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
@@ -424,14 +413,13 @@ public partial class MushTownGame
         {
             _account = _store.Register(_user, _pass); // one hash: reuse the new account, don't log in again
             created = true; // from here a failed Save must roll the new user back out
-            _serverPick = 0;
+            _hostPick = null;
             SaveSession();
             _store.Save(_accountsPath);
             GameLog($"registered {_user}");
             _pass = "";
-            _focus = "";
             _registerOpen = false;
-            _screen = Screen.Server;
+            EnterServer();
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
@@ -446,7 +434,7 @@ public partial class MushTownGame
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _error = ex.Message;
-            return; // still logged in: the session survived, so stay on Server
+            return; // still logged in: the session survived, so stay put
         }
         _account = null;
         _focus = "user";
@@ -454,18 +442,17 @@ public partial class MushTownGame
     }
 
     // Stay logged in: a past session skips login and the server pick (the pick
-    // defaults to solo at login and updates on every EnterChars, so Chars can
+    // defaults to this PC at login and updates on every EnterChars, so Chars can
     // always land somewhere valid; Cancel still goes back to re-pick).
     private bool TryRestoreSession()
     {
         var s = Session.TryLoad(_sessionPath);
         if (s?.User == null || !_store.Users.TryGetValue(s.User, out var account)
-            || (uint)s.Server > 2 || (s.Server == 2 && !System.Net.IPAddress.TryParse(s.Ip, out _)))
+            || (s.Host != null && !System.Net.IPAddress.TryParse(s.Host, out _)))
             return false;
         _account = account;
         _user = account.User; // logout shows the last name, like a typed login
-        _serverPick = s.Server;
-        if (System.Net.IPAddress.TryParse(s.Ip, out _)) _ip = s.Ip; // keep a good IP for the join popup, drop garbage
+        _hostPick = s.Host;
         _focus = "";
         SelectFirstChara();
         GameLog($"welcome back {_account.User}");
@@ -473,19 +460,17 @@ public partial class MushTownGame
         return true;
     }
 
-    // The login cache: who is in plus the server pick, so the next launch
+    // The login cache: who is in plus the host pick, so the next launch
     // opens on characters. Written on login, register, and every server pick.
     private void SaveSession() =>
-        new Session { User = _account!.User, Server = _serverPick, Ip = _ip }.Save(_sessionPath);
+        new Session { User = _account!.User, Host = _hostPick }.Save(_sessionPath);
 
     // Server choice confirmed: characters become the hub (first occupied selected).
-    private void EnterChars(int server)
+    private void EnterChars(string? host)
     {
-        if (server == 2 && !System.Net.IPAddress.TryParse(_ip, out _)) { _error = $"bad IP {_ip}"; return; } // the join popup stays open
-        _serverPick = server;
+        _hostPick = host;
         try { SaveSession(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _error = ex.Message; } // cache only: still enter
-        _joinOpen = false;
         _focus = "";
         SelectFirstChara();
         GameLog($"server: {ServerLabel()}");
@@ -553,8 +538,8 @@ public partial class MushTownGame
         }
     }
 
-    // mode: null = solo, "host" = host, else join that ip.
-    private void StartGame(string? mode)
+    // mode: "host" = host here, else join that IP.
+    private void StartGame(string mode)
     {
         var chara = _account!.Slots[_slot]!;
         if (chara.Map != _mapId) LoadMapData(chara.Map);
@@ -572,24 +557,20 @@ public partial class MushTownGame
         }
         SnapCamera();
         _remotes.Clear();
-        if (mode != null)
+        try
         {
-            try
-            {
-                StartNet(mode == "host", mode == "host" ? null : mode);
-            }
-            catch
-            {
-                _net?.Dispose(); // failed join/host must not leak a half server
-                _server?.Dispose();
-                _net = null;
-                _server = null;
-                throw;
-            }
+            StartNet(mode == "host", mode == "host" ? null : mode);
         }
-        GameLog($"{chara.Name} entered the game ({mode ?? "solo"})");
-        if (mode == null) StartSoloWorld(); // solo drives its own mob world
-        else { _soloWorld = null; _mobs.Clear(); _numbers.Clear(); } // net: the server pushes mobs
+        catch
+        {
+            _net?.Dispose(); // failed join/host must not leak a half server
+            _server?.Dispose();
+            _net = null;
+            _server = null;
+            throw;
+        }
+        GameLog($"{chara.Name} entered the game ({mode})");
+        _localWorld = null; _mobs.Clear(); _numbers.Clear(); // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
         _upWasDown = kb.IsKeyDown(Keys.Up);
@@ -612,7 +593,7 @@ public partial class MushTownGame
         _net = null;
         _server = null;
         _remotes.Clear();
-        _soloWorld = null;
+        _localWorld = null;
         _mobs.Clear();
         _numbers.Clear();
         try
@@ -639,8 +620,10 @@ public partial class MushTownGame
     private void SaveChara()
     {
         // CLI bypass has no account; menus never entered the game either:
-        // saving menu-time coordinates would wipe the real saved position
-        if (_account == null || _screen != Screen.Game) return;
+        // saving menu-time coordinates would wipe the real saved position.
+        // Shots never save: shot mode rides on a demo account plus an empty
+        // store, so saving would wipe the player's real accounts file.
+        if (_shotPath != null || _account == null || _screen != Screen.Game) return;
         var chara = _account.Slots[_slot]!;
         chara.Map = _mapId;
         chara.X = (int)Math.Floor(_px);
@@ -718,32 +701,23 @@ public partial class MushTownGame
     private void DrawServer(int gx, int gy)
     {
         DrawUi("worldbg.png", 0, 0);
+        // The frame hugs the rows: top once, mid tiled, bot at the content end.
+        int rows = 1 + _hosts.Count;
+        int bottom = 12 + rows * 50;
         DrawUi("row_top.png", 1184, 12);
-        DrawUi("row_mid.png", 1184, 61);
-        DrawUi("row_bot.png", 1184, 94);
-        for (int i = 0; i < 3; i++)
+        int topH = Tex("row_top.png").Height, midH = Tex("row_mid.png").Height;
+        for (int y = 12 + topH; y < bottom; y += midH) DrawUi("row_mid.png", 1184, y);
+        DrawUi("row_bot.png", 1184, bottom);
+        for (int i = 0; i < rows; i++)
         {
             var r = ServerRowRect(i);
             DrawHover(r, gx, gy, 60);
-            if (_joinOpen && i == 2) DrawBoxBorder(r, Color.Gold);
-            DrawTextCentered(ServerNames[i], r.X + r.Width / 2, r.Y + 12, Ink);
+            string name = i == 0 ? "This PC" : _hosts[i - 1].Name;
+            string sub = i == 0 ? "host here" : _hosts[i - 1].Ip;
+            DrawTextCentered(name, r.X + r.Width / 2, r.Y + 6, Ink);
+            DrawTextCentered(sub, r.X + r.Width / 2, r.Y + 26, Hint);
         }
-        if (_joinOpen)
-        {
-            DrawDim(100);
-            var p = JoinPanelRect();
-            DrawUi("ch_top.png", p.X, p.Y);
-            for (int k = 0; k < 5; k++) DrawUi("ch_mid.png", p.X, p.Y + 66 + k * 34);
-            DrawUi("ch_bot.png", p.X, p.Y + 236);
-            // the frame art carries a channel grid: cover it with a white
-            // inset, our rows draw on that instead
-            _spriteBatch.Draw(_pixel, new Rectangle(p.X + 18, p.Y + 66, p.Width - 36, 224), Color.White);
-            DrawTextCentered("Join Game", 683, 288, Ink);
-            DrawTextCentered("Host IP:", 683, 322, Hint);
-            DrawUiBox(JoinIpRect(), _ip, "", _focus == "ip");
-            DrawUiBox(JoinBtnRect(), "Join World", "", false);
-            DrawHover(JoinBtnRect(), gx, gy, new Color(0, 0, 0, 40));
-        }
+        DrawTextCentered(_scanTask != null ? "Searching..." : "R: Refresh", 683, 500, Hint);
         DrawImgButton("btn_cancel.png", CancelBtnRect(), gx, gy);
         DrawTextButton(LogoutTextRect(), "Logout", gx, gy);
         if (_error != "") DrawTextCentered(_error, 683, 540, ErrRed);
@@ -896,20 +870,16 @@ public partial class MushTownGame
         DrawHover(r, gx, gy, 40);
     }
 
-    // Full-screen dim behind a modal (the server popup dims less: the world art stays readable).
+    // Full-screen dim behind a modal (register and delete).
     private void DrawDim(int alpha)
     {
         _spriteBatch.Draw(_pixel, new Rectangle(0, 0, GameWidth, GameHeight), new Color(0, 0, 0, alpha));
     }
 
     // White hover overlay (art buttons take 40, white boxes and rows take 60).
-    private void DrawHover(Rectangle r, int gx, int gy, int alpha) =>
-        DrawHover(r, gx, gy, new Color(255, 255, 255, alpha));
-
-    // The Join button is a white box: it takes a dark veil (white-on-white would be invisible).
-    private void DrawHover(Rectangle r, int gx, int gy, Color veil)
+    private void DrawHover(Rectangle r, int gx, int gy, int alpha)
     {
-        if (HitRect(r, gx, gy)) _spriteBatch.Draw(_pixel, r, veil);
+        if (HitRect(r, gx, gy)) _spriteBatch.Draw(_pixel, r, new Color(255, 255, 255, alpha));
     }
 
     // Self-drawn white modal panel (register and delete have no official art).
