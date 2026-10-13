@@ -1,6 +1,6 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right]]
+// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|select|menu]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means solo play.
 // Anything else is a mistake, not something to ignore.
@@ -11,6 +11,7 @@ int shotFrame = 0;
 bool shotFacingRight = false;
 bool host = false;
 string? join = null;
+string? shotScreen = null;
 var rest = args.ToList();
 if (rest.Count >= 1 && rest[0] == "--host") { host = true; rest.RemoveAt(0); }
 else if (rest.Count >= 2 && rest[0] == "--join") { join = rest[1]; rest.RemoveRange(0, 2); }
@@ -27,29 +28,43 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         else if (rest[i] == "--frame") ok = int.TryParse(rest[i + 1], out shotFrame) && shotFrame >= 0;
         else if (rest[i] == "--facing" && rest[i + 1] == "left") shotFacingRight = false;
         else if (rest[i] == "--facing" && rest[i + 1] == "right") shotFacingRight = true;
+        else if (rest[i] == "--screen" && (rest[i + 1] is "login" or "select" or "menu")) shotScreen = rest[i + 1];
         else ok = false;
     }
 }
 if (shotPath != null && (host || join != null)) ok = false;
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|select|menu]]");
     Environment.ExitCode = 1;
     return;
 }
 
 try
 {
-    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join);
+    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join, shotScreen);
     game.Run();
 }
-catch (InvalidDataException ex)
+catch (Exception ex) when (ex is InvalidDataException or IOException)
 {
+    WriteCrashFile(ex);
     Console.WriteLine($"error: {ex.Message}");
     Environment.ExitCode = 1;
 }
-catch (IOException ex)
+catch (Exception ex) // anything else: leave a crash file, then fail loud
 {
-    Console.WriteLine($"error: {ex.Message}");
+    WriteCrashFile(ex);
+    Console.WriteLine($"error: unexpected crash, see logs/crash-{Environment.ProcessId}.log");
     Environment.ExitCode = 1;
+}
+
+// WinExe has no console on double-click, so every failure also lands in a file.
+void WriteCrashFile(Exception ex)
+{
+    try
+    {
+        Directory.CreateDirectory("logs");
+        File.WriteAllText(Path.Combine("logs", $"crash-{Environment.ProcessId}.log"), ex.ToString());
+    }
+    catch (Exception cex) when (cex is IOException or UnauthorizedAccessException) { } // last resort: console still gets the message
 }

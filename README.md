@@ -42,6 +42,13 @@
 **W5 已完成：双人同屏。** 一个开房（`--host`）、一个加入（`--join <ip>`），
 互相看到对方跑/跳（TCP + 长度头二进制消息，服务端中转状态）。不带参数还是单机。
 
+**W6 已完成：彩虹岛全境可走。** 6 张图闭集合：传送门（↑进，动画实机渲染）、
+梯绳爬行、单向平台下落、趴下、按图隔离的多人同步。
+
+**W7 已完成：账号大厅。** 本地账号（PBKDF2）+ 3 角色栏 + 位置存档
+（`data/accounts.json`，原子写）：注册→建角→下线→重登，数据不丢。
+无参数进登录菜单；`--host/--join/--shot` 照旧直跳（无存档）。
+
 ## 常用命令
 
 命令都在仓库根目录下运行（`assets/`、`logs/` 等相对路径都按当前目录解析）。
@@ -54,10 +61,10 @@ dotnet run --project MushTown.Exporter -- dump [路径] [深度]         # 看 B
 dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度] # 看某个分类 wz（如 Character）里的节点
 dotnet run --project MushTown.Exporter -- find <节点名>              # 按名字定位节点
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录] # 导出 assets/
-dotnet run --project MushTown.Client                                # 打开游戏窗口（单机）
-dotnet run --project MushTown.Client -- --host                       # 开房（本机当主机）
+dotnet run --project MushTown.Client                                # 打开游戏窗口（账号登录菜单）
+dotnet run --project MushTown.Client -- --host                       # 开房（本机当主机，无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>                   # 加入主机（本机双开用 127.0.0.1）
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left]  # 截图后退出（frame 从 0 数）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen login|select|menu]  # 截图后退出（frame 从 0 数）
 git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```
 

@@ -8,7 +8,7 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // Renders the exported map + playable character. Weekly acceptance view.
-public class MushTownGame : Game
+public partial class MushTownGame : Game
 {
     // The game is always drawn at this size, then scaled up to fill the screen.
     private const int GameWidth = 1366;
@@ -37,6 +37,7 @@ public class MushTownGame : Game
     private readonly bool _shotFacingRight;
     private readonly bool _host;
     private readonly string? _joinHost;
+    private readonly string? _shotScreen;
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
@@ -74,7 +75,7 @@ public class MushTownGame : Game
     private NetClient? _net;
     private readonly Dictionary<int, RemoteEvent> _remotes = new();
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost)
+    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
@@ -83,11 +84,10 @@ public class MushTownGame : Game
         _shotFacingRight = shotFacingRight;
         _host = host;
         _joinHost = joinHost;
+        _shotScreen = shotScreen;
         _assetsDir = FindAssetsDir();
         _graphics = new GraphicsDeviceManager(this);
         IsMouseVisible = true;
-        // net play often runs two instances on one PC; keep the unfocused one at full speed
-        if (host || joinHost != null) InactiveSleepTime = TimeSpan.Zero;
 
         // borderless fullscreen at desktop resolution; the game image itself
         // keeps its own size and gets scaled up to fill the screen
@@ -97,7 +97,7 @@ public class MushTownGame : Game
         _graphics.PreferredBackBufferWidth = mode.Width;
         _graphics.PreferredBackBufferHeight = mode.Height;
 
-        Exiting += (_, _) => { _net?.Dispose(); _server?.Dispose(); };
+        Exiting += (_, _) => { SaveChara(); _net?.Dispose(); _server?.Dispose(); };
     }
 
     protected override void Initialize()
@@ -125,23 +125,7 @@ public class MushTownGame : Game
         SnapCamera();
 
         if (_host || _joinHost != null)
-        {
-            var log = new RollLog(Path.Combine("logs", $"net-{Environment.ProcessId}.log"));
-            if (_host)
-            {
-                _server = new GameServer(log.Write);
-                try
-                {
-                    _server.Start();
-                }
-                catch (Exception ex)
-                {
-                    throw new IOException($"cannot host: port {Net.Port} busy? ({ex.Message})", ex);
-                }
-            }
-            _net = new NetClient(log.Write);
-            _net.Connect(_host ? "127.0.0.1" : _joinHost!);
-        }
+            StartNet(_host, _joinHost);
 
         if (_shotPath != null)
         {
@@ -154,6 +138,7 @@ public class MushTownGame : Game
             _facingRight = _shotFacingRight;
         }
 
+        InitializeMenu(_shotScreen);
         base.Initialize();
     }
 
@@ -174,20 +159,27 @@ public class MushTownGame : Game
     // every map switch; textures load separately (see LoadMapTextures).
     private void LoadMapData(int mapId)
     {
-        _mapId = mapId;
-        _map = LoadJson<MapData>(Path.Combine(_assetsDir, "maps", $"{mapId}.json"));
+        var map = LoadJson<MapData>(Path.Combine(_assetsDir, "maps", $"{mapId}.json"));
         // inside a map layer objects come before tiles, then by z, then by file order
         // (OrderBy is stable, so the file index stays the tiebreak) (FrmMapRender.cs:1353-1412)
-        _map.Objs = _map.Objs.OrderBy(o => o.Layer).ThenBy(o => o.Z).ToList();
-        _map.Tiles = _map.Tiles.OrderBy(t => t.Layer).ThenBy(t => t.Z).ToList();
-        _layers = _map.Tiles.Select(t => t.Layer).Concat(_map.Objs.Select(o => o.Layer)).Distinct().OrderBy(l => l).ToList();
-        _spawnGround = SceneMath.GroundBelow(_map.Footholds, _map.Info.SpawnX, _map.Info.SpawnY)
-            ?? throw new InvalidDataException($"map {mapId}: no foothold under spawn ({_map.Info.SpawnX},{_map.Info.SpawnY})");
-        _portalAnims = _map.Portals.Select(_ => (0, 0f)).ToList();
-        _portalDelays = _map.Portals.Select(p => p.Frames.Select(f => f.Delay).ToList()).ToList();
-        for (int i = 0; i < _portalDelays.Count; i++)
-            if (_portalDelays[i].Any(x => x <= 0))
+        map.Objs = map.Objs.OrderBy(o => o.Layer).ThenBy(o => o.Z).ToList();
+        map.Tiles = map.Tiles.OrderBy(t => t.Layer).ThenBy(t => t.Z).ToList();
+        var layers = map.Tiles.Select(t => t.Layer).Concat(map.Objs.Select(o => o.Layer)).Distinct().OrderBy(l => l).ToList();
+        var spawnGround = SceneMath.GroundBelow(map.Footholds, map.Info.SpawnX, map.Info.SpawnY)
+            ?? throw new InvalidDataException($"map {mapId}: no foothold under spawn ({map.Info.SpawnX},{map.Info.SpawnY})");
+        var portalAnims = map.Portals.Select(_ => (0, 0f)).ToList();
+        var portalDelays = map.Portals.Select(p => p.Frames.Select(f => f.Delay).ToList()).ToList();
+        for (int i = 0; i < portalDelays.Count; i++)
+            if (portalDelays[i].Any(x => x <= 0))
                 throw new InvalidDataException($"map {mapId} portal {i} has a bad delay");
+        // all checks passed: commit everything at once, so a bad map leaves
+        // the old map untouched and the menu can retry cleanly
+        _mapId = mapId;
+        _map = map;
+        _layers = layers;
+        _spawnGround = spawnGround;
+        _portalAnims = portalAnims;
+        _portalDelays = portalDelays;
     }
 
     // Stand on this map's spawn ground.
@@ -218,6 +210,7 @@ public class MushTownGame : Game
         foreach (var chara in _charas.Values)
             foreach (var frame in chara.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
+        LoadMenuContent();
     }
 
     private void LoadMapTextures()
@@ -236,10 +229,20 @@ public class MushTownGame : Game
             base.Update(gameTime);
             return;
         }
+        if (_screen != Screen.Game)
+        {
+            UpdateMenu();
+            base.Update(gameTime);
+            return;
+        }
 
         var kb = Keyboard.GetState();
         if (kb.IsKeyDown(Keys.Escape))
-            Exit();
+        {
+            if (_account != null) { ToMenu(); base.Update(gameTime); return; } // menu session: Esc saves and steps out
+            else Exit(); // CLI session has no menu to return to
+        }
+        UpdateLogButton();
         if (_loadBeat > 0) _loadBeat--;
         if (_portalCooldown > 0) _portalCooldown--;
         if (_grabCooldown > 0) _grabCooldown--;
@@ -510,8 +513,17 @@ public class MushTownGame : Game
         GraphicsDevice.SetRenderTarget(_scene);
         if (_loadBeat > 0)
             GraphicsDevice.Clear(Color.Black);
-        else
+        else if (_screen == Screen.Game)
             DrawScene();
+        else
+            DrawMenu();
+        if (_screen == Screen.Game && _shotPath == null)
+        {
+            _spriteBatch.Begin(blendState: BlendState.NonPremultiplied);
+            var (gx, gy) = MouseGamePos(Mouse.GetState());
+            DrawLogOverlay(gx, gy);
+            _spriteBatch.End();
+        }
         GraphicsDevice.SetRenderTarget(null);
 
         if (_shotPath == null)

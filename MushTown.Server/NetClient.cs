@@ -135,7 +135,7 @@ public sealed class NetClient : IDisposable
                 p[17], p[18], p[19] != 0));
         else if (p[0] == Net.Leave && p.Length == 5)
             _events.Enqueue(new RemoteEvent(true, BitConverter.ToInt32(p, 1), 0, 0, 0, 0, 0, false));
-        else if (p[0] != Net.Welcome)
+        else
             _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
     }
 
