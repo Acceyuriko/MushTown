@@ -47,6 +47,7 @@ public partial class MushTownGame : Game
     private readonly bool _host;
     private readonly string? _joinHost;
     private readonly string? _shotScreen;
+    private readonly int _shotTalk; // --talk <npc>: which NPC the talk shot opens
     private readonly bool _shotHit;
     private readonly int _shotSkill; // --skill <id>: 0 means no skill pose
     private readonly int _shotSkillTab; // --skilltab: which job tab the skill window opens on
@@ -158,7 +159,7 @@ public partial class MushTownGame : Game
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0)
+    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
@@ -168,6 +169,7 @@ public partial class MushTownGame : Game
         _host = host;
         _joinHost = joinHost;
         _shotScreen = shotScreen;
+        _shotTalk = shotTalk;
         _shotHit = shotHit;
         _shotSkill = shotSkill;
         _shotSkillTab = shotSkillTab;
@@ -202,6 +204,7 @@ public partial class MushTownGame : Game
     {
         Window.ClientSizeChanged += OnClientSizeChanged;
 
+        LoadQuestData(); // NPC/quest json before maps (views validate placements)
         _mapId = _shotPath != null ? _shotMap : SpawnMapId;
         LoadMapData(_mapId);
         foreach (string action in Net.Actions)
@@ -278,6 +281,7 @@ public partial class MushTownGame : Game
         _spawnGround = spawnGround;
         _portalAnims = portalAnims;
         _portalDelays = portalDelays;
+        EndTalkAndCheckNpcs(); // NPCs are static per map (talk ends with the map)
     }
 
     // Stand on this map's spawn ground.
@@ -310,7 +314,7 @@ public partial class MushTownGame : Game
             foreach (var frame in chara.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
-        if (_shotPath != null && _shotScreen is null or "inv" or "use" or "stat" or "hud" or "skill") // game shots show mobs; menu shots don't
+        if (_shotPath != null && _shotScreen is null or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk") // game shots show mobs; menu shots don't
             SetupShotMobs();
     }
 
@@ -322,6 +326,7 @@ public partial class MushTownGame : Game
     private void SetupShotMobs()
     {
         StartLocalWorld();
+        SetupShotQuests(); // quest/talk screens run the real accept/open path (other shots no-op)
         if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))
             throw new InvalidDataException($"unknown skill: {_shotSkill}");
         if (_shotSkill != 0 && _skills[_shotSkill].Kind == SkillData.KindBuff)
@@ -449,8 +454,15 @@ public partial class MushTownGame : Game
         var kb = Keyboard.GetState();
         if (kb.IsKeyDown(Keys.Escape))
         {
+            if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before exiting
             if (_account != null) { ToChars(); base.Update(gameTime); return; } // menu session: Esc saves and steps out
             else Exit(); // CLI session has no menu to return to
+        }
+        // Talk needs presence: walking out of reach closes the modal.
+        if (_talkNpc != 0 && !_map.Npcs.Any(n => n.NpcId == _talkNpc
+            && Math.Abs(n.X - _px) <= QuestLog.TalkDx && Math.Abs(n.Cy - _py) <= QuestLog.TalkDy))
+        {
+            _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         }
         var ms = Mouse.GetState(); // one click edge for the log button and the HUD
         bool click = ClickEdge(ms);
@@ -1027,6 +1039,8 @@ public partial class MushTownGame : Game
             var d = _drops[uid];
             draws.Add(((int)Math.Floor(d.Y), () => DrawDrop(d)));
         }
+        foreach (var n in _map.Npcs)
+            draws.Add((n.Cy, () => DrawNpc(n)));
         foreach ((int _, Action draw) in draws.OrderBy(d => d.y))
             draw();
 
@@ -1049,6 +1063,52 @@ public partial class MushTownGame : Game
         int px = (int)Math.Floor(m.X) - BarWidth / 2 - _cameraX, py = y - 8 - _cameraY;
         _spriteBatch.Draw(_pixel, new Rectangle(px, py, BarWidth, 5), Color.Black);
         _spriteBatch.Draw(_pixel, new Rectangle(px + 1, py + 1, Math.Max(1, (int)((BarWidth - 2) * (float)m.Hp / m.MaxHp)), 3), new Color(80, 220, 80));
+    }
+
+    // One NPC: stand sprite on its origin-anchored feet, name tag above,
+    // gold "!" when it has quest work (an offer or a ready turn-in).
+    private void DrawNpc(NpcSpawn n)
+    {
+        var data = _npcs[n.NpcId];
+        var tex = _textures[$"npc/{n.NpcId}.png"];
+        int feet = n.X;
+        // Raw art faces left: flipped feet mirror around the origin (avatar parts do the same).
+        int x = n.FacingRight ? SceneMath.FlipDrawX(feet, -data.OriginX, tex.Width) : feet - data.OriginX;
+        int y = n.Cy - data.OriginY;
+        DrawTexture($"npc/{n.NpcId}.png", x, y, n.FacingRight);
+        var tag = _ui.GetSmall(data.Name);
+        int feetX = feet - _cameraX, tagY = y - 20 - _cameraY;
+        _spriteBatch.Draw(_pixel,
+            new Rectangle(feetX - tag.Width / 2 - 3, tagY, tag.Width + 6, 16),
+            new Color(0, 0, 0, 120));
+        _spriteBatch.Draw(tag, new Vector2(feetX - tag.Width / 2, tagY), Color.White);
+        if (NpcHasWork(n.NpcId))
+        {
+            var mark = _ui.GetSmall("!");
+            _spriteBatch.Draw(mark, new Vector2(feetX - mark.Width / 2, tagY - 16),
+                new Color(255, 220, 0));
+        }
+    }
+
+    // Click an NPC in talk reach: the talk panel opens (too far: nothing).
+    private void NpcClick(int gx, int gy)
+    {
+        foreach (var n in _map.Npcs.OrderByDescending(n => n.Cy)) // draw order: high feet on top, clicks match
+        {
+            var data = _npcs[n.NpcId];
+            var tex = _textures[$"npc/{n.NpcId}.png"];
+            int feet = n.X;
+            int x = n.FacingRight ? SceneMath.FlipDrawX(feet, -data.OriginX, tex.Width) : feet - data.OriginX;
+            var rect = new Rectangle(x - _cameraX, n.Cy - data.OriginY - _cameraY,
+                tex.Width, tex.Height);
+            if (!HitRect(rect, gx, gy)) continue;
+            if (Math.Abs(n.X - _px) > QuestLog.TalkDx || Math.Abs(n.Cy - _py) > QuestLog.TalkDy) continue; // an overlapped NPC behind may be in reach
+            _talkNpc = n.NpcId;
+            _talkQuest = 0;
+            _talkPage = 0;
+            _showSubmenu = false;
+            return;
+        }
     }
 
     // One ground drop: the sprite sits on its feet (coin or potion icon).
@@ -1183,7 +1243,7 @@ public partial class MushTownGame : Game
             if (Random.Shared.NextDouble() * 100 < chance) // visible count: rolled client-side, shown in the window
                 _orbs = Math.Min(_orbs + 1, _skills[SkillData.ComboAttack].OrbMax);
         }
-        if (hpLeft == 0 && mine) GainExp(exp);
+        if (hpLeft == 0 && mine) { GainExp(exp); BumpQuestKills(m.Mob); }
     }
 
     // One AI step: snap the pose, face along. hit1/die1 own the pose until
@@ -1233,6 +1293,7 @@ public partial class MushTownGame : Game
         _py = SceneMath.FootholdY(_ground, _map.Info.SpawnX);
         ResetMotion();
         SnapCamera();
+        _talkNpc = 0; _talkQuest = 0; _talkPage = 0; // death teleports: no reload on the same map, so end talk here
         GameLog("you died");
     }
 
@@ -1627,7 +1688,8 @@ public partial class MushTownGame : Game
         _invPos = new Point(Layout.Inv.X, Layout.Inv.Y);
         _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);
         _skillPos = new Point(Layout.Skill.X, Layout.Skill.Y);
-        _dragInv = null; _dragStat = null; _dragSkill = null; // a reload mid-drag drops the grab
+        _questPos = new Point(Layout.Quest.X, Layout.Quest.Y);
+        _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; // a reload mid-drag drops the grab
     }
 
     private static string FindAssetsDir()

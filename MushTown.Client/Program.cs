@@ -1,6 +1,6 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel|inv|use|stat|hud|skill] [--skilltab <0|1|2>] [--hit | --skill <id> | --drop] [--aiticks <n>]]
+// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel|inv|use|stat|hud|skill|quest|talk] [--skilltab <0|1|2>] [--talk <npc>] [--hit | --skill <id> | --drop] [--aiticks <n>]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means menus.
 // --hit plants the player mid-swing next to the first mob (game shots only).
@@ -11,6 +11,9 @@ using MushTown.Client;
 // --drop swings until the first kill and shows its drops (game shots only).
 // --aiticks <n> runs n 100ms AI steps at the posed feet (moves show, touches
 // don't: the demo must not die mid-pose). Game shots only.
+// --screen quest accepts custom 90001 with 2/5 kills (window + tracker show);
+// --screen talk needs --talk <npc> and opens that NPC's menu. Talk shots are
+// game shots only.
 // Anything else is a mistake, not something to ignore.
 string? shotPath = null;
 int shotMap = 10000;
@@ -20,6 +23,7 @@ bool shotFacingRight = false;
 bool host = false;
 string? join = null;
 string? shotScreen = null;
+int shotTalk = 0;
 int shotSkillTab = 0;
 bool shotHit = false;
 int shotSkill = 0;
@@ -39,13 +43,14 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         else if (rest[i] == "--drop") { shotDrop = true; i++; }
         else if (i + 1 >= rest.Count) ok = false;
         else if (rest[i] == "--skill") { ok = int.TryParse(rest[i + 1], out shotSkill) && shotSkill > 0; i += 2; }
+        else if (rest[i] == "--talk") { ok = int.TryParse(rest[i + 1], out shotTalk) && shotTalk > 0; i += 2; }
         else if (rest[i] == "--aiticks") { ok = int.TryParse(rest[i + 1], out shotAiticks) && shotAiticks > 0; i += 2; }
         else if (rest[i] == "--action") { shotAction = rest[i + 1]; i += 2; }
         else if (rest[i] == "--map") { ok = int.TryParse(rest[i + 1], out shotMap); i += 2; }
         else if (rest[i] == "--frame") { ok = int.TryParse(rest[i + 1], out shotFrame) && shotFrame >= 0; i += 2; }
         else if (rest[i] == "--facing" && rest[i + 1] == "left") { shotFacingRight = false; i += 2; }
         else if (rest[i] == "--facing" && rest[i + 1] == "right") { shotFacingRight = true; i += 2; }
-        else if (rest[i] == "--screen" && (rest[i + 1] is "login" or "server" or "chars" or "job" or "setup" or "register" or "delete" or "panel" or "inv" or "use" or "stat" or "hud" or "skill")) { shotScreen = rest[i + 1]; i += 2; }
+        else if (rest[i] == "--screen" && (rest[i + 1] is "login" or "server" or "chars" or "job" or "setup" or "register" or "delete" or "panel" or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk")) { shotScreen = rest[i + 1]; i += 2; }
         else if (rest[i] == "--skilltab") { ok = int.TryParse(rest[i + 1], out shotSkillTab) && shotSkillTab is >= 0 and <= 2; i += 2; }
         else ok = false;
     }
@@ -55,16 +60,18 @@ if ((shotHit || shotDrop || shotAiticks > 0) && shotScreen != null) ok = false; 
 if (shotSkill != 0 && shotScreen != null && shotScreen != "skill") ok = false; // --skill rides only with the skill window
 if ((shotHit ? 1 : 0) + (shotSkill != 0 ? 1 : 0) + (shotDrop ? 1 : 0) > 1) ok = false; // one pose per shot
 if (shotScreen != "skill" && shotSkillTab != 0) ok = false; // --skilltab needs the skill window
+if (shotTalk != 0 && shotScreen != "talk") ok = false; // --talk rides only with the talk screen
+if (shotScreen == "talk" && shotTalk == 0) ok = false; // the talk screen needs its NPC
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel|inv|use|stat|hud|skill] [--skilltab <0|1|2>] [--hit | --skill <id> | --drop] [--aiticks <n>]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel|inv|use|stat|hud|skill|quest|talk] [--skilltab <0|1|2>] [--talk <npc>] [--hit | --skill <id> | --drop] [--aiticks <n>]]");
     Environment.ExitCode = 1;
     return;
 }
 
 try
 {
-    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks);
+    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks);
     game.Run();
 }
 catch (Exception ex) when (ex is InvalidDataException or IOException)

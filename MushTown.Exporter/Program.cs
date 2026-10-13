@@ -7,6 +7,7 @@ using MushTown.Exporter;
 //   find     <node name>                      locate nodes by name under Base
 //   uipng    [Category] <node-path> <out.png>   save one canvas as png
 //   export   [DataDir] [OutDir]               export map + character assets
+//   questscan <npcid> [<npcid>...]       list quests starting/ending at these NPCs
 // Only smoke and export take a DataDir; the others always read the default one,
 // so their first argument is their own.
 string cmd = args.Length > 0 ? args[0] : "smoke";
@@ -62,9 +63,19 @@ switch (cmd)
         Environment.ExitCode = 1;
         return;
 
+    case "questscan":
+        if (args.Length < 2)
+        {
+            Console.WriteLine("usage: questscan <npcid> [<npcid>...]");
+            Environment.ExitCode = 1;
+            return;
+        }
+        Environment.ExitCode = QuestScan.Run(WzRoot.LoadBase(ExporterPaths.DataDir), args[1..]) ? 0 : 1;
+        return;
+
     default:
         Console.WriteLine($"unknown command: {cmd}");
-        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir]");
+        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir] | questscan <npcid> [<npcid>...]");
         Environment.ExitCode = 1;
         return;
 }

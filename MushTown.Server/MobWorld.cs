@@ -152,22 +152,22 @@ public sealed class MobWorld
     // Mobs face left until the AI turns them.
     private static Live Plant(int uid, int mob, int map, float x, float y,
         (int hp, double def, int exp, int touch, int speed, int aggro) st) => new()
-    {
-        Uid = uid,
-        Mob = mob,
-        Map = map,
-        X = x,
-        Y = y,
-        HomeX = x,
-        HomeY = y,
-        Hp = st.hp,
-        MaxHp = st.hp,
-        Def = st.def,
-        Exp = st.exp,
-        Touch = st.touch,
-        Speed = st.speed,
-        Aggro = st.aggro
-    };
+        {
+            Uid = uid,
+            Mob = mob,
+            Map = map,
+            X = x,
+            Y = y,
+            HomeX = x,
+            HomeY = y,
+            Hp = st.hp,
+            MaxHp = st.hp,
+            Def = st.def,
+            Exp = st.exp,
+            Touch = st.touch,
+            Speed = st.speed,
+            Aggro = st.aggro
+        };
 
     // Live mobs on one map, for clients entering it.
     public List<Spawn> MobsOn(int map)
@@ -441,18 +441,34 @@ public sealed class MobWorld
     {
         var data = _maps[m.Map]; // lives only exist after EnterMap loaded it
         float px = Math.Clamp(m.X - 7, data.Info.VrLeft, data.Info.VrRight);
-        var pile = new GroundDrop { Uid = _nextDrop++, Map = m.Map, X = px,
+        var pile = new GroundDrop
+        {
+            Uid = _nextDrop++,
+            Map = m.Map,
+            X = px,
             Y = LandY(data.Footholds, px, m.Y),
-            Kind = DropKind.Mesos, Id = 10 + rng.Next(21), Count = 1, MsLeft = DropMs };
+            Kind = DropKind.Mesos,
+            Id = 10 + rng.Next(21),
+            Count = 1,
+            MsLeft = DropMs
+        };
         _drops.Add(pile);
         _fresh.Add(new Drop(pile.Uid, pile.Map, pile.X, pile.Y, pile.Kind, pile.Id, pile.Count));
         double roll = rng.NextDouble();
         int potion = roll < 0.10 ? ItemData.RedPotion : roll < 0.14 ? ItemData.BluePotion : 0;
         if (potion == 0) return;
         float bx = Math.Clamp(m.X + 7, data.Info.VrLeft, data.Info.VrRight);
-        var bottle = new GroundDrop { Uid = _nextDrop++, Map = m.Map, X = bx,
+        var bottle = new GroundDrop
+        {
+            Uid = _nextDrop++,
+            Map = m.Map,
+            X = bx,
             Y = LandY(data.Footholds, bx, m.Y),
-            Kind = DropKind.Item, Id = potion, Count = 1, MsLeft = DropMs };
+            Kind = DropKind.Item,
+            Id = potion,
+            Count = 1,
+            MsLeft = DropMs
+        };
         _drops.Add(bottle);
         _fresh.Add(new Drop(bottle.Uid, bottle.Map, bottle.X, bottle.Y, bottle.Kind, bottle.Id, bottle.Count));
     }

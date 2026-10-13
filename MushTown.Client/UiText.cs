@@ -45,6 +45,35 @@ public sealed class UiText : IDisposable
         return tex;
     }
 
+    // Word-wrap for dialog/quest bodies (small font; explicit \n splits
+    // first, then greedy words; a word wider than the box splits by char).
+    public List<string> Wrap(string text, float maxWidth)
+    {
+        var lines = new List<string>();
+        using var bmp = new Bitmap(1, 1, PixelFormat.Format32bppArgb);
+        using var meas = Graphics.FromImage(bmp);
+        foreach (string para in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            string line = "";
+            foreach (string word in para.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                string test = line == "" ? word : line + " " + word;
+                if (meas.MeasureString(test, _small).Width <= maxWidth) { line = test; continue; }
+                if (line != "") lines.Add(line);
+                line = word;
+                while (meas.MeasureString(line, _small).Width > maxWidth && line.Length > 1)
+                {
+                    int n = line.Length - 1;
+                    while (n > 1 && meas.MeasureString(line[..n], _small).Width > maxWidth) n--;
+                    lines.Add(line[..n]);
+                    line = line[n..];
+                }
+            }
+            lines.Add(line);
+        }
+        return lines;
+    }
+
     // One texture for a stack of lines (the log panel rebuilds this on change).
     public Texture2D BakeBlock(List<string> lines, int width)
     {

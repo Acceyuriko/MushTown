@@ -198,5 +198,7 @@ public sealed class CharaSlot
     public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
     public List<string>? Equips { get; set; }
     public Dictionary<int, int> SkillLv { get; set; } = new();
-    public List<int> Quests { get; set; } = new();
+    public List<int> Quests { get; set; } = new(); // accepted quest ids
+    public List<int> QuestsDone { get; set; } = new(); // turned-in quest ids
+    public Dictionary<string, int> QuestKills { get; set; } = new(); // "qid:index" -> capped kill count
 }

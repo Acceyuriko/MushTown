@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
@@ -19,6 +20,19 @@ public static class UiPng
 
     public static bool Save(WzRoot root, string category, string nodePath, string outPath)
     {
+        if (!TryRead(root, category, nodePath, out Wz_Png? png, out Wz_Vector? origin))
+            return false;
+        WzNodeUtil.SavePng(png, outPath);
+        Console.WriteLine($"{outPath}: {png.Width}x{png.Height} origin={origin?.X},{origin?.Y}");
+        return true;
+    }
+
+    // Same link walk without the save: exporters needing the origin read here.
+    public static bool TryRead(WzRoot root, string category, string nodePath,
+        [NotNullWhen(true)] out Wz_Png? png, out Wz_Vector? origin)
+    {
+        png = null;
+        origin = null;
         Wz_Node? node = WzNodeUtil.ResolveUol(root.Find(nodePath));
         if (node == null)
         {
@@ -30,7 +44,7 @@ public static class UiPng
         // behind an _outlink like "<Category>/_Canvas/...". Links are absolute
         // from the Data dir, but this root IS the category tree, so strip the
         // "<Category>/" prefix.
-        Wz_Vector? origin = node.Nodes["origin"]?.Value as Wz_Vector;
+        origin = node.Nodes["origin"]?.Value as Wz_Vector;
         Wz_Node? target = node;
         while (target != null)
         {
@@ -44,14 +58,12 @@ public static class UiPng
                 : root.Find(link.StartsWith(category + "/") ? link.Substring(category.Length + 1) : link);
             target = WzNodeUtil.ResolveUol(target);
         }
-        Wz_Png? png = target?.Value as Wz_Png;
+        png = target?.Value as Wz_Png;
         if (png == null)
         {
             Console.WriteLine($"no image at: {nodePath}");
             return false;
         }
-        WzNodeUtil.SavePng(png, outPath);
-        Console.WriteLine($"{outPath}: {png.Width}x{png.Height} origin={origin?.X},{origin?.Y}");
         return true;
     }
 }

@@ -123,6 +123,22 @@ public static class Export
         }
         foreach (var map in maps.Values)
             WriteJson(Path.Combine(outDir, "maps", $"{map.MapId}.json"), map);
+        var str = WzRoot.LoadCategory(dataDir, "String");
+        var npc = WzRoot.LoadCategory(dataDir, "Npc");
+        var npcIds = maps.Values.SelectMany(m => m.Npcs).Select(n => n.NpcId).Distinct().OrderBy(id => id);
+        foreach (int npcId in npcIds)
+        {
+            if (!ExportNpc(npc, str, npcId, outDir, saved))
+            {
+                Environment.ExitCode = 1;
+                return;
+            }
+        }
+        if (!ExportQuests(baseRoot, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         var chara = WzRoot.LoadCategory(dataDir, "Character");
         foreach (string action in Net.Actions)
         {
@@ -135,7 +151,7 @@ public static class Export
         var mob = WzRoot.LoadCategory(dataDir, "Mob");
         foreach (int mobId in Mobs.Keys.OrderBy(id => id))
         {
-            if (!ExportMob(mob, mobId, outDir, saved))
+            if (!ExportMob(mob, str, mobId, outDir, saved))
             {
                 Environment.ExitCode = 1;
                 return;
@@ -154,7 +170,6 @@ public static class Export
             return;
         }
         var skill = WzRoot.LoadCategory(dataDir, "Skill");
-        var str = WzRoot.LoadCategory(dataDir, "String");
         if (!ExportSkills(skill, str, outDir, saved))
         {
             Environment.ExitCode = 1;
@@ -381,19 +396,32 @@ public static class Export
                     Ladder = Int(l, "l") != 0
                 });
 
-        // life: mob spawn points only (NPCs wait for W14). The id comes as a
-        // zero-padded string ("0100000"), so parse it; every mob must be exported.
+        // life: mob spawn points and NPC placements (hide=1 skips: quest
+        // phantoms). Ids come zero-padded ("0100000"), so parse them; every
+        // mob must be exported, NPC art follows after the maps.
         var lifeNode = scene.Nodes["life"];
         if (lifeNode != null)
             foreach (Wz_Node l in lifeNode.Nodes)
             {
-                if (Str(l, "type") != "m") continue;
-                if (!int.TryParse(Str(l, "id"), out int mobId) || !Mobs.ContainsKey(mobId))
+                if (Str(l, "type") == "m")
                 {
-                    Console.WriteLine($"map {mapId}: bad or unexported life mob '{Str(l, "id")}'");
-                    return null;
+                    if (!int.TryParse(Str(l, "id"), out int mobId) || !Mobs.ContainsKey(mobId))
+                    {
+                        Console.WriteLine($"map {mapId}: bad or unexported life mob '{Str(l, "id")}'");
+                        return null;
+                    }
+                    map.Life.Add(new LifeItem { MobId = mobId, X = Int(l, "x"), Cy = Int(l, "cy") });
                 }
-                map.Life.Add(new LifeItem { MobId = mobId, X = Int(l, "x"), Cy = Int(l, "cy") });
+                else if (Str(l, "type") == "n")
+                {
+                    if (Int(l, "hide") != 0) continue;
+                    if (!int.TryParse(Str(l, "id"), out int npcId))
+                    {
+                        Console.WriteLine($"map {mapId}: bad life npc '{Str(l, "id")}'");
+                        return null;
+                    }
+                    map.Npcs.Add(new NpcSpawn { NpcId = npcId, X = Int(l, "x"), Cy = Int(l, "cy"), FacingRight = Int(l, "f") != 0 });
+                }
             }
 
         int missing = 0;     // an image we should have read but could not: export fails
@@ -680,7 +708,7 @@ public static class Export
     // One mob's art: every action's frames in numeric order (die1 starts at 1,
     // not 0, hence the sort). Frames are bare pngs with no origin or delay,
     // so each gets delay 100 and the client anchors center-bottom.
-    private static bool ExportMob(WzRoot mob, int mobId, string outDir, HashSet<string> saved)
+    private static bool ExportMob(WzRoot mob, WzRoot str, int mobId, string outDir, HashSet<string> saved)
     {
         var img = mob.Find($@"_Canvas\{Mobs[mobId].art}.img");
         if (img == null)
@@ -688,8 +716,23 @@ public static class Export
             Console.WriteLine($"mob {mobId}: art {Mobs[mobId].art}.img not found");
             return false;
         }
-        var data = new MobData { MobId = mobId, MaxHp = Mobs[mobId].hp, Def = Mobs[mobId].def, Exp = Mobs[mobId].exp,
-            Touch = Mobs[mobId].touch, Speed = Mobs[mobId].speed, Aggro = Mobs[mobId].aggro };
+        string mobName = str.Find($@"Mob.img\{mobId}\name")?.GetValueEx<string>("") ?? "";
+        if (mobName == "")
+        {
+            Console.WriteLine($"mob {mobId} has no String name");
+            return false;
+        }
+        var data = new MobData
+        {
+            MobId = mobId,
+            Name = mobName,
+            MaxHp = Mobs[mobId].hp,
+            Def = Mobs[mobId].def,
+            Exp = Mobs[mobId].exp,
+            Touch = Mobs[mobId].touch,
+            Speed = Mobs[mobId].speed,
+            Aggro = Mobs[mobId].aggro
+        };
         foreach (Wz_Node action in img.Nodes)
         {
             if (action.Text == "info") continue;
@@ -741,6 +784,142 @@ public static class Export
             string.Join(", ", data.Actions.Select(a => $"{a.Name} x{a.Frames.Count}")));
         WriteJson(Path.Combine(outDir, "mob", $"{mobId}.json"), data);
         return true;
+    }
+
+    // One placed NPC: stand frame (a 1x1 stub with _outlink into _Canvas) plus
+    // its origin, and the String name + d0 greeting (greeting may be empty).
+    private static bool ExportNpc(WzRoot npc, WzRoot str, int npcId, string outDir, HashSet<string> saved)
+    {
+        if (!UiPng.TryRead(npc, "Npc", $@"{npcId:D7}.img/stand/0", out var png, out var origin))
+            return false;
+        if (png.Width <= 1 || origin == null)
+        {
+            Console.WriteLine($"npc {npcId}: stand art is a stub");
+            return false;
+        }
+        string name = str.Find($@"Npc.img\{npcId}\name")?.GetValueEx<string>("") ?? "";
+        if (name == "")
+        {
+            Console.WriteLine($"npc {npcId} has no String name");
+            return false;
+        }
+        string greet = str.Find($@"Npc.img\{npcId}\d0")?.GetValueEx<string>("") ?? "";
+        SaveOnce(png, Path.Combine(outDir, "npc", $"{npcId}.png"), saved);
+        WriteJson(Path.Combine(outDir, "npc", $"{npcId}.json"),
+            new NpcData { NpcId = npcId, Name = name, Greet = greet, OriginX = origin.X, OriginY = origin.Y });
+        Console.WriteLine($"npc {npcId}: {name} {png.Width}x{png.Height}");
+        return true;
+    }
+
+    // Proof quests (W15 picks the real chain): 1016 carries full Say pages,
+    // 36301 is scripted with empty Say (the client falls back to summaries).
+    private static readonly int[] QuestIds = new[] { 1016, 36301 };
+
+    private static bool ExportQuests(WzRoot baseRoot, string outDir)
+    {
+        foreach (int questId in QuestIds)
+        {
+            var img = baseRoot.Find($@"Quest\QuestData\{questId}.img");
+            if (img == null)
+            {
+                Console.WriteLine($"quest {questId} not found");
+                return false;
+            }
+            var info = img.Nodes["QuestInfo"];
+            string name = info?.Nodes["name"]?.GetValueEx<string>("") ?? "";
+            if (name == "")
+            {
+                Console.WriteLine($"quest {questId} has no name");
+                return false;
+            }
+            var check0 = img.Nodes["Check"]?.Nodes["0"];
+            var check1 = img.Nodes["Check"]?.Nodes["1"];
+            int npc0 = QNum(check0?.Nodes["npc"]), npc1 = QNum(check1?.Nodes["npc"]);
+            if (npc0 == 0 || npc1 == 0)
+            {
+                Console.WriteLine($"quest {questId} has no giver or turn-in (v1 needs both)");
+                return false;
+            }
+            var data = new QuestData
+            {
+                QuestId = questId,
+                Name = name,
+                Npc0 = npc0,
+                Npc1 = npc1,
+                LvMin = QNum(check0?.Nodes["lvmin"]),
+                LvMax = QNum(check0?.Nodes["lvmax"]),
+                Offer = QStr(info?.Nodes["0"]),
+                Progress = QStr(info?.Nodes["1"]),
+                Done = QStr(info?.Nodes["2"]),
+                NeedItemsToComplete = check1?.Nodes["item"]?.Nodes.Count > 0,
+                NeedItemsToAccept = check0?.Nodes["item"]?.Nodes.Count > 0,
+                RewardExp = QNum(img.Nodes["Act"]?.Nodes["1"]?.Nodes["exp"]),
+            };
+            foreach (var side in new[] { check0, check1 })
+                foreach (Wz_Node pre in side?.Nodes["quest"]?.Nodes ?? Enumerable.Empty<Wz_Node>())
+                    if (QNum(pre.Nodes["state"]) == 2)
+                    {
+                        int preId = QNum(pre.Nodes["id"]);
+                        if (preId == 0)
+                        {
+                            Console.WriteLine($"quest {questId} has a zero pre id");
+                            return false;
+                        }
+                        if (!data.Pre.Contains(preId)) data.Pre.Add(preId); // both sides may list it
+                    }
+            var say0 = img.Nodes["Say"]?.Nodes["0"];
+            var say1 = img.Nodes["Say"]?.Nodes["1"];
+            string first0 = QStr(say0?.Nodes["0"]);
+            if (first0 != "") data.Say0.Add(first0);
+            data.Say0.AddRange(QPages(say0?.Nodes["yes"]));
+            string first1 = QStr(say1?.Nodes["0"]);
+            if (first1 != "") data.Say1.Add(first1);
+            data.Say1.AddRange(QPages(say1?.Nodes["yes"]));
+            data.Stop = QStr(say1?.Nodes["stop"]?.Nodes["0"]);
+            if (data.Stop == "") data.Stop = QStr(say1?.Nodes["stop"]?.Nodes["mob"]?.Nodes["0"]);
+            // Mob keys ("0","1",...) sort numeric like QPages: #a order-1 is the index.
+            var mobs = (check1?.Nodes["mob"]?.Nodes ?? Enumerable.Empty<Wz_Node>())
+                .OrderBy(m => int.TryParse(m.Text, out int key) ? key : int.MaxValue);
+            foreach (Wz_Node m in mobs)
+            {
+                int mob = QNum(m.Nodes["id"]), count = QNum(m.Nodes["count"]);
+                if (mob == 0 || count == 0)
+                {
+                    Console.WriteLine($"quest {questId} has a zero kill (mob {mob} x{count})");
+                    return false;
+                }
+                data.Kills.Add(new QuestKill { Mob = mob, Count = count });
+            }
+            if (data.Kills.Count > 9)
+            {
+                Console.WriteLine($"quest {questId} has {data.Kills.Count} kills (v1 takes 9)");
+                return false;
+            }
+            Console.WriteLine($"quest {questId}: {name} kills={data.Kills.Count} say0={data.Say0.Count} say1={data.Say1.Count}");
+            WriteJson(Path.Combine(outDir, "quest", $"{questId}.json"), data);
+        }
+        return true;
+    }
+
+    // Quest numbers read as int or padded string (missing = 0, e.g. no lvmin).
+    private static int QNum(Wz_Node? node) => node?.Value switch
+    {
+        int i => i,
+        string s when int.TryParse(s, out int n) => n,
+        _ => 0
+    };
+
+    private static string QStr(Wz_Node? node) => node?.Value as string ?? "";
+
+    // Numbered string pages in key order (yes/0, yes/1, ...).
+    private static List<string> QPages(Wz_Node? node)
+    {
+        var pages = new List<(int key, string text)>();
+        if (node != null)
+            foreach (Wz_Node p in node.Nodes)
+                if (int.TryParse(p.Text, out int key) && p.Value is string s && s != "")
+                    pages.Add((key, s));
+        return pages.OrderBy(t => t.key).Select(t => t.text).ToList();
     }
 
     // Basic damage skin digits: BasicEff.img NoRed0 0-9 (yellow; the set that

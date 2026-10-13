@@ -130,6 +130,30 @@ public class AccountTests
     }
 
     [TestMethod]
+    public void Save_Load_RoundtripsQuests()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"accounts-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new AccountStore();
+            store.Register("bob", "secret");
+            var chara = store.CreateChara("bob", 0, "hero");
+            chara.Quests.Add(90001);
+            chara.QuestsDone.Add(90002);
+            chara.QuestKills["90001:0"] = 2;
+            store.Save(path);
+            var slot = AccountStore.Load(path).Login("bob", "secret").Slots[0]!;
+            Assert.IsTrue(slot.Quests.Contains(90001));
+            Assert.IsTrue(slot.QuestsDone.Contains(90002));
+            Assert.AreEqual(2, slot.QuestKills["90001:0"]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void Save_MissingDirectory_CreatesIt()
     {
         string dir = Path.Combine(Path.GetTempPath(), $"accounts-{Guid.NewGuid():N}");

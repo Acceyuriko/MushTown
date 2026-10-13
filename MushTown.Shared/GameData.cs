@@ -12,6 +12,7 @@ public sealed class MapData
     public List<PortalItem> Portals { get; set; } = new();
     public List<LadderItem> Ladders { get; set; } = new();
     public List<LifeItem> Life { get; set; } = new();
+    public List<NpcSpawn> Npcs { get; set; } = new();
 }
 
 public sealed class MapInfo
@@ -130,7 +131,7 @@ public sealed class LadderItem
     public bool Ladder { get; set; }
 }
 
-// One mob spawn point: the WZ life node with type "m" (NPCs wait for W14).
+// One mob spawn point: the WZ life node with type "m" (NPCs live in MapData.Npcs).
 // X/Cy is the feet point (the simulator places life at x,cy: FrmMapRender.cs:1612).
 public sealed class LifeItem
 {
@@ -139,11 +140,21 @@ public sealed class LifeItem
     public int Cy { get; set; }
 }
 
+// One NPC placed on a map (life type "n", hide=1 skipped at export).
+public sealed class NpcSpawn
+{
+    public int NpcId { get; set; }
+    public int X { get; set; }
+    public int Cy { get; set; }
+    public bool FacingRight { get; set; }
+}
+
 // Exported mob file: assets/mob/{id}.json. Stats are v1 feel numbers, not WZ:
 // the modern client keeps them server-side (no maxHP node anywhere in the data).
 public sealed class MobData
 {
     public int MobId { get; set; }
+    public string Name { get; set; } = "";
     public int MaxHp { get; set; }
     public double Def { get; set; } // fraction of damage blocked, 0-1 (bwiki 防御; v1: nothing ignores it)
     public int Exp { get; set; } // kill award (v1 feel number, like MaxHp: the modern client keeps it server-side)
