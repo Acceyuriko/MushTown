@@ -77,6 +77,13 @@ public sealed class AccountStore
         return chara;
     }
 
+    public void DeleteChara(string user, int slot)
+    {
+        if ((uint)slot >= 3)
+            throw new InvalidDataException($"bad slot {slot}");
+        Users[user].Slots[slot] = null; // unknown user is a programmer bug (menus always pass a logged-in user)
+    }
+
     // One charset for usernames and character names: the client reuses this
     // while typing so the two can never drift apart.
     public static bool IsIdChar(char c) =>

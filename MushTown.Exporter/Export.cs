@@ -7,6 +7,7 @@ namespace MushTown.Exporter;
 // Writes assets/ from the local MapleStory client data:
 //   assets/maps/{id}.json + tiles/back/obj png files
 //   assets/chara/body/{action}.json + part png files
+//   assets/ui/*.png (login/server/chars/job/setup art, normal states only)
 // Usage: export [DataDir] [OutDir]
 public static class Export
 {
@@ -15,6 +16,38 @@ public static class Export
     // W6 exports the Maple Island chain. Every map must resolve here: WZ dir
     // rule is not id/1e8, so FindMapImg searches Map0..Map9.
     private static readonly int[] MapIds = new[] { 10000, 20000, 1000000, 1010000, 1020000, 2000000 };
+
+    // W7.5 lobby art: (node path, file name). Normal button states only;
+    // hover is a white overlay drawn by the client, so no hover art needed.
+    // Must match Menu.cs UiFiles: every file there must be listed here.
+    private static readonly (string node, string file)[] UiFiles = new[]
+    {
+        ("LoginBack.img/Title/0", "loginbg.png"),
+        ("Login.img/Title_new/backgrd", "loginwin.png"),
+        ("Login.img/Title_new/BtLogin/normal/0", "btn_login.png"),
+        ("LoginBack.img/WorldSelect/default/0/0", "worldbg.png"),
+        ("Login.img/WorldSelect/worldList/top", "row_top.png"),
+        ("Login.img/WorldSelect/worldList/middle", "row_mid.png"),
+        ("Login.img/WorldSelect/worldList/bottom", "row_bot.png"),
+        ("Login.img/WorldSelect/channelList/common/top", "ch_top.png"),
+        ("Login.img/WorldSelect/channelList/common/middle", "ch_mid.png"),
+        ("Login.img/WorldSelect/channelList/common/bottom", "ch_bot.png"),
+        ("Login.img/CharSelect/canvas:charInfo", "charinfo.png"),
+        ("Login.img/CharSelect/BtSelect/normal/0", "btn_start.png"),
+        ("Login.img/CharSelect/BtNew/normal/0", "btn_create.png"),
+        ("Login.img/CharSelect/BtDelete/normal/0", "btn_delete.png"),
+        ("Login.img/CharSelect/BtDeleteConfirm/normal/0", "btn_deleteyes.png"),
+        ("Login.img/CharSelect/selectWorld", "selectworld.png"),
+        ("Login.img/CharSelect/nameTag/0/0", "tag_l.png"),
+        ("Login.img/CharSelect/nameTag/0/1", "tag_m.png"),
+        ("Login.img/CharSelect/nameTag/0/2", "tag_r.png"),
+        ("Login.img/ClassSelect/list/backgrnd", "listbg.png"),
+        ("Login.img/ClassSelect/list/class/button:classEnabled/110/normal/0", "cell_hero.png"),
+        ("Login.img/ClassSelect/button:make/normal/0", "btn_make.png"),
+        ("LoginBack.img/CustomizeChar/000/0/0", "setupbg.png"),
+        ("Login.img/CustomizeChar/000/BtYes/normal/0", "btn_confirm.png"),
+        ("Login.img/CustomizeChar/000/BtNo/normal/0", "btn_cancel.png"),
+    };
 
     public static void Run(string dataDir, string outDir)
     {
@@ -42,6 +75,15 @@ public static class Export
         foreach (string action in Net.Actions)
         {
             if (!ExportCharacter(baseRoot, chara, outDir, action))
+            {
+                Environment.ExitCode = 1;
+                return;
+            }
+        }
+        var ui = WzRoot.LoadCategory(dataDir, "UI");
+        foreach ((string node, string file) in UiFiles)
+        {
+            if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))
             {
                 Environment.ExitCode = 1;
                 return;

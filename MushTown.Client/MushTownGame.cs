@@ -239,7 +239,7 @@ public partial class MushTownGame : Game
         var kb = Keyboard.GetState();
         if (kb.IsKeyDown(Keys.Escape))
         {
-            if (_account != null) { ToMenu(); base.Update(gameTime); return; } // menu session: Esc saves and steps out
+            if (_account != null) { ToChars(); base.Update(gameTime); return; } // menu session: Esc saves and steps out
             else Exit(); // CLI session has no menu to return to
         }
         UpdateLogButton();
@@ -569,6 +569,23 @@ public partial class MushTownGame : Game
         // exported png files carry straight (not premultiplied) alpha
         _spriteBatch.Begin(blendState: BlendState.NonPremultiplied);
 
+        DrawMapBack();
+
+        // the player, then each peer: current action frame, mirrored around the
+        // feet when facing right (peers by id, so overlap order never flickers)
+        int feetX = (int)Math.Floor(_px), feetY = (int)Math.Floor(_py);
+        DrawAvatar(feetX, feetY, _action, _frame, _facingRight);
+        foreach (var r in _remotes.Values.OrderBy(r => r.Id))
+            DrawAvatar((int)Math.Floor(r.X), (int)Math.Floor(r.Y), Net.ActionName(r.Action), r.Frame, r.FacingRight);
+
+        DrawMapFront();
+
+        _spriteBatch.End();
+    }
+
+    // The map without any characters: the chars screen reuses this as its backdrop.
+    private void DrawMapBack()
+    {
         foreach (var item in _map.Backs) { if (!item.Front) DrawBack(item); }
 
         // layers are drawn 0 first; inside one layer objects come before tiles
@@ -586,18 +603,12 @@ public partial class MushTownGame : Game
             var f = portal.Frames[_portalAnims[i].frame];
             DrawTexture(f.Image, portal.X + f.Dx, portal.Y + f.Dy, false);
         }
+    }
 
-        // the player, then each peer: current action frame, mirrored around the
-        // feet when facing right (peers by id, so overlap order never flickers)
-        int feetX = (int)Math.Floor(_px), feetY = (int)Math.Floor(_py);
-        DrawAvatar(feetX, feetY, _action, _frame, _facingRight);
-        foreach (var r in _remotes.Values.OrderBy(r => r.Id))
-            DrawAvatar((int)Math.Floor(r.X), (int)Math.Floor(r.Y), Net.ActionName(r.Action), r.Frame, r.FacingRight);
-
-        // front backgrounds cover the scene
+    // Front backgrounds cover the scene (and the chars-screen avatars too).
+    private void DrawMapFront()
+    {
         foreach (var item in _map.Backs) { if (item.Front) DrawBack(item); }
-
-        _spriteBatch.End();
     }
 
     private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight)

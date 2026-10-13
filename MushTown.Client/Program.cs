@@ -1,6 +1,6 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|select|menu]]
+// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means solo play.
 // Anything else is a mistake, not something to ignore.
@@ -28,14 +28,14 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         else if (rest[i] == "--frame") ok = int.TryParse(rest[i + 1], out shotFrame) && shotFrame >= 0;
         else if (rest[i] == "--facing" && rest[i + 1] == "left") shotFacingRight = false;
         else if (rest[i] == "--facing" && rest[i + 1] == "right") shotFacingRight = true;
-        else if (rest[i] == "--screen" && (rest[i + 1] is "login" or "select" or "menu")) shotScreen = rest[i + 1];
+        else if (rest[i] == "--screen" && (rest[i + 1] is "login" or "server" or "chars" or "job" or "setup" or "register" or "delete" or "panel")) shotScreen = rest[i + 1];
         else ok = false;
     }
 }
 if (shotPath != null && (host || join != null)) ok = false;
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|select|menu]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel]]");
     Environment.ExitCode = 1;
     return;
 }

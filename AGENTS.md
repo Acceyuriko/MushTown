@@ -33,6 +33,6 @@ dotnet run --project MushTown.Exporter -- find <节点名>      # 按名字定�
 dotnet run --project MushTown.Client                        # 打开游戏窗口（账号登录菜单）
 dotnet run --project MushTown.Client -- --host               # 开房（无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>           # 加入主机
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen login|select|menu]  # 截图后退出（验收用，frame 从 0 数）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen login|server|chars|job|setup|register|delete|panel]  # 截图后退出（验收用，frame 从 0 数）
 git clone --recurse-submodules <仓库>                       # 克隆要带子模块
 ```

@@ -60,6 +60,21 @@ public class AccountTests
     }
 
     [TestMethod]
+    public void DeleteChara_ClearsSlot()
+    {
+        var store = new AccountStore();
+        store.Register("bob", "secret");
+        store.CreateChara("bob", 0, "hero");
+        store.DeleteChara("bob", 0);
+        Assert.IsNull(store.Users["bob"].Slots[0]);
+        store.DeleteChara("bob", 0); // deleting an empty slot is a no-op
+        Assert.ThrowsException<InvalidDataException>(() => store.DeleteChara("bob", 3));
+        Assert.ThrowsException<InvalidDataException>(() => store.DeleteChara("bob", -1));
+        store.CreateChara("bob", 0, "hero"); // the freed name is reusable
+        Assert.AreEqual("hero", store.Users["bob"].Slots[0]!.Name);
+    }
+
+    [TestMethod]
     public void Save_Load_RoundtripsPosition()
     {
         string path = Path.Combine(Path.GetTempPath(), $"accounts-{Guid.NewGuid():N}.json");

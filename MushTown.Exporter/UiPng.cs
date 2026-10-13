@@ -6,9 +6,12 @@ namespace MushTown.Exporter;
 // Usage: uipng <node-path> <out.png>   (path like Login.img/Title_new/backgrd)
 public static class UiPng
 {
-    public static bool Run(string nodePath, string outPath)
+    public static bool Run(string nodePath, string outPath) =>
+        Save(WzRoot.LoadCategory(ExporterPaths.DataDir, "UI"), nodePath, outPath);
+
+    // Same save against an already-loaded UI root, so export loads once.
+    public static bool Save(WzRoot root, string nodePath, string outPath)
     {
-        WzRoot root = WzRoot.LoadCategory(ExporterPaths.DataDir, "UI");
         Wz_Node? node = WzNodeUtil.ResolveUol(root.Find(nodePath));
         if (node == null)
         {
