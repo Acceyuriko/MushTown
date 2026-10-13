@@ -147,7 +147,17 @@ public sealed class MobData
     public int MaxHp { get; set; }
     public double Def { get; set; } // fraction of damage blocked, 0-1 (bwiki 防御; v1: nothing ignores it)
     public int Exp { get; set; } // kill award (v1 feel number, like MaxHp: the modern client keeps it server-side)
+    public int Touch { get; set; } // contact damage (flat: mobs roll no variance in v1)
+    public int Speed { get; set; } // walk px/s (wander and chase share it)
+    public int Aggro { get; set; } // chase range in x px (0 = never chases)
     public List<MobAction> Actions { get; set; } = new();
+}
+
+// Drop kinds on the DropSpawn wire shape (mesos pay an amount, items an id+count).
+public static class DropKind
+{
+    public const int Mesos = 0;
+    public const int Item = 1;
 }
 
 public sealed class MobAction

@@ -22,12 +22,16 @@ public static class Export
     // numbers: the modern client keeps them server-side, no maxHP node exists
     // anywhere in the data (verified in W8 recon). EXP pays for levels 1-10
     // (W10 curve: 1035 total, the 23 mobs pay 1225).
-    private static readonly Dictionary<int, (string art, int hp, double def, int exp)> Mobs = new()
+    // Touch/speed/aggro (W13 feel): touch is flat contact damage, speed is
+    // walk px/s (all slower than the player's 140, so everything outruns),
+    // aggro is chase range in x px. No attack actions exist in the art (all
+    // four twins carry only stand/move/hit1/die1), so contact is the attack.
+    private static readonly Dictionary<int, (string art, int hp, double def, int exp, int touch, int speed, int aggro)> Mobs = new()
     {
-        [100000] = ("0100100", 40, 0, 35),     // Snail
-        [100001] = ("0100101", 55, 0, 50),     // Blue Snail
-        [100003] = ("0120100", 70, 0, 65),     // Spore (twin 120100)
-        [100004] = ("1210102", 110, 0.05, 95), // Orange Mushroom (twin 1210102)
+        [100000] = ("0100100", 40, 0, 35, 4, 40, 180),      // Snail
+        [100001] = ("0100101", 55, 0, 50, 6, 45, 220),      // Blue Snail
+        [100003] = ("0120100", 70, 0, 65, 8, 35, 200),      // Spore (twin 120100)
+        [100004] = ("1210102", 110, 0.05, 95, 12, 55, 280), // Orange Mushroom (twin 1210102)
     };
 
     // Skill table: v1 feel numbers (SkillData documents the column rules).
@@ -42,9 +46,9 @@ public static class Export
         [SkillData.SlashBlast] = new() { ReqLevel = 1, MaxLevel = 10, Kind = SkillData.KindActive, Mp = 5, CooldownMs = 3000, DmgLo = 150, DmgHi = 250, MobCount = 6, Range = 160, CastLockMs = 600 },
         [SkillData.WarLeap] = new() { ReqLevel = 3, MaxLevel = 1, Kind = SkillData.KindActive, Mp = 3, CooldownMs = 5000 },
         [SkillData.LeapAttack] = new() { ReqLevel = 5, MaxLevel = 10, Kind = SkillData.KindActive, Mp = 8, CooldownMs = 5000, DmgLo = 150, DmgHi = 250, MobCount = 6, Range = 160, CastLockMs = 600 },
-        [SkillData.IronBody] = new() { ReqLevel = 2, MaxLevel = 10, Kind = SkillData.KindBuff, Mp = 10, CooldownMs = 10000, BuffMs = 120000, HpPct = 3 },
+        [SkillData.IronBody] = new() { ReqLevel = 2, MaxLevel = 10, Kind = SkillData.KindBuff, Mp = 10, CooldownMs = 10000, BuffMs = 120000, HpPct = 3, DefPct = 2 },
         [SkillData.WarriorMastery] = new() { ReqLevel = 4, MaxLevel = 10, Kind = SkillData.KindPassive, HpPct = 2, MovePct = 1 },
-        [SkillData.GuardianArmor] = new() { ReqLevel = 6, MaxLevel = 10, Kind = SkillData.KindPassive, Atk = 2 },
+        [SkillData.GuardianArmor] = new() { ReqLevel = 6, MaxLevel = 10, Kind = SkillData.KindPassive, Atk = 2, DefPct = 1 },
         // 110 Fighter.
         [SkillData.Brandish] = new() { ReqLevel = 6, MaxLevel = 10, Kind = SkillData.KindActive, Mp = 8, CooldownMs = 4000, DmgLo = 140, DmgHi = 230, MobCount = 6, Range = 170, CastLockMs = 600 },
         [SkillData.FlashBlade] = new() { ReqLevel = 8, MaxLevel = 10, Kind = SkillData.KindActive, Mp = 10, CooldownMs = 6000, DmgLo = 130, DmgHi = 220, MobCount = 5, Range = 150, CastLockMs = 400 },
@@ -62,7 +66,7 @@ public static class Export
         [SkillData.ComboSynergy] = new() { ReqLevel = 9, MaxLevel = 5, Kind = SkillData.KindPassive, SynDmg = 2, SynChance = 6 },
         [SkillData.SelfRecovery] = new() { ReqLevel = 10, MaxLevel = 10, Kind = SkillData.KindPassive, RegenHp = 5, RegenMp = 3 },
         [SkillData.ChanceAttack] = new() { ReqLevel = 10, MaxLevel = 10, Kind = SkillData.KindPassive, CritPct = 2 },
-        [SkillData.Endure] = new() { ReqLevel = 10, MaxLevel = 10, Kind = SkillData.KindPassive, HpPct = 3 },
+        [SkillData.Endure] = new() { ReqLevel = 10, MaxLevel = 10, Kind = SkillData.KindPassive, HpPct = 3, DefPct = 2 },
     };
 
     // W7.5 lobby art: (node path, file name). Normal button states only;
@@ -684,7 +688,8 @@ public static class Export
             Console.WriteLine($"mob {mobId}: art {Mobs[mobId].art}.img not found");
             return false;
         }
-        var data = new MobData { MobId = mobId, MaxHp = Mobs[mobId].hp, Def = Mobs[mobId].def, Exp = Mobs[mobId].exp };
+        var data = new MobData { MobId = mobId, MaxHp = Mobs[mobId].hp, Def = Mobs[mobId].def, Exp = Mobs[mobId].exp,
+            Touch = Mobs[mobId].touch, Speed = Mobs[mobId].speed, Aggro = Mobs[mobId].aggro };
         foreach (Wz_Node action in img.Nodes)
         {
             if (action.Text == "info") continue;

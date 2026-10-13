@@ -37,7 +37,7 @@ public partial class MushTownGame
     private const int SkillRowsY = 48; // rows start below the tab strip + SP line
     private const int SkillBodyH = SkillRowsY + 8 * SkillRowH + 8; // strip + SP + rows + bottom pad
 
-    // USE tab slots, fixed order: red potion, blue potion (the only USE items until W13 drops).
+    // USE tab slots, fixed order: red potion, blue potion (starters and W13 drops share them).
     private static readonly int[] UseIds = new[] { ItemData.RedPotion, ItemData.BluePotion };
     private readonly Dictionary<int, ItemData> _items = new();
 
@@ -68,7 +68,7 @@ public partial class MushTownGame
     private static readonly Dictionary<int, string> PassiveBlurb = new()
     {
         [SkillData.WarriorMastery] = "+HP/speed",
-        [SkillData.GuardianArmor] = "+attack",
+        [SkillData.GuardianArmor] = "+attack/DEF",
         [SkillData.WeaponMastery] = "+damage/crit",
         [SkillData.AgileArms] = "+STR",
         [SkillData.FinalAttack] = "bonus hit",
@@ -76,7 +76,7 @@ public partial class MushTownGame
         [SkillData.ComboSynergy] = "+orb gain/dmg",
         [SkillData.SelfRecovery] = "HP/MP regen",
         [SkillData.ChanceAttack] = "+crit",
-        [SkillData.Endure] = "+Max HP",
+        [SkillData.Endure] = "+Max HP/DEF",
     };
     private readonly Dictionary<int, SkillData> _skills = new();
     private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
@@ -488,7 +488,7 @@ public partial class MushTownGame
         (int lo, int hi) = Progression.PanelRange(build.Str, build.Dex, build.WeaponAtk);
         DrawStatRow("Attack Power", $"{lo}~{hi}", r.X, y); y += 16;
         DrawStatRow("Magic ATT", "0", r.X, y); y += 16;
-        DrawStatRow("Defense", "0", r.X, y); y += 16;
+        DrawStatRow("Defense", $"{OwnDef()}", r.X, y); y += 16;
         DrawStatRow("Speed", "100", r.X, y); y += 16;
         DrawStatRow("Jump", "100", r.X, y);
     }

@@ -5,9 +5,9 @@ namespace MushTown.Shared;
 // active damage lerps DmgLo->DmgHi over lv 1..max; every other column is
 // per skill level (value = column x lv), except BuffMs/OrbMax (flat).
 // MP and cooldown never scale (v1). Modern-client gaps, all v1 mapped:
-// Iron Body/Guardian/Endure lose DEF-flavored parts (no mob damage until
-// W13) and keep +MaxHP%/+attack; Weapon Mastery/Chance Attack feed the
-// crit stat; Warrior Mastery moves both run and jump with one column.
+// Iron Body/Guardian/Endure keep +MaxHP%/+attack and add DEF% (W13 mob
+// damage); Weapon Mastery/Chance Attack feed the crit stat; Warrior Mastery
+// moves both run and jump with one column.
 public sealed class SkillData
 {
     // 100 Warrior.
@@ -62,14 +62,15 @@ public sealed class SkillData
     public int OrbMax { get; set; }
     public int OrbDmg { get; set; }
     // Passive, all per skill level: stats, +damage%, crit%, +maxHP%, run and
-    // jump %, flat weapon attack (Guardian v1), regen per 10s tick, Final
-    // Attack proc %, Combo Synergy (+damage% per orb, +gain chance%).
+    // jump %, flat weapon attack (Guardian v1), DEF% (mob touch), regen per
+    // 10s tick, Final Attack proc %, Combo Synergy (+damage% per orb, +gain chance%).
     public int Str { get; set; }
     public int Dex { get; set; }
     public int DmgPct { get; set; }
     public int CritPct { get; set; }
     public int MovePct { get; set; }
     public int Atk { get; set; }
+    public int DefPct { get; set; }
     public int RegenHp { get; set; }
     public int RegenMp { get; set; }
     public int ProcPct { get; set; }

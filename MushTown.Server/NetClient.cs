@@ -13,6 +13,9 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<RemoteEvent> _events = new();
     private readonly ConcurrentQueue<MobEvent> _mobEvents = new();
     private readonly ConcurrentQueue<SkillFxEvent> _fxEvents = new();
+    private readonly ConcurrentQueue<MoveEvent> _moveEvents = new();
+    private readonly ConcurrentQueue<HurtEvent> _hurtEvents = new();
+    private readonly ConcurrentQueue<DropEvent> _dropEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -126,6 +129,14 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.SkillCast, w => { w.Write(skill); w.Write(pct); }));
     }
 
+    // One pickup: the drop uid under our Z key. The server checks map +
+    // reach and answers with a DropTake (a miss answers nothing).
+    public void SendPickup(int uid)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.Pickup, w => w.Write(uid)));
+    }
+
     private void SendFrame(byte[] frame)
     {
         try
@@ -145,6 +156,12 @@ public sealed class NetClient : IDisposable
     public bool TryTakeMob(out MobEvent e) => _mobEvents.TryDequeue(out e);
 
     public bool TryTakeFx(out SkillFxEvent e) => _fxEvents.TryDequeue(out e);
+
+    public bool TryTakeMove(out MoveEvent e) => _moveEvents.TryDequeue(out e);
+
+    public bool TryTakeHurt(out HurtEvent e) => _hurtEvents.TryDequeue(out e);
+
+    public bool TryTakeDrop(out DropEvent e) => _dropEvents.TryDequeue(out e);
 
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
@@ -192,6 +209,24 @@ public sealed class NetClient : IDisposable
             _fxEvents.Enqueue(new SkillFxEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
                 BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), p[21] != 0));
+        else if (p[0] == Net.MobMove && p.Length == 18)
+            _moveEvents.Enqueue(new MoveEvent(
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),
+                BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13), p[17] != 0));
+        else if (p[0] == Net.Hurt && p.Length == 17)
+            _hurtEvents.Enqueue(new HurtEvent(
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
+                BitConverter.ToInt32(p, 13)));
+        else if (p[0] == Net.DropSpawn && p.Length == 29)
+            _dropEvents.Enqueue(new DropEvent(true,
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),
+                BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13),
+                BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21), BitConverter.ToInt32(p, 25), 0));
+        else if (p[0] == Net.DropTake && p.Length == 25)
+            _dropEvents.Enqueue(new DropEvent(false,
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), 0, 0,
+                BitConverter.ToInt32(p, 13), BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21),
+                BitConverter.ToInt32(p, 9)));
         else
             _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
     }

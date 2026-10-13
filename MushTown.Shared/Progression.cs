@@ -103,6 +103,16 @@ public static class Progression
     // and sets the cooldown after this passes (single-threaded: no race).
     public static bool CanCast(CharaSlot chara, SkillData skill, int lv, float cdLeftMs) =>
         lv > 0 && chara.Level >= skill.ReqLevel && chara.Mp >= skill.Mp && cdLeftMs <= 0;
+
+    // One mob touch: DEF% blocks its share (min 1 when damage lands), HP
+    // floors at 0. Returns the damage dealt (the client shows it; Hp 0 means dead).
+    public static int ApplyHurt(CharaSlot chara, int damage, int defPct)
+    {
+        if (damage <= 0) return 0; // a Touch-0 mob is harmless, not chip damage
+        int dealt = Math.Max(1, damage * (100 - defPct) / 100);
+        chara.Hp = Math.Max(0, chara.Hp - dealt);
+        return dealt;
+    }
 }
 
 // The attacker's combat stats (warrior line: STR/DEX + weapon). Int/Luk stay

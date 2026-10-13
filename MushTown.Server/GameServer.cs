@@ -48,6 +48,54 @@ public sealed class GameServer : IDisposable
         _responder = new DiscoverResponder(tcpPort: _port);
         _log($"server listening on port {_port}");
         _ = Task.Run(() => AcceptLoop(_cts.Token));
+        _ = Task.Run(() => TickLoop(_cts.Token));
+    }
+
+    // The AI clock: 10Hz ticks drive mob steps, touches, respawns, and drop
+    // expiry. Judge and tick share the mob lock, so a swing and a step never
+    // interleave mid-list.
+    private const int TickMs = 100;
+
+    private async Task TickLoop(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TickMs, ct);
+                lock (_mobLock)
+                {
+                    var players = new List<(int id, int map, float x, float y)>();
+                    foreach (var kv in _pos) players.Add((kv.Key, kv.Value.map, kv.Value.x, kv.Value.y));
+                    var ev = _mobs.Tick(TickMs, players);
+                    foreach (var mv in ev.Moves)
+                        Broadcast(Net.Encode(Net.MobMove, w =>
+                        {
+                            w.Write(mv.Uid);
+                            w.Write(mv.Map);
+                            w.Write(mv.X);
+                            w.Write(mv.Y);
+                            w.Write(mv.FacingRight);
+                        }));
+                    foreach (var h in ev.Hurts)
+                        if (_clients.TryGetValue(h.Victim, out var victim))
+                            Send(victim, Net.Encode(Net.Hurt, w =>
+                            {
+                                w.Write(h.Uid);
+                                w.Write(h.Mob);
+                                w.Write(h.Map);
+                                w.Write(h.Damage);
+                            }));
+                    foreach (var s in ev.Spawns)
+                        Broadcast(MobSpawnFrame(s));
+                    foreach (var t in ev.Takes)
+                        BroadcastDropTake(t.uid, t.map, 0, 0, 0, 0);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task AcceptLoop(CancellationToken ct)
@@ -114,13 +162,18 @@ public sealed class GameServer : IDisposable
         _log($"client {id} left");
     }
 
-    // Clients send State, Attack, Build, and SkillCast; anything else means a foreign client.
+    // Clients send State, Attack, Build, SkillCast, and Pickup; anything else means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
         if (payload[0] == Net.Attack && payload.Length == 1)
         {
             OnAttack(id);
+            return;
+        }
+        if (payload[0] == Net.Pickup && payload.Length == 5)
+        {
+            OnPickup(id, BitConverter.ToInt32(payload, 1));
             return;
         }
         if (payload[0] == Net.SkillCast && payload.Length == 9)
@@ -169,6 +222,7 @@ public sealed class GameServer : IDisposable
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
             foreach (var h in _mobs.Strike(p.map, p.x, p.y, p.facing, Random.Shared, build))
                 BroadcastHit(h, id);
+            BroadcastFreshDrops();
         }
     }
 
@@ -198,8 +252,43 @@ public sealed class GameServer : IDisposable
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
             foreach (var h in _mobs.SkillStrike(p.map, p.x, p.y, p.facing, Random.Shared, build, skill, pct))
                 BroadcastHit(h, id);
+            BroadcastFreshDrops();
         }
     }
+
+    // One pickup: the drop must exist on the taker's map within reach. The
+    // take carries the loot, so the taker's client claims it and every other
+    // client just clears the view. A miss sends nothing (the client retries).
+    private void OnPickup(int id, int uid)
+    {
+        lock (_mobLock)
+        {
+            if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to judge from
+            var d = _mobs.Pickup(uid, p.map, p.x, p.y);
+            if (d == null) return;
+            BroadcastDropTake(d.Uid, d.Map, id, d.Kind, d.Id, d.Count);
+        }
+    }
+
+    // Kill drops land right after the judging that made them (same lock, so
+    // the take race starts after every screen could see the drop).
+    private void BroadcastFreshDrops()
+    {
+        foreach (var d in _mobs.TakeDrops())
+            Broadcast(DropSpawnFrame(d));
+    }
+
+    // One drop gone: claimed (taker + loot) or expired (taker 0, no loot).
+    private void BroadcastDropTake(int uid, int map, int taker, int kind, int id, int count) =>
+        Broadcast(Net.Encode(Net.DropTake, w =>
+        {
+            w.Write(uid);
+            w.Write(map);
+            w.Write(taker);
+            w.Write(kind);
+            w.Write(id);
+            w.Write(count);
+        }));
 
     // One judged hit to every client (basic swings and skills share this wire shape).
     private void BroadcastHit(MobWorld.Hit h, int attacker) =>
@@ -224,18 +313,36 @@ public sealed class GameServer : IDisposable
         {
             _mobs.EnterMap(map);
             foreach (var s in _mobs.MobsOn(map))
-                Send(client, Net.Encode(Net.MobSpawn, w =>
-                {
-                    w.Write(s.Uid);
-                    w.Write(s.Mob);
-                    w.Write(s.Map);
-                    w.Write(s.X);
-                    w.Write(s.Y);
-                    w.Write(s.MaxHp);
-                    w.Write(s.Hp);
-                }));
+                Send(client, MobSpawnFrame(s));
+            foreach (var d in _mobs.DropsOn(map))
+                Send(client, DropSpawnFrame(d));
         }
     }
+
+    // Spawn frames, built once: the tick loop and map entry share them.
+    private static byte[] MobSpawnFrame(MobWorld.Spawn s) =>
+        Net.Encode(Net.MobSpawn, w =>
+        {
+            w.Write(s.Uid);
+            w.Write(s.Mob);
+            w.Write(s.Map);
+            w.Write(s.X);
+            w.Write(s.Y);
+            w.Write(s.MaxHp);
+            w.Write(s.Hp);
+        });
+
+    private static byte[] DropSpawnFrame(MobWorld.Drop d) =>
+        Net.Encode(Net.DropSpawn, w =>
+        {
+            w.Write(d.Uid);
+            w.Write(d.Map);
+            w.Write(d.X);
+            w.Write(d.Y);
+            w.Write(d.Kind);
+            w.Write(d.Id);
+            w.Write(d.Count);
+        });
 
     private void Broadcast(byte[] frame, int exceptId = -1)
     {

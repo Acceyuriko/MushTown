@@ -50,6 +50,8 @@ public partial class MushTownGame : Game
     private readonly bool _shotHit;
     private readonly int _shotSkill; // --skill <id>: 0 means no skill pose
     private readonly int _shotSkillTab; // --skilltab: which job tab the skill window opens on
+    private readonly bool _shotDrop; // --drop: swing until the first kill, show its drops
+    private readonly int _shotAiticks; // --aiticks <n>: n 100ms AI steps at the posed feet
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
@@ -81,7 +83,7 @@ public partial class MushTownGame : Game
     private int _frame;
     private float _timerMs;
     private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal, _ctrlWasDown;
-    private bool _qWasDown, _wWasDown, _eWasDown, _rWasDown, _tWasDown, _yWasDown, _uWasDown, _fWasDown, _gWasDown, _hWasDown, _jWasDown, _lWasDown;
+    private bool _qWasDown, _wWasDown, _eWasDown, _rWasDown, _tWasDown, _yWasDown, _uWasDown, _fWasDown, _gWasDown, _hWasDown, _jWasDown, _lWasDown, _zWasDown;
     private float _attackLock; // ms of swing left: movement frozen until it hits 0
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
@@ -108,12 +110,24 @@ public partial class MushTownGame : Game
         public int Mob;
         public float X;
         public float Y;
+        public bool FacingRight; // AI poses face along (raw art faces left)
         public int Hp;
         public int MaxHp;
         public string Action = ""; // idle, hit1, die1
         public int Frame;
         public float Timer;
     }
+
+    // One ground drop: a meso pile (Id = amount) or a potion (Id + Count).
+    private sealed class DropView
+    {
+        public float X;
+        public float Y;
+        public int Kind;
+        public int Id;
+        public int Count;
+    }
+    private readonly Dictionary<int, DropView> _drops = new();
 
     private sealed class DamageNumber
     {
@@ -144,7 +158,7 @@ public partial class MushTownGame : Game
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0)
+    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
@@ -157,6 +171,8 @@ public partial class MushTownGame : Game
         _shotHit = shotHit;
         _shotSkill = shotSkill;
         _shotSkillTab = shotSkillTab;
+        _shotDrop = shotDrop;
+        _shotAiticks = shotAiticks;
         _assetsDir = FindAssetsDir();
         string dir = Path.GetDirectoryName(_assetsDir)!;
         _layoutPath = Path.Combine(dir, "hud-layout.json");
@@ -320,47 +336,84 @@ public partial class MushTownGame : Game
             if (!TryPaySkill(_shotSkill))
                 throw new InvalidDataException($"--skill {_shotSkill} cannot cast: needs Lv.{data.ReqLevel} and {data.Mp} MP");
             CastBuff(_shotSkill);
+            RunShotAi();
             SnapCamera();
             return;
         }
-        if (!_shotHit && _shotSkill == 0) return;
-        var world = _localWorld!; // StartLocalWorld just built it
-        var first = world.MobsOn(_mapId).FirstOrDefault()
-            ?? throw new InvalidDataException($"--hit/--skill needs mobs, map {_mapId} has none");
-        _px = first.X - 50;
-        _ground = SceneMath.ArrivalGround(_map.Footholds, (int)_px, (int)first.Y)
-            ?? throw new InvalidDataException($"--hit/--skill found no ground near mob {first.Mob}");
-        _py = SceneMath.FootholdY(_ground, (int)_px);
-        ResetMotion();
-        _facingRight = true;
-        _action = "swingP1";
-        _frame = 1;
-        // fixed seed: the evidence shot shows the same number every run
-        if (_shotSkill != 0)
+        if (_shotHit || _shotSkill != 0 || _shotDrop)
         {
-            if (_skills[_shotSkill].Kind == SkillData.KindPassive)
-                throw new InvalidDataException($"--skill {_shotSkill} is passive (no art to pose)");
-            var chara = _account?.Slots[_slot];
-            if (chara != null) // window shots learn and pay best-effort (cooldowns show); plain shots have no one
+            var world = _localWorld!; // StartLocalWorld just built it
+            var first = world.MobsOn(_mapId).FirstOrDefault()
+                ?? throw new InvalidDataException($"--hit/--skill/--drop needs mobs, map {_mapId} has none");
+            _px = first.X - 50;
+            _ground = SceneMath.ArrivalGround(_map.Footholds, (int)_px, (int)first.Y)
+                ?? throw new InvalidDataException($"--hit/--skill/--drop found no ground near mob {first.Mob}");
+            _py = SceneMath.FootholdY(_ground, (int)_px);
+            ResetMotion();
+            _facingRight = true;
+            _action = "swingP1";
+            _frame = 1;
+            // fixed seed: the evidence shot shows the same number every run
+            if (_shotSkill != 0)
             {
-                if (!chara.SkillLv.ContainsKey(_shotSkill)) Progression.LearnSkill(chara, _skills[_shotSkill]);
-                TryPaySkill(_shotSkill);
+                if (_skills[_shotSkill].Kind == SkillData.KindPassive)
+                    throw new InvalidDataException($"--skill {_shotSkill} is passive (no art to pose)");
+                var chara = _account?.Slots[_slot];
+                if (chara != null) // window shots learn and pay best-effort (cooldowns show); plain shots have no one
+                {
+                    if (!chara.SkillLv.ContainsKey(_shotSkill)) Progression.LearnSkill(chara, _skills[_shotSkill]);
+                    TryPaySkill(_shotSkill);
+                }
+                SpawnCastFx(_shotSkill, _px, _py, true);
+                int n = _skills[_shotSkill].Effect.Count;
+                if (n <= 5) throw new InvalidDataException($"--skill {_shotSkill} needs 6+ effect frames, got {n}");
+                _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
+                if (world.IsDamageSkill(_shotSkill))
+                {
+                    int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
+                    foreach (var h in world.SkillStrike(_mapId, _px, _py, true, new Random(0), Progression.Beginner, _shotSkill, pct))
+                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                    DrainDrops(world);
+                }
             }
-            SpawnCastFx(_shotSkill, _px, _py, true);
-            int n = _skills[_shotSkill].Effect.Count;
-            if (n <= 5) throw new InvalidDataException($"--skill {_shotSkill} needs 6+ effect frames, got {n}");
-            _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
-            if (world.IsDamageSkill(_shotSkill))
+            else if (_shotDrop)
             {
-                int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
-                foreach (var h in world.SkillStrike(_mapId, _px, _py, true, new Random(0), Progression.Beginner, _shotSkill, pct))
+                // swing until the first kill (one fixed seed: same corpse, same loot)
+                var rng = new Random(0);
+                bool killed = false;
+                for (int i = 0; i < 20 && !killed; i++)
+                    foreach (var h in world.Strike(_mapId, _px, _py, true, rng, Progression.Beginner))
+                    {
+                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                        killed |= h.HpLeft == 0;
+                    }
+                if (!killed) throw new InvalidDataException($"--drop killed nothing in 20 swings, map {_mapId}");
+                DrainDrops(world);
+            }
+            else
+            {
+                foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), Progression.Beginner))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                DrainDrops(world);
             }
         }
-        else
-            foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), Progression.Beginner))
-                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+        RunShotAi();
         SnapCamera();
+    }
+
+    // --aiticks <n>: n 100ms AI steps at the posed feet. Moves and respawns
+    // show; touches don't (the demo must not die mid-pose). Zero ticks skips.
+    private void RunShotAi()
+    {
+        var world = _localWorld!; // StartLocalWorld just built it
+        var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _px, _py) };
+        for (int i = 0; i < _shotAiticks; i++)
+        {
+            var ev = world.Tick(100, players);
+            foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
+            ApplySpawns(ev.Spawns);
+            foreach (var t in ev.Takes) _drops.Remove(t.uid);
+        }
     }
 
     private void LoadMapTextures()
@@ -454,6 +507,7 @@ public partial class MushTownGame : Game
         bool freshH = FreshKey(kb, Keys.H, ref _hWasDown);
         bool freshJ = FreshKey(kb, Keys.J, ref _jWasDown);
         bool freshL = FreshKey(kb, Keys.L, ref _lWasDown);
+        bool freshZ = FreshKey(kb, Keys.Z, ref _zWasDown);
 
         // Ctrl swings the polearm (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
@@ -463,8 +517,36 @@ public partial class MushTownGame : Game
             _attackLock = _delays["swingP1"].Sum();
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
+            {
                 foreach (var h in _localWorld.Strike(_mapId, _px, _py, _facingRight, Random.Shared, OwnBuild()))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                DrainDrops(_localWorld);
+            }
+        }
+
+        // Z grabs the nearest drop in reach: net play asks the server (a miss
+        // answers nothing), the local world judges it right here. The client
+        // pre-filters the judge box, so a nearer-but-out drop never blocks one.
+        if (freshZ && HasJudge())
+        {
+            int best = 0;
+            float bestD2 = float.MaxValue;
+            foreach (var kv in _drops)
+            {
+                float dx = kv.Value.X - _px, dy = kv.Value.Y - _py;
+                if (Math.Abs(dx) > MobWorld.PickDx || Math.Abs(dy) > MobWorld.PickDy) continue;
+                float d2 = dx * dx + dy * dy;
+                if (d2 < bestD2) { bestD2 = d2; best = kv.Key; }
+            }
+            if (best != 0)
+            {
+                if (_net != null && _net.Connected) _net.SendPickup(best);
+                else if (_localWorld != null)
+                {
+                    var d = _localWorld.Pickup(best, _mapId, _px, _py);
+                    if (d != null) ApplyDropTake(d.Uid, true, d.Kind, d.Id, d.Count);
+                }
+            }
         }
 
         // Plain rings (Q Slash, T Brandish, G Intrepid, H Beam, L Scarring):
@@ -727,6 +809,24 @@ public partial class MushTownGame : Game
                 if (m.Spawn) ApplySpawn(m.Uid, m.Mob, m.X, m.Y, m.MaxHp, m.HpLeft);
                 else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp, m.Skill);
             }
+            while (_net.TryTakeMove(out var mv))
+            {
+                if (mv.Map != _mapId) continue; // another map's walk: not shown here
+                ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
+            }
+            while (_net.TryTakeHurt(out var h))
+            {
+                if (h.Map != _mapId) continue; // another map's touch: not ours (we moved since)
+                if (!ApplyHurt(h.Damage)) continue;
+                while (_net.TryTakeHurt(out _)) { } // died: drop touches judged at the corpse
+                break;
+            }
+            while (_net.TryTakeDrop(out var d))
+            {
+                if (d.Map != _mapId) continue; // another map's loot: not shown here
+                if (d.Spawn) ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count);
+                else ApplyDropTake(d.Uid, d.Taker == _net.PlayerId, d.Kind, d.Id, d.Count);
+            }
             while (_net.TryTakeFx(out var f))
             {
                 if (f.Map != _mapId) continue; // another map's cast: not shown here
@@ -736,6 +836,21 @@ public partial class MushTownGame : Game
                 _remotes.Clear(); // link lost: peers vanish, the local world takes over
             if (!_net.Connected && _localWorld == null)
                 StartLocalWorld(); // link lost: a fresh local world keeps the mobs working (kills come back: the drop resets the session)
+        }
+
+        // Local AI (dropped links tick it live; shots pose it frozen and
+        // never reach Update): the world steps every frame and we apply its
+        // events like net ones.
+        if (_localWorld != null)
+        {
+            var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _px, _py) };
+            var ev = _localWorld.Tick((int)dtMs, players);
+            foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
+            foreach (var h in ev.Hurts)
+                if (ApplyHurt(h.Damage))
+                    break; // died: the rest were judged at the corpse
+            ApplySpawns(ev.Spawns);
+            foreach (var t in ev.Takes) _drops.Remove(t.uid);
         }
 
         base.Update(gameTime);
@@ -800,7 +915,7 @@ public partial class MushTownGame : Game
             LoadMapTextures();
             _remotes.Clear(); // peers stay on the old map; their live states refill this one
             if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
-            else { _mobs.Clear(); _numbers.Clear(); _fx.Clear(); RespawnBuffLoops(); } // net: the server re-pushes them
+            else { _mobs.Clear(); _drops.Clear(); _numbers.Clear(); _fx.Clear(); RespawnBuffLoops(); } // net: the server re-pushes them
             _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
         }
         var land = _map.Portals.FirstOrDefault(p => p.Pn == tn)
@@ -907,6 +1022,11 @@ public partial class MushTownGame : Game
             var m = _mobs[uid];
             draws.Add(((int)Math.Floor(m.Y), () => DrawMob(m)));
         }
+        foreach (int uid in _drops.Keys.OrderBy(u => u))
+        {
+            var d = _drops[uid];
+            draws.Add(((int)Math.Floor(d.Y), () => DrawDrop(d)));
+        }
         foreach ((int _, Action draw) in draws.OrderBy(d => d.y))
             draw();
 
@@ -924,11 +1044,21 @@ public partial class MushTownGame : Game
         // WZ mob art has no origin: center-bottom anchor at the feet
         int x = (int)Math.Floor(m.X) - tex.Width / 2;
         int y = (int)Math.Floor(m.Y) - tex.Height;
-        DrawTexture(frame.Image, x, y, false); // mobs face left (raw); W12 AI flips them
+        DrawTexture(frame.Image, x, y, m.FacingRight); // raw art faces left; the AI faces along
         if (m.Hp >= m.MaxHp || m.Hp <= 0) return; // fresh and dying mobs hide their bar
         int px = (int)Math.Floor(m.X) - BarWidth / 2 - _cameraX, py = y - 8 - _cameraY;
         _spriteBatch.Draw(_pixel, new Rectangle(px, py, BarWidth, 5), Color.Black);
         _spriteBatch.Draw(_pixel, new Rectangle(px + 1, py + 1, Math.Max(1, (int)((BarWidth - 2) * (float)m.Hp / m.MaxHp)), 3), new Color(80, 220, 80));
+    }
+
+    // One ground drop: the sprite sits on its feet (coin or potion icon).
+    private void DrawDrop(DropView d)
+    {
+        string image = d.Kind == DropKind.Mesos ? "ui/hud_coin.png" : _items[d.Id].Image;
+        var tex = _textures[image];
+        int x = (int)Math.Floor(d.X) - tex.Width / 2;
+        int y = (int)Math.Floor(d.Y) - tex.Height;
+        DrawTexture(image, x, y, false);
     }
 
     // Skill effects: bare frames centered on their anchor, flipped like
@@ -1056,6 +1186,107 @@ public partial class MushTownGame : Game
         if (hpLeft == 0 && mine) GainExp(exp);
     }
 
+    // One AI step: snap the pose, face along. hit1/die1 own the pose until
+    // they finish (a move never steals a flinch or mirrors a corpse), but
+    // the feet still follow.
+    // A move for a view we never saw is dropped, like a hit. A changed
+    // action restarts its frames (stand/move counts differ per mob).
+    private void ApplyMove(int uid, float x, float y, bool facingRight)
+    {
+        if (!_mobs.TryGetValue(uid, out var m)) return;
+        m.X = x;
+        m.Y = y;
+        if (m.Action == "hit1" || m.Action == "die1") return; // flinch/death own the pose
+        m.FacingRight = facingRight;
+        if (m.Action != "move")
+        {
+            m.Action = "move";
+            m.Frame = 0;
+            m.Timer = 0;
+        }
+    }
+
+    // One touch that landed on us: DEF folds in, the number shows what got
+    // through, death respawns at the map spawn with full pools (buffs stay).
+    // Returns true on death: the caller drops the rest of the frame's touches
+    // (judged at the corpse, not the spawn).
+    private bool ApplyHurt(int damage)
+    {
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return false; // CLI sessions have no one to hurt
+        int dealt = Progression.ApplyHurt(chara, damage, OwnDef());
+        if (dealt == 0) return false; // harmless touch: no number, no death
+        _numbers.Add(new DamageNumber { Text = dealt.ToString(), X = _px, Y = _py - 90 });
+        if (chara.Hp != 0) return false;
+        Die(chara);
+        return true;
+    }
+
+    // Death: full pools, feet back on the spawn ground, motion cleared.
+    private void Die(CharaSlot chara)
+    {
+        chara.Hp = Progression.BuffedMaxHp(chara.Level, OwnHpPct());
+        chara.Mp = Progression.MaxMp(chara.Level);
+        _px = _map.Info.SpawnX;
+        _ground = SceneMath.GroundBelow(_map.Footholds, _map.Info.SpawnX, _map.Info.SpawnY)
+            ?? throw new InvalidDataException($"map {_mapId} has no ground under spawn");
+        _py = SceneMath.FootholdY(_ground, _map.Info.SpawnX);
+        ResetMotion();
+        SnapCamera();
+        GameLog("you died");
+    }
+
+    // DEF% from every source: Iron Body while live, Guardian Armor and
+    // Endure always. Mob touches are the only thing it blocks.
+    private int OwnDef() =>
+        (_buffMs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0)
+        + _skills[SkillData.GuardianArmor].DefPct * SkillLv(SkillData.GuardianArmor)
+        + _skills[SkillData.Endure].DefPct * SkillLv(SkillData.Endure);
+
+    // One drop landed: mesos draw the HUD coin, potions their own icon.
+    // Fresh kill drops land in view: every local judge drains right after
+    // striking (net play gets them pushed instead).
+    private void DrainDrops(MobWorld world)
+    {
+        foreach (var d in world.TakeDrops())
+            ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count);
+    }
+
+    // Respawn arrivals for this view (other maps' graves tick too, but their
+    // spawns are not ours to show).
+    private void ApplySpawns(IEnumerable<MobWorld.Spawn> spawns)
+    {
+        foreach (var s in spawns)
+        {
+            if (s.Map != _mapId) continue;
+            ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);
+        }
+    }
+
+    private void ApplyDropSpawn(int uid, float x, float y, int kind, int id, int count) =>
+        _drops[uid] = new DropView { X = x, Y = y, Kind = kind, Id = id, Count = count };
+
+    // One drop gone: everyone clears the view, the taker claims the loot.
+    // Only mesos and the two USE potions ever drop, so the names are fixed.
+    private void ApplyDropTake(int uid, bool mine, int kind, int id, int count)
+    {
+        _drops.Remove(uid);
+        var chara = _account?.Slots[_slot];
+        if (!mine || chara == null) return;
+        if (kind == DropKind.Mesos)
+        {
+            chara.Mesos += id;
+            GameLog($"picked up {id} mesos");
+        }
+        else
+        {
+            chara.Use ??= new Dictionary<int, int>();
+            chara.Use.TryGetValue(id, out int have);
+            chara.Use[id] = have + count;
+            GameLog($"picked up {(id == ItemData.RedPotion ? "Red Potion" : "Blue Potion")} x{count}");
+        }
+    }
+
     // Swings and damaging casts need a judge: net play sends, the local
     // world strikes right here. The disconnect frame has neither yet.
     private bool HasJudge() => (_net != null && _net.Connected) || _localWorld != null;
@@ -1116,8 +1347,11 @@ public partial class MushTownGame : Game
         int pct = CastPct(id);
         if (_net != null && _net.Connected) _net.SendSkillCast(id, pct);
         else if (_localWorld != null)
+        {
             foreach (var h in _localWorld.SkillStrike(_mapId, _px, _py, _facingRight, Random.Shared, OwnBuild(), id, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+            DrainDrops(_localWorld);
+        }
     }
 
     // Cast-time damage pct: the skill's level curve plus combo orbs (each orb
@@ -1268,8 +1502,7 @@ public partial class MushTownGame : Game
     }
 
     // Local mobs (shots and dropped links): a fresh world once per session,
-    // then re-list the view (map switches re-list; kills stay dead until
-    // the session ends).
+    // then re-list the view (map switches re-list; kills re-plant on timers).
     private void StartLocalWorld()
     {
         _localWorld = new MobWorld(_assetsDir);
@@ -1279,12 +1512,15 @@ public partial class MushTownGame : Game
     private void RefreshLocalMobs()
     {
         _mobs.Clear();
+        _drops.Clear();
         _numbers.Clear();
         _fx.Clear();
         RespawnBuffLoops(); // buff timers survive the switch, so their loops re-hang
         _localWorld!.EnterMap(_mapId);
         foreach (var s in _localWorld.MobsOn(_mapId))
             ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);
+        foreach (var d in _localWorld.DropsOn(_mapId))
+            ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count);
     }
 
     // The map without any characters: the chars screen reuses this as its backdrop.

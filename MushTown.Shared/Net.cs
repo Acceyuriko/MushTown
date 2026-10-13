@@ -15,6 +15,11 @@ public static class Net
     public const byte Build = 8;   // client -> server: int str, int dex, int weaponAtk, int dmgPct, int critPct, int finalPct (resent on level-up/learn/buff)
     public const byte SkillCast = 9; // client -> server: int skill, int pct (cast-time damage pct, orbs folded in; buffs send 0)
     public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing
+    public const byte MobMove = 11;  // server -> client: int uid, int map, float x, float y, byte facing (10Hz, occupied maps only)
+    public const byte Hurt = 12;     // server -> client: int uid, int mob, int map, int damage (sent to the victim only, so no victim id rides along)
+    public const byte DropSpawn = 13; // server -> client: int uid, int map, float x, float y, int kind, int id, int count
+    public const byte DropTake = 14; // server -> client: int uid, int map, int taker, int kind, int id, int count (taker 0 = expired)
+    public const byte Pickup = 15;   // client -> server: int uid (the drop to grab; server checks map + reach)
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -91,6 +96,20 @@ public readonly record struct MobEvent(
 // or left. The caster plays its own effect live and never gets this echo.
 // Clients drop effects for other maps, like states.
 public readonly record struct SkillFxEvent(int Attacker, int Skill, int Map, float X, float Y, bool FacingRight);
+
+// One mob step from the server: Uid now stands at X/Y facing right or left.
+// Clients drop moves for other maps and for mobs mid-flinch (hit1/die1 own
+// the pose until they finish).
+public readonly record struct MoveEvent(int Uid, int Map, float X, float Y, bool FacingRight);
+
+// One touch that landed on us: Mob's Uid dealt Damage (pre-DEF). Sent to
+// the victim only, so no victim id rides along.
+public readonly record struct HurtEvent(int Uid, int Mob, int Map, int Damage);
+
+// One drop event: a spawn (Spawn true, Kind/Id/Count set) or a take (Spawn
+// false). The taker's client claims Kind/Id/Count; taker 0 means expired.
+public readonly record struct DropEvent(
+    bool Spawn, int Uid, int Map, float X, float Y, int Kind, int Id, int Count, int Taker);
 
 // Accumulates raw TCP bytes and yields whole payloads (header eaten).
 // TCP splits and merges at will, so one Feed can yield zero, one, or more.
