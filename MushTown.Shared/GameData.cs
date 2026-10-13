@@ -11,6 +11,7 @@ public sealed class MapData
     public List<FootholdItem> Footholds { get; set; } = new();
     public List<PortalItem> Portals { get; set; } = new();
     public List<LadderItem> Ladders { get; set; } = new();
+    public List<LifeItem> Life { get; set; } = new();
 }
 
 public sealed class MapInfo
@@ -129,6 +130,38 @@ public sealed class LadderItem
     public bool Ladder { get; set; }
 }
 
+// One mob spawn point: the WZ life node with type "m" (NPCs wait for W14).
+// X/Cy is the feet point (the simulator places life at x,cy: FrmMapRender.cs:1612).
+public sealed class LifeItem
+{
+    public int MobId { get; set; }
+    public int X { get; set; }
+    public int Cy { get; set; }
+}
+
+// Exported mob file: assets/mob/{id}.json. Stats are v1 feel numbers, not WZ:
+// the modern client keeps them server-side (no maxHP node anywhere in the data).
+public sealed class MobData
+{
+    public int MobId { get; set; }
+    public int MaxHp { get; set; }
+    public double Def { get; set; } // fraction of damage blocked, 0-1 (bwiki 防御; v1: nothing ignores it)
+    public List<MobAction> Actions { get; set; } = new();
+}
+
+public sealed class MobAction
+{
+    public string Name { get; set; } = ""; // stand, move, hit1, die1
+    public List<MobFrame> Frames { get; set; } = new();
+}
+
+public sealed class MobFrame
+{
+    public string Image { get; set; } = "";
+
+    // Frame time in ms. The WZ art carries no delays, so every frame is 100.
+    public int Delay { get; set; }
+}
 // Exported character action: assets/chara/{body}/{action}.json
 public sealed class CharaData
 {

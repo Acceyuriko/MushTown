@@ -11,6 +11,7 @@ public sealed class NetClient : IDisposable
 {
     private readonly Action<string> _log;
     private readonly ConcurrentQueue<RemoteEvent> _events = new();
+    private readonly ConcurrentQueue<MobEvent> _mobEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -80,19 +81,31 @@ public sealed class NetClient : IDisposable
     public void SendState(int map, float x, float y, byte action, byte frame, bool facingRight)
     {
         if (!Connected) return;
+        SendFrame(Net.Encode(Net.State, w =>
+        {
+            w.Write(PlayerId);
+            w.Write(map);
+            w.Write(x);
+            w.Write(y);
+            w.Write(action);
+            w.Write(frame);
+            w.Write(facingRight ? (byte)1 : (byte)0);
+        }));
+    }
+
+    // One basic-attack swing: the body is empty, the server judges from our last State.
+    public void SendAttack()
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.Attack, w => { }));
+    }
+
+    private void SendFrame(byte[] frame)
+    {
         try
         {
             lock (_sendLock)
-                _tcp!.GetStream().Write(Net.Encode(Net.State, w =>
-                {
-                    w.Write(PlayerId);
-                    w.Write(map);
-                    w.Write(x);
-                    w.Write(y);
-                    w.Write(action);
-                    w.Write(frame);
-                    w.Write(facingRight ? (byte)1 : (byte)0);
-                }));
+                _tcp!.GetStream().Write(frame);
         }
         catch (Exception ex)
         {
@@ -102,6 +115,8 @@ public sealed class NetClient : IDisposable
     }
 
     public bool TryTake(out RemoteEvent e) => _events.TryDequeue(out e);
+
+    public bool TryTakeMob(out MobEvent e) => _mobEvents.TryDequeue(out e);
 
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
@@ -135,6 +150,15 @@ public sealed class NetClient : IDisposable
                 p[17], p[18], p[19] != 0));
         else if (p[0] == Net.Leave && p.Length == 5)
             _events.Enqueue(new RemoteEvent(true, BitConverter.ToInt32(p, 1), 0, 0, 0, 0, 0, false));
+        else if (p[0] == Net.MobSpawn && p.Length == 29)
+            _mobEvents.Enqueue(new MobEvent(true,
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
+                BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17),
+                BitConverter.ToInt32(p, 21), 0, BitConverter.ToInt32(p, 25)));
+        else if (p[0] == Net.MobHit && p.Length == 17)
+            _mobEvents.Enqueue(new MobEvent(false,
+                BitConverter.ToInt32(p, 1), 0, BitConverter.ToInt32(p, 5), 0, 0, 0,
+                BitConverter.ToInt32(p, 9), BitConverter.ToInt32(p, 13)));
         else
             _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
     }

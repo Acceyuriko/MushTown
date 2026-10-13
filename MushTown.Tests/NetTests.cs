@@ -72,7 +72,9 @@ public sealed class NetTests
     [TestMethod]
     public void Loopback_TwoClientsExchangeStates()
     {
-        using var server = new GameServer(_ => { }, Net.Port + 1);
+        using var assets = new TempAssets();
+        assets.AddMap(10000);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 1);
         server.Start();
         using var a = new NetClient(_ => { });
         using var b = new NetClient(_ => { });
@@ -99,16 +101,16 @@ public sealed class NetTests
         Assert.AreEqual(Net.ActJump, atA.Action);
 
         // newest action must pass the filter too (pins the Enqueue bound)
-        b.SendState(10000, 31, 41, Net.ActProne, 0, true);
-        Assert.AreEqual(Net.ActProne, WaitTake(a).Action);
+        b.SendState(10000, 31, 41, Net.ActSwing, 0, true);
+        Assert.AreEqual(Net.ActSwing, WaitTake(a).Action);
     }
 
     [TestMethod]
-    public void ActionCode_RoundtripsAllSix()
+    public void ActionCode_RoundtripsAll()
     {
         foreach (string name in Net.Actions)
             Assert.AreEqual(name, Net.ActionName(Net.ActionCode(name)));
-        for (byte code = 0; code <= Net.ActProne; code++)
+        for (byte code = 0; code <= Net.ActSwing; code++)
             Assert.AreEqual(code, Net.ActionCode(Net.ActionName(code)));
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionCode("xxx"));
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionName(99));
@@ -117,7 +119,10 @@ public sealed class NetTests
     [TestMethod]
     public void Loopback_MapsVisible_SwitchSendsLeave()
     {
-        using var server = new GameServer(_ => { }, Net.Port + 2);
+        using var assets = new TempAssets();
+        assets.AddMap(1);
+        assets.AddMap(2);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 2);
         server.Start();
         using var a = new NetClient(_ => { });
         using var b = new NetClient(_ => { });

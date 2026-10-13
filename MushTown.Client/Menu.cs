@@ -174,7 +174,7 @@ public partial class MushTownGame
         _rollLog ??= new RollLog(NetLogPath());
         if (host)
         {
-            _server = new GameServer(GameLog);
+            _server = new GameServer(GameLog, _assetsDir);
             try
             {
                 _server.Start();
@@ -532,9 +532,12 @@ public partial class MushTownGame
             }
         }
         GameLog($"{chara.Name} entered the game ({mode ?? "solo"})");
+        if (mode == null) StartSoloWorld(); // solo drives its own mob world
+        else { _soloWorld = null; _mobs.Clear(); _numbers.Clear(); } // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
         _upWasDown = kb.IsKeyDown(Keys.Up);
+        _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
         _wasInPortal = SceneMath.FindPortal(_map.Portals, _px, _py) != null;
         _screen = Screen.Game;
     }
@@ -551,6 +554,9 @@ public partial class MushTownGame
         _net = null;
         _server = null;
         _remotes.Clear();
+        _soloWorld = null;
+        _mobs.Clear();
+        _numbers.Clear();
         try
         {
             // the chars screen always shows the spawn map, whatever was played last

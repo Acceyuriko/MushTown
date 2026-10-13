@@ -1,8 +1,9 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel]]
+// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel] [--hit]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means solo play.
+// --hit plants the player mid-swing next to the first mob (game shots only).
 // Anything else is a mistake, not something to ignore.
 string? shotPath = null;
 int shotMap = 10000;
@@ -12,6 +13,7 @@ bool shotFacingRight = false;
 bool host = false;
 string? join = null;
 string? shotScreen = null;
+bool shotHit = false;
 var rest = args.ToList();
 if (rest.Count >= 1 && rest[0] == "--host") { host = true; rest.RemoveAt(0); }
 else if (rest.Count >= 2 && rest[0] == "--join") { join = rest[1]; rest.RemoveRange(0, 2); }
@@ -20,29 +22,31 @@ if (rest.Count >= 2 && rest[0] == "--shot")
 {
     shotPath = rest[1];
     ok = true;
-    for (int i = 2; i < rest.Count && ok; i += 2)
+    for (int i = 2; i < rest.Count && ok;)
     {
-        if (i + 1 >= rest.Count) ok = false;
-        else if (rest[i] == "--action") shotAction = rest[i + 1];
-        else if (rest[i] == "--map") ok = int.TryParse(rest[i + 1], out shotMap);
-        else if (rest[i] == "--frame") ok = int.TryParse(rest[i + 1], out shotFrame) && shotFrame >= 0;
-        else if (rest[i] == "--facing" && rest[i + 1] == "left") shotFacingRight = false;
-        else if (rest[i] == "--facing" && rest[i + 1] == "right") shotFacingRight = true;
-        else if (rest[i] == "--screen" && (rest[i + 1] is "login" or "server" or "chars" or "job" or "setup" or "register" or "delete" or "panel")) shotScreen = rest[i + 1];
+        if (rest[i] == "--hit") { shotHit = true; i++; }
+        else if (i + 1 >= rest.Count) ok = false;
+        else if (rest[i] == "--action") { shotAction = rest[i + 1]; i += 2; }
+        else if (rest[i] == "--map") { ok = int.TryParse(rest[i + 1], out shotMap); i += 2; }
+        else if (rest[i] == "--frame") { ok = int.TryParse(rest[i + 1], out shotFrame) && shotFrame >= 0; i += 2; }
+        else if (rest[i] == "--facing" && rest[i + 1] == "left") { shotFacingRight = false; i += 2; }
+        else if (rest[i] == "--facing" && rest[i + 1] == "right") { shotFacingRight = true; i += 2; }
+        else if (rest[i] == "--screen" && (rest[i + 1] is "login" or "server" or "chars" or "job" or "setup" or "register" or "delete" or "panel")) { shotScreen = rest[i + 1]; i += 2; }
         else ok = false;
     }
 }
 if (shotPath != null && (host || join != null)) ok = false;
+if (shotHit && shotScreen != null) ok = false; // --hit is a game shot: no menu screens
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel] [--hit]]");
     Environment.ExitCode = 1;
     return;
 }
 
 try
 {
-    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join, shotScreen);
+    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotHit);
     game.Run();
 }
 catch (Exception ex) when (ex is InvalidDataException or IOException)

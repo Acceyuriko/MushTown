@@ -17,6 +17,18 @@ public static class Export
     // rule is not id/1e8, so FindMapImg searches Map0..Map9.
     private static readonly int[] MapIds = new[] { 10000, 20000, 1000000, 1010000, 1020000, 2000000 };
 
+    // Mob table: our life mobs have no own art img, so each borrows its
+    // same-named twin (String names verified identical). Stats are v1 feel
+    // numbers: the modern client keeps them server-side, no maxHP node exists
+    // anywhere in the data (verified in W8 recon).
+    private static readonly Dictionary<int, (string art, int hp, double def)> Mobs = new()
+    {
+        [100000] = ("0100100", 40, 0),     // Snail
+        [100001] = ("0100101", 55, 0),     // Blue Snail
+        [100003] = ("0120100", 70, 0),     // Spore (twin 120100)
+        [100004] = ("1210102", 110, 0.05), // Orange Mushroom (twin 1210102)
+    };
+
     // W7.5 lobby art: (node path, file name). Normal button states only;
     // hover is a white overlay drawn by the client, so no hover art needed.
     // Must match Menu.cs UiFiles: every file there must be listed here.
@@ -75,6 +87,15 @@ public static class Export
         foreach (string action in Net.Actions)
         {
             if (!ExportCharacter(baseRoot, chara, outDir, action))
+            {
+                Environment.ExitCode = 1;
+                return;
+            }
+        }
+        var mob = WzRoot.LoadCategory(dataDir, "Mob");
+        foreach (int mobId in Mobs.Keys.OrderBy(id => id))
+        {
+            if (!ExportMob(mob, mobId, outDir, saved))
             {
                 Environment.ExitCode = 1;
                 return;
@@ -295,6 +316,21 @@ public static class Export
                     Y2 = Int(l, "y2"),
                     Ladder = Int(l, "l") != 0
                 });
+
+        // life: mob spawn points only (NPCs wait for W14). The id comes as a
+        // zero-padded string ("0100000"), so parse it; every mob must be exported.
+        var lifeNode = scene.Nodes["life"];
+        if (lifeNode != null)
+            foreach (Wz_Node l in lifeNode.Nodes)
+            {
+                if (Str(l, "type") != "m") continue;
+                if (!int.TryParse(Str(l, "id"), out int mobId) || !Mobs.ContainsKey(mobId))
+                {
+                    Console.WriteLine($"map {mapId}: bad or unexported life mob '{Str(l, "id")}'");
+                    return null;
+                }
+                map.Life.Add(new LifeItem { MobId = mobId, X = Int(l, "x"), Cy = Int(l, "cy") });
+            }
 
         int missing = 0;     // an image we should have read but could not: export fails
         int unsupported = 0; // Spine/ani node: has no png by design, only printed
@@ -574,6 +610,71 @@ public static class Export
             return false;
         }
         WriteJson(Path.Combine(outDir, "chara", "body", $"{action}.json"), data);
+        return true;
+    }
+
+    // One mob's art: every action's frames in numeric order (die1 starts at 1,
+    // not 0, hence the sort). Frames are bare pngs with no origin or delay,
+    // so each gets delay 100 and the client anchors center-bottom.
+    private static bool ExportMob(WzRoot mob, int mobId, string outDir, HashSet<string> saved)
+    {
+        var img = mob.Find($@"_Canvas\{Mobs[mobId].art}.img");
+        if (img == null)
+        {
+            Console.WriteLine($"mob {mobId}: art {Mobs[mobId].art}.img not found");
+            return false;
+        }
+        var data = new MobData { MobId = mobId, MaxHp = Mobs[mobId].hp, Def = Mobs[mobId].def };
+        foreach (Wz_Node action in img.Nodes)
+        {
+            if (action.Text == "info") continue;
+            var outAction = new MobAction { Name = action.Text };
+            var frames = new List<(int key, Wz_Node node)>();
+            foreach (Wz_Node f in action.Nodes)
+            {
+                if (!int.TryParse(f.Text, out int key))
+                {
+                    Console.WriteLine($"mob {mobId} {action.Text}: non-frame child {f.Text}");
+                    return false;
+                }
+                frames.Add((key, f));
+            }
+            int i = 0;
+            foreach ((int _, Wz_Node f) in frames.OrderBy(t => t.key))
+            {
+                if (f.Value is not Wz_Png png)
+                {
+                    Console.WriteLine($"mob {mobId} {action.Text} frame {f.Text}: not a png");
+                    return false;
+                }
+                string path = $"mob/{mobId}/{action.Text}/{i}.png";
+                SaveOnce(png, Path.Combine(outDir, path), saved);
+                outAction.Frames.Add(new MobFrame { Image = path, Delay = 100 });
+                i++;
+            }
+            if (outAction.Frames.Count == 0)
+            {
+                Console.WriteLine($"mob {mobId} {action.Text}: no frames");
+                return false;
+            }
+            data.Actions.Add(outAction);
+        }
+        // W8 plays the idle (stand, or move when the mob has no stand, like
+        // the blue snail), hit1 (flinch), die1 (death); W12 AI drives move.
+        foreach (string need in new[] { "hit1", "die1" })
+            if (!data.Actions.Any(a => a.Name == need))
+            {
+                Console.WriteLine($"mob {mobId}: no {need} action");
+                return false;
+            }
+        if (!data.Actions.Any(a => a.Name is "stand" or "move"))
+        {
+            Console.WriteLine($"mob {mobId}: no stand or move action");
+            return false;
+        }
+        Console.WriteLine($"mob {mobId}: " +
+            string.Join(", ", data.Actions.Select(a => $"{a.Name} x{a.Frames.Count}")));
+        WriteJson(Path.Combine(outDir, "mob", $"{mobId}.json"), data);
         return true;
     }
 

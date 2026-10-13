@@ -25,6 +25,9 @@ public partial class MushTownGame : Game
     private const int LoadBeat = 10;      // black frames shown on map switch (~170ms)
     private const int PortalCooldown = 30; // frames after travel during which ↑ cannot travel again (~0.5s)
     private const int GrabCooldown = 20; // frames after leaving a ladder during which Up/Down cannot re-grab (~0.33s)
+    private const float NumberMs = 800; // damage numbers rise and fade over this long
+    private const int NumberRise = 60; // px a damage number floats up
+    private const int BarWidth = 40; // mob HP bar width, px
 
     private const int SpawnMapId = 10000; // Maple Island: Southperry
 
@@ -38,6 +41,7 @@ public partial class MushTownGame : Game
     private readonly bool _host;
     private readonly string? _joinHost;
     private readonly string? _shotScreen;
+    private readonly bool _shotHit;
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
@@ -68,14 +72,42 @@ public partial class MushTownGame : Game
     private string _action = "stand2";
     private int _frame;
     private float _timerMs;
-    private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal;
+    private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal, _ctrlWasDown;
+    private float _attackLock; // ms of swing left: movement frozen until it hits 0
 
     // Net peers, keyed by server id. Empty in solo play and shot mode.
     private GameServer? _server;
     private NetClient? _net;
     private readonly Dictionary<int, RemoteEvent> _remotes = new();
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null)
+    // Mobs, keyed by server uid. Solo play drives a local MobWorld; net play
+    // applies server events; shot mode shows a frozen local world.
+    private MobWorld? _soloWorld;
+    private readonly Dictionary<int, MobView> _mobs = new();
+    private readonly Dictionary<int, MobData> _mobData = new();
+    private readonly List<DamageNumber> _numbers = new();
+
+    private sealed class MobView
+    {
+        public int Mob;
+        public float X;
+        public float Y;
+        public int Hp;
+        public int MaxHp;
+        public string Action = ""; // idle, hit1, die1
+        public int Frame;
+        public float Timer;
+    }
+
+    private sealed class DamageNumber
+    {
+        public string Text = "";
+        public float X; // head position when the hit landed
+        public float Y;
+        public float Age;
+    }
+
+    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
@@ -85,6 +117,7 @@ public partial class MushTownGame : Game
         _host = host;
         _joinHost = joinHost;
         _shotScreen = shotScreen;
+        _shotHit = shotHit;
         _assetsDir = FindAssetsDir();
         _graphics = new GraphicsDeviceManager(this);
         IsMouseVisible = true;
@@ -191,7 +224,7 @@ public partial class MushTownGame : Game
         ResetMotion();
     }
 
-    // Stop all motion: still speeds, no ladder, no drop-through.
+    // Stop all motion: still speeds, no ladder, no drop-through, no swing.
     private void ResetMotion()
     {
         _vx = 0;
@@ -199,6 +232,7 @@ public partial class MushTownGame : Game
         _climb = null;
         _climbMoving = false;
         _dropFrames = 0;
+        _attackLock = 0;
     }
 
     protected override void LoadContent()
@@ -211,6 +245,31 @@ public partial class MushTownGame : Game
             foreach (var frame in chara.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
+        if (_shotPath != null && _shotScreen == null) // game shots show mobs; menu shots don't
+            SetupShotMobs();
+    }
+
+    // Shot mode: a frozen local world. --hit plants the player mid-swing next
+    // to the first mob and lands one real strike (numbers and all).
+    private void SetupShotMobs()
+    {
+        StartSoloWorld();
+        if (!_shotHit) return;
+        var world = _soloWorld!; // StartSoloWorld just built it
+        var first = world.MobsOn(_mapId).FirstOrDefault()
+            ?? throw new InvalidDataException($"--hit needs mobs, map {_mapId} has none");
+        _px = first.X - 50;
+        _ground = SceneMath.ArrivalGround(_map.Footholds, (int)_px, (int)first.Y)
+            ?? throw new InvalidDataException($"--hit found no ground near mob {first.Mob}");
+        _py = SceneMath.FootholdY(_ground, (int)_px);
+        ResetMotion();
+        _facingRight = true;
+        _action = "swingP1";
+        _frame = 1;
+        // fixed seed: the evidence shot shows the same number every run
+        foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0)))
+            ApplyHit(h.Uid, h.Damage, h.HpLeft);
+        SnapCamera();
     }
 
     private void LoadMapTextures()
@@ -252,6 +311,11 @@ public partial class MushTownGame : Game
         float dtMs = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
         int dir = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
         if (dir != 0 && _climb == null) _facingRight = dir > 0; // raw sprites face left; mirror when facing right
+        if (_attackLock > 0)
+        {
+            _attackLock = Math.Max(0, _attackLock - dtMs);
+            dir = 0; // mid-swing: feet planted
+        }
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
         // (portal also fires on walking in with Up held; grab and jump use held keys)
@@ -262,6 +326,22 @@ public partial class MushTownGame : Game
         bool freshUp = up && !_upWasDown;
         _upWasDown = up;
         bool down = kb.IsKeyDown(Keys.Down);
+        bool ctrl = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
+        bool freshCtrl = ctrl && !_ctrlWasDown;
+        _ctrlWasDown = ctrl;
+
+        // Ctrl swings the polearm (not on a ladder): the swing locks movement
+        // for one playthrough; net play sends it, solo judges it right here.
+        // No swing without a judge (the disconnect frame has neither yet).
+        if (freshCtrl && _climb == null && _attackLock <= 0 &&
+            ((_net != null && _net.Connected) || _soloWorld != null))
+        {
+            _attackLock = _delays["swingP1"].Sum();
+            if (_net != null && _net.Connected) _net.SendAttack();
+            else if (_soloWorld != null)
+                foreach (var h in _soloWorld.Strike(_mapId, _px, _py, _facingRight, Random.Shared))
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft);
+        }
 
         // Up at a portal travels: tap anywhere in range, or hold Up and walk
         // in (portal wins over ladder). Travel cools down for ~0.5s, and
@@ -275,7 +355,7 @@ public partial class MushTownGame : Game
             SwitchMap(portal.Tm, portal.Tn);
             switched = true;
         }
-        if (_climb == null && !switched && _grabCooldown == 0 && (up || down)) GrabLadder(up, down);
+        if (_climb == null && !switched && _grabCooldown == 0 && (up || down) && _attackLock <= 0) GrabLadder(up, down);
         _wasInPortal = switched
             ? SceneMath.FindPortal(_map.Portals, _px, _py) != null // arrival spot, not the old one
             : portal != null;
@@ -296,8 +376,8 @@ public partial class MushTownGame : Game
 
         // held Alt jumps (landings chain into the next jump); down+jump instead
         // drops through the platform, one floor per tap, and only over a floor
-        bool wantJump = alt && !down && _ground != null && _climb == null;
-        bool wantDrop = freshAlt && down && _ground != null && _climb == null
+        bool wantJump = alt && !down && _ground != null && _climb == null && _attackLock <= 0;
+        bool wantDrop = freshAlt && down && _ground != null && _climb == null && _attackLock <= 0
             && SceneMath.GroundBelow(_map.Footholds, (int)Math.Floor(_px), (int)Math.Ceiling(_py) + 1) != null;
 
         // horizontal: full speed on ground, keep momentum plus weak drift in the air
@@ -385,7 +465,8 @@ public partial class MushTownGame : Game
             }
         }
 
-        string want = _climb != null ? (_climb.Ladder ? "ladder" : "rope")
+        string want = _attackLock > 0 ? "swingP1"
+            : _climb != null ? (_climb.Ladder ? "ladder" : "rope")
             : _ground == null ? "jump" : down ? "prone" : dir != 0 && moved ? "walk2" : "stand2";
         if (want != _action)
         {
@@ -398,6 +479,28 @@ public partial class MushTownGame : Game
         for (int i = 0; i < _map.Portals.Count; i++) // portal gates shimmer on their own loop
             if (_map.Portals[i].Frames.Count > 0)
                 _portalAnims[i] = SceneMath.AdvanceFrame(_portalAnims[i].frame, _portalAnims[i].timer, dtMs, _portalDelays[i]);
+
+        // Mob anims: idles loop, flinch returns to idle, death removes the body.
+        foreach (int uid in _mobs.Keys.ToList())
+        {
+            var m = _mobs[uid];
+            var frames = MobFrames(m.Mob, m.Action);
+            m.Timer += dtMs;
+            if (m.Timer < frames[m.Frame].Delay) continue;
+            m.Timer -= frames[m.Frame].Delay; // keep the overflow (single step: delays run >= 100ms, ticks 16ms)
+            if (++m.Frame < frames.Count) continue;
+            if (m.Action == "die1") _mobs.Remove(uid);
+            else
+            {
+                if (m.Action == "hit1") m.Action = MobIdle(m.Mob);
+                m.Frame = 0;
+            }
+        }
+        for (int i = _numbers.Count - 1; i >= 0; i--)
+        {
+            _numbers[i].Age += dtMs;
+            if (_numbers[i].Age >= NumberMs) _numbers.RemoveAt(i);
+        }
 
         var (targetX, targetY) = CameraTarget();
         (_camX, _camVX) = SceneMath.SpringStep(_camX, _camVX, targetX, dt);
@@ -418,8 +521,16 @@ public partial class MushTownGame : Game
                     _remotes.Remove(e.Id); // peer on another map: not shown here
                 else if (e.Frame < _charas[Net.ActionName(e.Action)].Frames.Count)
                     _remotes[e.Id] = e; // bad frame: not ours, drop it
+            while (_net.TryTakeMob(out var m))
+            {
+                if (m.Map != _mapId) continue; // another map's fight: not shown here
+                if (m.Spawn) ApplySpawn(m.Uid, m.Mob, m.X, m.Y, m.MaxHp, m.HpLeft);
+                else ApplyHit(m.Uid, m.Damage, m.HpLeft);
+            }
             if (!_net.Connected && _remotes.Count > 0)
                 _remotes.Clear(); // link lost: peers vanish, we keep playing solo
+            if (!_net.Connected && _soloWorld == null)
+                StartSoloWorld(); // link lost: a fresh local world keeps the mobs working (kills come back: the drop resets the session)
         }
 
         base.Update(gameTime);
@@ -483,6 +594,8 @@ public partial class MushTownGame : Game
             LoadMapData(tm);
             LoadMapTextures();
             _remotes.Clear(); // peers stay on the old map; their live states refill this one
+            if (_soloWorld != null) RefreshSoloMobs(); // solo re-lists the new map
+            else { _mobs.Clear(); _numbers.Clear(); } // net: the server re-pushes them
             _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
         }
         var land = _map.Portals.FirstOrDefault(p => p.Pn == tn)
@@ -571,16 +684,126 @@ public partial class MushTownGame : Game
 
         DrawMapBack();
 
-        // the player, then each peer: current action frame, mirrored around the
-        // feet when facing right (peers by id, so overlap order never flickers)
+        // the player, then each peer, then each mob: current frames, actors
+        // by feet height (lower feet draw in front; ties keep this order)
         int feetX = (int)Math.Floor(_px), feetY = (int)Math.Floor(_py);
-        DrawAvatar(feetX, feetY, _action, _frame, _facingRight);
+        var draws = new List<(int y, Action draw)>();
+        draws.Add((feetY, () => DrawAvatar(feetX, feetY, _action, _frame, _facingRight)));
         foreach (var r in _remotes.Values.OrderBy(r => r.Id))
-            DrawAvatar((int)Math.Floor(r.X), (int)Math.Floor(r.Y), Net.ActionName(r.Action), r.Frame, r.FacingRight);
+            draws.Add(((int)Math.Floor(r.Y), () => DrawAvatar((int)Math.Floor(r.X), (int)Math.Floor(r.Y), Net.ActionName(r.Action), r.Frame, r.FacingRight)));
+        foreach (int uid in _mobs.Keys.OrderBy(u => u))
+        {
+            var m = _mobs[uid];
+            draws.Add(((int)Math.Floor(m.Y), () => DrawMob(m)));
+        }
+        foreach ((int _, Action draw) in draws.OrderBy(d => d.y))
+            draw();
 
         DrawMapFront();
+        DrawNumbers();
 
         _spriteBatch.End();
+    }
+
+    private void DrawMob(MobView m)
+    {
+        var frame = MobFrames(m.Mob, m.Action)[m.Frame];
+        var tex = _textures[frame.Image];
+        // WZ mob art has no origin: center-bottom anchor at the feet
+        int x = (int)Math.Floor(m.X) - tex.Width / 2;
+        int y = (int)Math.Floor(m.Y) - tex.Height;
+        DrawTexture(frame.Image, x, y, false); // mobs face left (raw); W12 AI flips them
+        if (m.Hp >= m.MaxHp || m.Hp <= 0) return; // fresh and dying mobs hide their bar
+        int px = (int)Math.Floor(m.X) - BarWidth / 2 - _cameraX, py = y - 8 - _cameraY;
+        _spriteBatch.Draw(_pixel, new Rectangle(px, py, BarWidth, 5), Color.Black);
+        _spriteBatch.Draw(_pixel, new Rectangle(px + 1, py + 1, Math.Max(1, (int)((BarWidth - 2) * (float)m.Hp / m.MaxHp)), 3), new Color(80, 220, 80));
+    }
+
+    // Damage numbers: baked text, yellow, rising and fading over NumberMs.
+    private void DrawNumbers()
+    {
+        foreach (var n in _numbers)
+        {
+            var tex = _ui.Get(n.Text);
+            float k = n.Age / NumberMs;
+            int alpha = k < 0.7f ? 255 : (int)(255 * (1 - (k - 0.7f) / 0.3f));
+            _spriteBatch.Draw(tex,
+                new Vector2(n.X - tex.Width / 2 - _cameraX, n.Y - tex.Height - NumberRise * k - _cameraY),
+                null, new Color(255, 230, 80, alpha), 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+        }
+    }
+
+    // One mob's art: json plus textures, loaded once. The idle is stand, or
+    // move when the mob has no stand (the blue snail crawls everywhere).
+    private string LoadMob(int mob)
+    {
+        if (!_mobData.TryGetValue(mob, out var data))
+        {
+            data = LoadJson<MobData>(Path.Combine(_assetsDir, "mob", $"{mob}.json"));
+            if (!data.Actions.Any(a => a.Name is "stand" or "move"))
+                throw new InvalidDataException($"mob {mob} has no idle action");
+            foreach (string need in new[] { "hit1", "die1" })
+                if (!data.Actions.Any(a => a.Name == need))
+                    throw new InvalidDataException($"mob {mob} has no {need} action");
+            foreach (var a in data.Actions)
+            {
+                if (a.Frames.Count == 0)
+                    throw new InvalidDataException($"mob {mob} {a.Name} has no frames");
+                if (a.Frames.Any(f => f.Delay <= 0))
+                    throw new InvalidDataException($"mob {mob} {a.Name} has a bad delay");
+            }
+            foreach (var a in data.Actions)
+                foreach (var f in a.Frames)
+                    LoadTexture(f.Image);
+            _mobData[mob] = data;
+        }
+        return MobIdle(mob);
+    }
+
+    private string MobIdle(int mob) =>
+        _mobData[mob].Actions.Any(a => a.Name == "stand") ? "stand" : "move";
+
+    private List<MobFrame> MobFrames(int mob, string state) =>
+        _mobData[mob].Actions.FirstOrDefault(a => a.Name == state)?.Frames
+            ?? throw new InvalidDataException($"mob {mob} has no {state} action");
+
+    // A spawn the server pushed (or the solo world listed): the view starts
+    // at the live HP, so late joiners see wounded mobs as wounded.
+    private void ApplySpawn(int uid, int mob, float x, float y, int maxHp, int hp)
+    {
+        string idle = LoadMob(mob);
+        _mobs[uid] = new MobView { Mob = mob, X = x, Y = y, Hp = hp, MaxHp = maxHp, Action = idle };
+    }
+
+    // A hit the server judged (or the solo world struck): flinch or die, plus
+    // a number. A hit for a view we never saw is dropped: a kill in flight
+    // across a remap, or a join racing a swing on another thread.
+    private void ApplyHit(int uid, int damage, int hpLeft)
+    {
+        if (!_mobs.TryGetValue(uid, out var m)) return;
+        m.Hp = hpLeft;
+        m.Action = hpLeft == 0 ? "die1" : "hit1";
+        m.Frame = 0;
+        m.Timer = 0;
+        float headY = m.Y - _textures[MobFrames(m.Mob, m.Action)[0].Image].Height;
+        _numbers.Add(new DamageNumber { Text = damage.ToString(), X = m.X, Y = headY });
+    }
+
+    // Solo mobs: a fresh world once per session, then re-list the view (map
+    // switches re-list; kills stay dead until the session ends).
+    private void StartSoloWorld()
+    {
+        _soloWorld = new MobWorld(_assetsDir);
+        RefreshSoloMobs();
+    }
+
+    private void RefreshSoloMobs()
+    {
+        _mobs.Clear();
+        _numbers.Clear();
+        _soloWorld!.EnterMap(_mapId);
+        foreach (var s in _soloWorld.MobsOn(_mapId))
+            ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);
     }
 
     // The map without any characters: the chars screen reuses this as its backdrop.
