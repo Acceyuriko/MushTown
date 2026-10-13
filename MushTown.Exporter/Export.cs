@@ -101,6 +101,12 @@ public static class Export
                 return;
             }
         }
+        var effect = WzRoot.LoadCategory(dataDir, "Effect");
+        if (!ExportDamageSkin(effect, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         var ui = WzRoot.LoadCategory(dataDir, "UI");
         foreach ((string node, string file) in UiFiles)
         {
@@ -675,6 +681,31 @@ public static class Export
         Console.WriteLine($"mob {mobId}: " +
             string.Join(", ", data.Actions.Select(a => $"{a.Name} x{a.Frames.Count}")));
         WriteJson(Path.Combine(outDir, "mob", $"{mobId}.json"), data);
+        return true;
+    }
+
+    // Basic damage skin digits: BasicEff.img NoRed0 0-9 (yellow; the set that
+    // also carries Miss/guard words). Miss and the words stay for the week
+    // that adds dodge and guard.
+    private static bool ExportDamageSkin(WzRoot effect, string outDir)
+    {
+        var data = new DmgData();
+        for (int d = 0; d <= 9; d++)
+        {
+            string node = $"BasicEff.img/NoRed0/{d}";
+            var origin = WzNodeUtil.ResolveUol(effect.Find(node))?.Nodes["origin"]?.Value as Wz_Vector;
+            if (origin == null)
+            {
+                Console.WriteLine($"{node}: no origin");
+                return false;
+            }
+            string path = $"effect/dmg/{d}.png";
+            if (!UiPng.Save(effect, "Effect", node, Path.Combine(outDir, path)))
+                return false;
+            data.Digits.Add(new DmgDigit { Image = path, Oy = origin.Y });
+        }
+        WriteJson(Path.Combine(outDir, "effect", "dmg.json"), data);
+        Console.WriteLine("damage skin: NoRed0 0-9");
         return true;
     }
 

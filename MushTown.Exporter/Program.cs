@@ -5,7 +5,7 @@ using MushTown.Exporter;
 //   dump     <path-under-Base> [depth]        print WZ node structure
 //   catdump  <Category> <path> [depth]        same, inside a category wz
 //   find     <node name>                      locate nodes by name under Base
-//   uipng    <node-path> <out.png>            save one UI canvas as png
+//   uipng    [Category] <node-path> <out.png>   save one canvas as png
 //   export   [DataDir] [OutDir]               export map + character assets
 // Only smoke and export take a DataDir; the others always read the default one,
 // so their first argument is their own.
@@ -48,18 +48,23 @@ switch (cmd)
         return;
 
     case "uipng":
-        if (args.Length < 3)
+        if (args.Length == 3)
         {
-            Console.WriteLine("usage: uipng <node-path> <out.png>");
-            Environment.ExitCode = 1;
+            Environment.ExitCode = UiPng.Run(args[1], args[2]) ? 0 : 1;
             return;
         }
-        Environment.ExitCode = UiPng.Run(args[1], args[2]) ? 0 : 1;
+        if (args.Length == 4)
+        {
+            Environment.ExitCode = UiPng.Run(args[1], args[2], args[3]) ? 0 : 1;
+            return;
+        }
+        Console.WriteLine("usage: uipng <node-path> <out.png> | uipng <Category> <node-path> <out.png>");
+        Environment.ExitCode = 1;
         return;
 
     default:
         Console.WriteLine($"unknown command: {cmd}");
-        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | uipng <node-path> <out.png> | export [DataDir] [OutDir]");
+        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir]");
         Environment.ExitCode = 1;
         return;
 }

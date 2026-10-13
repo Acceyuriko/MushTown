@@ -2,15 +2,22 @@ using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
 
-// Saves one UI canvas node as a .png file, for art review before a rework week.
-// Usage: uipng <node-path> <out.png>   (path like Login.img/Title_new/backgrd)
+// Saves one canvas node as a .png file, for art review before a rework week.
+// Usage: uipng <node-path> <out.png>            (UI tree)
+//        uipng <Category> <node-path> <out.png>  (another category wz)
 public static class UiPng
 {
     public static bool Run(string nodePath, string outPath) =>
-        Save(WzRoot.LoadCategory(ExporterPaths.DataDir, "UI"), nodePath, outPath);
+        Save(WzRoot.LoadCategory(ExporterPaths.DataDir, "UI"), "UI", nodePath, outPath);
 
-    // Same save against an already-loaded UI root, so export loads once.
-    public static bool Save(WzRoot root, string nodePath, string outPath)
+    public static bool Run(string category, string nodePath, string outPath) =>
+        Save(WzRoot.LoadCategory(ExporterPaths.DataDir, category), category, nodePath, outPath);
+
+    // Same save against an already-loaded root, so export loads once.
+    public static bool Save(WzRoot root, string nodePath, string outPath) =>
+        Save(root, "UI", nodePath, outPath);
+
+    public static bool Save(WzRoot root, string category, string nodePath, string outPath)
     {
         Wz_Node? node = WzNodeUtil.ResolveUol(root.Find(nodePath));
         if (node == null)
@@ -19,9 +26,10 @@ public static class UiPng
             return false;
         }
 
-        // UI canvases are 1x1 placeholders; the real bytes live in _Canvas
-        // behind an _outlink like "UI/_Canvas/...". Links are absolute from the
-        // Data dir, but this root IS the UI tree, so strip the "UI/" prefix.
+        // Canvases are 1x1 placeholders; the real bytes live in _Canvas
+        // behind an _outlink like "<Category>/_Canvas/...". Links are absolute
+        // from the Data dir, but this root IS the category tree, so strip the
+        // "<Category>/" prefix.
         Wz_Vector? origin = node.Nodes["origin"]?.Value as Wz_Vector;
         Wz_Node? target = node;
         while (target != null)
@@ -33,7 +41,7 @@ public static class UiPng
             if (link == null) break;
             target = inlink != null
                 ? target.GetNodeWzImage()?.Node.FindNodeByPath(true, link.Split('/'))
-                : root.Find(link.StartsWith("UI/") ? link.Substring(3) : link);
+                : root.Find(link.StartsWith(category + "/") ? link.Substring(category.Length + 1) : link);
             target = WzNodeUtil.ResolveUol(target);
         }
         Wz_Png? png = target?.Value as Wz_Png;

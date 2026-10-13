@@ -162,6 +162,20 @@ public sealed class MobFrame
     // Frame time in ms. The WZ art carries no delays, so every frame is 100.
     public int Delay { get; set; }
 }
+
+// Basic damage skin digits: assets/effect/dmg.json (BasicEff.img NoRed0,
+// the set that also carries Miss/guard words, so it is the combat font).
+// Digits[d] is the art for digit d; Oy aligns baselines at draw time.
+public sealed class DmgData
+{
+    public List<DmgDigit> Digits { get; set; } = new();
+}
+
+public sealed class DmgDigit
+{
+    public string Image { get; set; } = "";
+    public int Oy { get; set; }
+}
 // Exported character action: assets/chara/{body}/{action}.json
 public sealed class CharaData
 {

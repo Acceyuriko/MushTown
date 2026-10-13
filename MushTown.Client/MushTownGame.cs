@@ -86,6 +86,7 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, MobView> _mobs = new();
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<DamageNumber> _numbers = new();
+    private DmgData? _dmg; // basic damage skin digits, loaded once
 
     private sealed class MobView
     {
@@ -310,12 +311,12 @@ public partial class MushTownGame : Game
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float dtMs = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
         int dir = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
-        if (dir != 0 && _climb == null) _facingRight = dir > 0; // raw sprites face left; mirror when facing right
         if (_attackLock > 0)
         {
             _attackLock = Math.Max(0, _attackLock - dtMs);
-            dir = 0; // mid-swing: feet planted
+            dir = 0; // mid-swing: feet planted, facing kept
         }
+        else if (dir != 0 && _climb == null) _facingRight = dir > 0; // raw sprites face left; mirror when facing right
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
         // (portal also fires on walking in with Up held; grab and jump use held keys)
@@ -719,18 +720,43 @@ public partial class MushTownGame : Game
         _spriteBatch.Draw(_pixel, new Rectangle(px + 1, py + 1, Math.Max(1, (int)((BarWidth - 2) * (float)m.Hp / m.MaxHp)), 3), new Color(80, 220, 80));
     }
 
-    // Damage numbers: baked text, yellow, rising and fading over NumberMs.
+    // Damage numbers: basic skin digits, rising and fading over NumberMs.
     private void DrawNumbers()
     {
+        if (_numbers.Count == 0) return;
+        var dmg = LoadDmg();
         foreach (var n in _numbers)
         {
-            var tex = _ui.Get(n.Text);
             float k = n.Age / NumberMs;
             int alpha = k < 0.7f ? 255 : (int)(255 * (1 - (k - 0.7f) / 0.3f));
-            _spriteBatch.Draw(tex,
-                new Vector2(n.X - tex.Width / 2 - _cameraX, n.Y - tex.Height - NumberRise * k - _cameraY),
-                null, new Color(255, 230, 80, alpha), 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+            var tint = new Color(255, 255, 255, alpha);
+            int totalW = 0;
+            foreach (char c in n.Text) totalW += _textures[dmg.Digits[c - '0'].Image].Width;
+            float x = n.X - totalW / 2f - _cameraX;
+            float baseY = n.Y - NumberRise * k - _cameraY;
+            foreach (char c in n.Text)
+            {
+                var d = dmg.Digits[c - '0'];
+                var tex = _textures[d.Image];
+                _spriteBatch.Draw(tex, new Vector2(x, baseY - d.Oy), null, tint,
+                    0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+                x += tex.Width;
+            }
         }
+    }
+
+    // Basic damage skin: ten digits plus their baseline offsets, loaded once.
+    private DmgData LoadDmg()
+    {
+        if (_dmg == null)
+        {
+            var data = LoadJson<DmgData>(Path.Combine(_assetsDir, "effect", "dmg.json"));
+            if (data.Digits.Count != 10)
+                throw new InvalidDataException($"damage skin has {data.Digits.Count} digits, want 10");
+            foreach (var d in data.Digits) LoadTexture(d.Image);
+            _dmg = data;
+        }
+        return _dmg;
     }
 
     // One mob's art: json plus textures, loaded once. The idle is stand, or
