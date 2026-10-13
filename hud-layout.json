@@ -1,0 +1,39 @@
+{
+  "_help": "HUD widget top-left positions in 1366x768 space. Sizes stay in code (they must match the art). coin/meso are inventory-panel-local (meso X = number right end). Keys may be omitted (keeps current value). DEBUG builds reload this file live on save; the file wins over dragged panels.",
+  "charBtn": [
+    304,
+    724
+  ],
+  "coin": [
+    24,
+    484
+  ],
+  "hpmp": [
+    584,
+    715
+  ],
+  "inv": [
+    1114,
+    45
+  ],
+  "menuBtn": [
+    266,
+    724
+  ],
+  "meso": [
+    213,
+    484
+  ],
+  "plate": [
+    0,
+    723
+  ],
+  "qslot": [
+    810,
+    691
+  ],
+  "stat": [
+    656,
+    130
+  ]
+}

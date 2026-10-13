@@ -108,6 +108,12 @@ public partial class MushTownGame : Game
         public float Age;
     }
 
+    private readonly string _layoutPath;
+#if DEBUG
+    private FileSystemWatcher? _layoutWatcher;
+    private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
+#endif
+
     public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false)
     {
         _shotPath = shotPath;
@@ -120,6 +126,16 @@ public partial class MushTownGame : Game
         _shotScreen = shotScreen;
         _shotHit = shotHit;
         _assetsDir = FindAssetsDir();
+        string dir = Path.GetDirectoryName(_assetsDir)!;
+        _layoutPath = Path.Combine(dir, "hud-layout.json");
+        TryReloadLayout();
+#if DEBUG
+        _layoutWatcher = new FileSystemWatcher(dir, Path.GetFileName(_layoutPath));
+        _layoutWatcher.Changed += (_, _) => _layoutDirty = true;
+        _layoutWatcher.Renamed += (_, _) => _layoutDirty = true; // some editors save by rename
+        _layoutWatcher.Created += (_, _) => _layoutDirty = true; // ...or delete-then-create
+        _layoutWatcher.EnableRaisingEvents = true;
+#endif
         _graphics = new GraphicsDeviceManager(this);
         IsMouseVisible = true;
 
@@ -289,6 +305,13 @@ public partial class MushTownGame : Game
             base.Update(gameTime);
             return;
         }
+#if DEBUG
+        if (_layoutDirty)
+        {
+            _layoutDirty = false;
+            TryReloadLayout();
+        }
+#endif
         if (_screen != Screen.Game)
         {
             UpdateMenu();
@@ -925,6 +948,27 @@ public partial class MushTownGame : Game
 
         return JsonSerializer.Deserialize<T>(File.ReadAllText(path))
             ?? throw new InvalidDataException($"cannot parse json: {path}");
+    }
+
+    // A missing/bad file keeps the current layout and logs one line
+    // (startup: built-in defaults; hot-reload: old values). A mid-write
+    // read fails once; saving again fixes it.
+    private void TryReloadLayout()
+    {
+        try { ReloadLayout(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        {
+            GameLog($"layout: {ex.Message}");
+        }
+    }
+
+    // File wins: reload positions and snap dragged panels back to them.
+    private void ReloadLayout()
+    {
+        Layout.Load(_layoutPath);
+        _invPos = new Point(Layout.Inv.X, Layout.Inv.Y);
+        _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);
+        _dragInv = null; _dragStat = null; // a reload mid-drag drops the grab
     }
 
     private static string FindAssetsDir()

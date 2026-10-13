@@ -702,14 +702,18 @@ public static class Export
         {
             ($"{sb3}/main/namePlate/backgrnd", "hud_plate.png"),
             ($"{sb3}/main/namePlate/layer:lv", "hud_lvtag.png"),
-            ($"{sb3}/mainBar/status/backgrnd", "hud_hpbg.png"),
-            ($"{sb3}/mainBar/status/layer:cover", "hud_hpcover.png"),
-            ($"{sb3}/mainBar/status/gauge/hp/layer:0", "hud_hpfill.png"),
-            ($"{sb3}/mainBar/status/gauge/mp/layer:0", "hud_mpfill.png"),
+            ($"{sb3}/main/status/normal/backgrnd", "hud_hpbg.png"),
+            ($"{sb3}/main/status/normal/layer:cover", "hud_hpcover.png"),
+            ($"{sb3}/main/status/normal/gauge/hp/layer:0", "hud_hpfill.png"),
+            ($"{sb3}/main/status/normal/gauge/mp/layer:0", "hud_mpfill.png"),
             ($"{sb3}/mainBar/EXPBar/1366/layer:back", "hud_expback.png"),
             ($"{sb3}/mainBar/EXPBar/1366/layer:cover", "hud_expcover.png"),
             ($"{sb3}/mainBar/quickSlot/backgrnd", "hud_qslot.png"),
             ($"{sb3}/mainBar/quickSlot/layer:cover", "hud_qslotcover.png"),
+            ($"{sb3}/KeyConfig/key/29", "hud_key_ctrl.png"),
+            ($"{sb3}/KeyConfig/key/56", "hud_key_alt.png"),
+            ($"{sb3}/KeyConfig/key/23", "hud_key_i.png"),
+            ($"{sb3}/KeyConfig/key/46", "hud_key_c.png"),
             ("UIInventory.img/Inventory/backgrnd", "hud_inv.png"),
             ("UIWindow.img/Item/BtCoin/normal/0", "hud_coin.png"),
             ("UICharacterInfo.img/common/detailStat/canvas:attackBack", "hud_stat.png"),
@@ -719,7 +723,7 @@ public static class Export
         for (int d = 0; d <= 9; d++)
             files.Add(($"{sb3}/main/namePlate/levelNum/{d}", $"hud_lv{d}.png"));
         for (int d = 0; d <= 9; d++)
-            files.Add(($"{sb3}/mainBar/status/gauge/number/{d}", $"hud_num{d}.png"));
+            files.Add(($"{sb3}/main/status/normal/gauge/number/{d}", $"hud_num{d}.png"));
         for (int tab = 0; tab < 6; tab++)
         {
             files.Add(($"UIInventory.img/Inventory/AutoBuild/tab:category/selected/{tab}", $"hud_itab_s{tab}.png"));

@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using MushTown.Shared;
 
 namespace MushTown.Client;
 
@@ -22,6 +23,7 @@ public partial class MushTownGame
         "hud_sub_item_n.png", "hud_sub_item_h.png", "hud_sub_item_p.png",
         "hud_sub_bg0.png", "hud_sub_bg1.png", "hud_sub_bg2.png",
         "hud_qslot.png", "hud_qslotcover.png",
+        "hud_key_ctrl.png", "hud_key_alt.png", "hud_key_i.png", "hud_key_c.png",
         "hud_inv.png",
         "hud_itab_s0.png", "hud_itab_s1.png", "hud_itab_s2.png",
         "hud_itab_s3.png", "hud_itab_s4.png", "hud_itab_s5.png",
@@ -39,13 +41,13 @@ public partial class MushTownGame
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
     private bool _iWasDown, _cWasDown;
 
-    private static Rectangle PlateRect() => new(0, 723, 250, 35);
-    private static Rectangle HpRect() => new(584, 720, 198, 37); // cover bottom flush with EXP top
-    private static Rectangle MenuBtnRect() => new(266, 724, 34, 37);
-    private static Rectangle CharBtnRect() => new(304, 724, 34, 37);
-    private static Rectangle QslotRect() => new(810, 691, 557, 67);
+    private static Rectangle PlateRect() => new(Layout.Plate.X, Layout.Plate.Y, 250, 35);
+    private static Rectangle HpRect() => new(Layout.HpMp.X, Layout.HpMp.Y, 205, 46); // cover bottom flush with EXP top
+    private static Rectangle MenuBtnRect() => new(Layout.MenuBtn.X, Layout.MenuBtn.Y, 34, 37);
+    private static Rectangle CharBtnRect() => new(Layout.CharBtn.X, Layout.CharBtn.Y, 34, 37);
+    private static Rectangle QslotRect() => new(Layout.Qslot.X, Layout.Qslot.Y, 557, 67);
     private static Rectangle ExpRect() => new(0, 758, 1366, 10);
-    private Point _invPos = new(1114, 45), _statPos = new(656, 130);
+    private Point _invPos = new(Layout.Inv.X, Layout.Inv.Y), _statPos = new(Layout.Stat.X, Layout.Stat.Y);
     private Point? _dragInv, _dragStat; // title grab offsets while held
     private bool _statOnTop = true; // false = inventory is the active (front) panel
     private Texture2D _statBack = null!; // navy body backing, corners rounded to match the art
@@ -196,35 +198,37 @@ public partial class MushTownGame
     {
         var r = HpRect();
         _spriteBatch.Draw(Tex("hud_hpbg.png"), r, Color.White);
-        // Official anchor math (canvas draws at anchor minus origin): fills at
-        // bg+(22,4)/(22,20), cover at bg+(-3,-24). Bar always full: nothing
+        // main/status/normal anchors (canvas draws at anchor minus origin):
+        // fills at bg+(4,4)/(4,25), cover at bg+(3,3), numbers centered on
+        // x+101 (vector:hp/mp), tops y+7/y+28. Bar always full: nothing
         // drains HP/MP until W13 mob hits (W13 adds the clip then).
-        _spriteBatch.Draw(Tex("hud_hpfill.png"), new Vector2(r.X + 22, r.Y + 4), Color.White);
-        _spriteBatch.Draw(Tex("hud_mpfill.png"), new Vector2(r.X + 22, r.Y + 20), Color.White);
-        DrawBarNumber($"{MaxHp}/{MaxHp}", r.X + 22, r.Y + 4);
-        DrawBarNumber($"{MaxMp}/{MaxMp}", r.X + 22, r.Y + 20);
-        _spriteBatch.Draw(Tex("hud_hpcover.png"), new Vector2(r.X - 3, r.Y - 24), Color.White);
+        _spriteBatch.Draw(Tex("hud_hpfill.png"), new Vector2(r.X + 4, r.Y + 4), Color.White);
+        _spriteBatch.Draw(Tex("hud_mpfill.png"), new Vector2(r.X + 4, r.Y + 25), Color.White);
+        DrawBarNumber($"{MaxHp}/{MaxHp}", r.X + 101, r.Y + 7);
+        DrawBarNumber($"{MaxMp}/{MaxMp}", r.X + 101, r.Y + 28);
+        _spriteBatch.Draw(Tex("hud_hpcover.png"), new Vector2(r.X + 3, r.Y + 3), Color.White);
     }
 
-    // Art digits centered on the 171px fill; the "/" is baked (see ExportHud).
-    private void DrawBarNumber(string text, int rowX, int rowY)
+    // Art digits centered on the official x; the "/" is baked 12px
+    // (font:number is Arial 12; the WZ separator name breaks path lookup).
+    private void DrawBarNumber(string text, int centerX, int topY)
     {
+        int dh = Tex("hud_num0.png").Height;
         int w = 0;
         foreach (char ch in text) w += ch == '/' ? _ui.GetSmall("/").Width : Tex($"hud_num{ch}.png").Width;
-        int x = rowX + (171 - w) / 2;
-        int y = rowY + (13 - 9) / 2;
+        int x = centerX - w / 2;
         foreach (char ch in text)
         {
             if (ch == '/')
             {
                 var s = _ui.GetSmall("/");
-                _spriteBatch.Draw(s, new Vector2(x, rowY + (13 - s.Height) / 2), Color.White);
+                _spriteBatch.Draw(s, new Vector2(x, topY + (dh - s.Height) / 2), Color.White);
                 x += s.Width;
             }
             else
             {
                 var d = Tex($"hud_num{ch}.png");
-                _spriteBatch.Draw(d, new Vector2(x, y), Color.White);
+                _spriteBatch.Draw(d, new Vector2(x, topY), Color.White);
                 x += d.Width;
             }
         }
@@ -247,14 +251,14 @@ public partial class MushTownGame
     {
         var r = QslotRect();
         _spriteBatch.Draw(Tex("hud_qslot.png"), r, Color.White);
-        // Fixed W9 hotkeys: only live actions get a label (icons arrive with skills/potions).
-        (string key, string action)[] slots = new[] { ("Ctrl", "Attack"), ("Alt", "Jump"), ("I", "Items"), ("C", "Stats") };
+        // Fixed W9 hotkeys: official key art top-left (icons arrive with skills/potions).
+        (string file, string action)[] slots = new[] { ("hud_key_ctrl.png", "Attack"), ("hud_key_alt.png", "Jump"), ("hud_key_i.png", "Items"), ("hud_key_c.png", "Stats") };
         for (int i = 0; i < slots.Length; i++)
         {
             var s = QslotCell(i);
-            var k = _ui.GetSmall(slots[i].key);
+            var k = Tex(slots[i].file);
             var a = _ui.GetSmall(slots[i].action);
-            _spriteBatch.Draw(k, new Vector2(s.X + (s.Width - k.Width) / 2, s.Y + 2), Color.White);
+            _spriteBatch.Draw(k, new Vector2(s.X + 2, s.Y + 2), Color.White);
             _spriteBatch.Draw(a, new Vector2(s.X + (s.Width - a.Width) / 2, s.Y + 2 + k.Height), Color.Gray);
         }
         _spriteBatch.Draw(Tex("hud_qslotcover.png"), r, Color.White); // gloss stretched onto the cells: bottom flush with EXP top
@@ -275,9 +279,9 @@ public partial class MushTownGame
         // Slots stay empty: no items exist until W13 drops.
         var chara = _account?.Slots[_slot];
         // Official numbers: Arial Bold 12 #606871, right end x+213 top y+484 (font:Meso, vector:Meso).
-        _spriteBatch.Draw(Tex("hud_coin.png"), new Vector2(r.X + 24, r.Y + 484), Color.White);
+        _spriteBatch.Draw(Tex("hud_coin.png"), new Vector2(r.X + Layout.Coin.X, r.Y + Layout.Coin.Y), Color.White);
         var meso = _ui.GetMeso((chara?.Mesos ?? 0).ToString("#,##0"));
-        _spriteBatch.Draw(meso, new Vector2(r.X + 213 - meso.Width, r.Y + 484), new Color(96, 104, 113));
+        _spriteBatch.Draw(meso, new Vector2(r.X + Layout.Meso.X - meso.Width, r.Y + Layout.Meso.Y), new Color(96, 104, 113));
     }
 
     private void DrawTab(int t)
