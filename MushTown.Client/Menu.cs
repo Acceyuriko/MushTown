@@ -78,6 +78,7 @@ public partial class MushTownGame
     private static Rectangle CreateBtnRect() => new(498, 667, 170, 41);
     private static Rectangle DeleteBtnRect() => new(586, 722, 160, 33);
     private static Rectangle CancelBtnRect() => new(30, 695, 167, 43);
+    private static Rectangle LogoutTextRect() => new(210, 695, 120, 43);
     private static Rectangle DeletePanelRect() => new(483, 284, 400, 200);
     private static Rectangle DeleteYesRect() => new(508, 410, 180, 30);
     private static Rectangle DeleteNoRect() => new(700, 402, 167, 43);
@@ -113,7 +114,7 @@ public partial class MushTownGame
         if (shotScreen != null) // menu screenshots ride on a demo account
         {
             _account = new Account { User = "demo" };
-            _account.Slots[0] = new CharaSlot { Name = "hero", Level = 5, Map = 10000, X = 100, Y = 200 };
+            _account.Slots[0] = new CharaSlot { Name = "hero", Level = 5, Map = 10000, X = 100, Y = 200, Mesos = 12345 };
             _account.Slots[2] = new CharaSlot { Name = "mage", Level = 2, Map = 20000 };
             _screen = shotScreen switch
             {
@@ -121,8 +122,13 @@ public partial class MushTownGame
                 "chars" or "delete" or "panel" => Screen.Chars,
                 "job" => Screen.Job,
                 "setup" => Screen.Setup,
+                "inv" or "use" or "stat" or "hud" => Screen.Game,
                 _ => Screen.Login,
             };
+            if (shotScreen is "inv" or "use" or "hud") _showInv = true;
+            if (shotScreen == "use") _invTab = 1;
+            if (shotScreen is "stat" or "hud") _showStat = true;
+            if (shotScreen == "hud") _showSubmenu = true;
             if (shotScreen == "register") _registerOpen = true; // the two modal states get their own shots
             if (shotScreen == "delete") _deleteOpen = true;
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -140,6 +146,10 @@ public partial class MushTownGame
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
         foreach (string f in UiFiles) LoadTexture("ui/" + f); // missing file fails loud here
+        foreach (string f in HudFiles) LoadTexture("ui/" + f);
+        for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
+        _statBack = RoundedBacking(448, 406, new Color(62, 96, 118), 3);
+        RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
     }
 
     protected override void UnloadContent()
@@ -299,10 +309,12 @@ public partial class MushTownGame
         if (esc || (click && hit(CancelBtnRect())))
         {
             if (_joinOpen) { CloseJoin(); return; } // Esc/Cancel closes the popup first (register/delete do the same)
-            Logout();
+            _screen = Screen.Chars; // back to characters: logout is its own button now (quitting with Esc used to log out)
+            _focus = "";
             return;
         }
         if (!_joinOpen) // the open popup is modal: rows wait until it closes
+        {
             for (int i = 0; i < 3; i++)
                 if (click && hit(ServerRowRect(i)))
                 {
@@ -310,6 +322,8 @@ public partial class MushTownGame
                     else EnterChars(i);
                     return;
                 }
+            if (click && hit(LogoutTextRect())) Logout();
+        }
         if (!_joinOpen) return;
         if (click && hit(JoinIpRect())) { _focus = "ip"; return; }
         if ((click && hit(JoinBtnRect())) || enter) EnterChars(2);
@@ -580,6 +594,8 @@ public partial class MushTownGame
         _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
         _upWasDown = kb.IsKeyDown(Keys.Up);
         _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
+        _iWasDown = kb.IsKeyDown(Keys.I);
+        _cWasDown = kb.IsKeyDown(Keys.C);
         _wasInPortal = SceneMath.FindPortal(_map.Portals, _px, _py) != null;
         _screen = Screen.Game;
     }
@@ -633,12 +649,12 @@ public partial class MushTownGame
         GameLog($"saved {chara.Name} at map {chara.Map} ({chara.X},{chara.Y})");
     }
 
-    private void UpdateLogButton()
+    // True when the click lands on the log button or the open panel: the caller must skip the HUD (both panels overlap the panel).
+    private bool UpdateLogButton(bool click, int gx, int gy)
     {
-        var ms = Mouse.GetState();
-        if (!ClickEdge(ms)) return;
-        var (gx, gy) = MouseGamePos(ms);
-        if (HitRect(LogButtonRect(), gx, gy)) _panelOpen = !_panelOpen;
+        if (!click) return false;
+        if (HitRect(LogButtonRect(), gx, gy)) { _panelOpen = !_panelOpen; return true; }
+        return _panelOpen && HitRect(LogPanelRect(), gx, gy);
     }
 
     // Feet of slot i on the spawn ground (all three share the line, clamped inside it).
@@ -729,6 +745,7 @@ public partial class MushTownGame
             DrawHover(JoinBtnRect(), gx, gy, new Color(0, 0, 0, 40));
         }
         DrawImgButton("btn_cancel.png", CancelBtnRect(), gx, gy);
+        DrawTextButton(LogoutTextRect(), "Logout", gx, gy);
         if (_error != "") DrawTextCentered(_error, 683, 540, ErrRed);
     }
 

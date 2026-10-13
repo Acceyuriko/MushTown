@@ -116,6 +116,11 @@ public static class Export
                 return;
             }
         }
+        if (!ExportHud(ui, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         Console.WriteLine("export done -> " + Path.GetFullPath(outDir));
     }
 
@@ -687,6 +692,60 @@ public static class Export
     // Basic damage skin digits: BasicEff.img NoRed0 0-9 (yellow; the set that
     // also carries Miss/guard words). Miss and the words stay for the week
     // that adds dodge and guard.
+    // W9 HUD art: bottom bar (StatusBar3), inventory frame + tab pieces,
+    // stat body. Buttons take normal/mouseOver/pressed; disabled never shows.
+    // Must match Hud.cs: every file there must be listed here.
+    private static bool ExportHud(WzRoot ui, string outDir)
+    {
+        string sb3 = "StatusBar3.img";
+        var files = new List<(string node, string file)>
+        {
+            ($"{sb3}/main/namePlate/backgrnd", "hud_plate.png"),
+            ($"{sb3}/main/namePlate/layer:lv", "hud_lvtag.png"),
+            ($"{sb3}/mainBar/status/backgrnd", "hud_hpbg.png"),
+            ($"{sb3}/mainBar/status/layer:cover", "hud_hpcover.png"),
+            ($"{sb3}/mainBar/status/gauge/hp/layer:0", "hud_hpfill.png"),
+            ($"{sb3}/mainBar/status/gauge/mp/layer:0", "hud_mpfill.png"),
+            ($"{sb3}/mainBar/EXPBar/1366/layer:back", "hud_expback.png"),
+            ($"{sb3}/mainBar/EXPBar/1366/layer:cover", "hud_expcover.png"),
+            ($"{sb3}/mainBar/quickSlot/backgrnd", "hud_qslot.png"),
+            ($"{sb3}/mainBar/quickSlot/layer:cover", "hud_qslotcover.png"),
+            ("UIInventory.img/Inventory/backgrnd", "hud_inv.png"),
+            ("UIWindow.img/Item/BtCoin/normal/0", "hud_coin.png"),
+            ("UICharacterInfo.img/common/detailStat/canvas:attackBack", "hud_stat.png"),
+            ("UICharacterInfo.img/common/detailStat/canvas:highlightLong", "hud_stathilong.png"),
+            ("UICharacterInfo.img/common/main/button:close/normal/0", "hud_statx.png"),
+        };
+        for (int d = 0; d <= 9; d++)
+            files.Add(($"{sb3}/main/namePlate/levelNum/{d}", $"hud_lv{d}.png"));
+        for (int d = 0; d <= 9; d++)
+            files.Add(($"{sb3}/mainBar/status/gauge/number/{d}", $"hud_num{d}.png"));
+        for (int tab = 0; tab < 6; tab++)
+        {
+            files.Add(($"UIInventory.img/Inventory/AutoBuild/tab:category/selected/{tab}", $"hud_itab_s{tab}.png"));
+            files.Add(($"UIInventory.img/Inventory/AutoBuild/tab:category/normal/{tab}", $"hud_itab_n{tab}.png"));
+        }
+        // number's 11th child is "\" (the HP/MP separator): its name breaks
+        // path lookup, so the client bakes "/" instead. No other symbols exist.
+        (string state, string suffix)[] states = new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") };
+        foreach ((string state, string suffix) in states)
+        {
+            files.Add(($"{sb3}/mainBar/menu/button:Character/{state}/0", $"hud_btn_char_{suffix}.png"));
+            files.Add(($"{sb3}/mainBar/menu/button:Menu/{state}/0", $"hud_btn_menu_{suffix}.png"));
+            files.Add(($"{sb3}/mainBar/submenu/character/button:character/{state}/0", $"hud_sub_char_{suffix}.png"));
+            files.Add(($"{sb3}/mainBar/submenu/character/button:Item/{state}/0", $"hud_sub_item_{suffix}.png"));
+        }
+        for (int i = 0; i <= 2; i++)
+            files.Add(($"{sb3}/mainBar/submenu/backgrnd/{i}", $"hud_sub_bg{i}.png"));
+        foreach ((string node, string file) in files)
+        {
+            if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))
+                return false;
+        }
+        Console.WriteLine($"hud: {files.Count} files");
+        return true;
+    }
+
     private static bool ExportDamageSkin(WzRoot effect, string outDir)
     {
         var data = new DmgData();

@@ -246,7 +246,7 @@ public partial class MushTownGame : Game
             foreach (var frame in chara.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
-        if (_shotPath != null && _shotScreen == null) // game shots show mobs; menu shots don't
+        if (_shotPath != null && _shotScreen is null or "inv" or "use" or "stat" or "hud") // game shots show mobs; menu shots don't
             SetupShotMobs();
     }
 
@@ -302,7 +302,11 @@ public partial class MushTownGame : Game
             if (_account != null) { ToChars(); base.Update(gameTime); return; } // menu session: Esc saves and steps out
             else Exit(); // CLI session has no menu to return to
         }
-        UpdateLogButton();
+        var ms = Mouse.GetState(); // one click edge for the log button and the HUD
+        bool click = ClickEdge(ms);
+        var (mx, my) = MouseGamePos(ms);
+        if (!UpdateLogButton(click, mx, my))
+            UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
         if (_loadBeat > 0) _loadBeat--;
         if (_portalCooldown > 0) _portalCooldown--;
         if (_grabCooldown > 0) _grabCooldown--;
@@ -631,11 +635,17 @@ public partial class MushTownGame : Game
             DrawScene();
         else
             DrawMenu();
-        if (_screen == Screen.Game && _shotPath == null)
+        if (_screen == Screen.Game)
         {
             _spriteBatch.Begin(blendState: BlendState.NonPremultiplied);
-            var (gx, gy) = MouseGamePos(Mouse.GetState());
-            DrawLogOverlay(gx, gy);
+            if (_shotPath == null)
+            {
+                var ms = Mouse.GetState();
+                var (gx, gy) = MouseGamePos(ms);
+                DrawHud(gx, gy, ms.LeftButton == ButtonState.Pressed);
+                DrawLogOverlay(gx, gy);
+            }
+            else DrawHud(-10, -10, false); // shots: clean art, no hover, no log
             _spriteBatch.End();
         }
         GraphicsDevice.SetRenderTarget(null);
