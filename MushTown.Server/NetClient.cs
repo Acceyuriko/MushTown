@@ -100,6 +100,19 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.Attack, w => { }));
     }
 
+    // Our combat stats, so the server judges our swings on the real attacker.
+    // Sent on connect and resent on every level-up.
+    public void SendBuild(int str, int dex, int weaponAtk)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.Build, w =>
+        {
+            w.Write(str);
+            w.Write(dex);
+            w.Write(weaponAtk);
+        }));
+    }
+
     private void SendFrame(byte[] frame)
     {
         try
@@ -154,11 +167,12 @@ public sealed class NetClient : IDisposable
             _mobEvents.Enqueue(new MobEvent(true,
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
                 BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17),
-                BitConverter.ToInt32(p, 21), 0, BitConverter.ToInt32(p, 25)));
-        else if (p[0] == Net.MobHit && p.Length == 17)
+                BitConverter.ToInt32(p, 21), 0, BitConverter.ToInt32(p, 25), 0, 0));
+        else if (p[0] == Net.MobHit && p.Length == 25)
             _mobEvents.Enqueue(new MobEvent(false,
                 BitConverter.ToInt32(p, 1), 0, BitConverter.ToInt32(p, 5), 0, 0, 0,
-                BitConverter.ToInt32(p, 9), BitConverter.ToInt32(p, 13)));
+                BitConverter.ToInt32(p, 9), BitConverter.ToInt32(p, 13),
+                BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21)));
         else
             _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
     }

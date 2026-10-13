@@ -72,7 +72,12 @@ public sealed class AccountStore
         var account = Users[user];
         if (account.Slots[slot] != null)
             throw new InvalidDataException($"slot {slot} is taken");
-        var chara = new CharaSlot { Name = name };
+        var chara = new CharaSlot
+        {
+            Name = name,
+            // Starter kit: the only potion source until W13 drops (no shop until W18).
+            Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
+        };
         account.Slots[slot] = chara;
         return chara;
     }
@@ -170,18 +175,23 @@ public sealed class Account
 
 // One character. X/Y null means never played: spawn at the map portal.
 // Equips null means the beginner set (real loadouts arrive with W17).
+// Use null means an empty bag (pre-W10 saves never got the starter kit).
 public sealed class CharaSlot
 {
     public string Name { get; set; } = "";
     public int Level { get; set; } = 1;
+    public int Exp { get; set; }
     public int Map { get; set; } = 10000;
     public int? X { get; set; }
     public int? Y { get; set; }
     public int Mesos { get; set; }
+    public int Hp { get; set; } = Progression.MaxHp(1);
+    public int Mp { get; set; } = Progression.MaxMp(1);
     public int Str { get; set; } = 4;
     public int Dex { get; set; } = 4;
     public int Int { get; set; } = 4;
     public int Luk { get; set; } = 4;
+    public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
     public List<string>? Equips { get; set; }
     public List<int> Skills { get; set; } = new();
     public List<int> Quests { get; set; } = new();

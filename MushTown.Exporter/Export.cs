@@ -20,13 +20,14 @@ public static class Export
     // Mob table: our life mobs have no own art img, so each borrows its
     // same-named twin (String names verified identical). Stats are v1 feel
     // numbers: the modern client keeps them server-side, no maxHP node exists
-    // anywhere in the data (verified in W8 recon).
-    private static readonly Dictionary<int, (string art, int hp, double def)> Mobs = new()
+    // anywhere in the data (verified in W8 recon). EXP pays for levels 1-10
+    // (W10 curve: 1035 total, the 23 mobs pay 1225).
+    private static readonly Dictionary<int, (string art, int hp, double def, int exp)> Mobs = new()
     {
-        [100000] = ("0100100", 40, 0),     // Snail
-        [100001] = ("0100101", 55, 0),     // Blue Snail
-        [100003] = ("0120100", 70, 0),     // Spore (twin 120100)
-        [100004] = ("1210102", 110, 0.05), // Orange Mushroom (twin 1210102)
+        [100000] = ("0100100", 40, 0, 35),     // Snail
+        [100001] = ("0100101", 55, 0, 50),     // Blue Snail
+        [100003] = ("0120100", 70, 0, 65),     // Spore (twin 120100)
+        [100004] = ("1210102", 110, 0.05, 95), // Orange Mushroom (twin 1210102)
     };
 
     // W7.5 lobby art: (node path, file name). Normal button states only;
@@ -103,6 +104,12 @@ public static class Export
         }
         var effect = WzRoot.LoadCategory(dataDir, "Effect");
         if (!ExportDamageSkin(effect, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
+        var item = WzRoot.LoadCategory(dataDir, "Item");
+        if (!ExportPotions(item, outDir))
         {
             Environment.ExitCode = 1;
             return;
@@ -635,7 +642,7 @@ public static class Export
             Console.WriteLine($"mob {mobId}: art {Mobs[mobId].art}.img not found");
             return false;
         }
-        var data = new MobData { MobId = mobId, MaxHp = Mobs[mobId].hp, Def = Mobs[mobId].def };
+        var data = new MobData { MobId = mobId, MaxHp = Mobs[mobId].hp, Def = Mobs[mobId].def, Exp = Mobs[mobId].exp };
         foreach (Wz_Node action in img.Nodes)
         {
             if (action.Text == "info") continue;
@@ -708,6 +715,7 @@ public static class Export
             ($"{sb3}/main/status/normal/gauge/mp/layer:0", "hud_mpfill.png"),
             ($"{sb3}/mainBar/EXPBar/1366/layer:back", "hud_expback.png"),
             ($"{sb3}/mainBar/EXPBar/1366/layer:cover", "hud_expcover.png"),
+            ($"{sb3}/mainBar/EXPBar/1366/layer:gauge", "hud_expgauge.png"),
             ($"{sb3}/mainBar/quickSlot/backgrnd", "hud_qslot.png"),
             ($"{sb3}/mainBar/quickSlot/layer:cover", "hud_qslotcover.png"),
             ($"{sb3}/KeyConfig/key/29", "hud_key_ctrl.png"),
@@ -769,6 +777,40 @@ public static class Export
         }
         WriteJson(Path.Combine(outDir, "effect", "dmg.json"), data);
         Console.WriteLine("damage skin: NoRed0 0-9");
+        return true;
+    }
+
+    // W10 potions: red (+50 HP) and blue (+100 MP). Heals come from the WZ
+    // spec node; icons are the info/icon canvases (_outlink to _Canvas).
+    private static bool ExportPotions(WzRoot item, string outDir)
+    {
+        foreach (int id in new[] { ItemData.RedPotion, ItemData.BluePotion })
+        {
+            string key = id.ToString("D8"); // 02000000
+            var node = item.Find($"Consume/0200.img/{key}");
+            if (node == null)
+            {
+                Console.WriteLine($"potion {id} not found");
+                return false;
+            }
+            var spec = node.Nodes["spec"];
+            if (spec == null)
+            {
+                Console.WriteLine($"potion {id} has no spec");
+                return false;
+            }
+            var data = new ItemData
+            {
+                ItemId = id,
+                Image = $"item/{id}.png",
+                Hp = Int(spec, "hp"),
+                Mp = Int(spec, "mp"),
+            };
+            if (!UiPng.Save(item, "Item", $"Consume/0200.img/{key}/info/icon", Path.Combine(outDir, data.Image)))
+                return false;
+            WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
+        }
+        Console.WriteLine("potions: 2000000 2000003");
         return true;
     }
 

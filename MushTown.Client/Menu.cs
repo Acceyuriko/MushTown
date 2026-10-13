@@ -111,8 +111,14 @@ public partial class MushTownGame
         if (shotScreen != null) // menu screenshots ride on a demo account
         {
             _account = new Account { User = "demo" };
-            _account.Slots[0] = new CharaSlot { Name = "hero", Level = 5, Map = 10000, X = 100, Y = 200, Mesos = 12345 };
-            _account.Slots[2] = new CharaSlot { Name = "mage", Level = 2, Map = 20000 };
+            _account.Slots[0] = new CharaSlot
+            {
+                Name = "hero", Level = 5, Map = 10000, X = 100, Y = 200, Mesos = 12345,
+                Exp = 60, Hp = Progression.MaxHp(5), Mp = Progression.MaxMp(5), // half-full EXP bar, full pools
+                Str = 20, Dex = 8, // leveled stats (4 level-ups at +4/+1), like a real Lv.5
+                Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
+            };
+            _account.Slots[2] = new CharaSlot { Name = "mage", Level = 2, Map = 20000, Hp = Progression.MaxHp(2), Mp = Progression.MaxMp(2) };
             _screen = shotScreen switch
             {
                 "server" => Screen.Server,
@@ -144,6 +150,12 @@ public partial class MushTownGame
         foreach (string f in UiFiles) LoadTexture("ui/" + f); // missing file fails loud here
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
+        foreach (int id in UseIds) // USE tab potions: json first (it names the icon), then the icon
+        {
+            var item = LoadJson<ItemData>(Path.Combine(_assetsDir, "item", $"{id}.json"));
+            _items[id] = item;
+            LoadTexture(item.Image);
+        }
         _statBack = RoundedBacking(448, 406, new Color(62, 96, 118), 3);
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
     }
@@ -196,6 +208,8 @@ public partial class MushTownGame
         }
         _net = new NetClient(GameLog);
         _net.Connect(host ? "127.0.0.1" : joinHost!);
+        var chara = _account?.Slots[_slot];
+        if (chara != null) _net.SendBuild(chara.Str, chara.Dex, Progression.WeaponAtk); // CLI sessions skip: the server defaults them to beginner
     }
 
     private void MenuTextInput(char c)

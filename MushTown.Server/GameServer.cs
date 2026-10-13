@@ -24,8 +24,9 @@ public sealed class GameServer : IDisposable
     private readonly Action<string> _log;
     private readonly int _port;
     private readonly MobWorld _mobs;
-    private readonly object _mobLock = new(); // guards _pos and the MobWorld (read loops run per client)
+    private readonly object _mobLock = new(); // guards _pos/_builds and the MobWorld (read loops run per client)
     private readonly Dictionary<int, (int map, float x, float y, bool facing)> _pos = new();
+    private readonly Dictionary<int, Build> _builds = new(); // combat stats per client (missing = beginner default)
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private DiscoverResponder? _responder; // answers LAN scans while we run (same lifetime as the listener)
@@ -103,19 +104,29 @@ public sealed class GameServer : IDisposable
             _log($"client {id} error: {ex.Message}");
         }
         _clients.TryRemove(id, out _);
-        lock (_mobLock) _pos.Remove(id);
+        lock (_mobLock)
+        {
+            _pos.Remove(id);
+            _builds.Remove(id);
+        }
         client.Tcp.Close();
         Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
         _log($"client {id} left");
     }
 
-    // Clients send State and Attack; anything else means a foreign client.
+    // Clients send State, Attack, and Build; anything else means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
         if (payload[0] == Net.Attack && payload.Length == 1)
         {
             OnAttack(id);
+            return;
+        }
+        if (payload[0] == Net.Build && payload.Length == 13)
+        {
+            lock (_mobLock)
+                _builds[id] = new Build(BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5), BitConverter.ToInt32(payload, 9));
             return;
         }
         if (payload[0] != Net.State || payload.Length != 20)
@@ -138,22 +149,27 @@ public sealed class GameServer : IDisposable
     }
 
     // The Attack carries no body: the swing is judged from the sender's last
-    // State (its position and facing). Every mob in reach takes one hit. Judge
-    // and broadcast under one lock: two swings landing together must reach
-    // every screen in the order they were judged, or HP would jump back up.
+    // State (its position and facing) and its Build (combat stats; CLI
+    // clients never send one, so they swing as beginners). Every mob in
+    // reach takes one hit. Judge and broadcast under one lock: two swings
+    // landing together must reach every screen in the order they were judged,
+    // or HP would jump back up.
     // No swing cooldown on purpose: LAN self-play trusts the client (like movement).
     private void OnAttack(int id)
     {
         lock (_mobLock)
         {
             if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to judge from
-            foreach (var h in _mobs.Strike(p.map, p.x, p.y, p.facing, Random.Shared))
+            if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
+            foreach (var h in _mobs.Strike(p.map, p.x, p.y, p.facing, Random.Shared, build))
                 Broadcast(Net.Encode(Net.MobHit, w =>
                 {
                     w.Write(h.Uid);
                     w.Write(h.Map);
                     w.Write(h.Damage);
                     w.Write(h.HpLeft);
+                    w.Write(id);
+                    w.Write(h.Exp);
                 }));
         }
     }

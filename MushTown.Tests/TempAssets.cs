@@ -19,9 +19,9 @@ public sealed class TempAssets : IDisposable
         File.WriteAllText(Path.Combine(Dir, "maps", $"{map}.json"),
             $"{{\"MapId\":{map},\"Life\":{lifeJson}}}");
 
-    public void AddMob(int mob, int hp, double def = 0) =>
+    public void AddMob(int mob, int hp, double def = 0, int exp = 0) =>
         File.WriteAllText(Path.Combine(Dir, "mob", $"{mob}.json"),
-            $"{{\"MobId\":{mob},\"MaxHp\":{hp},\"Def\":{def.ToString(CultureInfo.InvariantCulture)},\"Actions\":[]}}");
+            $"{{\"MobId\":{mob},\"MaxHp\":{hp},\"Def\":{def.ToString(CultureInfo.InvariantCulture)},\"Exp\":{exp},\"Actions\":[]}}");
 
     public void Dispose()
     {

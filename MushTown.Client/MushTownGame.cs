@@ -284,8 +284,8 @@ public partial class MushTownGame : Game
         _action = "swingP1";
         _frame = 1;
         // fixed seed: the evidence shot shows the same number every run
-        foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0)))
-            ApplyHit(h.Uid, h.Damage, h.HpLeft);
+        foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), Progression.Beginner))
+            ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp);
         SnapCamera();
     }
 
@@ -367,8 +367,8 @@ public partial class MushTownGame : Game
             _attackLock = _delays["swingP1"].Sum();
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
-                foreach (var h in _localWorld.Strike(_mapId, _px, _py, _facingRight, Random.Shared))
-                    ApplyHit(h.Uid, h.Damage, h.HpLeft);
+                foreach (var h in _localWorld.Strike(_mapId, _px, _py, _facingRight, Random.Shared, OwnBuild()))
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp);
         }
 
         // Up at a portal travels: tap anywhere in range, or hold Up and walk
@@ -553,7 +553,7 @@ public partial class MushTownGame : Game
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
                 if (m.Spawn) ApplySpawn(m.Uid, m.Mob, m.X, m.Y, m.MaxHp, m.HpLeft);
-                else ApplyHit(m.Uid, m.Damage, m.HpLeft);
+                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp);
             }
             if (!_net.Connected && _remotes.Count > 0)
                 _remotes.Clear(); // link lost: peers vanish, the local world takes over
@@ -837,7 +837,8 @@ public partial class MushTownGame : Game
     // A hit the server judged (or the local world struck): flinch or die, plus
     // a number. A hit for a view we never saw is dropped: a kill in flight
     // across a remap, or a join racing a swing on another thread.
-    private void ApplyHit(int uid, int damage, int hpLeft)
+    // mine + dead means we landed the killing blow: claim the EXP.
+    private void ApplyHit(int uid, int damage, int hpLeft, bool mine, int exp)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
         m.Hp = hpLeft;
@@ -846,6 +847,29 @@ public partial class MushTownGame : Game
         m.Timer = 0;
         float headY = m.Y - _textures[MobFrames(m.Mob, m.Action)[0].Image].Height;
         _numbers.Add(new DamageNumber { Text = damage.ToString(), X = m.X, Y = headY });
+        if (hpLeft == 0 && mine) GainExp(exp);
+    }
+
+    // Our combat stats for the server (Build) and the local judge. CLI
+    // sessions have no character, so they swing as beginners.
+    private Build OwnBuild()
+    {
+        var chara = _account?.Slots[_slot];
+        return chara == null ? Progression.Beginner : new Build(chara.Str, chara.Dex, Progression.WeaponAtk);
+    }
+
+    // A kill we landed (net or local): claim the EXP. A level-up pushes our
+    // new build to the server (the local judge reads it fresh every swing).
+    private void GainExp(int exp)
+    {
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return; // CLI sessions have no one to level
+        int ups = Progression.ApplyExp(chara, exp);
+        if (ups > 0)
+        {
+            GameLog($"level up! now Lv.{chara.Level} (STR {chara.Str} DEX {chara.Dex})");
+            _net?.SendBuild(chara.Str, chara.Dex, Progression.WeaponAtk);
+        }
     }
 
     // Local mobs (shots and dropped links): a fresh world once per session,

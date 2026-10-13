@@ -6,9 +6,9 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // W9 bottom bar + item/stat panels. Art is official (StatusBar3, UIInventory,
-// UICharacterInfo, Basic tabs); all text baked. Plate/slot positions are WZ
-// vectors; the rest is tuned rects. HP full + EXP 0 are real: nothing changes
-// them until W10 leveling and W13 mob hits.
+// UICharacterInfo); all text baked. Plate/slot positions are WZ vectors;
+// the rest is tuned rects. HP/MP numbers and EXP are live (W10 leveling);
+// nothing drains HP until W13 mob hits, so the bars always draw full.
 public partial class MushTownGame
 {
     // Must match Export.cs ExportHud: every name here must be exported, or LoadTexture throws.
@@ -16,7 +16,7 @@ public partial class MushTownGame
     {
         "hud_plate.png", "hud_lvtag.png",
         "hud_hpbg.png", "hud_hpcover.png", "hud_hpfill.png", "hud_mpfill.png",
-        "hud_expback.png", "hud_expcover.png",
+        "hud_expback.png", "hud_expcover.png", "hud_expgauge.png",
         "hud_btn_char_n.png", "hud_btn_char_h.png", "hud_btn_char_p.png",
         "hud_btn_menu_n.png", "hud_btn_menu_h.png", "hud_btn_menu_p.png",
         "hud_sub_char_n.png", "hud_sub_char_h.png", "hud_sub_char_p.png",
@@ -33,9 +33,9 @@ public partial class MushTownGame
     };
     private const int TabCount = 6;
 
-    // Beginner vitals: no formula yet (W10), so the bar shows full.
-    private const int MaxHp = 50;
-    private const int MaxMp = 5;
+    // USE tab slots, fixed order: red potion, blue potion (the only USE items until W13 drops).
+    private static readonly int[] UseIds = new[] { ItemData.RedPotion, ItemData.BluePotion };
+    private readonly Dictionary<int, ItemData> _items = new();
 
     private bool _showInv, _showStat, _showSubmenu;
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
@@ -100,6 +100,9 @@ public partial class MushTownGame
             {
                 for (int t = 0; t < TabCount; t++)
                     if (HitRect(TabRect(t), gx, gy)) { _invTab = t; break; }
+                if (_invTab == 1) // USE tab: click a potion to drink it
+                    for (int s = 0; s < UseIds.Length; s++)
+                        if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(UseIds[s]);
             }
             return;
         }
@@ -136,6 +139,23 @@ public partial class MushTownGame
     // Official tabs are fixed 35x22 art at pitch 37 (tab:category lt/pitch).
     private Rectangle TabRect(int t) =>
         new(InvRect().X + 11 + 37 * t, InvRect().Y + 31, 35, 22);
+
+    // USE tab potion cells: aligned to the first inset row of the art grid
+    // (local y 95..143, measured off the USE shot; x pitch 56).
+    private Rectangle UseSlotRect(int i)
+    {
+        var r = InvRect();
+        return new Rectangle(r.X + 14 + i * 56, r.Y + 95, 48, 48);
+    }
+
+    // Click a USE slot: drink one. Empty slots and full pools do nothing.
+    private void DrinkPotion(int id)
+    {
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return; // CLI sessions carry no bag
+        var item = _items[id];
+        Progression.UsePotion(chara, id, item.Hp, item.Mp);
+    }
 
     private Rectangle InvXRect()
     {
@@ -174,7 +194,14 @@ public partial class MushTownGame
     {
         var r = ExpRect();
         _spriteBatch.Draw(Tex("hud_expback.png"), r, Color.White);
-        // EXP is always 0 in W9: nothing fills the bar yet (W10 leveling).
+        var chara = _account?.Slots[_slot];
+        if (chara != null && chara.Exp > 0) // CLI sessions have no EXP: the bar stays empty
+        {
+            var gauge = Tex("hud_expgauge.png");
+            int w = gauge.Width * chara.Exp / Progression.ExpNext(chara.Level);
+            if (w > 0)
+                _spriteBatch.Draw(gauge, new Vector2(r.X, r.Y), new Rectangle(0, 0, w, gauge.Height), Color.White);
+        }
         _spriteBatch.Draw(Tex("hud_expcover.png"), new Vector2(r.X, r.Y), Color.White);
     }
 
@@ -200,12 +227,14 @@ public partial class MushTownGame
         _spriteBatch.Draw(Tex("hud_hpbg.png"), r, Color.White);
         // main/status/normal anchors (canvas draws at anchor minus origin):
         // fills at bg+(4,4)/(4,25), cover at bg+(3,3), numbers centered on
-        // x+101 (vector:hp/mp), tops y+7/y+28. Bar always full: nothing
+        // x+101 (vector:hp/mp), tops y+7/y+28. Bars always full: nothing
         // drains HP/MP until W13 mob hits (W13 adds the clip then).
+        var chara = _account?.Slots[_slot];
+        int maxHp = Progression.MaxHp(chara?.Level ?? 1), maxMp = Progression.MaxMp(chara?.Level ?? 1);
         _spriteBatch.Draw(Tex("hud_hpfill.png"), new Vector2(r.X + 4, r.Y + 4), Color.White);
         _spriteBatch.Draw(Tex("hud_mpfill.png"), new Vector2(r.X + 4, r.Y + 25), Color.White);
-        DrawBarNumber($"{MaxHp}/{MaxHp}", r.X + 101, r.Y + 7);
-        DrawBarNumber($"{MaxMp}/{MaxMp}", r.X + 101, r.Y + 28);
+        DrawBarNumber($"{chara?.Hp ?? maxHp}/{maxHp}", r.X + 101, r.Y + 7);
+        DrawBarNumber($"{chara?.Mp ?? maxMp}/{maxMp}", r.X + 101, r.Y + 28);
         _spriteBatch.Draw(Tex("hud_hpcover.png"), new Vector2(r.X + 3, r.Y + 3), Color.White);
     }
 
@@ -276,8 +305,11 @@ public partial class MushTownGame
         _spriteBatch.Draw(Tex("hud_inv.png"), r, Color.White);
         for (int t = 0; t < TabCount; t++) DrawTab(t);
         _spriteBatch.Draw(Tex("hud_statx.png"), InvXRect(), Color.White);
-        // Slots stay empty: no items exist until W13 drops.
         var chara = _account?.Slots[_slot];
+        if (_invTab == 1 && chara?.Use != null) // USE tab: owned potions only (other tabs stay empty until W13+)
+            for (int i = 0; i < UseIds.Length; i++)
+                if (chara.Use.TryGetValue(UseIds[i], out int count) && count > 0)
+                    DrawUseSlot(i, UseIds[i], count);
         // Official numbers: Arial Bold 12 #606871, right end x+213 top y+484 (font:Meso, vector:Meso).
         _spriteBatch.Draw(Tex("hud_coin.png"), new Vector2(r.X + Layout.Coin.X, r.Y + Layout.Coin.Y), Color.White);
         var meso = _ui.GetMeso((chara?.Mesos ?? 0).ToString("#,##0"));
@@ -289,6 +321,16 @@ public partial class MushTownGame
         var tr = TabRect(t);
         string file = t == _invTab ? $"hud_itab_s{t}.png" : $"hud_itab_n{t}.png";
         _spriteBatch.Draw(Tex(file), new Vector2(tr.X, tr.Y), Color.White);
+    }
+
+    // One USE slot: icon centered in the cell, count bottom-right.
+    private void DrawUseSlot(int i, int id, int count)
+    {
+        var s = UseSlotRect(i);
+        var icon = _textures[_items[id].Image];
+        _spriteBatch.Draw(icon, new Vector2(s.X + (s.Width - icon.Width) / 2, s.Y + (s.Height - icon.Height) / 2), Color.White);
+        var n = _ui.GetSmall(count.ToString());
+        _spriteBatch.Draw(n, new Vector2(s.X + s.Width - n.Width - 2, s.Y + s.Height - n.Height - 2), Color.Black);
     }
 
     // Solid backing with rounded corners (the art's own radius is ~3px, measured).
@@ -333,17 +375,19 @@ public partial class MushTownGame
         _spriteBatch.Draw(_statBack, new Vector2(r.X, by), Color.White);
         _spriteBatch.Draw(Tex("hud_stat.png"), new Vector2(r.X, by), Color.White);
         var chara = _account?.Slots[_slot];
+        int maxHp = Progression.MaxHp(chara?.Level ?? 1), maxMp = Progression.MaxMp(chara?.Level ?? 1);
         var cp = _ui.GetSmall("0"); // value only; "Combat Power" is baked in the art (no formula yet)
         _spriteBatch.Draw(cp, new Vector2(r.X + 432 - cp.Width, by + 8), Color.White);
         int y = by + 132; // panel 1: vitals + 4 stats (name/level live on the plate)
-        DrawStatRow("HP", $"{MaxHp} / {MaxHp}", r.X, y); y += 22;
-        DrawStatRow("MP", $"{MaxMp} / {MaxMp}", r.X, y); y += 22;
+        DrawStatRow("HP", $"{chara?.Hp ?? maxHp} / {maxHp}", r.X, y); y += 22;
+        DrawStatRow("MP", $"{chara?.Mp ?? maxMp} / {maxMp}", r.X, y); y += 22;
         DrawStatRow("STR", $"{chara?.Str ?? 4}", r.X, y); y += 22;
         DrawStatRow("DEX", $"{chara?.Dex ?? 4}", r.X, y); y += 22;
         DrawStatRow("INT", $"{chara?.Int ?? 4}", r.X, y); y += 22;
         DrawStatRow("LUK", $"{chara?.Luk ?? 4}", r.X, y);
         y = by + 320; // panel 2 is only ~80px: 5 tight rows (official rows are tight too)
-        DrawStatRow("Attack Power", "32", r.X, y); y += 16; // polearm incPAD (W8); formula in W10
+        (int lo, int hi) = Progression.PanelRange(chara?.Str ?? 4, chara?.Dex ?? 4, Progression.WeaponAtk);
+        DrawStatRow("Attack Power", $"{lo}~{hi}", r.X, y); y += 16;
         DrawStatRow("Magic ATT", "0", r.X, y); y += 16;
         DrawStatRow("Defense", "0", r.X, y); y += 16;
         DrawStatRow("Speed", "100", r.X, y); y += 16;

@@ -11,7 +11,8 @@ public static class Net
     public const byte Leave = 4;   // server -> client: int id (a peer is gone)
     public const byte Attack = 5;  // client -> server: no body (server judges from the last State)
     public const byte MobSpawn = 6; // server -> client: int uid, int mob, int map, float x, float y, int maxHp, int hp
-    public const byte MobHit = 7;  // server -> client: int uid, int map, int damage, int hpLeft (0 = dead)
+    public const byte MobHit = 7;  // server -> client: int uid, int map, int damage, int hpLeft (0 = dead), int attacker, int exp
+    public const byte Build = 8;   // client -> server: int str, int dex, int weaponAtk (combat stats, resent on level-up)
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -77,8 +78,11 @@ public readonly record struct RemoteEvent(
 
 // One mob event from the server: a spawn (Spawn true, Mob/MaxHp set, HpLeft
 // is the live HP) or a hit (Spawn false, Damage/HpLeft set, HpLeft 0 means dead).
+// A hit also carries its Attacker id (kill credit goes to that client only)
+// and the mob's Exp (awarded on the killing blow).
 public readonly record struct MobEvent(
-    bool Spawn, int Uid, int Mob, int Map, float X, float Y, int MaxHp, int Damage, int HpLeft);
+    bool Spawn, int Uid, int Mob, int Map, float X, float Y, int MaxHp, int Damage, int HpLeft,
+    int Attacker, int Exp);
 
 // Accumulates raw TCP bytes and yields whole payloads (header eaten).
 // TCP splits and merges at will, so one Feed can yield zero, one, or more.

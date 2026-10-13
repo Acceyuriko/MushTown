@@ -4,8 +4,9 @@ using MushTown.Shared;
 namespace MushTown.Server;
 
 // The mob side of the world: spawns, HP, hit judging. The client never runs
-// this logic (Q9: movement is client-side, mobs are server-side). Solo play
-// drives one directly; net play lets the GameServer drive it for everyone.
+// this logic (Q9: movement is client-side, mobs are server-side). Local
+// worlds (shots, dropped links) drive one directly; net play lets the
+// GameServer drive it for everyone.
 public sealed class MobWorld
 {
     // One spawn pushed to clients entering the map (live Hp, not MaxHp: a
@@ -13,7 +14,8 @@ public sealed class MobWorld
     public sealed record Spawn(int Uid, int Mob, int Map, float X, float Y, int MaxHp, int Hp);
 
     // One mob caught by a swing. HpLeft 0 means it died (no separate die message).
-    public sealed record Hit(int Uid, int Map, int Damage, int HpLeft);
+    // Exp is the mob's kill award (the killer's client claims it).
+    public sealed record Hit(int Uid, int Map, int Damage, int HpLeft, int Exp);
 
     // Swing reach in pixels: a mob is hit when roughly at swing height and
     // within arm's length ahead (a little behind counts, for jumps landing short).
@@ -31,11 +33,12 @@ public sealed class MobWorld
         public int Hp;
         public int MaxHp;
         public double Def;
+        public int Exp;
     }
 
     private readonly string _assetsDir;
     private readonly Dictionary<int, MapData> _maps = new();
-    private readonly Dictionary<int, (int hp, double def)> _stats = new();
+    private readonly Dictionary<int, (int hp, double def, int exp)> _stats = new();
     private readonly List<Live> _lives = new();
     private readonly HashSet<int> _spawned = new();
     private int _nextUid = 1;
@@ -72,9 +75,9 @@ public sealed class MobWorld
             if (!_stats.TryGetValue(life.MobId, out var st))
             {
                 var mob = LoadJson<MobData>(Path.Combine(_assetsDir, "mob", $"{life.MobId}.json"));
-                if (mob.MaxHp <= 0 || mob.Def is < 0 or > 1)
-                    throw new InvalidDataException($"mob {life.MobId} has bad stats (hp {mob.MaxHp}, def {mob.Def})");
-                st = (mob.MaxHp, mob.Def);
+                if (mob.MaxHp <= 0 || mob.Def is < 0 or > 1 || mob.Exp < 0)
+                    throw new InvalidDataException($"mob {life.MobId} has bad stats (hp {mob.MaxHp}, def {mob.Def}, exp {mob.Exp})");
+                st = (mob.MaxHp, mob.Def, mob.Exp);
                 _stats[life.MobId] = st;
             }
             fresh.Add(new Live
@@ -86,7 +89,8 @@ public sealed class MobWorld
                 Y = life.Cy,
                 Hp = st.hp,
                 MaxHp = st.hp,
-                Def = st.def
+                Def = st.def,
+                Exp = st.exp
             });
         }
         _lives.AddRange(fresh);
@@ -105,7 +109,8 @@ public sealed class MobWorld
 
     // One basic-attack swing at (x, y): every mob in reach takes one damage
     // roll, and the dead are removed. rng comes from the caller (tests pass a seed).
-    public List<Hit> Strike(int map, float x, float y, bool facingRight, Random rng)
+    // build is the attacker's combat stats (the server stores one per client).
+    public List<Hit> Strike(int map, float x, float y, bool facingRight, Random rng, Build build)
     {
         var hits = new List<Hit>();
         for (int i = _lives.Count - 1; i >= 0; i--)
@@ -115,9 +120,9 @@ public sealed class MobWorld
             float dx = m.X - x;
             bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
-            int damage = Damage.Calc(rng.NextDouble(), m.Def);
+            int damage = Damage.Calc(rng.NextDouble(), m.Def, build.Str, build.Dex, build.WeaponAtk);
             m.Hp = Math.Max(0, m.Hp - damage);
-            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp));
+            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp));
             if (m.Hp == 0) _lives.RemoveAt(i);
         }
         return hits;

@@ -146,6 +146,7 @@ public sealed class MobData
     public int MobId { get; set; }
     public int MaxHp { get; set; }
     public double Def { get; set; } // fraction of damage blocked, 0-1 (bwiki 防御; v1: nothing ignores it)
+    public int Exp { get; set; } // kill award (v1 feel number, like MaxHp: the modern client keeps it server-side)
     public List<MobAction> Actions { get; set; } = new();
 }
 
@@ -161,6 +162,19 @@ public sealed class MobFrame
 
     // Frame time in ms. The WZ art carries no delays, so every frame is 100.
     public int Delay { get; set; }
+}
+
+// Consumable potion: assets/item/{id}.json. Heals come from the WZ spec
+// node (flat hp/mp points); the icon is the WZ info/icon canvas.
+public sealed class ItemData
+{
+    public const int RedPotion = 2000000; // +50 HP (spec hp)
+    public const int BluePotion = 2000003; // +100 MP (spec mp)
+
+    public int ItemId { get; set; }
+    public string Image { get; set; } = "";
+    public int Hp { get; set; }
+    public int Mp { get; set; }
 }
 
 // Basic damage skin digits: assets/effect/dmg.json (BasicEff.img NoRed0,

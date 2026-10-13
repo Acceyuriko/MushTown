@@ -55,8 +55,24 @@ public class AccountTests
         var chara = store.Login("bob", "secret").Slots[0]!;
         Assert.AreEqual("hero", chara.Name);
         Assert.AreEqual(1, chara.Level);
+        Assert.AreEqual(0, chara.Exp);
+        Assert.AreEqual(50, chara.Hp);
+        Assert.AreEqual(5, chara.Mp);
+        Assert.AreEqual(20, chara.Use![ItemData.RedPotion]); // starter kit
+        Assert.AreEqual(10, chara.Use[ItemData.BluePotion]);
         Assert.IsNull(chara.X);
         Assert.IsNull(chara.Equips);
+    }
+
+    [TestMethod]
+    public void Load_OldSlot_MissingVitalsDefault()
+    {
+        var slot = System.Text.Json.JsonSerializer.Deserialize<CharaSlot>("""{"Name":"hero"}""")!;
+        Assert.AreEqual(1, slot.Level);
+        Assert.AreEqual(0, slot.Exp);
+        Assert.AreEqual(50, slot.Hp);
+        Assert.AreEqual(5, slot.Mp);
+        Assert.IsNull(slot.Use); // pre-W10 saves never got the starter kit
     }
 
     [TestMethod]
@@ -86,6 +102,8 @@ public class AccountTests
             chara.Map = 20000;
             chara.X = 300;
             chara.Y = 400;
+            chara.Exp = 12;
+            chara.Hp = 40;
             store.Save(path);
             Assert.IsFalse(File.Exists(path + ".tmp")); // atomic write leaves no tmp behind
             var back = AccountStore.Load(path);
@@ -93,6 +111,10 @@ public class AccountTests
             Assert.AreEqual(20000, slot.Map);
             Assert.AreEqual(300, slot.X);
             Assert.AreEqual(400, slot.Y);
+            Assert.AreEqual(12, slot.Exp);
+            Assert.AreEqual(40, slot.Hp);
+            Assert.AreEqual(20, slot.Use![ItemData.RedPotion]); // int-keyed dict roundtrips
+            Assert.AreEqual(10, slot.Use[ItemData.BluePotion]);
         }
         finally
         {
