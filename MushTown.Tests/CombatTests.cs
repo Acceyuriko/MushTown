@@ -178,6 +178,7 @@ public class CombatTests
         }
         Assert.AreEqual(0, hit.HpLeft);
         Assert.AreEqual(a.PlayerId, hit.Attacker); // the killer is named
+        Assert.AreEqual(0, hit.Skill); // a basic swing tags no skill
     }
 
     // The server judges swings on the attacker's Build: a strong build

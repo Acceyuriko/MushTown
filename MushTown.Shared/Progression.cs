@@ -73,6 +73,11 @@ public static class Progression
         chara.Mp = Math.Min(chara.Mp + healMp, MaxMp(chara.Level));
         return true;
     }
+
+    // One cast's checks: level, MP, cooldown. The client deducts MP and
+    // sets the cooldown after this passes (single-threaded: no race).
+    public static bool CanCast(CharaSlot chara, SkillData skill, float cdLeftMs) =>
+        chara.Level >= skill.ReqLevel && chara.Mp >= skill.Mp && cdLeftMs <= 0;
 }
 
 // The attacker's combat stats (warrior line: STR/DEX + weapon). Int/Luk stay

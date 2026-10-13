@@ -12,6 +12,7 @@ public sealed class NetClient : IDisposable
     private readonly Action<string> _log;
     private readonly ConcurrentQueue<RemoteEvent> _events = new();
     private readonly ConcurrentQueue<MobEvent> _mobEvents = new();
+    private readonly ConcurrentQueue<SkillFxEvent> _fxEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -113,6 +114,13 @@ public sealed class NetClient : IDisposable
         }));
     }
 
+    // One skill cast: the server judges damage skills and relays every cast's effect.
+    public void SendSkillCast(int skill)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.SkillCast, w => w.Write(skill)));
+    }
+
     private void SendFrame(byte[] frame)
     {
         try
@@ -130,6 +138,8 @@ public sealed class NetClient : IDisposable
     public bool TryTake(out RemoteEvent e) => _events.TryDequeue(out e);
 
     public bool TryTakeMob(out MobEvent e) => _mobEvents.TryDequeue(out e);
+
+    public bool TryTakeFx(out SkillFxEvent e) => _fxEvents.TryDequeue(out e);
 
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
@@ -167,12 +177,16 @@ public sealed class NetClient : IDisposable
             _mobEvents.Enqueue(new MobEvent(true,
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
                 BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17),
-                BitConverter.ToInt32(p, 21), 0, BitConverter.ToInt32(p, 25), 0, 0));
-        else if (p[0] == Net.MobHit && p.Length == 25)
+                BitConverter.ToInt32(p, 21), 0, BitConverter.ToInt32(p, 25), 0, 0, 0));
+        else if (p[0] == Net.MobHit && p.Length == 29)
             _mobEvents.Enqueue(new MobEvent(false,
                 BitConverter.ToInt32(p, 1), 0, BitConverter.ToInt32(p, 5), 0, 0, 0,
                 BitConverter.ToInt32(p, 9), BitConverter.ToInt32(p, 13),
-                BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21)));
+                BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21), BitConverter.ToInt32(p, 25)));
+        else if (p[0] == Net.SkillFx && p.Length == 22)
+            _fxEvents.Enqueue(new SkillFxEvent(
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
+                BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), p[21] != 0));
         else
             _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
     }

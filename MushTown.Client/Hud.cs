@@ -32,14 +32,25 @@ public partial class MushTownGame
         "hud_coin.png", "hud_stat.png", "hud_stathilong.png", "hud_statx.png",
     };
     private const int TabCount = 6;
+    private const int SkillW = 320; // skill window: narrow panel, 2 rows
+    private const int SkillRowH = 52;
+    private const int SkillBodyH = 8 + 2 * SkillRowH; // top pad + rows
 
     // USE tab slots, fixed order: red potion, blue potion (the only USE items until W13 drops).
     private static readonly int[] UseIds = new[] { ItemData.RedPotion, ItemData.BluePotion };
     private readonly Dictionary<int, ItemData> _items = new();
 
-    private bool _showInv, _showStat, _showSubmenu;
+    // Skill window rows: skill id + fixed cast key (rebinds wait for the settings week).
+    private static readonly (int id, string key)[] SkillList = new[]
+    {
+        (SkillData.SlashBlast, "Q"),
+        (SkillData.WarLeap, "W"),
+    };
+    private readonly Dictionary<int, SkillData> _skills = new();
+
+    private bool _showInv, _showStat, _showSubmenu, _showSkill;
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
-    private bool _iWasDown, _cWasDown;
+    private bool _iWasDown, _cWasDown, _kWasDown;
 
     private static Rectangle PlateRect() => new(Layout.Plate.X, Layout.Plate.Y, 250, 35);
     private static Rectangle HpRect() => new(Layout.HpMp.X, Layout.HpMp.Y, 205, 46); // cover bottom flush with EXP top
@@ -48,25 +59,32 @@ public partial class MushTownGame
     private static Rectangle QslotRect() => new(Layout.Qslot.X, Layout.Qslot.Y, 557, 67);
     private static Rectangle ExpRect() => new(0, 758, 1366, 10);
     private Point _invPos = new(Layout.Inv.X, Layout.Inv.Y), _statPos = new(Layout.Stat.X, Layout.Stat.Y);
-    private Point? _dragInv, _dragStat; // title grab offsets while held
-    private bool _statOnTop = true; // false = inventory is the active (front) panel
+    private Point _skillPos = new(Layout.Skill.X, Layout.Skill.Y);
+    private Point? _dragInv, _dragStat, _dragSkill; // title grab offsets while held
+    private int _topPanel = 1; // the front panel: 0 = inventory, 1 = stat, 2 = skill
     private Texture2D _statBack = null!; // navy body backing, corners rounded to match the art
+    private Texture2D _skillBack = null!; // same navy, skill window size
 
     private Rectangle InvRect() => new(_invPos.X, _invPos.Y, 242, 593);
     private Rectangle StatRect() => new(_statPos.X, _statPos.Y, 448, 422); // title 16 + body 406
+    private Rectangle SkillRect() => new(_skillPos.X, _skillPos.Y, SkillW, 16 + SkillBodyH); // title 16 + 2 rows
     private Rectangle InvTitleRect() => new(_invPos.X, _invPos.Y, 242, 28);
     private Rectangle StatTitleRect() => new(_statPos.X, _statPos.Y, 448, 16);
+    private Rectangle SkillTitleRect() => new(_skillPos.X, _skillPos.Y, SkillW, 16);
 
     private Texture2D Tex(string file) => _textures["ui/" + file];
 
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
     {
         bool i = kb.IsKeyDown(Keys.I);
-        if (i && !_iWasDown) { _showInv = !_showInv; _dragInv = null; if (_showInv) _statOnTop = false; } // hiding mid-drag drops the grab
+        if (i && !_iWasDown) { _showInv = !_showInv; _dragInv = null; if (_showInv) _topPanel = 0; } // hiding mid-drag drops the grab
         _iWasDown = i;
         bool c = kb.IsKeyDown(Keys.C);
-        if (c && !_cWasDown) { _showStat = !_showStat; _dragStat = null; if (_showStat) _statOnTop = true; } // hiding mid-drag drops the grab
+        if (c && !_cWasDown) { _showStat = !_showStat; _dragStat = null; if (_showStat) _topPanel = 1; } // hiding mid-drag drops the grab
         _cWasDown = c;
+        bool k = kb.IsKeyDown(Keys.K);
+        if (k && !_kWasDown) { _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; } // hiding mid-drag drops the grab
+        _kWasDown = k;
         // Title drag runs on held (down starts it in the chain below).
         if (_dragInv.HasValue)
         {
@@ -78,24 +96,36 @@ public partial class MushTownGame
             if (!held) _dragStat = null;
             else _statPos = ClampPanel(new Point(gx - _dragStat.Value.X, gy - _dragStat.Value.Y), 448);
         }
+        if (_dragSkill.HasValue)
+        {
+            if (!held) _dragSkill = null;
+            else _skillPos = ClampPanel(new Point(gx - _dragSkill.Value.X, gy - _dragSkill.Value.Y), SkillW);
+        }
         if (!click) return;
         bool onInv = _showInv && HitRect(InvRect(), gx, gy);
         bool onStat = _showStat && HitRect(StatRect(), gx, gy);
-        if (onInv && !onStat) _statOnTop = false; // a click brings its panel to front
-        else if (onStat && !onInv) _statOnTop = true;
-        if (onInv && onStat) // overlap: the top panel owns the click
-        {
-            if (_statOnTop) onInv = false;
-            else onStat = false;
-        }
+        bool onSkill = _showSkill && HitRect(SkillRect(), gx, gy);
+        // Overlap: the frontmost panel owns the click. The front panel wins
+        // every tie; the back two keep inv < stat < skill order. Pairwise
+        // elimination leaves the highest z standing, and the survivor comes
+        // to front (a click brings its panel to front, even on overlap).
+        int z(int p) => p == _topPanel ? 3 : p;
+        if (onInv && onStat) { if (z(0) < z(1)) onInv = false; else onStat = false; }
+        if (onInv && onSkill) { if (z(0) < z(2)) onInv = false; else onSkill = false; }
+        if (onStat && onSkill) { if (z(1) < z(2)) onStat = false; else onSkill = false; }
+        if (onInv) _topPanel = 0;
+        else if (onStat) _topPanel = 1;
+        else if (onSkill) _topPanel = 2;
         // Panels draw on top, so a panel click never reaches the bottom bar behind it.
-        if (onInv || onStat)
+        if (onInv || onStat || onSkill)
         {
             _showSubmenu = false;
             if (onInv && HitRect(InvXRect(), gx, gy)) _showInv = false;
             else if (onStat && HitRect(StatXRect(), gx, gy)) _showStat = false;
+            else if (onSkill && HitRect(SkillXRect(), gx, gy)) _showSkill = false;
             else if (onInv && HitRect(InvTitleRect(), gx, gy)) _dragInv = new Point(gx - _invPos.X, gy - _invPos.Y);
             else if (onStat && HitRect(StatTitleRect(), gx, gy)) _dragStat = new Point(gx - _statPos.X, gy - _statPos.Y);
+            else if (onSkill && HitRect(SkillTitleRect(), gx, gy)) _dragSkill = new Point(gx - _skillPos.X, gy - _skillPos.Y);
             else if (onInv)
             {
                 for (int t = 0; t < TabCount; t++)
@@ -107,9 +137,9 @@ public partial class MushTownGame
             return;
         }
         if (HitRect(MenuBtnRect(), gx, gy)) _showSubmenu = !_showSubmenu;
-        else if (HitRect(CharBtnRect(), gx, gy)) { _showStat = !_showStat; _showSubmenu = false; if (_showStat) _statOnTop = true; }
-        else if (_showSubmenu && HitRect(SubRowRect(0), gx, gy)) { _showStat = true; _showSubmenu = false; _statOnTop = true; }
-        else if (_showSubmenu && HitRect(SubRowRect(1), gx, gy)) { _showInv = true; _showSubmenu = false; _statOnTop = false; }
+        else if (HitRect(CharBtnRect(), gx, gy)) { _showStat = !_showStat; _showSubmenu = false; if (_showStat) _topPanel = 1; }
+        else if (_showSubmenu && HitRect(SubRowRect(0), gx, gy)) { _showStat = true; _showSubmenu = false; _topPanel = 1; }
+        else if (_showSubmenu && HitRect(SubRowRect(1), gx, gy)) { _showInv = true; _showSubmenu = false; _topPanel = 0; }
         else if (_showSubmenu && HitRect(SubPopupRect(), gx, gy)) { } // popup padding swallows the click
         else if (_showSubmenu) _showSubmenu = false; // outside click closes (no panel behind to fall through to)
     }
@@ -169,6 +199,12 @@ public partial class MushTownGame
         return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
     }
 
+    private Rectangle SkillXRect()
+    {
+        var r = SkillRect();
+        return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
+    }
+
     private void DrawHud(int gx, int gy, bool pressed)
     {
         DrawExpBar();
@@ -178,9 +214,10 @@ public partial class MushTownGame
         DrawHudButton(CharBtnRect(), "hud_btn_char", gx, gy, pressed);
         if (_showSubmenu) DrawSubmenu(gx, gy, pressed);
         DrawQslot();
-        // The active panel draws last (on top).
-        if (_statOnTop) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); }
-        else { if (_showStat) DrawStatPanel(); if (_showInv) DrawInvPanel(); }
+        // The front panel draws last (on top); the back two keep inv < stat < skill.
+        if (_topPanel == 0) { if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showInv) DrawInvPanel(); }
+        else if (_topPanel == 1) { if (_showInv) DrawInvPanel(); if (_showSkill) DrawSkillPanel(); if (_showStat) DrawStatPanel(); }
+        else { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); }
     }
 
     private void DrawHudButton(Rectangle r, string stem, int gx, int gy, bool pressed)
@@ -399,5 +436,36 @@ public partial class MushTownGame
         _spriteBatch.Draw(_ui.GetSmall(label), new Vector2(x + 16, y), new Color(50, 50, 60));
         var v = _ui.GetSmall(value);
         _spriteBatch.Draw(v, new Vector2(x + 432 - v.Width, y), Color.Black);
+    }
+
+    // Skill window: one row per skill (icon, name, costs, cast key). Locked
+    // skills show the required level in red; cooling skills count seconds.
+    private void DrawSkillPanel()
+    {
+        var r = SkillRect();
+        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
+        _spriteBatch.Draw(_ui.GetSmall("SKILL"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
+        _spriteBatch.Draw(Tex("hud_statx.png"), SkillXRect(), Color.White);
+        int by = r.Y + 16;
+        _spriteBatch.Draw(_skillBack, new Vector2(r.X, by), Color.White);
+        for (int i = 0; i < SkillList.Length; i++)
+            DrawSkillRow(SkillList[i].id, SkillList[i].key, r.X, by + 8 + i * SkillRowH);
+    }
+
+    private void DrawSkillRow(int id, string key, int x, int y)
+    {
+        var skill = _skills[id];
+        int level = _account?.Slots[_slot]?.Level ?? 1;
+        bool locked = level < skill.ReqLevel;
+        float left = 0;
+        bool cooling = !locked && _skillCdMs.TryGetValue(id, out left) && left > 0;
+        _spriteBatch.Draw(_textures[locked || cooling ? skill.Disabled : skill.Icon], new Vector2(x + 10, y + 8), Color.White);
+        var ink = locked ? new Color(130, 140, 150) : Color.White;
+        _spriteBatch.Draw(_ui.GetSmall(skill.Name), new Vector2(x + 50, y + 4), ink);
+        _spriteBatch.Draw(_ui.GetSmall($"Lv.{skill.ReqLevel}  MP {skill.Mp}  CD {skill.CooldownMs / 1000}s"), new Vector2(x + 50, y + 24), ink);
+        string right = locked ? $"Lv.{skill.ReqLevel}" : cooling ? $"{(int)Math.Ceiling(left / 1000)}s" : key;
+        var rt = _ui.GetSmall(right);
+        var rc = locked ? new Color(255, 120, 120) : cooling ? new Color(255, 220, 0) : Color.White;
+        _spriteBatch.Draw(rt, new Vector2(x + SkillW - 8 - rt.Width, y + 4), rc);
     }
 }

@@ -9,6 +9,7 @@ public static class Layout
 {
     public static (int X, int Y) Inv = (1114, 45);
     public static (int X, int Y) Stat = (656, 130);
+    public static (int X, int Y) Skill = (326, 130);
     public static (int X, int Y) Plate = (0, 723);
     public static (int X, int Y) HpMp = (584, 715);
     public static (int X, int Y) MenuBtn = (266, 724);
@@ -24,6 +25,7 @@ public static class Layout
         // All or nothing: a bad value throws before any field changes.
         var inv = GetPoint(root, "inv", Inv);
         var stat = GetPoint(root, "stat", Stat);
+        var skill = GetPoint(root, "skill", Skill);
         var plate = GetPoint(root, "plate", Plate);
         var hpmp = GetPoint(root, "hpmp", HpMp);
         var menuBtn = GetPoint(root, "menuBtn", MenuBtn);
@@ -31,7 +33,7 @@ public static class Layout
         var qslot = GetPoint(root, "qslot", Qslot);
         var coin = GetPoint(root, "coin", Coin);
         var meso = GetPoint(root, "meso", Meso);
-        Inv = inv; Stat = stat; Plate = plate; HpMp = hpmp; MenuBtn = menuBtn;
+        Inv = inv; Stat = stat; Skill = skill; Plate = plate; HpMp = hpmp; MenuBtn = menuBtn;
         CharBtn = charBtn; Qslot = qslot; Coin = coin; Meso = meso;
     }
 

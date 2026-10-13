@@ -114,13 +114,18 @@ public sealed class GameServer : IDisposable
         _log($"client {id} left");
     }
 
-    // Clients send State, Attack, and Build; anything else means a foreign client.
+    // Clients send State, Attack, Build, and SkillCast; anything else means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
         if (payload[0] == Net.Attack && payload.Length == 1)
         {
             OnAttack(id);
+            return;
+        }
+        if (payload[0] == Net.SkillCast && payload.Length == 5)
+        {
+            OnSkill(id, BitConverter.ToInt32(payload, 1));
             return;
         }
         if (payload[0] == Net.Build && payload.Length == 13)
@@ -162,17 +167,51 @@ public sealed class GameServer : IDisposable
             if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to judge from
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
             foreach (var h in _mobs.Strike(p.map, p.x, p.y, p.facing, Random.Shared, build))
-                Broadcast(Net.Encode(Net.MobHit, w =>
-                {
-                    w.Write(h.Uid);
-                    w.Write(h.Map);
-                    w.Write(h.Damage);
-                    w.Write(h.HpLeft);
-                    w.Write(id);
-                    w.Write(h.Exp);
-                }));
+                BroadcastHit(h, id);
         }
     }
+
+    // A skill cast: Slash Blast is judged from the sender's last State and
+    // Build like a swing (its hits carry the skill id for hit sparks); War
+    // Leap moves on the caster's own screen, so the server only relays the
+    // effect. The caster plays its own effect live and skips this echo.
+    // Unknown skill ids mean a foreign client. No MP/cooldown checks: LAN
+    // self-play trusts the client (the Character data lives client-side).
+    private void OnSkill(int id, int skill)
+    {
+        lock (_mobLock)
+        {
+            if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to judge from
+            if (skill != SkillData.SlashBlast && skill != SkillData.WarLeap)
+                throw new InvalidDataException($"bad skill id {skill}");
+            Broadcast(Net.Encode(Net.SkillFx, w =>
+            {
+                w.Write(id);
+                w.Write(skill);
+                w.Write(p.map);
+                w.Write(p.x);
+                w.Write(p.y);
+                w.Write(p.facing);
+            }), id);
+            if (skill == SkillData.WarLeap) return; // utility: the leap itself is client-side movement
+            if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
+            foreach (var h in _mobs.SkillStrike(p.map, p.x, p.y, Random.Shared, build, skill))
+                BroadcastHit(h, id);
+        }
+    }
+
+    // One judged hit to every client (basic swings and skills share this wire shape).
+    private void BroadcastHit(MobWorld.Hit h, int attacker) =>
+        Broadcast(Net.Encode(Net.MobHit, w =>
+        {
+            w.Write(h.Uid);
+            w.Write(h.Map);
+            w.Write(h.Damage);
+            w.Write(h.HpLeft);
+            w.Write(attacker);
+            w.Write(h.Exp);
+            w.Write(h.Skill);
+        }));
 
     // A client entering a map (first State or switch) gets its live mobs. The
     // snapshot and the sends stay under one lock: a kill slipping between

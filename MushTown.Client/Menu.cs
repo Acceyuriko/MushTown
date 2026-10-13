@@ -125,12 +125,13 @@ public partial class MushTownGame
                 "chars" or "delete" or "panel" => Screen.Chars,
                 "job" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "hud" => Screen.Game,
+                "inv" or "use" or "stat" or "hud" or "skill" => Screen.Game,
                 _ => Screen.Login,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
             if (shotScreen is "stat" or "hud") _showStat = true;
+            if (shotScreen == "skill") _showSkill = true;
             if (shotScreen == "hud") _showSubmenu = true;
             if (shotScreen == "register") _registerOpen = true; // the two modal states get their own shots
             if (shotScreen == "delete") _deleteOpen = true;
@@ -156,7 +157,17 @@ public partial class MushTownGame
             _items[id] = item;
             LoadTexture(item.Image);
         }
+        foreach ((int id, string _) in SkillList) // skills: json first (it names every frame), then all art
+        {
+            var skill = LoadJson<SkillData>(Path.Combine(_assetsDir, "skill", $"{id}.json"));
+            _skills[id] = skill;
+            LoadTexture(skill.Icon);
+            LoadTexture(skill.Disabled);
+            foreach (string f in skill.Effect) LoadTexture(f);
+            foreach (string f in skill.Hit) LoadTexture(f);
+        }
         _statBack = RoundedBacking(448, 406, new Color(62, 96, 118), 3);
+        _skillBack = RoundedBacking(SkillW, SkillBodyH, new Color(62, 96, 118), 3);
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
     }
 
@@ -584,13 +595,16 @@ public partial class MushTownGame
             throw;
         }
         GameLog($"{chara.Name} entered the game ({mode})");
-        _localWorld = null; _mobs.Clear(); _numbers.Clear(); // net: the server pushes mobs
+        _localWorld = null; _mobs.Clear(); _numbers.Clear(); _fx.Clear(); _skillCdMs.Clear(); // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
         _upWasDown = kb.IsKeyDown(Keys.Up);
         _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
+        _qWasDown = kb.IsKeyDown(Keys.Q);
+        _wWasDown = kb.IsKeyDown(Keys.W);
         _iWasDown = kb.IsKeyDown(Keys.I);
         _cWasDown = kb.IsKeyDown(Keys.C);
+        _kWasDown = kb.IsKeyDown(Keys.K);
         _wasInPortal = SceneMath.FindPortal(_map.Portals, _px, _py) != null;
         _screen = Screen.Game;
     }
@@ -610,6 +624,8 @@ public partial class MushTownGame
         _localWorld = null;
         _mobs.Clear();
         _numbers.Clear();
+        _fx.Clear();
+        _skillCdMs.Clear();
         try
         {
             // the chars screen always shows the spawn map, whatever was played last

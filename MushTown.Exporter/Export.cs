@@ -30,6 +30,17 @@ public static class Export
         [100004] = ("1210102", 110, 0.05, 95), // Orange Mushroom (twin 1210102)
     };
 
+    // Skill table: v1 feel numbers (req level, MP cost, cooldown ms, damage
+    // pct, mob cap, ring px, cast lock ms). The modern client keeps skill
+    // stats server-side: no level/mpCon/damage nodes exist anywhere in the
+    // data (verified in W11 recon). War Leap is utility (damage fields
+    // unused: the server relays its effect but never judges it).
+    private static readonly Dictionary<int, (int req, int mp, int cd, int dmg, int mobs, int range, int lockMs)> Skills = new()
+    {
+        [SkillData.SlashBlast] = (1, 5, 3000, 150, 6, 160, 600), // Slash Blast (1001005)
+        [SkillData.WarLeap] = (3, 3, 5000, 0, 0, 0, 0),          // War Leap (1001008)
+    };
+
     // W7.5 lobby art: (node path, file name). Normal button states only;
     // hover is a white overlay drawn by the client, so no hover art needed.
     // Must match Menu.cs UiFiles: every file there must be listed here.
@@ -110,6 +121,13 @@ public static class Export
         }
         var item = WzRoot.LoadCategory(dataDir, "Item");
         if (!ExportPotions(item, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
+        var skill = WzRoot.LoadCategory(dataDir, "Skill");
+        var str = WzRoot.LoadCategory(dataDir, "String");
+        if (!ExportSkills(skill, str, outDir, saved))
         {
             Environment.ExitCode = 1;
             return;
@@ -811,6 +829,104 @@ public static class Export
             WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
         }
         Console.WriteLine("potions: 2000000 2000003");
+        return true;
+    }
+
+    // Job-100 actives: icon + disabled icon + effect frames + hit spark
+    // frames (Slash Blast only; War Leap has no hit node). War Leap carries
+    // 4 effect variants: v1 plays variant 0, flipped by facing.
+    private static bool ExportSkills(WzRoot skill, WzRoot str, string outDir, HashSet<string> saved)
+    {
+        foreach (int id in Skills.Keys.OrderBy(x => x))
+        {
+            var node = skill.Find($@"_Canvas\100.img\skill\{id}");
+            if (node == null)
+            {
+                Console.WriteLine($"skill {id} not found");
+                return false;
+            }
+            string name = str.Find($@"Skill.img\{id}\name")?.GetValueEx<string>("") ?? "";
+            if (name == "")
+            {
+                Console.WriteLine($"skill {id} has no String name");
+                return false;
+            }
+            var (req, mp, cd, dmg, mobCount, range, lockMs) = Skills[id];
+            var data = new SkillData
+            {
+                SkillId = id,
+                Name = name,
+                ReqLevel = req,
+                Mp = mp,
+                CooldownMs = cd,
+                DamagePct = dmg,
+                MobCount = mobCount,
+                Range = range,
+                CastLockMs = lockMs,
+                Icon = $"skill/{id}/icon.png",
+                Disabled = $"skill/{id}/dis.png",
+            };
+            if (!UiPng.Save(skill, "Skill", $@"_Canvas/100.img/skill/{id}/icon", Path.Combine(outDir, data.Icon)))
+                return false;
+            if (!UiPng.Save(skill, "Skill", $@"_Canvas/100.img/skill/{id}/iconDisabled", Path.Combine(outDir, data.Disabled)))
+                return false;
+            var effect = node.Nodes["effect"];
+            if (effect == null)
+            {
+                Console.WriteLine($"skill {id} has no effect");
+                return false;
+            }
+            Wz_Node? frames = id == SkillData.WarLeap ? effect.Nodes["0"] : effect;
+            if (frames == null)
+            {
+                Console.WriteLine($"skill {id} has no effect variant 0");
+                return false;
+            }
+            if (!SaveSkillFrames(frames, $"skill/{id}/effect", data.Effect, outDir, saved, id)) return false;
+            var hit = node.Nodes["hit"]?.Nodes["0"];
+            if (node.Nodes["hit"] != null && hit == null)
+            {
+                Console.WriteLine($"skill {id} has a hit node but no hit 0");
+                return false;
+            }
+            if (hit != null && !SaveSkillFrames(hit, $"skill/{id}/hit", data.Hit, outDir, saved, id)) return false;
+            Console.WriteLine($"skill {id} {name}: effect x{data.Effect.Count}, hit x{data.Hit.Count}");
+            WriteJson(Path.Combine(outDir, "skill", $"{id}.json"), data);
+        }
+        return true;
+    }
+
+    // Saves one flat frame list (int-named png children) as dir/{i}.png.
+    private static bool SaveSkillFrames(Wz_Node list, string dir, List<string> into, string outDir, HashSet<string> saved, int id)
+    {
+        var frames = new List<(int key, Wz_Node node)>();
+        foreach (Wz_Node f in list.Nodes)
+        {
+            if (!int.TryParse(f.Text, out int key))
+            {
+                Console.WriteLine($"skill {id} {dir}: non-frame child {f.Text}");
+                return false;
+            }
+            frames.Add((key, f));
+        }
+        int i = 0;
+        foreach ((int _, Wz_Node f) in frames.OrderBy(t => t.key))
+        {
+            if (f.Value is not Wz_Png png)
+            {
+                Console.WriteLine($"skill {id} {dir} frame {f.Text}: not a png");
+                return false;
+            }
+            string path = $"{dir}/{i}.png";
+            SaveOnce(png, Path.Combine(outDir, path), saved);
+            into.Add(path);
+            i++;
+        }
+        if (into.Count == 0)
+        {
+            Console.WriteLine($"skill {id} {dir}: no frames");
+            return false;
+        }
         return true;
     }
 

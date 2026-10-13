@@ -11,8 +11,10 @@ public static class Net
     public const byte Leave = 4;   // server -> client: int id (a peer is gone)
     public const byte Attack = 5;  // client -> server: no body (server judges from the last State)
     public const byte MobSpawn = 6; // server -> client: int uid, int mob, int map, float x, float y, int maxHp, int hp
-    public const byte MobHit = 7;  // server -> client: int uid, int map, int damage, int hpLeft (0 = dead), int attacker, int exp
+    public const byte MobHit = 7;  // server -> client: int uid, int map, int damage, int hpLeft (0 = dead), int attacker, int exp, int skill (0 = basic)
     public const byte Build = 8;   // client -> server: int str, int dex, int weaponAtk (combat stats, resent on level-up)
+    public const byte SkillCast = 9; // client -> server: int skill (server judges damage skills, relays leap Fx)
+    public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -78,11 +80,17 @@ public readonly record struct RemoteEvent(
 
 // One mob event from the server: a spawn (Spawn true, Mob/MaxHp set, HpLeft
 // is the live HP) or a hit (Spawn false, Damage/HpLeft set, HpLeft 0 means dead).
-// A hit also carries its Attacker id (kill credit goes to that client only)
-// and the mob's Exp (awarded on the killing blow).
+// A hit also carries its Attacker id (kill credit goes to that client only),
+// the mob's Exp (awarded on the killing blow), and the Skill id (0 = basic
+// swing, else the skill whose hit spark each client plays on the mob).
 public readonly record struct MobEvent(
     bool Spawn, int Uid, int Mob, int Map, float X, float Y, int MaxHp, int Damage, int HpLeft,
-    int Attacker, int Exp);
+    int Attacker, int Exp, int Skill);
+
+// One skill effect from the server: Attacker cast Skill at X/Y facing right
+// or left. The caster plays its own effect live and never gets this echo.
+// Clients drop effects for other maps, like states.
+public readonly record struct SkillFxEvent(int Attacker, int Skill, int Map, float X, float Y, bool FacingRight);
 
 // Accumulates raw TCP bytes and yields whole payloads (header eaten).
 // TCP splits and merges at will, so one Feed can yield zero, one, or more.

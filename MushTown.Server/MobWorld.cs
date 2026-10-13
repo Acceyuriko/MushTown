@@ -15,7 +15,8 @@ public sealed class MobWorld
 
     // One mob caught by a swing. HpLeft 0 means it died (no separate die message).
     // Exp is the mob's kill award (the killer's client claims it).
-    public sealed record Hit(int Uid, int Map, int Damage, int HpLeft, int Exp);
+    // Skill is 0 for a basic swing, else the skill whose hit spark to play.
+    public sealed record Hit(int Uid, int Map, int Damage, int HpLeft, int Exp, int Skill);
 
     // Swing reach in pixels: a mob is hit when roughly at swing height and
     // within arm's length ahead (a little behind counts, for jumps landing short).
@@ -39,6 +40,7 @@ public sealed class MobWorld
     private readonly string _assetsDir;
     private readonly Dictionary<int, MapData> _maps = new();
     private readonly Dictionary<int, (int hp, double def, int exp)> _stats = new();
+    private readonly Dictionary<int, (int damagePct, int mobCount, int range)> _skills = new();
     private readonly List<Live> _lives = new();
     private readonly HashSet<int> _spawned = new();
     private int _nextUid = 1;
@@ -122,8 +124,42 @@ public sealed class MobWorld
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
             int damage = Damage.Calc(rng.NextDouble(), m.Def, build.Str, build.Dex, build.WeaponAtk);
             m.Hp = Math.Max(0, m.Hp - damage);
-            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp));
+            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0));
             if (m.Hp == 0) _lives.RemoveAt(i);
+        }
+        return hits;
+    }
+
+    // One damaging skill cast at (x, y): every live mob inside the skill's
+    // ring takes one scaled roll, nearest first, capped at the skill's mob
+    // count. rng and build come from the caller like Strike.
+    public List<Hit> SkillStrike(int map, float x, float y, Random rng, Build build, int skill)
+    {
+        if (!_skills.TryGetValue(skill, out var st))
+        {
+            var data = LoadJson<SkillData>(Path.Combine(_assetsDir, "skill", $"{skill}.json"));
+            if (data.DamagePct <= 0 || data.MobCount <= 0 || data.Range <= 0)
+                throw new InvalidDataException($"skill {skill} has bad damage stats");
+            st = (data.DamagePct, data.MobCount, data.Range);
+            _skills[skill] = st;
+        }
+        var inRing = new List<(float dist2, Live m)>();
+        foreach (var m in _lives)
+        {
+            if (m.Map != map) continue;
+            float dx = m.X - x, dy = m.Y - y;
+            float dist2 = dx * dx + dy * dy;
+            if (dist2 <= st.range * st.range) inRing.Add((dist2, m));
+        }
+        inRing.Sort((a, b) => a.dist2.CompareTo(b.dist2)); // nearest first: the cap keeps the close ones
+        var hits = new List<Hit>();
+        foreach ((float _, Live m) in inRing)
+        {
+            if (hits.Count >= st.mobCount) break;
+            int damage = Damage.SkillCalc(rng.NextDouble(), m.Def, build.Str, build.Dex, build.WeaponAtk, st.damagePct);
+            m.Hp = Math.Max(0, m.Hp - damage);
+            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, skill));
+            if (m.Hp == 0) _lives.Remove(m);
         }
         return hits;
     }

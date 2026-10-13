@@ -28,6 +28,8 @@ public partial class MushTownGame : Game
     private const float NumberMs = 800; // damage numbers rise and fade over this long
     private const int NumberRise = 60; // px a damage number floats up
     private const int BarWidth = 40; // mob HP bar width, px
+    private const int FxDelay = 100; // skill effect frames share one delay (WZ ships no delays for them)
+    private const int FxCastDy = 40; // cast effects center on the torso (bare frames: no WZ origins)
 
     private const int SpawnMapId = 10000; // Maple Island: Southperry
 
@@ -42,6 +44,7 @@ public partial class MushTownGame : Game
     private readonly string? _joinHost;
     private readonly string? _shotScreen;
     private readonly bool _shotHit;
+    private readonly bool _shotSlash;
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
@@ -72,8 +75,9 @@ public partial class MushTownGame : Game
     private string _action = "stand2";
     private int _frame;
     private float _timerMs;
-    private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal, _ctrlWasDown;
+    private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal, _ctrlWasDown, _qWasDown, _wWasDown;
     private float _attackLock; // ms of swing left: movement frozen until it hits 0
+    private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
     // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
     private GameServer? _server;
@@ -86,6 +90,8 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, MobView> _mobs = new();
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<DamageNumber> _numbers = new();
+    private readonly Dictionary<int, float> _skillCdMs = new(); // ms left per cooling skill
+    private readonly List<SkillFx> _fx = new(); // skill cast effects + hit sparks in flight
     private DmgData? _dmg; // basic damage skin digits, loaded once
 
     private sealed class MobView
@@ -108,13 +114,26 @@ public partial class MushTownGame : Game
         public float Age;
     }
 
+    // One skill effect in flight: a cast effect (centered on the caster) or
+    // a hit spark (centered on the mob's body). Plays once, then removed.
+    private sealed class SkillFx
+    {
+        public int Skill;
+        public bool Hit;
+        public float X;
+        public float Y;
+        public bool FacingRight;
+        public int Frame;
+        public float Timer;
+    }
+
     private readonly string _layoutPath;
 #if DEBUG
     private FileSystemWatcher? _layoutWatcher;
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false)
+    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false, bool shotSlash = false)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
@@ -125,6 +144,7 @@ public partial class MushTownGame : Game
         _joinHost = joinHost;
         _shotScreen = shotScreen;
         _shotHit = shotHit;
+        _shotSlash = shotSlash;
         _assetsDir = FindAssetsDir();
         string dir = Path.GetDirectoryName(_assetsDir)!;
         _layoutPath = Path.Combine(dir, "hud-layout.json");
@@ -262,30 +282,41 @@ public partial class MushTownGame : Game
             foreach (var frame in chara.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
-        if (_shotPath != null && _shotScreen is null or "inv" or "use" or "stat" or "hud") // game shots show mobs; menu shots don't
+        if (_shotPath != null && _shotScreen is null or "inv" or "use" or "stat" or "hud" or "skill") // game shots show mobs; menu shots don't
             SetupShotMobs();
     }
 
     // Shot mode: a frozen local world. --hit plants the player mid-swing next
-    // to the first mob and lands one real strike (numbers and all).
+    // to the first mob and lands one real strike (numbers and all); --slash
+    // does the same with a Slash Blast (cast effect + hit sparks).
     private void SetupShotMobs()
     {
         StartLocalWorld();
-        if (!_shotHit) return;
+        if (!_shotHit && !_shotSlash) return;
         var world = _localWorld!; // StartLocalWorld just built it
         var first = world.MobsOn(_mapId).FirstOrDefault()
-            ?? throw new InvalidDataException($"--hit needs mobs, map {_mapId} has none");
+            ?? throw new InvalidDataException($"--hit/--slash needs mobs, map {_mapId} has none");
         _px = first.X - 50;
         _ground = SceneMath.ArrivalGround(_map.Footholds, (int)_px, (int)first.Y)
-            ?? throw new InvalidDataException($"--hit found no ground near mob {first.Mob}");
+            ?? throw new InvalidDataException($"--hit/--slash found no ground near mob {first.Mob}");
         _py = SceneMath.FootholdY(_ground, (int)_px);
         ResetMotion();
         _facingRight = true;
         _action = "swingP1";
         _frame = 1;
         // fixed seed: the evidence shot shows the same number every run
-        foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), Progression.Beginner))
-            ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp);
+        if (_shotSlash)
+        {
+            SpawnCastFx(SkillData.SlashBlast, _px, _py, true);
+            int n = _skills[SkillData.SlashBlast].Effect.Count;
+            if (n <= 5) throw new InvalidDataException($"--slash needs 6+ effect frames, got {n}");
+            _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
+            foreach (var h in world.SkillStrike(_mapId, _px, _py, new Random(0), Progression.Beginner, SkillData.SlashBlast))
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+        }
+        else
+            foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), Progression.Beginner))
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
         SnapCamera();
     }
 
@@ -344,6 +375,8 @@ public partial class MushTownGame : Game
             dir = 0; // mid-swing: feet planted, facing kept
         }
         else if (dir != 0 && _climb == null) _facingRight = dir > 0; // raw sprites face left; mirror when facing right
+        foreach (int id in _skillCdMs.Keys.ToList())
+            _skillCdMs[id] = Math.Max(0, _skillCdMs[id] - dtMs);
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
         // (portal also fires on walking in with Up held; grab and jump use held keys)
@@ -357,6 +390,12 @@ public partial class MushTownGame : Game
         bool ctrl = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
         bool freshCtrl = ctrl && !_ctrlWasDown;
         _ctrlWasDown = ctrl;
+        bool q = kb.IsKeyDown(Keys.Q);
+        bool freshQ = q && !_qWasDown;
+        _qWasDown = q;
+        bool w = kb.IsKeyDown(Keys.W);
+        bool freshW = w && !_wWasDown;
+        _wWasDown = w;
 
         // Ctrl swings the polearm (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
@@ -368,7 +407,33 @@ public partial class MushTownGame : Game
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
                 foreach (var h in _localWorld.Strike(_mapId, _px, _py, _facingRight, Random.Shared, OwnBuild()))
-                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp);
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+        }
+
+        // Q casts Slash Blast (the ring around us): same judge gate as a
+        // swing, and the cast locks movement like one (the pose follows from
+        // the lock). TryPaySkill runs last: no judge, no charge.
+        if (freshQ && _climb == null && _attackLock <= 0 &&
+            ((_net != null && _net.Connected) || _localWorld != null) &&
+            TryPaySkill(SkillData.SlashBlast))
+        {
+            _attackLock = _skills[SkillData.SlashBlast].CastLockMs;
+            SpawnCastFx(SkillData.SlashBlast, _px, _py, _facingRight);
+            if (_net != null && _net.Connected) _net.SendSkillCast(SkillData.SlashBlast);
+            else if (_localWorld != null)
+                foreach (var h in _localWorld.SkillStrike(_mapId, _px, _py, Random.Shared, OwnBuild(), SkillData.SlashBlast))
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+        }
+
+        // W leaps again mid-air (never on the ground or a ladder): once per
+        // airtime plus the cooldown, full jump velocity, drift unchanged.
+        // No attack-lock check on purpose: the leap stays available mid-swing.
+        if (freshW && _ground == null && _climb == null && _canLeap && TryPaySkill(SkillData.WarLeap))
+        {
+            _vy = JumpV0;
+            _canLeap = false;
+            SpawnCastFx(SkillData.WarLeap, _px, _py, _facingRight);
+            if (_net != null && _net.Connected) _net.SendSkillCast(SkillData.WarLeap);
         }
 
         // Up at a portal travels: tap anywhere in range, or hold Up and walk
@@ -492,6 +557,7 @@ public partial class MushTownGame : Game
                 SnapCamera(); // teleport: snap, don't swoosh across the map
             }
         }
+        if (_ground != null || _climb != null) _canLeap = true; // grounded or held: the next airtime gets its leap back
 
         string want = _attackLock > 0 ? "swingP1"
             : _climb != null ? (_climb.Ladder ? "ladder" : "rope")
@@ -529,6 +595,16 @@ public partial class MushTownGame : Game
             _numbers[i].Age += dtMs;
             if (_numbers[i].Age >= NumberMs) _numbers.RemoveAt(i);
         }
+        for (int i = _fx.Count - 1; i >= 0; i--) // skill effects play once, then leave
+        {
+            var f = _fx[i];
+            var frames = f.Hit ? _skills[f.Skill].Hit : _skills[f.Skill].Effect;
+            f.Timer += dtMs;
+            if (f.Timer < FxDelay) continue;
+            f.Timer -= FxDelay; // keep the overflow (single step: 100ms delays, 16ms ticks)
+            if (++f.Frame < frames.Count) continue;
+            _fx.RemoveAt(i);
+        }
 
         var (targetX, targetY) = CameraTarget();
         (_camX, _camVX) = SceneMath.SpringStep(_camX, _camVX, targetX, dt);
@@ -553,7 +629,12 @@ public partial class MushTownGame : Game
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
                 if (m.Spawn) ApplySpawn(m.Uid, m.Mob, m.X, m.Y, m.MaxHp, m.HpLeft);
-                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp);
+                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp, m.Skill);
+            }
+            while (_net.TryTakeFx(out var f))
+            {
+                if (f.Map != _mapId) continue; // another map's cast: not shown here
+                SpawnCastFx(f.Skill, f.X, f.Y, f.FacingRight);
             }
             if (!_net.Connected && _remotes.Count > 0)
                 _remotes.Clear(); // link lost: peers vanish, the local world takes over
@@ -623,7 +704,7 @@ public partial class MushTownGame : Game
             LoadMapTextures();
             _remotes.Clear(); // peers stay on the old map; their live states refill this one
             if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
-            else { _mobs.Clear(); _numbers.Clear(); } // net: the server re-pushes them
+            else { _mobs.Clear(); _numbers.Clear(); _fx.Clear(); } // net: the server re-pushes them
             _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
         }
         var land = _map.Portals.FirstOrDefault(p => p.Pn == tn)
@@ -734,6 +815,7 @@ public partial class MushTownGame : Game
             draw();
 
         DrawMapFront();
+        DrawFx();
         DrawNumbers();
 
         _spriteBatch.End();
@@ -751,6 +833,21 @@ public partial class MushTownGame : Game
         int px = (int)Math.Floor(m.X) - BarWidth / 2 - _cameraX, py = y - 8 - _cameraY;
         _spriteBatch.Draw(_pixel, new Rectangle(px, py, BarWidth, 5), Color.Black);
         _spriteBatch.Draw(_pixel, new Rectangle(px + 1, py + 1, Math.Max(1, (int)((BarWidth - 2) * (float)m.Hp / m.MaxHp)), 3), new Color(80, 220, 80));
+    }
+
+    // Skill effects: bare frames centered on their anchor, flipped like
+    // avatars (raw art faces left). Cast effects ride the caster, hit sparks
+    // the mob's body; both were centered when spawned.
+    private void DrawFx()
+    {
+        foreach (var f in _fx)
+        {
+            var frames = f.Hit ? _skills[f.Skill].Hit : _skills[f.Skill].Effect;
+            var tex = _textures[frames[f.Frame]];
+            var o = new Vector2(tex.Width / 2f, tex.Height / 2f);
+            _spriteBatch.Draw(tex, new Vector2(f.X - _cameraX, f.Y - _cameraY), null, Color.White,
+                0f, o, 1f, f.FacingRight ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+        }
     }
 
     // Damage numbers: basic skin digits, rising and fading over NumberMs.
@@ -838,17 +935,39 @@ public partial class MushTownGame : Game
     // a number. A hit for a view we never saw is dropped: a kill in flight
     // across a remap, or a join racing a swing on another thread.
     // mine + dead means we landed the killing blow: claim the EXP.
-    private void ApplyHit(int uid, int damage, int hpLeft, bool mine, int exp)
+    // A skill hit also plants the skill's spark on the mob's body.
+    private void ApplyHit(int uid, int damage, int hpLeft, bool mine, int exp, int skill)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
         m.Hp = hpLeft;
         m.Action = hpLeft == 0 ? "die1" : "hit1";
         m.Frame = 0;
         m.Timer = 0;
-        float headY = m.Y - _textures[MobFrames(m.Mob, m.Action)[0].Image].Height;
+        float bodyH = _textures[MobFrames(m.Mob, m.Action)[0].Image].Height;
+        float headY = m.Y - bodyH;
         _numbers.Add(new DamageNumber { Text = damage.ToString(), X = m.X, Y = headY });
+        if (skill != 0)
+            _fx.Add(new SkillFx { Skill = skill, Hit = true, X = m.X, Y = m.Y - bodyH / 2, FacingRight = true });
         if (hpLeft == 0 && mine) GainExp(exp);
     }
+
+    // One cast's client-side checks: level, MP, cooldown. CLI sessions carry
+    // no character (no pools), so they cannot cast, like potions.
+    private bool TryPaySkill(int id)
+    {
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return false;
+        var skill = _skills[id];
+        _skillCdMs.TryGetValue(id, out float left);
+        if (!Progression.CanCast(chara, skill, left)) return false;
+        chara.Mp -= skill.Mp;
+        _skillCdMs[id] = skill.CooldownMs;
+        return true;
+    }
+
+    // Our own cast or a peer's echo: the effect centers on the torso.
+    private void SpawnCastFx(int skill, float x, float y, bool facingRight) =>
+        _fx.Add(new SkillFx { Skill = skill, X = x, Y = y - FxCastDy, FacingRight = facingRight });
 
     // Our combat stats for the server (Build) and the local judge. CLI
     // sessions have no character, so they swing as beginners.
@@ -885,6 +1004,7 @@ public partial class MushTownGame : Game
     {
         _mobs.Clear();
         _numbers.Clear();
+        _fx.Clear();
         _localWorld!.EnterMap(_mapId);
         foreach (var s in _localWorld.MobsOn(_mapId))
             ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);
@@ -993,7 +1113,8 @@ public partial class MushTownGame : Game
         Layout.Load(_layoutPath);
         _invPos = new Point(Layout.Inv.X, Layout.Inv.Y);
         _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);
-        _dragInv = null; _dragStat = null; // a reload mid-drag drops the grab
+        _skillPos = new Point(Layout.Skill.X, Layout.Skill.Y);
+        _dragInv = null; _dragStat = null; _dragSkill = null; // a reload mid-drag drops the grab
     }
 
     private static string FindAssetsDir()
