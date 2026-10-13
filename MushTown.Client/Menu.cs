@@ -17,6 +17,7 @@ public partial class MushTownGame
     private Screen _screen = Screen.Game;
     private AccountStore _store = new();
     private string _accountsPath = "";
+    private string _sessionPath = "";
     private Account? _account;
     private int _slot;
     private int _serverPick; // 0 solo, 1 host, 2 join
@@ -99,13 +100,15 @@ public partial class MushTownGame
 
     private void InitializeMenu(string? shotScreen)
     {
-        _accountsPath = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "data", "accounts.json");
+        string dataDir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "data");
+        _accountsPath = Path.Combine(dataDir, "accounts.json");
+        _sessionPath = Path.Combine(dataDir, "session.json");
         Window.TextInput += (_, e) => MenuTextInput(e.Character);
         if (_shotPath == null && !_host && _joinHost == null) // real menu session only: CLI never touches accounts
         {
             _store = AccountStore.Load(_accountsPath);
             _rollLog ??= new RollLog(NetLogPath());
-            _screen = Screen.Login;
+            if (!TryRestoreSession()) _screen = Screen.Login;
         }
         if (shotScreen != null) // menu screenshots ride on a demo account
         {
@@ -387,12 +390,17 @@ public partial class MushTownGame
         try
         {
             _account = _store.Login(_user, _pass);
+            _serverPick = 0;
+            SaveSession();
             _pass = "";
             _focus = "";
-            _serverPick = 0;
             _screen = Screen.Server;
         }
-        catch (InvalidDataException ex) { _error = ex.Message; }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            _account = null; // a failed SaveSession must not leave a login behind
+            _error = ex.Message;
+        }
     }
 
     private void DoRegister()
@@ -402,12 +410,13 @@ public partial class MushTownGame
         {
             _account = _store.Register(_user, _pass); // one hash: reuse the new account, don't log in again
             created = true; // from here a failed Save must roll the new user back out
+            _serverPick = 0;
+            SaveSession();
             _store.Save(_accountsPath);
             GameLog($"registered {_user}");
             _pass = "";
             _focus = "";
             _registerOpen = false;
-            _serverPick = 0;
             _screen = Screen.Server;
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
@@ -419,16 +428,49 @@ public partial class MushTownGame
 
     private void Logout()
     {
+        try { File.Delete(_sessionPath); } // missing file is a no-op (a failed save or an outside delete)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _error = ex.Message;
+            return; // still logged in: the session survived, so stay on Server
+        }
         _account = null;
         _focus = "user";
         _screen = Screen.Login;
     }
+
+    // Stay logged in: a past session skips login and the server pick (the pick
+    // defaults to solo at login and updates on every EnterChars, so Chars can
+    // always land somewhere valid; Cancel still goes back to re-pick).
+    private bool TryRestoreSession()
+    {
+        var s = Session.TryLoad(_sessionPath);
+        if (s?.User == null || !_store.Users.TryGetValue(s.User, out var account)
+            || (uint)s.Server > 2 || (s.Server == 2 && !System.Net.IPAddress.TryParse(s.Ip, out _)))
+            return false;
+        _account = account;
+        _user = account.User; // logout shows the last name, like a typed login
+        _serverPick = s.Server;
+        if (System.Net.IPAddress.TryParse(s.Ip, out _)) _ip = s.Ip; // keep a good IP for the join popup, drop garbage
+        _focus = "";
+        SelectFirstChara();
+        GameLog($"welcome back {_account.User}");
+        _screen = Screen.Chars;
+        return true;
+    }
+
+    // The login cache: who is in plus the server pick, so the next launch
+    // opens on characters. Written on login, register, and every server pick.
+    private void SaveSession() =>
+        new Session { User = _account!.User, Server = _serverPick, Ip = _ip }.Save(_sessionPath);
 
     // Server choice confirmed: characters become the hub (first occupied selected).
     private void EnterChars(int server)
     {
         if (server == 2 && !System.Net.IPAddress.TryParse(_ip, out _)) { _error = $"bad IP {_ip}"; return; } // the join popup stays open
         _serverPick = server;
+        try { SaveSession(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _error = ex.Message; } // cache only: still enter
         _joinOpen = false;
         _focus = "";
         SelectFirstChara();

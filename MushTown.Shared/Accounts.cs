@@ -102,6 +102,38 @@ public sealed class AccountStore
     }
 }
 
+// Saved login: who is in plus the last server pick, so the next launch
+// opens on characters. A cache, not data: missing/unreadable file or bad
+// JSON means logged out, where AccountStore.Load would throw.
+public sealed class Session
+{
+    public string? User { get; set; }
+    public int Server { get; set; }
+    public string? Ip { get; set; }
+
+    public static Session? TryLoad(string path)
+    {
+        if (!File.Exists(path)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<Session>(File.ReadAllText(path));
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    // Atomic write, same as accounts: crash leaves old or new, never half.
+    public void Save(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        string tmp = path + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(this));
+        File.Move(tmp, path, true);
+    }
+}
+
 public sealed class Account
 {
     public string User { get; set; } = "";

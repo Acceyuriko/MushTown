@@ -198,4 +198,57 @@ public class AccountTests
         store.Users["bob"].Salt = Convert.ToBase64String(new byte[8]);
         Assert.ThrowsException<InvalidDataException>(() => store.Login("bob", "secret"));
     }
+
+    [TestMethod]
+    public void Session_Save_TryLoad_Roundtrips()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
+        try
+        {
+            new Session { User = "bob", Server = 2, Ip = "10.0.0.5" }.Save(path);
+            Assert.IsFalse(File.Exists(path + ".tmp")); // atomic write leaves no tmp behind
+            var back = Session.TryLoad(path);
+            Assert.IsNotNull(back);
+            Assert.AreEqual("bob", back.User);
+            Assert.AreEqual(2, back.Server);
+            Assert.AreEqual("10.0.0.5", back.Ip);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Session_MissingOrCorrupt_TryLoadNull()
+    {
+        string missing = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
+        Assert.IsNull(Session.TryLoad(missing)); // first run: no file, not an error
+        string bad = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(bad, "{oops");
+            Assert.IsNull(Session.TryLoad(bad)); // a bad cache logs out, never throws
+        }
+        finally
+        {
+            File.Delete(bad);
+        }
+    }
+
+    [TestMethod]
+    public void Session_Save_MissingDirectory_CreatesIt()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}");
+        string path = Path.Combine(dir, "session.json");
+        try
+        {
+            new Session { User = "bob", Server = 0 }.Save(path); // first run: data/ does not exist yet
+            Assert.AreEqual("bob", Session.TryLoad(path)!.User);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
 }
