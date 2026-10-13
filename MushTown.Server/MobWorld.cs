@@ -23,6 +23,7 @@ public sealed class MobWorld
     private const int ReachX = 90;
     private const int ReachY = 60;
     private const int BehindX = 10;
+    private const int PushPx = 60; // Rush knocks mobs this far along the dash
 
     private sealed class Live
     {
@@ -40,7 +41,7 @@ public sealed class MobWorld
     private readonly string _assetsDir;
     private readonly Dictionary<int, MapData> _maps = new();
     private readonly Dictionary<int, (int hp, double def, int exp)> _stats = new();
-    private readonly Dictionary<int, (int damagePct, int mobCount, int range)> _skills = new();
+    private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
     private readonly List<Live> _lives = new();
     private readonly HashSet<int> _spawned = new();
     private int _nextUid = 1;
@@ -122,7 +123,7 @@ public sealed class MobWorld
             float dx = m.X - x;
             bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
-            int damage = Damage.Calc(rng.NextDouble(), m.Def, build.Str, build.Dex, build.WeaponAtk);
+            int damage = Damage.Calc(rng.NextDouble(), rng.NextDouble(), m.Def, build);
             m.Hp = Math.Max(0, m.Hp - damage);
             hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0));
             if (m.Hp == 0) _lives.RemoveAt(i);
@@ -130,19 +131,36 @@ public sealed class MobWorld
         return hits;
     }
 
-    // One damaging skill cast at (x, y): every live mob inside the skill's
-    // ring takes one scaled roll, nearest first, capped at the skill's mob
-    // count. rng and build come from the caller like Strike.
-    public List<Hit> SkillStrike(int map, float x, float y, Random rng, Build build, int skill)
+    // Cast routing: damaging actives are judged, everything else (War Leap
+    // utility, buffs) only relays its effect. Unknown ids mean a foreign
+    // client. Files load once and cache like mob stats.
+    public bool IsDamageSkill(int skill)
     {
         if (!_skills.TryGetValue(skill, out var st))
         {
-            var data = LoadJson<SkillData>(Path.Combine(_assetsDir, "skill", $"{skill}.json"));
-            if (data.DamagePct <= 0 || data.MobCount <= 0 || data.Range <= 0)
-                throw new InvalidDataException($"skill {skill} has bad damage stats");
-            st = (data.DamagePct, data.MobCount, data.Range);
+            string path = Path.Combine(_assetsDir, "skill", $"{skill}.json");
+            if (!File.Exists(path))
+                throw new InvalidDataException($"bad skill id {skill}");
+            var data = LoadJson<SkillData>(path);
+            st = (data.Kind, data.DmgLo, data.MobCount, data.Range);
             _skills[skill] = st;
         }
+        return st.kind == SkillData.KindActive && st.dmgLo > 0;
+    }
+
+    // One damaging skill cast at (x, y): every live mob inside the skill's
+    // ring takes one scaled roll, nearest first, capped at the skill's mob
+    // count. pct is the cast-time damage pct (skill level and combo orbs
+    // folded in by the caster); the attacker's +damage% adds on top. Rush
+    // shoves its victims along the dash (clients resync positions on map
+    // entry; W13's AI syncs them live). Final Attack may land one bonus
+    // hit on the nearest survivor (a number, no spark: passives have no art).
+    public List<Hit> SkillStrike(int map, float x, float y, bool facingRight, Random rng, Build build, int skill, int pct)
+    {
+        IsDamageSkill(skill); // loads and caches (a buff id here is a caller bug, caught below)
+        var st = _skills[skill];
+        if (st.mobCount <= 0 || st.range <= 0)
+            throw new InvalidDataException($"skill {skill} has bad damage stats");
         var inRing = new List<(float dist2, Live m)>();
         foreach (var m in _lives)
         {
@@ -153,14 +171,25 @@ public sealed class MobWorld
         }
         inRing.Sort((a, b) => a.dist2.CompareTo(b.dist2)); // nearest first: the cap keeps the close ones
         var hits = new List<Hit>();
+        Live? firstAlive = null;
         foreach ((float _, Live m) in inRing)
         {
             if (hits.Count >= st.mobCount) break;
-            int damage = Damage.SkillCalc(rng.NextDouble(), m.Def, build.Str, build.Dex, build.WeaponAtk, st.damagePct);
-            m.Hp = Math.Max(0, m.Hp - damage);
-            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, skill));
-            if (m.Hp == 0) _lives.Remove(m);
+            hits.Add(HitOne(m, skill, rng, build, pct));
+            if (skill == SkillData.Rush) m.X += facingRight ? PushPx : -PushPx;
+            if (m.Hp > 0) firstAlive ??= m;
         }
+        if (firstAlive != null && rng.NextDouble() * 100 < build.FinalPct)
+            hits.Add(HitOne(firstAlive, SkillData.FinalAttack, rng, build, pct));
         return hits;
+    }
+
+    // One damage roll applied to one live mob (dead mobs leave the world).
+    private Hit HitOne(Live m, int tag, Random rng, Build build, int pct)
+    {
+        int damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct);
+        m.Hp = Math.Max(0, m.Hp - damage);
+        if (m.Hp == 0) _lives.Remove(m);
+        return new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, tag);
     }
 }

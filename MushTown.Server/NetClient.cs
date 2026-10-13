@@ -102,23 +102,28 @@ public sealed class NetClient : IDisposable
     }
 
     // Our combat stats, so the server judges our swings on the real attacker.
-    // Sent on connect and resent on every level-up.
-    public void SendBuild(int str, int dex, int weaponAtk)
+    // Sent on connect and resent whenever they change (level-up, learn, buff).
+    public void SendBuild(Build build)
     {
         if (!Connected) return;
         SendFrame(Net.Encode(Net.Build, w =>
         {
-            w.Write(str);
-            w.Write(dex);
-            w.Write(weaponAtk);
+            w.Write(build.Str);
+            w.Write(build.Dex);
+            w.Write(build.WeaponAtk);
+            w.Write(build.DmgPct);
+            w.Write(build.CritPct);
+            w.Write(build.FinalPct);
         }));
     }
 
-    // One skill cast: the server judges damage skills and relays every cast's effect.
-    public void SendSkillCast(int skill)
+    // One skill cast: skill id plus the cast-time damage pct (skill level
+    // and combo orbs folded in; buffs send 0). The server judges damage
+    // skills and relays every cast's effect.
+    public void SendSkillCast(int skill, int pct)
     {
         if (!Connected) return;
-        SendFrame(Net.Encode(Net.SkillCast, w => w.Write(skill)));
+        SendFrame(Net.Encode(Net.SkillCast, w => { w.Write(skill); w.Write(pct); }));
     }
 
     private void SendFrame(byte[] frame)

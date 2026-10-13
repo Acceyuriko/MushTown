@@ -23,12 +23,12 @@ public sealed class TempAssets : IDisposable
         File.WriteAllText(Path.Combine(Dir, "mob", $"{mob}.json"),
             $"{{\"MobId\":{mob},\"MaxHp\":{hp},\"Def\":{def.ToString(CultureInfo.InvariantCulture)},\"Exp\":{exp},\"Actions\":[]}}");
 
-    // The server only reads Range/DamagePct/MobCount, so names and art stay out.
-    public void AddSkill(int skill, int range, int damagePct, int mobCount)
+    // The server only reads Kind/DmgLo/MobCount/Range, so names and art stay out.
+    public void AddSkill(int skill, int range, int mobCount, int kind = 0, int dmgLo = 1)
     {
         Directory.CreateDirectory(Path.Combine(Dir, "skill"));
         File.WriteAllText(Path.Combine(Dir, "skill", $"{skill}.json"),
-            $"{{\"SkillId\":{skill},\"Range\":{range},\"DamagePct\":{damagePct},\"MobCount\":{mobCount}}}");
+            $"{{\"SkillId\":{skill},\"Kind\":{kind},\"DmgLo\":{dmgLo},\"Range\":{range},\"MobCount\":{mobCount}}}");
     }
 
     public void Dispose()

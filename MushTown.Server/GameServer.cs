@@ -123,15 +123,16 @@ public sealed class GameServer : IDisposable
             OnAttack(id);
             return;
         }
-        if (payload[0] == Net.SkillCast && payload.Length == 5)
+        if (payload[0] == Net.SkillCast && payload.Length == 9)
         {
-            OnSkill(id, BitConverter.ToInt32(payload, 1));
+            OnSkill(id, BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5));
             return;
         }
-        if (payload[0] == Net.Build && payload.Length == 13)
+        if (payload[0] == Net.Build && payload.Length == 25)
         {
             lock (_mobLock)
-                _builds[id] = new Build(BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5), BitConverter.ToInt32(payload, 9));
+                _builds[id] = new Build(BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5), BitConverter.ToInt32(payload, 9),
+                    BitConverter.ToInt32(payload, 13), BitConverter.ToInt32(payload, 17), BitConverter.ToInt32(payload, 21));
             return;
         }
         if (payload[0] != Net.State || payload.Length != 20)
@@ -171,19 +172,19 @@ public sealed class GameServer : IDisposable
         }
     }
 
-    // A skill cast: Slash Blast is judged from the sender's last State and
-    // Build like a swing (its hits carry the skill id for hit sparks); War
-    // Leap moves on the caster's own screen, so the server only relays the
-    // effect. The caster plays its own effect live and skips this echo.
-    // Unknown skill ids mean a foreign client. No MP/cooldown checks: LAN
-    // self-play trusts the client (the Character data lives client-side).
-    private void OnSkill(int id, int skill)
+    // A skill cast: damaging actives are judged from the sender's last State
+    // and Build like a swing (their hits carry the skill id for hit sparks);
+    // utility (War Leap) and buffs move on the caster's own screen, so the
+    // server only relays the effect. The caster plays its own effect live
+    // and skips this echo. Unknown skill ids mean a foreign client. No
+    // MP/cooldown/level checks: LAN self-play trusts the client (the
+    // Character data lives client-side; pct arrives cast-ready).
+    private void OnSkill(int id, int skill, int pct)
     {
         lock (_mobLock)
         {
             if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to judge from
-            if (skill != SkillData.SlashBlast && skill != SkillData.WarLeap)
-                throw new InvalidDataException($"bad skill id {skill}");
+            bool damage = _mobs.IsDamageSkill(skill); // unknown id throws: a foreign client
             Broadcast(Net.Encode(Net.SkillFx, w =>
             {
                 w.Write(id);
@@ -193,9 +194,9 @@ public sealed class GameServer : IDisposable
                 w.Write(p.y);
                 w.Write(p.facing);
             }), id);
-            if (skill == SkillData.WarLeap) return; // utility: the leap itself is client-side movement
+            if (!damage) return; // utility/buff: the effect is the whole message
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
-            foreach (var h in _mobs.SkillStrike(p.map, p.x, p.y, Random.Shared, build, skill))
+            foreach (var h in _mobs.SkillStrike(p.map, p.x, p.y, p.facing, Random.Shared, build, skill, pct))
                 BroadcastHit(h, id);
         }
     }

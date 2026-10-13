@@ -23,7 +23,7 @@ public partial class MushTownGame
     private string? _hostPick; // null = this PC (host here), else the LAN IP to join
     private Task<List<FoundHost>>? _scanTask; // a running LAN scan (UpdateServer collects it; shots never start one)
     private List<FoundHost> _hosts = new();
-    private bool _rWasDown;
+    private bool _scanWasDown;
     private bool _registerOpen;
     private bool _jobPicked;
     private bool _deleteOpen;
@@ -111,13 +111,7 @@ public partial class MushTownGame
         if (shotScreen != null) // menu screenshots ride on a demo account
         {
             _account = new Account { User = "demo" };
-            _account.Slots[0] = new CharaSlot
-            {
-                Name = "hero", Level = 5, Map = 10000, X = 100, Y = 200, Mesos = 12345,
-                Exp = 60, Hp = Progression.MaxHp(5), Mp = Progression.MaxMp(5), // half-full EXP bar, full pools
-                Str = 20, Dex = 8, // leveled stats (4 level-ups at +4/+1), like a real Lv.5
-                Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
-            };
+            _account.Slots[0] = DemoChara();
             _account.Slots[2] = new CharaSlot { Name = "mage", Level = 2, Map = 20000, Hp = Progression.MaxHp(2), Mp = Progression.MaxMp(2) };
             _screen = shotScreen switch
             {
@@ -131,7 +125,7 @@ public partial class MushTownGame
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
             if (shotScreen is "stat" or "hud") _showStat = true;
-            if (shotScreen == "skill") _showSkill = true;
+            if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
             if (shotScreen == "hud") _showSubmenu = true;
             if (shotScreen == "register") _registerOpen = true; // the two modal states get their own shots
             if (shotScreen == "delete") _deleteOpen = true;
@@ -142,6 +136,20 @@ public partial class MushTownGame
             GameLog("MushTown w7.5 menu shot");
         }
     }
+
+    // The Lv.7 shot dummy: leveled stats (6 level-ups at +4/+1), half-full
+    // EXP bar, full pools, 3 SP spent on Slash Blast (Lv.7 casts Spirit
+    // Blade, the only buff with loop art). Plain --skill buff shots (no
+    // screen, no account) borrow it too.
+    private static CharaSlot DemoChara() => new()
+    {
+        Name = "hero", Level = 7, Map = 10000, X = 100, Y = 200, Mesos = 12345,
+        Exp = 77, Hp = Progression.MaxHp(7), Mp = Progression.MaxMp(7),
+        Str = 28, Dex = 10,
+        Sp = 18, // earned 21 (creation 3 + 6 level-ups), spent 3 on Slash Blast
+        SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
+        Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
+    };
 
     private void LoadMenuContent()
     {
@@ -157,15 +165,17 @@ public partial class MushTownGame
             _items[id] = item;
             LoadTexture(item.Image);
         }
-        foreach ((int id, string _) in SkillList) // skills: json first (it names every frame), then all art
-        {
-            var skill = LoadJson<SkillData>(Path.Combine(_assetsDir, "skill", $"{id}.json"));
-            _skills[id] = skill;
-            LoadTexture(skill.Icon);
-            LoadTexture(skill.Disabled);
-            foreach (string f in skill.Effect) LoadTexture(f);
-            foreach (string f in skill.Hit) LoadTexture(f);
-        }
+        foreach (var tab in SkillTabs) // skills: json first (it names every frame), then all art
+            foreach ((int id, string? _) in tab)
+            {
+                var skill = LoadJson<SkillData>(Path.Combine(_assetsDir, "skill", $"{id}.json"));
+                _skills[id] = skill;
+                LoadTexture(skill.Icon);
+                LoadTexture(skill.Disabled);
+                foreach (string f in skill.Effect) LoadTexture(f);
+                foreach (string f in skill.Hit) LoadTexture(f);
+                foreach (string f in skill.Affected) LoadTexture(f);
+            }
         _statBack = RoundedBacking(448, 406, new Color(62, 96, 118), 3);
         _skillBack = RoundedBacking(SkillW, SkillBodyH, new Color(62, 96, 118), 3);
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
@@ -220,7 +230,7 @@ public partial class MushTownGame
         _net = new NetClient(GameLog);
         _net.Connect(host ? "127.0.0.1" : joinHost!);
         var chara = _account?.Slots[_slot];
-        if (chara != null) _net.SendBuild(chara.Str, chara.Dex, Progression.WeaponAtk); // CLI sessions skip: the server defaults them to beginner
+        if (chara != null) PushBuild(); // CLI sessions skip: the server defaults them to beginner
     }
 
     private void MenuTextInput(char c)
@@ -273,8 +283,8 @@ public partial class MushTownGame
         _enterWasDown = kb.IsKeyDown(Keys.Enter);
         bool esc = kb.IsKeyDown(Keys.Escape) && !_escWasDown;
         _escWasDown = kb.IsKeyDown(Keys.Escape);
-        bool r = kb.IsKeyDown(Keys.R) && !_rWasDown;
-        _rWasDown = kb.IsKeyDown(Keys.R);
+        bool r = kb.IsKeyDown(Keys.R) && !_scanWasDown;
+        _scanWasDown = kb.IsKeyDown(Keys.R);
         if (click || enter || esc || r) _error = ""; // old errors die on the next click, key, or Esc
 
         // backspace with key repeat (fresh press deletes one at once)
@@ -595,13 +605,12 @@ public partial class MushTownGame
             throw;
         }
         GameLog($"{chara.Name} entered the game ({mode})");
-        _localWorld = null; _mobs.Clear(); _numbers.Clear(); _fx.Clear(); _skillCdMs.Clear(); // net: the server pushes mobs
+        _localWorld = null; _mobs.Clear(); _numbers.Clear(); _fx.Clear(); _skillCdMs.Clear(); _buffMs.Clear(); _orbs = 0; // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
         _upWasDown = kb.IsKeyDown(Keys.Up);
         _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
-        _qWasDown = kb.IsKeyDown(Keys.Q);
-        _wWasDown = kb.IsKeyDown(Keys.W);
+        SeedSkillKeys(kb);
         _iWasDown = kb.IsKeyDown(Keys.I);
         _cWasDown = kb.IsKeyDown(Keys.C);
         _kWasDown = kb.IsKeyDown(Keys.K);
@@ -626,6 +635,8 @@ public partial class MushTownGame
         _numbers.Clear();
         _fx.Clear();
         _skillCdMs.Clear();
+        _buffMs.Clear();
+        _orbs = 0;
         try
         {
             // the chars screen always shows the spawn map, whatever was played last

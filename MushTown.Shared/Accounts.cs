@@ -75,6 +75,7 @@ public sealed class AccountStore
         var chara = new CharaSlot
         {
             Name = name,
+            Sp = Progression.SpPerLevel, // creation banks the first level's points
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
         };
@@ -176,6 +177,8 @@ public sealed class Account
 // One character. X/Y null means never played: spawn at the map portal.
 // Equips null means the beginner set (real loadouts arrive with W17).
 // Use null means an empty bag (pre-W10 saves never got the starter kit).
+// SkillLv maps skill -> level (lv 0 = unlearned, no entry); Sp is unspent
+// skill points (pre-W12 saves start at 0 and earn fresh).
 public sealed class CharaSlot
 {
     public string Name { get; set; } = "";
@@ -185,6 +188,7 @@ public sealed class CharaSlot
     public int? X { get; set; }
     public int? Y { get; set; }
     public int Mesos { get; set; }
+    public int Sp { get; set; }
     public int Hp { get; set; } = Progression.MaxHp(1);
     public int Mp { get; set; } = Progression.MaxMp(1);
     public int Str { get; set; } = 4;
@@ -193,6 +197,6 @@ public sealed class CharaSlot
     public int Luk { get; set; } = 4;
     public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
     public List<string>? Equips { get; set; }
-    public List<int> Skills { get; set; } = new();
+    public Dictionary<int, int> SkillLv { get; set; } = new();
     public List<int> Quests { get; set; } = new();
 }

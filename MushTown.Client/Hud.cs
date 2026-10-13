@@ -32,22 +32,54 @@ public partial class MushTownGame
         "hud_coin.png", "hud_stat.png", "hud_stathilong.png", "hud_statx.png",
     };
     private const int TabCount = 6;
-    private const int SkillW = 320; // skill window: narrow panel, 2 rows
+    private const int SkillW = 320; // skill window: tabs + SP line + 8 rows
     private const int SkillRowH = 52;
-    private const int SkillBodyH = 8 + 2 * SkillRowH; // top pad + rows
+    private const int SkillRowsY = 48; // rows start below the tab strip + SP line
+    private const int SkillBodyH = SkillRowsY + 8 * SkillRowH + 8; // strip + SP + rows + bottom pad
 
     // USE tab slots, fixed order: red potion, blue potion (the only USE items until W13 drops).
     private static readonly int[] UseIds = new[] { ItemData.RedPotion, ItemData.BluePotion };
     private readonly Dictionary<int, ItemData> _items = new();
 
-    // Skill window rows: skill id + fixed cast key (rebinds wait for the settings week).
-    private static readonly (int id, string key)[] SkillList = new[]
+    // Skill window tabs (one per job) + rows: skill id + fixed cast key
+    // (null = passive, no key; rebinds wait for the settings week).
+    private static readonly string[] SkillTabNames = { "Warrior", "Fighter", "Crusader" };
+    private static readonly (int id, string? key)[][] SkillTabs = new[]
     {
-        (SkillData.SlashBlast, "Q"),
-        (SkillData.WarLeap, "W"),
+        new (int id, string? key)[]
+        {
+            (SkillData.SlashBlast, "Q"), (SkillData.IronBody, "R"), (SkillData.WarLeap, "W"),
+            (SkillData.WarriorMastery, null), (SkillData.LeapAttack, "E"), (SkillData.GuardianArmor, null),
+        },
+        new (int id, string? key)[]
+        {
+            (SkillData.Brandish, "T"), (SkillData.WeaponMastery, null), (SkillData.SpiritBlade, "U"),
+            (SkillData.ComboAttack, "F"), (SkillData.FlashBlade, "Y"), (SkillData.AgileArms, null),
+            (SkillData.FinalAttack, null), (SkillData.PhysicalTraining, null),
+        },
+        new (int id, string? key)[]
+        {
+            (SkillData.IntrepidSlash, "G"), (SkillData.BeamBlade, "H"), (SkillData.Rush, "J"),
+            (SkillData.ScarringSword, "L"), (SkillData.ComboSynergy, null), (SkillData.SelfRecovery, null),
+            (SkillData.ChanceAttack, null), (SkillData.Endure, null),
+        },
+    };
+    // One-line passive blurbs (per skill level): the window's only help text.
+    private static readonly Dictionary<int, string> PassiveBlurb = new()
+    {
+        [SkillData.WarriorMastery] = "+HP/speed",
+        [SkillData.GuardianArmor] = "+attack",
+        [SkillData.WeaponMastery] = "+damage/crit",
+        [SkillData.AgileArms] = "+STR",
+        [SkillData.FinalAttack] = "bonus hit",
+        [SkillData.PhysicalTraining] = "+STR/DEX",
+        [SkillData.ComboSynergy] = "+orb gain/dmg",
+        [SkillData.SelfRecovery] = "HP/MP regen",
+        [SkillData.ChanceAttack] = "+crit",
+        [SkillData.Endure] = "+Max HP",
     };
     private readonly Dictionary<int, SkillData> _skills = new();
-
+    private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
     private bool _showInv, _showStat, _showSubmenu, _showSkill;
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
     private bool _iWasDown, _cWasDown, _kWasDown;
@@ -67,7 +99,7 @@ public partial class MushTownGame
 
     private Rectangle InvRect() => new(_invPos.X, _invPos.Y, 242, 593);
     private Rectangle StatRect() => new(_statPos.X, _statPos.Y, 448, 422); // title 16 + body 406
-    private Rectangle SkillRect() => new(_skillPos.X, _skillPos.Y, SkillW, 16 + SkillBodyH); // title 16 + 2 rows
+    private Rectangle SkillRect() => new(_skillPos.X, _skillPos.Y, SkillW, 16 + SkillBodyH); // title 16 + tabs + SP + rows
     private Rectangle InvTitleRect() => new(_invPos.X, _invPos.Y, 242, 28);
     private Rectangle StatTitleRect() => new(_statPos.X, _statPos.Y, 448, 16);
     private Rectangle SkillTitleRect() => new(_skillPos.X, _skillPos.Y, SkillW, 16);
@@ -134,6 +166,14 @@ public partial class MushTownGame
                     for (int s = 0; s < UseIds.Length; s++)
                         if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(UseIds[s]);
             }
+            else if (onSkill)
+            {
+                for (int t = 0; t < SkillTabs.Length; t++)
+                    if (HitRect(SkillTabRect(t), gx, gy)) { _skillTab = t; break; }
+                var tab = SkillTabs[_skillTab]; // [+] spends one SP (LearnSkill re-checks everything)
+                for (int row = 0; row < tab.Length; row++)
+                    if (HitRect(SkillPlusRect(row), gx, gy) && LearnSkill(tab[row].id)) PushBuild();
+            }
             return;
         }
         if (HitRect(MenuBtnRect(), gx, gy)) _showSubmenu = !_showSubmenu;
@@ -184,7 +224,28 @@ public partial class MushTownGame
         var chara = _account?.Slots[_slot];
         if (chara == null) return; // CLI sessions carry no bag
         var item = _items[id];
-        Progression.UsePotion(chara, id, item.Hp, item.Mp);
+        Progression.UsePotion(chara, id, item.Hp, item.Mp, OwnHpPct());
+    }
+
+    // Skill window job tabs (3 x 100px under the title).
+    private Rectangle SkillTabRect(int t)
+    {
+        var r = SkillRect();
+        return new Rectangle(r.X + 8 + t * 104, r.Y + 16 + 4, 100, 18);
+    }
+
+    // [+] zone: right end of a skill row (spends one SP on click).
+    private Rectangle SkillPlusRect(int i)
+    {
+        var r = SkillRect();
+        return new Rectangle(r.X + SkillW - 44, r.Y + 16 + SkillRowsY + i * SkillRowH + 4, 36, 26);
+    }
+
+    // Click a [+]: learn one level. CLI sessions carry no character.
+    private bool LearnSkill(int id)
+    {
+        var chara = _account?.Slots[_slot];
+        return chara != null && Progression.LearnSkill(chara, _skills[id]);
     }
 
     private Rectangle InvXRect()
@@ -267,7 +328,7 @@ public partial class MushTownGame
         // x+101 (vector:hp/mp), tops y+7/y+28. Bars always full: nothing
         // drains HP/MP until W13 mob hits (W13 adds the clip then).
         var chara = _account?.Slots[_slot];
-        int maxHp = Progression.MaxHp(chara?.Level ?? 1), maxMp = Progression.MaxMp(chara?.Level ?? 1);
+        int maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct()), maxMp = Progression.MaxMp(chara?.Level ?? 1);
         _spriteBatch.Draw(Tex("hud_hpfill.png"), new Vector2(r.X + 4, r.Y + 4), Color.White);
         _spriteBatch.Draw(Tex("hud_mpfill.png"), new Vector2(r.X + 4, r.Y + 25), Color.White);
         DrawBarNumber($"{chara?.Hp ?? maxHp}/{maxHp}", r.X + 101, r.Y + 7);
@@ -412,18 +473,19 @@ public partial class MushTownGame
         _spriteBatch.Draw(_statBack, new Vector2(r.X, by), Color.White);
         _spriteBatch.Draw(Tex("hud_stat.png"), new Vector2(r.X, by), Color.White);
         var chara = _account?.Slots[_slot];
-        int maxHp = Progression.MaxHp(chara?.Level ?? 1), maxMp = Progression.MaxMp(chara?.Level ?? 1);
+        var build = OwnBuild(); // STR/DEX/range show skilled values (passives and buffs feed combat)
+        int maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct()), maxMp = Progression.MaxMp(chara?.Level ?? 1);
         var cp = _ui.GetSmall("0"); // value only; "Combat Power" is baked in the art (no formula yet)
         _spriteBatch.Draw(cp, new Vector2(r.X + 432 - cp.Width, by + 8), Color.White);
         int y = by + 132; // panel 1: vitals + 4 stats (name/level live on the plate)
         DrawStatRow("HP", $"{chara?.Hp ?? maxHp} / {maxHp}", r.X, y); y += 22;
         DrawStatRow("MP", $"{chara?.Mp ?? maxMp} / {maxMp}", r.X, y); y += 22;
-        DrawStatRow("STR", $"{chara?.Str ?? 4}", r.X, y); y += 22;
-        DrawStatRow("DEX", $"{chara?.Dex ?? 4}", r.X, y); y += 22;
+        DrawStatRow("STR", $"{build.Str}", r.X, y); y += 22;
+        DrawStatRow("DEX", $"{build.Dex}", r.X, y); y += 22;
         DrawStatRow("INT", $"{chara?.Int ?? 4}", r.X, y); y += 22;
         DrawStatRow("LUK", $"{chara?.Luk ?? 4}", r.X, y);
         y = by + 320; // panel 2 is only ~80px: 5 tight rows (official rows are tight too)
-        (int lo, int hi) = Progression.PanelRange(chara?.Str ?? 4, chara?.Dex ?? 4, Progression.WeaponAtk);
+        (int lo, int hi) = Progression.PanelRange(build.Str, build.Dex, build.WeaponAtk);
         DrawStatRow("Attack Power", $"{lo}~{hi}", r.X, y); y += 16;
         DrawStatRow("Magic ATT", "0", r.X, y); y += 16;
         DrawStatRow("Defense", "0", r.X, y); y += 16;
@@ -438,8 +500,9 @@ public partial class MushTownGame
         _spriteBatch.Draw(v, new Vector2(x + 432 - v.Width, y), Color.Black);
     }
 
-    // Skill window: one row per skill (icon, name, costs, cast key). Locked
-    // skills show the required level in red; cooling skills count seconds.
+    // Skill window: one tab per job (icon, name, level, costs, key).
+    // Locked skills show the required level in red; cooling skills and live
+    // buffs count seconds; learnable rows grow a green [+] (one SP a click).
     private void DrawSkillPanel()
     {
         var r = SkillRect();
@@ -448,24 +511,51 @@ public partial class MushTownGame
         _spriteBatch.Draw(Tex("hud_statx.png"), SkillXRect(), Color.White);
         int by = r.Y + 16;
         _spriteBatch.Draw(_skillBack, new Vector2(r.X, by), Color.White);
-        for (int i = 0; i < SkillList.Length; i++)
-            DrawSkillRow(SkillList[i].id, SkillList[i].key, r.X, by + 8 + i * SkillRowH);
+        for (int t = 0; t < SkillTabs.Length; t++)
+        {
+            var tab = SkillTabRect(t);
+            var ink = t == _skillTab ? new Color(255, 220, 0) : new Color(130, 140, 150);
+            _spriteBatch.Draw(_ui.GetSmall(SkillTabNames[t]), new Vector2(tab.X + 8, tab.Y + 2), ink);
+        }
+        int sp = _account?.Slots[_slot]?.Sp ?? 0;
+        _spriteBatch.Draw(_ui.GetSmall(sp > 0 ? $"SP: {sp} (click + to learn)" : $"SP: {sp}"),
+            new Vector2(r.X + 16, by + 26), Color.White);
+        var rows = SkillTabs[_skillTab];
+        for (int i = 0; i < rows.Length; i++)
+            DrawSkillRow(rows[i].id, rows[i].key, r.X, by + SkillRowsY + i * SkillRowH);
     }
 
-    private void DrawSkillRow(int id, string key, int x, int y)
+    private void DrawSkillRow(int id, string? key, int x, int y)
     {
         var skill = _skills[id];
-        int level = _account?.Slots[_slot]?.Level ?? 1;
+        var chara = _account?.Slots[_slot];
+        int level = chara?.Level ?? 1;
+        int lv = 0;
+        chara?.SkillLv.TryGetValue(id, out lv);
         bool locked = level < skill.ReqLevel;
+        bool maxed = lv >= skill.MaxLevel;
+        bool learnable = !locked && !maxed && (chara?.Sp ?? 0) > 0;
         float left = 0;
         bool cooling = !locked && _skillCdMs.TryGetValue(id, out left) && left > 0;
+        float buffLeft = 0;
+        bool live = _buffMs.TryGetValue(id, out buffLeft) && buffLeft > 0;
         _spriteBatch.Draw(_textures[locked || cooling ? skill.Disabled : skill.Icon], new Vector2(x + 10, y + 8), Color.White);
         var ink = locked ? new Color(130, 140, 150) : Color.White;
         _spriteBatch.Draw(_ui.GetSmall(skill.Name), new Vector2(x + 50, y + 4), ink);
-        _spriteBatch.Draw(_ui.GetSmall($"Lv.{skill.ReqLevel}  MP {skill.Mp}  CD {skill.CooldownMs / 1000}s"), new Vector2(x + 50, y + 24), ink);
-        string right = locked ? $"Lv.{skill.ReqLevel}" : cooling ? $"{(int)Math.Ceiling(left / 1000)}s" : key;
+        string sub = skill.Kind == SkillData.KindPassive
+            ? $"Lv.{lv}/{skill.MaxLevel}  {PassiveBlurb[id]}"
+            : skill.Kind == SkillData.KindBuff
+            ? $"Lv.{lv}/{skill.MaxLevel}  MP {skill.Mp}  {skill.BuffMs / 1000}s{(id == SkillData.ComboAttack && live ? $"  {_orbs} orbs" : "")}"
+            : $"Lv.{lv}/{skill.MaxLevel}  MP {skill.Mp}  CD {skill.CooldownMs / 1000}s";
+        _spriteBatch.Draw(_ui.GetSmall(sub), new Vector2(x + 50, y + 24), ink);
+        string right = locked ? $"Lv.{skill.ReqLevel}"
+            : live ? $"{(int)Math.Ceiling(buffLeft / 1000)}s"
+            : cooling ? $"{(int)Math.Ceiling(left / 1000)}s"
+            : key ?? $"{lv}/{skill.MaxLevel}";
+        var rc = locked ? new Color(255, 120, 120)
+            : live || cooling ? new Color(255, 220, 0) : Color.White;
+        if (learnable) { right += " [+]"; rc = new Color(120, 255, 120); }
         var rt = _ui.GetSmall(right);
-        var rc = locked ? new Color(255, 120, 120) : cooling ? new Color(255, 220, 0) : Color.White;
         _spriteBatch.Draw(rt, new Vector2(x + SkillW - 8 - rt.Width, y + 4), rc);
     }
 }

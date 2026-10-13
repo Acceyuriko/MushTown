@@ -30,6 +30,10 @@ public partial class MushTownGame : Game
     private const int BarWidth = 40; // mob HP bar width, px
     private const int FxDelay = 100; // skill effect frames share one delay (WZ ships no delays for them)
     private const int FxCastDy = 40; // cast effects center on the torso (bare frames: no WZ origins)
+    private const int DashPx = 220; // Rush/Flash Blade carry the caster this far along facing
+    private const float DiveV = 900f; // Leap Attack slams down this fast (past MaxFall on purpose)
+    private const int LeapRange = 400; // Leap Attack needs a platform within this far below
+    private const int RegenTickMs = 10000; // Self Recovery pays out every 10s, in combat too
 
     private const int SpawnMapId = 10000; // Maple Island: Southperry
 
@@ -44,7 +48,8 @@ public partial class MushTownGame : Game
     private readonly string? _joinHost;
     private readonly string? _shotScreen;
     private readonly bool _shotHit;
-    private readonly bool _shotSlash;
+    private readonly int _shotSkill; // --skill <id>: 0 means no skill pose
+    private readonly int _shotSkillTab; // --skilltab: which job tab the skill window opens on
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
@@ -75,7 +80,8 @@ public partial class MushTownGame : Game
     private string _action = "stand2";
     private int _frame;
     private float _timerMs;
-    private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal, _ctrlWasDown, _qWasDown, _wWasDown;
+    private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal, _ctrlWasDown;
+    private bool _qWasDown, _wWasDown, _eWasDown, _rWasDown, _tWasDown, _yWasDown, _uWasDown, _fWasDown, _gWasDown, _hWasDown, _jWasDown, _lWasDown;
     private float _attackLock; // ms of swing left: movement frozen until it hits 0
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
@@ -91,6 +97,9 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<DamageNumber> _numbers = new();
     private readonly Dictionary<int, float> _skillCdMs = new(); // ms left per cooling skill
+    private readonly Dictionary<int, float> _buffMs = new(); // ms left per live buff
+    private int _orbs; // combo orbs held (Combo Attack live only)
+    private float _regenMs = RegenTickMs; // ms to the next Self Recovery tick
     private readonly List<SkillFx> _fx = new(); // skill cast effects + hit sparks in flight
     private DmgData? _dmg; // basic damage skin digits, loaded once
 
@@ -114,12 +123,14 @@ public partial class MushTownGame : Game
         public float Age;
     }
 
-    // One skill effect in flight: a cast effect (centered on the caster) or
-    // a hit spark (centered on the mob's body). Plays once, then removed.
+    // One skill effect in flight: a cast effect (centered on the caster), a
+    // hit spark (centered on the mob's body), or a buff loop (riding the
+    // player until the buff ends). One-shots play once, then are removed.
     private sealed class SkillFx
     {
         public int Skill;
         public bool Hit;
+        public bool Loop;
         public float X;
         public float Y;
         public bool FacingRight;
@@ -133,7 +144,7 @@ public partial class MushTownGame : Game
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false, bool shotSlash = false)
+    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
@@ -144,7 +155,8 @@ public partial class MushTownGame : Game
         _joinHost = joinHost;
         _shotScreen = shotScreen;
         _shotHit = shotHit;
-        _shotSlash = shotSlash;
+        _shotSkill = shotSkill;
+        _shotSkillTab = shotSkillTab;
         _assetsDir = FindAssetsDir();
         string dir = Path.GetDirectoryName(_assetsDir)!;
         _layoutPath = Path.Combine(dir, "hud-layout.json");
@@ -287,32 +299,63 @@ public partial class MushTownGame : Game
     }
 
     // Shot mode: a frozen local world. --hit plants the player mid-swing next
-    // to the first mob and lands one real strike (numbers and all); --slash
-    // does the same with a Slash Blast (cast effect + hit sparks).
+    // to the first mob and lands one real strike (numbers and all); --skill
+    // poses a skill at lv 1: a buff casts for real (loop + timer, no mobs
+    // needed), a damage skill freezes mid-effect with judged hit sparks, a
+    // utility (leap) only poses its effect and judges nothing.
     private void SetupShotMobs()
     {
         StartLocalWorld();
-        if (!_shotHit && !_shotSlash) return;
+        if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))
+            throw new InvalidDataException($"unknown skill: {_shotSkill}");
+        if (_shotSkill != 0 && _skills[_shotSkill].Kind == SkillData.KindBuff)
+        {
+            // buff shots run the real path (learn, pay, cast): a demo that
+            // cannot afford the pose fails loud instead of faking it
+            _account ??= new Account { User = "demo" };
+            var chara = _account.Slots[_slot] ??= DemoChara();
+            var data = _skills[_shotSkill];
+            if (!chara.SkillLv.ContainsKey(_shotSkill) && !Progression.LearnSkill(chara, data))
+                throw new InvalidDataException($"--skill {_shotSkill} cannot learn: demo Lv.{chara.Level} needs Lv.{data.ReqLevel}");
+            if (!TryPaySkill(_shotSkill))
+                throw new InvalidDataException($"--skill {_shotSkill} cannot cast: needs Lv.{data.ReqLevel} and {data.Mp} MP");
+            CastBuff(_shotSkill);
+            SnapCamera();
+            return;
+        }
+        if (!_shotHit && _shotSkill == 0) return;
         var world = _localWorld!; // StartLocalWorld just built it
         var first = world.MobsOn(_mapId).FirstOrDefault()
-            ?? throw new InvalidDataException($"--hit/--slash needs mobs, map {_mapId} has none");
+            ?? throw new InvalidDataException($"--hit/--skill needs mobs, map {_mapId} has none");
         _px = first.X - 50;
         _ground = SceneMath.ArrivalGround(_map.Footholds, (int)_px, (int)first.Y)
-            ?? throw new InvalidDataException($"--hit/--slash found no ground near mob {first.Mob}");
+            ?? throw new InvalidDataException($"--hit/--skill found no ground near mob {first.Mob}");
         _py = SceneMath.FootholdY(_ground, (int)_px);
         ResetMotion();
         _facingRight = true;
         _action = "swingP1";
         _frame = 1;
         // fixed seed: the evidence shot shows the same number every run
-        if (_shotSlash)
+        if (_shotSkill != 0)
         {
-            SpawnCastFx(SkillData.SlashBlast, _px, _py, true);
-            int n = _skills[SkillData.SlashBlast].Effect.Count;
-            if (n <= 5) throw new InvalidDataException($"--slash needs 6+ effect frames, got {n}");
+            if (_skills[_shotSkill].Kind == SkillData.KindPassive)
+                throw new InvalidDataException($"--skill {_shotSkill} is passive (no art to pose)");
+            var chara = _account?.Slots[_slot];
+            if (chara != null) // window shots learn and pay best-effort (cooldowns show); plain shots have no one
+            {
+                if (!chara.SkillLv.ContainsKey(_shotSkill)) Progression.LearnSkill(chara, _skills[_shotSkill]);
+                TryPaySkill(_shotSkill);
+            }
+            SpawnCastFx(_shotSkill, _px, _py, true);
+            int n = _skills[_shotSkill].Effect.Count;
+            if (n <= 5) throw new InvalidDataException($"--skill {_shotSkill} needs 6+ effect frames, got {n}");
             _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
-            foreach (var h in world.SkillStrike(_mapId, _px, _py, new Random(0), Progression.Beginner, SkillData.SlashBlast))
-                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+            if (world.IsDamageSkill(_shotSkill))
+            {
+                int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
+                foreach (var h in world.SkillStrike(_mapId, _px, _py, true, new Random(0), Progression.Beginner, _shotSkill, pct))
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+            }
         }
         else
             foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), Progression.Beginner))
@@ -377,6 +420,14 @@ public partial class MushTownGame : Game
         else if (dir != 0 && _climb == null) _facingRight = dir > 0; // raw sprites face left; mirror when facing right
         foreach (int id in _skillCdMs.Keys.ToList())
             _skillCdMs[id] = Math.Max(0, _skillCdMs[id] - dtMs);
+        foreach (int id in _buffMs.Keys.ToList()) // buffs tick down, then leave (loops and stats go with them)
+        {
+            _buffMs[id] -= dtMs;
+            if (_buffMs[id] <= 0) EndBuff(id);
+        }
+        TickRegen(dtMs);
+        if (_account?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
+            c.Hp = Math.Min(c.Hp, Progression.BuffedMaxHp(c.Level, OwnHpPct()));
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
         // (portal also fires on walking in with Up held; grab and jump use held keys)
@@ -390,18 +441,24 @@ public partial class MushTownGame : Game
         bool ctrl = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
         bool freshCtrl = ctrl && !_ctrlWasDown;
         _ctrlWasDown = ctrl;
-        bool q = kb.IsKeyDown(Keys.Q);
-        bool freshQ = q && !_qWasDown;
-        _qWasDown = q;
-        bool w = kb.IsKeyDown(Keys.W);
-        bool freshW = w && !_wWasDown;
-        _wWasDown = w;
+        // Skill keys (Q/W/E/R/T/Y/U/F/G/H/J/L): one fresh edge each.
+        bool freshQ = FreshKey(kb, Keys.Q, ref _qWasDown);
+        bool freshW = FreshKey(kb, Keys.W, ref _wWasDown);
+        bool freshE = FreshKey(kb, Keys.E, ref _eWasDown);
+        bool freshR = FreshKey(kb, Keys.R, ref _rWasDown);
+        bool freshT = FreshKey(kb, Keys.T, ref _tWasDown);
+        bool freshY = FreshKey(kb, Keys.Y, ref _yWasDown);
+        bool freshU = FreshKey(kb, Keys.U, ref _uWasDown);
+        bool freshF = FreshKey(kb, Keys.F, ref _fWasDown);
+        bool freshG = FreshKey(kb, Keys.G, ref _gWasDown);
+        bool freshH = FreshKey(kb, Keys.H, ref _hWasDown);
+        bool freshJ = FreshKey(kb, Keys.J, ref _jWasDown);
+        bool freshL = FreshKey(kb, Keys.L, ref _lWasDown);
 
         // Ctrl swings the polearm (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (freshCtrl && _climb == null && _attackLock <= 0 &&
-            ((_net != null && _net.Connected) || _localWorld != null))
+        if (freshCtrl && _climb == null && _attackLock <= 0 && HasJudge())
         {
             _attackLock = _delays["swingP1"].Sum();
             if (_net != null && _net.Connected) _net.SendAttack();
@@ -410,31 +467,59 @@ public partial class MushTownGame : Game
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
         }
 
-        // Q casts Slash Blast (the ring around us): same judge gate as a
-        // swing, and the cast locks movement like one (the pose follows from
-        // the lock). TryPaySkill runs last: no judge, no charge.
-        if (freshQ && _climb == null && _attackLock <= 0 &&
-            ((_net != null && _net.Connected) || _localWorld != null) &&
-            TryPaySkill(SkillData.SlashBlast))
+        // Plain rings (Q Slash, T Brandish, G Intrepid, H Beam, L Scarring):
+        // same judge gate as a swing, and the cast locks movement like one
+        // (the pose follows from the lock). TryPaySkill runs last: no
+        // judge, no charge.
+        foreach ((bool fresh, int skill) in new[]
         {
-            _attackLock = _skills[SkillData.SlashBlast].CastLockMs;
-            SpawnCastFx(SkillData.SlashBlast, _px, _py, _facingRight);
-            if (_net != null && _net.Connected) _net.SendSkillCast(SkillData.SlashBlast);
-            else if (_localWorld != null)
-                foreach (var h in _localWorld.SkillStrike(_mapId, _px, _py, Random.Shared, OwnBuild(), SkillData.SlashBlast))
-                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
-        }
+            (freshQ, SkillData.SlashBlast), (freshT, SkillData.Brandish), (freshG, SkillData.IntrepidSlash),
+            (freshH, SkillData.BeamBlade), (freshL, SkillData.ScarringSword),
+        })
+            if (fresh && _climb == null && _attackLock <= 0 && HasJudge() && TryPaySkill(skill))
+                CastActive(skill);
 
         // W leaps again mid-air (never on the ground or a ladder): once per
         // airtime plus the cooldown, full jump velocity, drift unchanged.
         // No attack-lock check on purpose: the leap stays available mid-swing.
         if (freshW && _ground == null && _climb == null && _canLeap && TryPaySkill(SkillData.WarLeap))
         {
-            _vy = JumpV0;
+            _vy = OwnJump();
             _canLeap = false;
             SpawnCastFx(SkillData.WarLeap, _px, _py, _facingRight);
-            if (_net != null && _net.Connected) _net.SendSkillCast(SkillData.WarLeap);
+            if (_net != null && _net.Connected) _net.SendSkillCast(SkillData.WarLeap, 0);
         }
+
+        // E slams down from mid-air (never grounded): needs a platform in
+        // range below, rings at once, then dives (drift steers the landing).
+        if (freshE && _ground == null && _climb == null && _attackLock <= 0 && HasJudge() &&
+            DiveGround() && TryPaySkill(SkillData.LeapAttack))
+        {
+            _vy = DiveV;
+            CastActive(SkillData.LeapAttack);
+        }
+
+        // R/U buff (Iron Body, Spirit Blade): client-side timer + stats, the
+        // cast relays for peers. Recast refreshes. No judge needed: landing
+        // the buff never touches a mob.
+        foreach ((bool fresh, int skill) in new[] { (freshR, SkillData.IronBody), (freshU, SkillData.SpiritBlade) })
+            if (fresh && _climb == null && _attackLock <= 0 && TryPaySkill(skill))
+                CastBuff(skill);
+
+        // F toggles Combo Attack: recast cancels free (orbs drop with it).
+        if (freshF && _climb == null && _attackLock <= 0)
+        {
+            if (_buffMs.ContainsKey(SkillData.ComboAttack)) EndBuff(SkillData.ComboAttack);
+            else if (TryPaySkill(SkillData.ComboAttack)) CastBuff(SkillData.ComboAttack);
+        }
+
+        // Y/J dash then ring at the landing (Flash Blade, Rush).
+        foreach ((bool fresh, int skill) in new[] { (freshY, SkillData.FlashBlade), (freshJ, SkillData.Rush) })
+            if (fresh && _climb == null && _attackLock <= 0 && HasJudge() && TryPaySkill(skill))
+            {
+                Dash();
+                CastActive(skill);
+            }
 
         // Up at a portal travels: tap anywhere in range, or hold Up and walk
         // in (portal wins over ladder). Travel cools down for ~0.5s, and
@@ -459,8 +544,8 @@ public partial class MushTownGame : Game
         {
             _climb = null;
             _climbMoving = false;
-            _vy = JumpV0 / 2;
-            _vx = dir * WalkSpeed * 1.5f;
+            _vy = OwnJump() / 2;
+            _vx = dir * OwnWalk() * 1.5f;
             _facingRight = dir > 0;
             _ground = null;
             _grabCooldown = GrabCooldown;
@@ -479,9 +564,9 @@ public partial class MushTownGame : Game
         if (_climb == null)
         {
             if (_ground != null)
-                _vx = down ? 0 : dir * WalkSpeed; // held Down pins the feet: prone
+                _vx = down ? 0 : dir * OwnWalk(); // held Down pins the feet: prone
             else
-                _vx = Math.Clamp(_vx + dir * AirAccel * dt, -WalkSpeed, WalkSpeed);
+                _vx = Math.Clamp(_vx + dir * AirAccel * dt, -OwnWalk(), OwnWalk());
             float rawX = _px + _vx * dt;
             nx = Math.Clamp(rawX, _map.Info.VrLeft, _map.Info.VrRight);
             if (nx != rawX) _vx = 0; // hit a wall: momentum dies here
@@ -515,7 +600,7 @@ public partial class MushTownGame : Game
 
         if (wantJump)
         {
-            _vy = JumpV0;
+            _vy = OwnJump();
             _ground = null;
         }
         if (wantDrop)
@@ -598,6 +683,17 @@ public partial class MushTownGame : Game
         for (int i = _fx.Count - 1; i >= 0; i--) // skill effects play once, then leave
         {
             var f = _fx[i];
+            if (f.Loop) // buff loops ride the player and wrap until the buff ends
+            {
+                f.X = _px;
+                f.Y = _py - FxCastDy;
+                f.Timer += dtMs;
+                if (f.Timer < FxDelay) continue;
+                f.Timer -= FxDelay;
+                var loop = _skills[f.Skill].Affected;
+                f.Frame = (f.Frame + 1) % loop.Count;
+                continue;
+            }
             var frames = f.Hit ? _skills[f.Skill].Hit : _skills[f.Skill].Effect;
             f.Timer += dtMs;
             if (f.Timer < FxDelay) continue;
@@ -704,7 +800,7 @@ public partial class MushTownGame : Game
             LoadMapTextures();
             _remotes.Clear(); // peers stay on the old map; their live states refill this one
             if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
-            else { _mobs.Clear(); _numbers.Clear(); _fx.Clear(); } // net: the server re-pushes them
+            else { _mobs.Clear(); _numbers.Clear(); _fx.Clear(); RespawnBuffLoops(); } // net: the server re-pushes them
             _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
         }
         var land = _map.Portals.FirstOrDefault(p => p.Pn == tn)
@@ -837,12 +933,12 @@ public partial class MushTownGame : Game
 
     // Skill effects: bare frames centered on their anchor, flipped like
     // avatars (raw art faces left). Cast effects ride the caster, hit sparks
-    // the mob's body; both were centered when spawned.
+    // the mob's body, buff loops the player; all were centered when spawned.
     private void DrawFx()
     {
         foreach (var f in _fx)
         {
-            var frames = f.Hit ? _skills[f.Skill].Hit : _skills[f.Skill].Effect;
+            var frames = f.Loop ? _skills[f.Skill].Affected : f.Hit ? _skills[f.Skill].Hit : _skills[f.Skill].Effect;
             var tex = _textures[frames[f.Frame]];
             var o = new Vector2(tex.Width / 2f, tex.Height / 2f);
             _spriteBatch.Draw(tex, new Vector2(f.X - _cameraX, f.Y - _cameraY), null, Color.White,
@@ -935,7 +1031,9 @@ public partial class MushTownGame : Game
     // a number. A hit for a view we never saw is dropped: a kill in flight
     // across a remap, or a join racing a swing on another thread.
     // mine + dead means we landed the killing blow: claim the EXP.
-    // A skill hit also plants the skill's spark on the mob's body.
+    // A skill hit also plants the skill's spark on the mob's body (skills
+    // without spark art, like Scarring Sword, skip it). Our own hits feed
+    // the combo orb while Combo Attack lives (its bonus hits don't recurse).
     private void ApplyHit(int uid, int damage, int hpLeft, bool mine, int exp, int skill)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
@@ -946,36 +1044,214 @@ public partial class MushTownGame : Game
         float bodyH = _textures[MobFrames(m.Mob, m.Action)[0].Image].Height;
         float headY = m.Y - bodyH;
         _numbers.Add(new DamageNumber { Text = damage.ToString(), X = m.X, Y = headY });
-        if (skill != 0)
+        if (skill != 0 && _skills[skill].Hit.Count > 0)
             _fx.Add(new SkillFx { Skill = skill, Hit = true, X = m.X, Y = m.Y - bodyH / 2, FacingRight = true });
+        if (mine && skill != SkillData.FinalAttack && _buffMs.ContainsKey(SkillData.ComboAttack))
+        {
+            int chance = _skills[SkillData.ComboAttack].OrbChance * SkillLv(SkillData.ComboAttack)
+                + _skills[SkillData.ComboSynergy].SynChance * SkillLv(SkillData.ComboSynergy);
+            if (Random.Shared.NextDouble() * 100 < chance) // visible count: rolled client-side, shown in the window
+                _orbs = Math.Min(_orbs + 1, _skills[SkillData.ComboAttack].OrbMax);
+        }
         if (hpLeft == 0 && mine) GainExp(exp);
     }
 
-    // One cast's client-side checks: level, MP, cooldown. CLI sessions carry
-    // no character (no pools), so they cannot cast, like potions.
+    // Swings and damaging casts need a judge: net play sends, the local
+    // world strikes right here. The disconnect frame has neither yet.
+    private bool HasJudge() => (_net != null && _net.Connected) || _localWorld != null;
+
+    // One cast's client-side checks: learned, level, MP, cooldown. CLI
+    // sessions carry no character (no pools), so they cannot cast, like potions.
     private bool TryPaySkill(int id)
     {
         var chara = _account?.Slots[_slot];
         if (chara == null) return false;
         var skill = _skills[id];
+        chara.SkillLv.TryGetValue(id, out int lv);
         _skillCdMs.TryGetValue(id, out float left);
-        if (!Progression.CanCast(chara, skill, left)) return false;
+        if (!Progression.CanCast(chara, skill, lv, left)) return false;
         chara.Mp -= skill.Mp;
         _skillCdMs[id] = skill.CooldownMs;
         return true;
     }
 
+    private int SkillLv(int id)
+    {
+        if (_account?.Slots[_slot] is not CharaSlot chara) return 0;
+        return chara.SkillLv.TryGetValue(id, out int lv) ? lv : 0;
+    }
+
+    // One fresh edge per skill key (twelve now: a helper, not twelve blocks).
+    private static bool FreshKey(KeyboardState kb, Keys key, ref bool was)
+    {
+        bool down = kb.IsKeyDown(key);
+        bool fresh = down && !was;
+        was = down;
+        return fresh;
+    }
+
+    // Menu trips don't track game keys: seed every skill edge from live state.
+    private void SeedSkillKeys(KeyboardState kb)
+    {
+        _qWasDown = kb.IsKeyDown(Keys.Q);
+        _wWasDown = kb.IsKeyDown(Keys.W);
+        _eWasDown = kb.IsKeyDown(Keys.E);
+        _rWasDown = kb.IsKeyDown(Keys.R);
+        _tWasDown = kb.IsKeyDown(Keys.T);
+        _yWasDown = kb.IsKeyDown(Keys.Y);
+        _uWasDown = kb.IsKeyDown(Keys.U);
+        _fWasDown = kb.IsKeyDown(Keys.F);
+        _gWasDown = kb.IsKeyDown(Keys.G);
+        _hWasDown = kb.IsKeyDown(Keys.H);
+        _jWasDown = kb.IsKeyDown(Keys.J);
+        _lWasDown = kb.IsKeyDown(Keys.L);
+    }
+
+    // A paid damaging cast: lock the pose, play the effect, judge (local) or
+    // send (net). The cast-time pct folds skill level and combo orbs.
+    private void CastActive(int id)
+    {
+        _attackLock = _skills[id].CastLockMs;
+        SpawnCastFx(id, _px, _py, _facingRight);
+        int pct = CastPct(id);
+        if (_net != null && _net.Connected) _net.SendSkillCast(id, pct);
+        else if (_localWorld != null)
+            foreach (var h in _localWorld.SkillStrike(_mapId, _px, _py, _facingRight, Random.Shared, OwnBuild(), id, pct))
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+    }
+
+    // Cast-time damage pct: the skill's level curve plus combo orbs (each orb
+    // pays Combo Attack's rate plus Combo Synergy's, both at their levels).
+    private int CastPct(int id)
+    {
+        int pct = Progression.SkillDamage(_skills[id], SkillLv(id));
+        if (_orbs > 0)
+            pct += _orbs * (_skills[SkillData.ComboAttack].OrbDmg * SkillLv(SkillData.ComboAttack)
+                + _skills[SkillData.ComboSynergy].SynDmg * SkillLv(SkillData.ComboSynergy));
+        return pct;
+    }
+
+    // A paid buff cast: start the timer (recast refreshes), loop its art,
+    // relay the effect, push the new build (buff stats feed damage).
+    private void CastBuff(int id)
+    {
+        _buffMs[id] = _skills[id].BuffMs;
+        StripLoopFx(id); // recasts re-hang one loop, never stack two
+        SpawnLoopFx(id);
+        SpawnCastFx(id, _px, _py, _facingRight);
+        if (_net != null && _net.Connected) _net.SendSkillCast(id, 0);
+        PushBuild();
+    }
+
+    // Buff loops are singletons per buff (cast and end both strip first).
+    private void StripLoopFx(int id)
+    {
+        for (int i = _fx.Count - 1; i >= 0; i--)
+            if (_fx[i].Loop && _fx[i].Skill == id) _fx.RemoveAt(i);
+    }
+
+    // A buff ends (expiry, toggle, session): timer, loop, and orbs all go,
+    // and the build drops back (pools clamp next frame, never heal).
+    private void EndBuff(int id)
+    {
+        _buffMs.Remove(id);
+        StripLoopFx(id);
+        if (id == SkillData.ComboAttack) _orbs = 0;
+        PushBuild();
+    }
+
+    // Map switches clear one-shot effects but keep buff timers: re-hang loops.
+    private void RespawnBuffLoops()
+    {
+        foreach (int id in _buffMs.Keys) SpawnLoopFx(id);
+    }
+
+    // Buff loop art, riding the player (buffs without art skip silently).
+    private void SpawnLoopFx(int id)
+    {
+        if (_skills[id].Affected.Count == 0) return;
+        _fx.Add(new SkillFx { Skill = id, Loop = true, X = _px, Y = _py - FxCastDy, FacingRight = _facingRight });
+    }
+
+    // Rush/Flash Blade carry: shift along facing (staying inside the map),
+    // then re-ground below (over a gap the dash ends airborne and physics
+    // takes it from there).
+    private void Dash()
+    {
+        _px = Math.Clamp(_px + (_facingRight ? DashPx : -DashPx), _map.Info.VrLeft, _map.Info.VrRight);
+        _ground = _ground == null ? null
+            : SceneMath.ArrivalGround(_map.Footholds, (int)_px, (int)_py + 2);
+        if (_ground != null) _py = SceneMath.FootholdY(_ground, (int)_px);
+    }
+
+    // Leap Attack's floor check: a platform within range below the feet.
+    private bool DiveGround()
+    {
+        var land = SceneMath.GroundBelow(_map.Footholds, (int)Math.Floor(_px), (int)Math.Ceiling(_py));
+        return land != null && SceneMath.FootholdY(land, (int)_px) - _py <= LeapRange;
+    }
+
+    // Self Recovery pays out on its tick (both pools, capped at buffed max).
+    private void TickRegen(float dtMs)
+    {
+        _regenMs -= dtMs;
+        if (_regenMs > 0) return;
+        _regenMs += RegenTickMs;
+        var chara = _account?.Slots[_slot];
+        int lv = SkillLv(SkillData.SelfRecovery);
+        if (chara == null || lv <= 0) return;
+        chara.Hp = Math.Min(chara.Hp + _skills[SkillData.SelfRecovery].RegenHp * lv,
+            Progression.BuffedMaxHp(chara.Level, OwnHpPct()));
+        chara.Mp = Math.Min(chara.Mp + _skills[SkillData.SelfRecovery].RegenMp * lv,
+            Progression.MaxMp(chara.Level));
+    }
+
     // Our own cast or a peer's echo: the effect centers on the torso.
-    private void SpawnCastFx(int skill, float x, float y, bool facingRight) =>
+    // Casts without art (Iron Body, Combo Attack) skip silently.
+    private void SpawnCastFx(int skill, float x, float y, bool facingRight)
+    {
+        if (_skills[skill].Effect.Count == 0) return;
         _fx.Add(new SkillFx { Skill = skill, X = x, Y = y - FxCastDy, FacingRight = facingRight });
+    }
 
     // Our combat stats for the server (Build) and the local judge. CLI
-    // sessions have no character, so they swing as beginners.
+    // sessions have no character, so they swing as beginners. Passives fold
+    // in by level; Spirit Blade multiplies the weapon while live.
     private Build OwnBuild()
     {
         var chara = _account?.Slots[_slot];
-        return chara == null ? Progression.Beginner : new Build(chara.Str, chara.Dex, Progression.WeaponAtk);
+        if (chara == null) return Progression.Beginner;
+        int str = chara.Str
+            + _skills[SkillData.PhysicalTraining].Str * SkillLv(SkillData.PhysicalTraining)
+            + _skills[SkillData.AgileArms].Str * SkillLv(SkillData.AgileArms);
+        int dex = chara.Dex
+            + _skills[SkillData.PhysicalTraining].Dex * SkillLv(SkillData.PhysicalTraining);
+        int atk = Progression.WeaponAtk
+            + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor);
+        if (_buffMs.ContainsKey(SkillData.SpiritBlade))
+            atk = atk * (100 + _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade)) / 100;
+        int dmg = _skills[SkillData.WeaponMastery].DmgPct * SkillLv(SkillData.WeaponMastery);
+        int crit = _skills[SkillData.WeaponMastery].CritPct * SkillLv(SkillData.WeaponMastery)
+            + _skills[SkillData.ChanceAttack].CritPct * SkillLv(SkillData.ChanceAttack);
+        int final = _skills[SkillData.FinalAttack].ProcPct * SkillLv(SkillData.FinalAttack);
+        return new Build(str, dex, atk, dmg, crit, final);
     }
+
+    // +MaxHP% from every source: Iron Body while live, Warrior Mastery and
+    // Endure always. Pools, potions, and refills all cap at the buffed max.
+    private int OwnHpPct() =>
+        (_buffMs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].HpPct * SkillLv(SkillData.IronBody) : 0)
+        + _skills[SkillData.WarriorMastery].HpPct * SkillLv(SkillData.WarriorMastery)
+        + _skills[SkillData.Endure].HpPct * SkillLv(SkillData.Endure);
+
+    // Warrior Mastery speeds run and jump together (one column, both axes).
+    private float OwnWalk() =>
+        WalkSpeed * (100 + _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery)) / 100;
+    private float OwnJump() =>
+        JumpV0 * (100 + _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery)) / 100;
+
+    // Builds change on level-up, learn, and buff edges: push them all.
+    private void PushBuild() => _net?.SendBuild(OwnBuild());
 
     // A kill we landed (net or local): claim the EXP. A level-up pushes our
     // new build to the server (the local judge reads it fresh every swing).
@@ -983,11 +1259,11 @@ public partial class MushTownGame : Game
     {
         var chara = _account?.Slots[_slot];
         if (chara == null) return; // CLI sessions have no one to level
-        int ups = Progression.ApplyExp(chara, exp);
+        int ups = Progression.ApplyExp(chara, exp, OwnHpPct());
         if (ups > 0)
         {
             GameLog($"level up! now Lv.{chara.Level} (STR {chara.Str} DEX {chara.Dex})");
-            _net?.SendBuild(chara.Str, chara.Dex, Progression.WeaponAtk);
+            PushBuild();
         }
     }
 
@@ -1005,6 +1281,7 @@ public partial class MushTownGame : Game
         _mobs.Clear();
         _numbers.Clear();
         _fx.Clear();
+        RespawnBuffLoops(); // buff timers survive the switch, so their loops re-hang
         _localWorld!.EnterMap(_mapId);
         foreach (var s in _localWorld.MobsOn(_mapId))
             ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);

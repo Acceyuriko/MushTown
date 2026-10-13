@@ -34,13 +34,37 @@ public static class Progression
 
     // Combat stats the client sends the server (Build message) so damage is
     // judged on the real attacker. Beginner is the default for clients that
-    // never sent one (CLI sessions).
-    public static readonly Build Beginner = new(4, 4, WeaponAtk);
+    // never sent one (CLI sessions). DmgPct/CritPct/FinalPct fold every
+    // skill source client-side (passives, buffs, orbs stay in SkillCast).
+    public static readonly Build Beginner = new(4, 4, WeaponAtk, 0, 0, 0);
+
+    // Skill points banked per level-up (creation banks one level too).
+    public const int SpPerLevel = 3;
+
+    // Max-HP pool with the +MaxHP% of learned skills (Iron Body, Warrior
+    // Mastery, Endure) folded in. MP has no buff source in v1.
+    public static int BuffedMaxHp(int level, int hpPct) => MaxHp(level) * (100 + hpPct) / 100;
+
+    // Active damage pct at a skill level: lv 1 deals DmgLo, max deals DmgHi,
+    // linear between. Single-level skills (max 1) always deal DmgLo.
+    public static int SkillDamage(SkillData data, int lv) =>
+        data.MaxLevel <= 1 ? data.DmgLo : data.DmgLo + (data.DmgHi - data.DmgLo) * (lv - 1) / (data.MaxLevel - 1);
+
+    // Spends one SP to raise a skill: needs the character level, an unspent
+    // point, and headroom under max. Returns false when nothing happens.
+    public static bool LearnSkill(CharaSlot chara, SkillData data)
+    {
+        chara.SkillLv.TryGetValue(data.SkillId, out int lv);
+        if (chara.Level < data.ReqLevel || chara.Sp <= 0 || lv >= data.MaxLevel) return false;
+        chara.SkillLv[data.SkillId] = lv + 1;
+        chara.Sp--;
+        return true;
+    }
 
     // Adds EXP, levels up while the bar is full. Each level: auto stat points
-    // (+4 STR +1 DEX warrior ratio), pools refilled to the new max. Returns
-    // levels gained (0 when the bar is not full yet).
-    public static int ApplyExp(CharaSlot chara, int exp)
+    // (+4 STR +1 DEX warrior ratio), +3 SP, pools refilled to the new (buffed)
+    // max. Returns levels gained (0 when the bar is not full yet).
+    public static int ApplyExp(CharaSlot chara, int exp, int hpPct = 0)
     {
         chara.Exp += exp;
         int ups = 0;
@@ -50,7 +74,8 @@ public static class Progression
             chara.Level++;
             chara.Str += 4;
             chara.Dex += 1;
-            chara.Hp = MaxHp(chara.Level);
+            chara.Sp += SpPerLevel;
+            chara.Hp = BuffedMaxHp(chara.Level, hpPct);
             chara.Mp = MaxMp(chara.Level);
             ups++;
         }
@@ -59,27 +84,29 @@ public static class Progression
 
     // Drinks one potion: needs a bottle in the bag and a pool that is not
     // full. Returns false when nothing happens (empty or already full).
-    public static bool UsePotion(CharaSlot chara, int itemId, int healHp, int healMp)
+    public static bool UsePotion(CharaSlot chara, int itemId, int healHp, int healMp, int hpPct = 0)
     {
         var use = chara.Use;
         if (use == null || !use.TryGetValue(itemId, out int count) || count <= 0)
             return false;
-        bool need = (healHp > 0 && chara.Hp < MaxHp(chara.Level))
+        bool need = (healHp > 0 && chara.Hp < BuffedMaxHp(chara.Level, hpPct))
             || (healMp > 0 && chara.Mp < MaxMp(chara.Level));
         if (!need) return false;
         if (count == 1) use.Remove(itemId);
         else use[itemId] = count - 1;
-        chara.Hp = Math.Min(chara.Hp + healHp, MaxHp(chara.Level));
+        chara.Hp = Math.Min(chara.Hp + healHp, BuffedMaxHp(chara.Level, hpPct));
         chara.Mp = Math.Min(chara.Mp + healMp, MaxMp(chara.Level));
         return true;
     }
 
-    // One cast's checks: level, MP, cooldown. The client deducts MP and
-    // sets the cooldown after this passes (single-threaded: no race).
-    public static bool CanCast(CharaSlot chara, SkillData skill, float cdLeftMs) =>
-        chara.Level >= skill.ReqLevel && chara.Mp >= skill.Mp && cdLeftMs <= 0;
+    // One cast's checks: learned, level, MP, cooldown. The client deducts MP
+    // and sets the cooldown after this passes (single-threaded: no race).
+    public static bool CanCast(CharaSlot chara, SkillData skill, int lv, float cdLeftMs) =>
+        lv > 0 && chara.Level >= skill.ReqLevel && chara.Mp >= skill.Mp && cdLeftMs <= 0;
 }
 
 // The attacker's combat stats (warrior line: STR/DEX + weapon). Int/Luk stay
-// client-side: nothing consumes them until later milestones.
-public readonly record struct Build(int Str, int Dex, int WeaponAtk);
+// client-side: nothing consumes them until later milestones. The last three
+// fold skill sources: +damage% (Weapon Mastery), crit% (Weapon/Chance),
+// Final Attack proc% — the client recomputes them on every learn/buff tick.
+public readonly record struct Build(int Str, int Dex, int WeaponAtk, int DmgPct, int CritPct, int FinalPct);

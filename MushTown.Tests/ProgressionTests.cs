@@ -87,4 +87,66 @@ public class ProgressionTests
         Assert.IsTrue(Progression.UsePotion(chara, ItemData.BluePotion, 0, 100));
         Assert.AreEqual(5, chara.Mp); // clamped to MaxMp(1)
     }
+
+    // Each level banks 3 SP for the skill window to spend.
+    [TestMethod]
+    public void ApplyExp_BanksSkillPoints()
+    {
+        var chara = new CharaSlot { Name = "hero" };
+        Assert.AreEqual(2, Progression.ApplyExp(chara, 100));
+        Assert.AreEqual(6, chara.Sp);
+    }
+
+    // Active damage lerps lo->hi over the skill's levels (level 1 pays lo).
+    [TestMethod]
+    public void SkillDamage_LerpsOverLevels()
+    {
+        var skill = new SkillData { DmgLo = 150, DmgHi = 250, MaxLevel = 11 };
+        Assert.AreEqual(150, Progression.SkillDamage(skill, 1));
+        Assert.AreEqual(250, Progression.SkillDamage(skill, 11));
+        Assert.AreEqual(200, Progression.SkillDamage(skill, 6));
+        Assert.AreEqual(150, Progression.SkillDamage(new SkillData { DmgLo = 150, MaxLevel = 1 }, 1));
+    }
+
+    // Learning costs one SP and needs the level; maxed or poor stays put.
+    [TestMethod]
+    public void LearnSkill_SpendsOnePoint()
+    {
+        var skill = new SkillData { SkillId = SkillData.SlashBlast, ReqLevel = 1, MaxLevel = 2 };
+        var chara = new CharaSlot { Name = "hero", Level = 5, Sp = 2 };
+        Assert.IsTrue(Progression.LearnSkill(chara, skill));
+        Assert.AreEqual(1, chara.SkillLv[SkillData.SlashBlast]);
+        Assert.AreEqual(1, chara.Sp);
+        Assert.IsTrue(Progression.LearnSkill(chara, skill));
+        Assert.IsFalse(Progression.LearnSkill(chara, skill)); // maxed
+        Assert.AreEqual(0, chara.Sp);
+        Assert.IsFalse(Progression.LearnSkill(chara, new SkillData { SkillId = 1, ReqLevel = 9, MaxLevel = 1 })); // too young
+        Assert.IsFalse(Progression.LearnSkill(chara, new SkillData { SkillId = 2, ReqLevel = 1, MaxLevel = 1 })); // too poor
+    }
+
+    // Iron Body's +HP% stretches the pool (Endure stacks on top).
+    [TestMethod]
+    public void BuffedMaxHp_StretchesPool()
+    {
+        Assert.AreEqual(50, Progression.BuffedMaxHp(1, 0));
+        Assert.AreEqual(65, Progression.BuffedMaxHp(1, 30));
+    }
+
+    // Level-up refills and potions both cap at the buffed max, not base.
+    [TestMethod]
+    public void ApplyExp_RefillsToBuffedMax()
+    {
+        var chara = new CharaSlot { Name = "hero" };
+        Assert.AreEqual(1, Progression.ApplyExp(chara, 35, 100));
+        Assert.AreEqual(160, chara.Hp); // BuffedMaxHp(2, 100), not MaxHp(2) = 80
+    }
+
+    [TestMethod]
+    public void UsePotion_HealsToBuffedMax()
+    {
+        var chara = new CharaSlot { Name = "hero", Hp = 10 };
+        chara.Use = new Dictionary<int, int> { { ItemData.RedPotion, 1 } };
+        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0, 100));
+        Assert.AreEqual(60, chara.Hp); // over the base 50: the buff holds it
+    }
 }

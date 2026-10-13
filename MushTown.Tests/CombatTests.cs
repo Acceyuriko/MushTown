@@ -13,16 +13,26 @@ public class CombatTests
     [TestMethod]
     public void Damage_RollsInsideRange()
     {
-        Assert.AreEqual(5, Damage.Calc(0.0, 0.0, 4, 4, 32));
-        Assert.AreEqual(29, Damage.Calc(1.0, 0.0, 4, 4, 32));
-        Assert.AreEqual(17, Damage.Calc(0.5, 0.0, 4, 4, 32));
+        Assert.AreEqual(5, Damage.Calc(0.0, 1.0, 0.0, Progression.Beginner));
+        Assert.AreEqual(29, Damage.Calc(1.0, 1.0, 0.0, Progression.Beginner));
+        Assert.AreEqual(17, Damage.Calc(0.5, 1.0, 0.0, Progression.Beginner));
     }
 
     [TestMethod]
     public void Damage_DefenseBlocks()
     {
-        Assert.AreEqual(14, Damage.Calc(1.0, 0.5, 4, 4, 32));
-        Assert.AreEqual(1, Damage.Calc(0.0, 0.99, 4, 4, 32));
+        Assert.AreEqual(14, Damage.Calc(1.0, 1.0, 0.5, Progression.Beginner));
+        Assert.AreEqual(1, Damage.Calc(0.0, 1.0, 0.99, Progression.Beginner));
+    }
+
+    // +damage% (Weapon Mastery) raises the 100% base; a crit pays 150%.
+    // crit01 = 1.0 never crits, 0.0 always does at any positive rate.
+    [TestMethod]
+    public void Damage_MasteryAndCrit()
+    {
+        Assert.AreEqual(43, Damage.Calc(1.0, 1.0, 0.0, new Build(4, 4, 32, 50, 0, 0)));
+        Assert.AreEqual(43, Damage.Calc(1.0, 0.0, 0.0, new Build(4, 4, 32, 0, 100, 0)));
+        Assert.AreEqual(65, Damage.Calc(1.0, 0.0, 0.0, new Build(4, 4, 32, 50, 100, 0))); // both stack
     }
 
     [TestMethod]
@@ -196,7 +206,7 @@ public class CombatTests
 
         a.SendState(9, -50, 100, Net.ActStand, 0, true);
         Assert.IsTrue(WaitTakeMob(a).Spawn);
-        a.SendBuild(99, 99, 99); // panel min 450: one swing kills a 40 HP mob
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0)); // panel min 450: one swing kills a 40 HP mob
         a.SendAttack();
         var hit = WaitTakeMob(a);
         Assert.IsFalse(hit.Spawn);
