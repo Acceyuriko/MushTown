@@ -99,6 +99,37 @@ public static class Progression
         return true;
     }
 
+    // Wears one from the EQUIP bag (the same-slot piece swaps out, so a
+    // slot never holds two). Empty slots do nothing. True when worn.
+    public static bool WearEquip(CharaSlot chara, int id, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        var def = defs[id]; // callers only pass EquipIds (client boot proves their slots)
+        if (chara.EquipBag == null || !chara.EquipBag.TryGetValue(id, out int have) || have <= 0) return false;
+        chara.EquipBag[id] = have - 1;
+        if (chara.EquipBag[id] == 0) chara.EquipBag.Remove(id);
+        chara.Equips ??= new List<int>();
+        int swap = chara.Equips.FindIndex(w => defs.TryGetValue(w, out var wd) && wd.Slot == def.Slot);
+        if (swap >= 0)
+        {
+            int old = chara.Equips[swap];
+            chara.Equips.RemoveAt(swap);
+            chara.EquipBag[old] = chara.EquipBag.GetValueOrDefault(old) + 1;
+        }
+        chara.Equips.Add(id);
+        return true;
+    }
+
+    // Takes one off, back to the bag. Unworn slots do nothing. A hand-made
+    // save may wear unknown ids (they draw and grant nothing); the tab shows
+    // no cell for them, so they sit stuck but harmless.
+    public static bool TakeOffEquip(CharaSlot chara, int id)
+    {
+        if (chara.Equips == null || !chara.Equips.Remove(id)) return false;
+        chara.EquipBag ??= new Dictionary<int, int>();
+        chara.EquipBag[id] = chara.EquipBag.GetValueOrDefault(id) + 1;
+        return true;
+    }
+
     // One cast's checks: learned, level, MP, cooldown. The client deducts MP
     // and sets the cooldown after this passes (single-threaded: no race).
     public static bool CanCast(CharaSlot chara, SkillData skill, int lv, float cdLeftMs) =>

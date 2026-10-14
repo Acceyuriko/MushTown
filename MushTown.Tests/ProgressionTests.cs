@@ -149,4 +149,50 @@ public class ProgressionTests
         Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0, 100));
         Assert.AreEqual(60, chara.Hp); // over the base 50: the buff holds it
     }
+
+    private static Dictionary<int, ItemData> EquipDefs() => new()
+    {
+        [ItemData.Mop] = new ItemData { ItemId = ItemData.Mop, Slot = "Wp", Atk = 47 },
+        [1442000] = new ItemData { ItemId = 1442000, Slot = "Wp", Atk = 32 },
+    };
+
+    // Wearing swaps the same-slot piece out; wearing the worn id again is a
+    // no-op (out and back in); empty bags do nothing.
+    [TestMethod]
+    public void WearEquip_SwapsSameSlot()
+    {
+        var chara = new CharaSlot
+        {
+            Name = "hero",
+            EquipBag = new Dictionary<int, int> { { ItemData.Mop, 1 } },
+            Equips = new List<int> { 1442000 },
+        };
+        Assert.IsTrue(Progression.WearEquip(chara, ItemData.Mop, EquipDefs()));
+        Assert.AreEqual(1, chara.Equips.Count);
+        Assert.AreEqual(ItemData.Mop, chara.Equips[0]);
+        Assert.AreEqual(1, chara.EquipBag[1442000]); // the axe swapped out
+        Assert.IsFalse(chara.EquipBag.ContainsKey(ItemData.Mop));
+
+        chara.EquipBag[ItemData.Mop] = 1;
+        Assert.IsTrue(Progression.WearEquip(chara, ItemData.Mop, EquipDefs()));
+        Assert.AreEqual(1, chara.Equips.Count);
+        Assert.AreEqual(ItemData.Mop, chara.Equips[0]);
+        Assert.AreEqual(1, chara.EquipBag[ItemData.Mop]); // out and back in
+
+        chara.EquipBag.Remove(1442000);
+        Assert.IsFalse(Progression.WearEquip(chara, 1442000, EquipDefs())); // not in the bag
+    }
+
+    // Takeoff returns the piece to the bag; unworn slots do nothing.
+    [TestMethod]
+    public void TakeOffEquip_ReturnsToBag()
+    {
+        var chara = new CharaSlot { Name = "hero", Equips = new List<int> { ItemData.Mop } };
+        Assert.IsFalse(Progression.TakeOffEquip(chara, 1442000)); // not worn
+        Assert.IsTrue(Progression.TakeOffEquip(chara, ItemData.Mop));
+        Assert.AreEqual(0, chara.Equips.Count);
+        Assert.AreEqual(1, chara.EquipBag![ItemData.Mop]);
+        Assert.IsFalse(Progression.TakeOffEquip(chara, ItemData.Mop)); // already off
+        Assert.IsFalse(Progression.WearEquip(new CharaSlot { Name = "nobody" }, ItemData.Mop, EquipDefs())); // no bag
+    }
 }

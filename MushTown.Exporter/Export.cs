@@ -156,6 +156,17 @@ public static class Export
                 return;
             }
         }
+        foreach ((string gear, string beginner) in CharaGears)
+        {
+            foreach (string action in Net.Actions)
+            {
+                if (!ExportCharacter(baseRoot, chara, outDir, action, gear, beginner))
+                {
+                    Environment.ExitCode = 1;
+                    return;
+                }
+            }
+        }
         var mob = WzRoot.LoadCategory(dataDir, "Mob");
         foreach (int mobId in Mobs.Keys.OrderBy(id => id))
         {
@@ -173,6 +184,11 @@ public static class Export
         }
         var item = WzRoot.LoadCategory(dataDir, "Item");
         if (!ExportPotions(item, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
+        if (!ExportEquips(chara, outDir))
         {
             Environment.ExitCode = 1;
             return;
@@ -599,6 +615,13 @@ public static class Export
         @"Weapon\01442000.img",
     };
 
+    // Wearable gear: img path + the beginner img it swaps out of the doll
+    // merge (swap position = the beginner img's slot in CharaEquips).
+    private static readonly (string gear, string beginner)[] CharaGears = new[]
+    {
+        (@"Coat\01040039.img", @"Coat\01040036.img"),
+        (@"Weapon\01442004.img", @"Weapon\01442000.img"),
+    };
     // img/action/frame with a uol resolved at both levels (AvatarCanvas.cs:1203-1226)
     private static Wz_Node? FindImgFrame(WzRoot looseRoot, string img, string action, int frameIdx)
     {
@@ -608,14 +631,21 @@ public static class Export
 
     private static string ImgId(string img) => Path.GetFileNameWithoutExtension(img);
 
-    private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir, string action)
+    private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir, string action,
+        string? gear = null, string? gearBeginner = null)
     {
+        // One gear's parts across one action: same frames, same bones, only
+        // the target img's parts kept (prefix beginners feed the trash frame
+        // for bones; identical bytes may rewrite beginner pngs, harmless).
+        // Isolated parts equal the merged bake: bones only flow forward, so
+        // the target sees exactly base + preceding beginners + its own parts.
+        string tag = gear == null ? $"character {action}" : $"gear {ImgId(gear)} {action}";
         // loose tree (Character.wz) holds origin/map/z; png bytes live in Base _Canvas
         List<string> zNames = new();
         var zmap = baseRoot.Find("zmap.img");
         if (zmap == null || zmap.Nodes.Count == 0)
         {
-            Console.WriteLine($@"character {action}: Base\zmap.img missing");
+            Console.WriteLine($@"{tag}: Base\zmap.img missing");
             return false;
         }
         foreach (Wz_Node z in zmap.Nodes) zNames.Add(z.Text);
@@ -628,7 +658,7 @@ public static class Export
         var faceNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{FaceImg}\default"));
         if (faceNode == null)
         {
-            Console.WriteLine($"character {action}: {FaceImg} node not found");
+            Console.WriteLine($"{tag}: {FaceImg} node not found");
             return false;
         }
 
@@ -642,7 +672,7 @@ public static class Export
                 var bodyAction = WzNodeUtil.ResolveUol(looseRoot.Find($@"{BodyImg}\{action}"));
                 if (bodyAction?.Nodes[frameIdx.ToString()] != null)
                 {
-                    Console.WriteLine($"character {action} frame {frameIdx}: {BodyImg} frame uol is broken");
+                    Console.WriteLine($"{tag} frame {frameIdx}: {BodyImg} frame uol is broken");
                     return false;
                 }
                 break;
@@ -652,52 +682,60 @@ public static class Export
             var headFrame = FindImgFrame(looseRoot, HeadImg, action, frameIdx);
             if (headFrame == null)
             {
-                Console.WriteLine($"character {action} frame {frameIdx}: {HeadImg} node not found");
+                Console.WriteLine($"{tag} frame {frameIdx}: {HeadImg} node not found");
                 return false;
             }
             var hairFrame = FindImgFrame(looseRoot, HairImg, action, frameIdx);
             if (hairFrame == null)
             {
-                Console.WriteLine($"character {action} frame {frameIdx}: {HairImg} node not found");
+                Console.WriteLine($"{tag} frame {frameIdx}: {HairImg} node not found");
                 return false;
             }
 
             var outFrame = new CharaFrame { Delay = Int(bodyFrame, "delay", 120) };
             if (outFrame.Delay <= 0)
             {
-                Console.WriteLine($"character {action} frame {frameIdx}: {BodyImg} bad delay {outFrame.Delay}");
+                Console.WriteLine($"{tag} frame {frameIdx}: {BodyImg} bad delay {outFrame.Delay}");
                 return false;
             }
             var bones = new BoneSet(); // y down, feet at (0,0)
             bool face = Int(bodyFrame, "face", 1) != 0;
 
             // body first (it defines the neck/navel bones), then head, face, hair, gear
-            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(BodyImg), bodyFrame, outDir, frameIdx, saved, zNames, face, action);
-            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(HeadImg), headFrame, outDir, frameIdx, saved, zNames, face, action);
+            var trash = gear == null ? null : new CharaFrame();
+            var baseSink = gear == null ? outFrame : trash!;
+            string gearDir = gear == null ? "chara/body" : $"chara/gear/{ImgId(gear)}";
+            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(BodyImg), bodyFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(HeadImg), headFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
             if (face) // back-facing frames drop the whole face img (AvatarCanvas.cs:1111-1117)
-                missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(FaceImg), faceNode, outDir, frameIdx, saved, zNames, face, action);
-            missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(HairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action);
+                missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(FaceImg), faceNode, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(HairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
             foreach (string img in CharaEquips)
             {
-                var equipFrame = FindImgFrame(looseRoot, img, action, frameIdx);
+                bool isTarget = img == gearBeginner;
+                string path = isTarget ? gear! : img;
+                var equipFrame = FindImgFrame(looseRoot, path, action, frameIdx);
                 if (equipFrame == null)
                 {
                     // equips without this art (weapon/glove climb frames) reuse
                     // their stand2 frame; body/head/hair stay strict above
-                    equipFrame = FindImgFrame(looseRoot, img, "stand2", frameIdx);
+                    equipFrame = FindImgFrame(looseRoot, path, "stand2", frameIdx);
                     if (equipFrame == null)
                     {
-                        Console.WriteLine($"character {action} frame {frameIdx}: {img} node not found");
+                        Console.WriteLine($"{tag} frame {frameIdx}: {path} node not found");
                         return false;
                     }
-                    Console.WriteLine($"character {action} frame {frameIdx}: {img} falls back to stand2");
+                    Console.WriteLine($"{tag} frame {frameIdx}: {path} falls back to stand2");
                 }
-                missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(img), equipFrame, outDir, frameIdx, saved, zNames, face, action);
+                var sink = gear == null || isTarget ? outFrame : trash!;
+                missing += AddFrameParts(baseRoot, sink, bones, ImgId(path), equipFrame, outDir, frameIdx, saved, zNames, face, action,
+                    isTarget ? gearDir : "chara/body");
+                if (isTarget) break; // later beginners add no bones the target could use
             }
 
             if (outFrame.Parts.Count == 0)
             {
-                Console.WriteLine($"character {action} frame {frameIdx}: no parts exported");
+                Console.WriteLine($"{tag} frame {frameIdx}: no parts exported");
                 return false;
             }
 
@@ -710,18 +748,19 @@ public static class Export
 
         if (data.Frames.Count == 0)
         {
-            Console.WriteLine($"character {action} has no frames");
+            Console.WriteLine($"{tag} has no frames");
             return false;
         }
 
-        Console.WriteLine($"character {action}: {data.Frames.Count} frames, " +
+        Console.WriteLine($"{tag}: {data.Frames.Count} frames, " +
                           $"parts [{string.Join(",", data.Frames.Select(f => f.Parts.Count))}]");
         if (missing > 0)
         {
-            Console.WriteLine($"  missing {action} {missing} character part(s)");
+            Console.WriteLine($"  missing {tag} {missing} character part(s)");
             return false;
         }
-        WriteJson(Path.Combine(outDir, "chara", "body", $"{action}.json"), data);
+        string jsonDir = gear == null ? Path.Combine("chara", "body") : Path.Combine("chara", "gear", ImgId(gear));
+        WriteJson(Path.Combine(outDir, jsonDir, $"{action}.json"), data);
         return true;
     }
 
@@ -1084,6 +1123,52 @@ public static class Export
         return true;
     }
 
+    // One def + icon per wearable gear: Slot and bonuses come from the img's
+    // info node. v1 ships only all-supported stats: any other inc* fails loud
+    // (a half-working item must never sneak in); reqs/pose/sfx/speed/tuc/
+    // price/cash sit unused by design (ItemData documents the v1 gear rules).
+    private static bool ExportEquips(WzRoot chara, string outDir)
+    {
+        foreach ((string gear, string _) in CharaGears)
+        {
+            int id = int.Parse(ImgId(gear));
+            var info = chara.Find($@"{gear}\info");
+            if (info == null)
+            {
+                Console.WriteLine($"equip {id} has no info");
+                return false;
+            }
+            foreach (Wz_Node c in info.Nodes)
+            {
+                if (c.Text.StartsWith("inc") && c.Text is not ("incPAD" or "incPDD" or "incSTR" or "incDEX"))
+                {
+                    Console.WriteLine($"equip {id} has unsupported stat {c.Text}");
+                    return false;
+                }
+            }
+            var data = new ItemData
+            {
+                ItemId = id,
+                Image = $"item/{id}.png",
+                Slot = Str(info, "islot"),
+                Atk = Int(info, "incPAD"),
+                Def = Int(info, "incPDD"),
+                Str = Int(info, "incSTR"),
+                Dex = Int(info, "incDEX"),
+            };
+            if (data.Slot == "")
+            {
+                Console.WriteLine($"equip {id} has no slot");
+                return false;
+            }
+            if (!UiPng.Save(chara, "Character", $@"{gear}\info/icon", Path.Combine(outDir, data.Image)))
+                return false;
+            WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
+        }
+        Console.WriteLine("equips: 1040039 1442004");
+        return true;
+    }
+
     // Warrior line (100/110/111): icon + disabled icon + effect frames +
     // hit spark frames (variant 0) + buff loop frames (affected, buffs with
     // art only). Actives without an effect node fail loud (an invisible cast
@@ -1184,7 +1269,7 @@ public static class Export
 
     // Adds the png parts of one frame node and returns how many images were missing.
     private static int AddFrameParts(WzRoot baseRoot, CharaFrame outFrame, BoneSet bones, string imgId,
-        Wz_Node frame, string outDir, int frameIdx, HashSet<string> saved, List<string> zNames, bool face, string action)
+        Wz_Node frame, string outDir, int frameIdx, HashSet<string> saved, List<string> zNames, bool face, string action, string pngDir)
     {
         int missing = 0;
         foreach (Wz_Node raw in frame.Nodes)
@@ -1225,7 +1310,7 @@ public static class Export
                 continue;
             }
 
-            string img = $"chara/body/{action}/{frameIdx}_{imgId}_{name}.png";
+            string img = $"{pngDir}/{action}/{frameIdx}_{imgId}_{name}.png";
             SaveOnce(png, Path.Combine(outDir, img), saved);
 
             // a part without a "map" bone hangs on the root (AvatarCanvas.cs:791-794)
@@ -1248,6 +1333,7 @@ public static class Export
             outFrame.Parts.Add(new CharaPart
             {
                 Image = img,
+                Img = imgId,
                 X = skin.x - ox,
                 Y = skin.y - oy,
                 Z = z

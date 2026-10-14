@@ -186,22 +186,63 @@ public sealed class MobFrame
     public int Delay { get; set; }
 }
 
-// Consumable potion: assets/item/{id}.json. Heals come from the WZ spec
-// node (flat hp/mp points); the icon is the WZ info/icon canvas.
+// Item def: assets/item/{id}.json. Potions heal (Hp/Mp from the WZ spec
+// node); equips wear (Slot + bonuses from the WZ info node). v1 gear rules:
+// a worn weapon's Atk replaces WeaponAtk 32, Def is defense points 1:1,
+// Str/Dex add; level/job reqs ignored (official Lv10+ fits no v1 char).
+// Icons are the WZ info/icon canvas.
 public sealed class ItemData
 {
     public const int RedPotion = 2000000; // +50 HP (spec hp)
     public const int BluePotion = 2000003; // +100 MP (spec mp)
+    public const int Mop = 1442004; // Janitor's Mop (Wp, PAD 47): Mushmom purse
+    public const int Sergeant = 1040039; // Red Sergeant (Ma, DEX 1/PDD 25): orange rare
 
     // The potion ids v1 knows: the client loads and slots them, quests may
     // grant them. One list on purpose: a grantable potion the client never
-    // loaded would miss its art. (Equips and ETC join with W17.)
+    // loaded would miss its art.
     public static readonly int[] PotionIds = new[] { RedPotion, BluePotion };
+
+    // The equip ids v1 knows: the client loads defs/icons/art, bags and
+    // wears them, mobs drop them. (1040038 skipped: its official name is
+    // unfit; cap-class gear skipped: hats re-hang the hair.)
+    public static readonly int[] EquipIds = new[] { Mop, Sergeant };
+
+    // Every loadable item def + icon (potions, then equips).
+    public static readonly int[] AllIds = PotionIds.Concat(EquipIds).ToArray();
+
+    // Beginner img per worn slot: the doll merge draws these when the slot
+    // sits empty (only slots with v1 equips need entries).
+    public static readonly Dictionary<string, string> BeginnerImgs = new()
+    {
+        ["Wp"] = "01442000",
+        ["Ma"] = "01040036",
+    };
+
+    // Worn bonuses: weapon PAD (0 when none worn: the caller keeps the
+    // beginner 32), summed STR/DEX/DEF. Unknown ids grant nothing (a
+    // hand-made save may list what v1 never shipped).
+    public static (int weapon, int str, int dex, int def) EquipBonus(List<int>? worn, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        int weapon = 0, str = 0, dex = 0, def = 0;
+        if (worn == null) return (weapon, str, dex, def);
+        foreach (int id in worn)
+        {
+            if (!defs.TryGetValue(id, out var d) || d.Slot == null) continue;
+            if (d.Slot == "Wp") weapon = Math.Max(weapon, d.Atk);
+            str += d.Str;
+            dex += d.Dex;
+            def += d.Def;
+        }
+        return (weapon, str, dex, def);
+    }
 
     public static string Name(int id) => id switch
     {
         RedPotion => "Red Potion",
         BluePotion => "Blue Potion",
+        Mop => "Janitor's Mop",
+        Sergeant => "Red Sergeant",
         _ => $"item {id}",
     };
 
@@ -209,6 +250,11 @@ public sealed class ItemData
     public string Image { get; set; } = "";
     public int Hp { get; set; }
     public int Mp { get; set; }
+    public string? Slot { get; set; } // equip slot (WZ islot); null = consumable
+    public int Atk { get; set; } // WZ incPAD
+    public int Def { get; set; } // WZ incPDD
+    public int Str { get; set; } // WZ incSTR
+    public int Dex { get; set; } // WZ incDEX
 }
 
 // Basic damage skin digits: assets/effect/dmg.json (BasicEff.img NoRed0,
@@ -224,7 +270,8 @@ public sealed class DmgDigit
     public string Image { get; set; } = "";
     public int Oy { get; set; }
 }
-// Exported character action: assets/chara/{body}/{action}.json
+// Exported character action: assets/chara/body/{action}.json (beginner full
+// merge) or assets/chara/gear/{imgId}/{action}.json (one gear's parts).
 public sealed class CharaData
 {
     public List<CharaFrame> Frames { get; set; } = new();
@@ -239,6 +286,10 @@ public sealed class CharaFrame
 public sealed class CharaPart
 {
     public string Image { get; set; } = "";
+
+    // Source img id (00002000, 01040036, ...): the doll merge keeps base
+    // parts and swaps each worn slot's beginner img for the worn gear.
+    public string Img { get; set; } = "";
 
     // Image top-left corner in character space. Anchor (0,0) is between the feet.
     public int X { get; set; }

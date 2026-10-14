@@ -442,8 +442,10 @@ public sealed class MobWorld
 
     // One kill's drops: a meso pile (10-30, boss 150-300) always, plus
     // potions (normals roll one bottle, red 10%, else blue 4%; the boss
-    // always pays 2 reds and a blue). Each lands on the ground below its
-    // own x; over the void it keeps the kill height and fades unclaimed.
+    // always pays 2 reds and a blue). Gear: the boss always drops the mop,
+    // the orange mushroom (100004) rarely drops the sergeant coat (5%).
+    // Each lands on the ground below its own x; over the void it keeps the
+    // kill height and fades unclaimed.
     private void DropKill(Live m, Random rng)
     {
         var data = _maps[m.Map]; // lives only exist after EnterMap loaded it
@@ -452,12 +454,15 @@ public sealed class MobWorld
         {
             DropOne(data, m, m.X + 7, DropKind.Item, ItemData.RedPotion, 2);
             DropOne(data, m, m.X + 21, DropKind.Item, ItemData.BluePotion, 1);
+            DropOne(data, m, m.X + 35, DropKind.Item, ItemData.Mop, 1);
             return;
         }
         double roll = rng.NextDouble();
         int potion = roll < 0.10 ? ItemData.RedPotion : roll < 0.14 ? ItemData.BluePotion : 0;
-        if (potion == 0) return;
-        DropOne(data, m, m.X + 7, DropKind.Item, potion, 1);
+        if (potion != 0)
+            DropOne(data, m, m.X + 7, DropKind.Item, potion, 1);
+        if (m.Mob == 100004 && rng.NextDouble() < 0.05) // orange mushroom: the sergeant coat
+            DropOne(data, m, m.X + 21, DropKind.Item, ItemData.Sergeant, 1);
     }
 
     // One loot drop: clamped inside the VR, lands on the ground below.

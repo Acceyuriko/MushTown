@@ -138,8 +138,8 @@ public class MobAiTests
         Assert.AreEqual(1, spawns[0].Hp);
     }
 
-    // Boss kill: a fat purse (150-300 mesos, 2 reds, 1 blue) and a 5-min
-    // grave (normals pay 10-30 and re-plant in 10s).
+    // Boss kill: a fat purse (150-300 mesos, 2 reds, 1 blue, the mop) and
+    // a 5-min grave (normals pay 10-30 and re-plant in 10s).
     [TestMethod]
     public void Boss_KillDropsPurseAndRespawnsAfter5Min()
     {
@@ -152,7 +152,7 @@ public class MobAiTests
         var hits = world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner);
         Assert.AreEqual(0, hits[0].HpLeft);
         var fresh = world.TakeDrops();
-        Assert.AreEqual(3, fresh.Count);
+        Assert.AreEqual(4, fresh.Count);
         Assert.AreEqual(DropKind.Mesos, fresh[0].Kind);
         Assert.IsTrue(fresh[0].Id is >= 150 and <= 300);
         Assert.AreEqual(DropKind.Item, fresh[1].Kind);
@@ -161,6 +161,9 @@ public class MobAiTests
         Assert.AreEqual(DropKind.Item, fresh[2].Kind);
         Assert.AreEqual(ItemData.BluePotion, fresh[2].Id);
         Assert.AreEqual(1, fresh[2].Count);
+        Assert.AreEqual(DropKind.Item, fresh[3].Kind);
+        Assert.AreEqual(ItemData.Mop, fresh[3].Id);
+        Assert.AreEqual(1, fresh[3].Count);
         Assert.AreEqual(0, world.Tick(299999, Solo(900)).Spawns.Count);
         var spawns = world.Tick(1, Solo(900)).Spawns;
         Assert.AreEqual(1, spawns.Count);
@@ -187,6 +190,40 @@ public class MobAiTests
         var boss = new MobWorld(assets2.Dir);
         boss.EnterMap(7);
         Assert.AreEqual(1, boss.Tick(100, Solo(155)).Hurts.Count);
+    }
+
+    // Orange rare: seed 4 pays the sergeant coat (the 5% roll; the
+    // potion seeds pin their drops the same way).
+    [TestMethod]
+    public void Orange_KillMayDropSergeantCoat()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100004,"X":100,"Cy":100}]""", Flat);
+        assets.AddMob(100004, 1);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+
+        var hits = world.Strike(7, 60, 100, true, new Random(4), Progression.Beginner);
+        Assert.AreEqual(0, hits[0].HpLeft);
+        var coat = world.TakeDrops().Find(d => d.Kind == DropKind.Item && d.Id == ItemData.Sergeant);
+        Assert.IsNotNull(coat);
+        Assert.AreEqual(1, coat.Count);
+    }
+
+    // Same seed, wrong mob: the snail never pays the sergeant coat (the
+    // drop is gated on mob 100004, not on luck).
+    [TestMethod]
+    public void Snail_KillNeverDropsSergeantCoat()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Flat);
+        assets.AddMob(100000, 1);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+
+        var hits = world.Strike(7, 60, 100, true, new Random(4), Progression.Beginner);
+        Assert.AreEqual(0, hits[0].HpLeft);
+        Assert.IsNull(world.TakeDrops().Find(d => d.Kind == DropKind.Item && d.Id == ItemData.Sergeant));
     }
 
     // Pickup: the drop must exist, sit on the taker's map, and be near. Gone

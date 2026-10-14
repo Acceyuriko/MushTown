@@ -9,6 +9,7 @@ using MushTown.Client;
 // poses its effect. --skill rides with --screen skill for window shots
 // (buff timers, cooldowns); --skilltab picks the window tab.
 // --drop swings until the first kill and shows its drops (game shots only).
+// --wear puts the demo's whole EQUIP bag on (game shots and game screens).
 // --aiticks <n> runs n 100ms AI steps at the posed feet (moves show, touches
 // don't: the demo must not die mid-pose). Game shots only.
 // --screen quest accepts custom 90001 with 2/5 kills (window + tracker show);
@@ -28,6 +29,7 @@ int shotSkillTab = 0;
 bool shotHit = false;
 int shotSkill = 0;
 bool shotDrop = false;
+bool shotWear = false;
 int shotAiticks = 0;
 var rest = args.ToList();
 if (rest.Count >= 1 && rest[0] == "--host") { host = true; rest.RemoveAt(0); }
@@ -41,6 +43,7 @@ if (rest.Count >= 2 && rest[0] == "--shot")
     {
         if (rest[i] == "--hit") { shotHit = true; i++; }
         else if (rest[i] == "--drop") { shotDrop = true; i++; }
+        else if (rest[i] == "--wear") { shotWear = true; i++; }
         else if (i + 1 >= rest.Count) ok = false;
         else if (rest[i] == "--skill") { ok = int.TryParse(rest[i + 1], out shotSkill) && shotSkill > 0; i += 2; }
         else if (rest[i] == "--talk") { ok = int.TryParse(rest[i + 1], out shotTalk) && shotTalk > 0; i += 2; }
@@ -64,14 +67,14 @@ if (shotTalk != 0 && shotScreen != "talk") ok = false; // --talk rides only with
 if (shotScreen == "talk" && shotTalk == 0) ok = false; // the talk screen needs its NPC
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel|inv|use|stat|hud|skill|quest|talk] [--skilltab <0|1|2>] [--talk <npc>] [--hit | --skill <id> | --drop] [--aiticks <n>]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen login|server|chars|job|setup|register|delete|panel|inv|use|stat|hud|skill|quest|talk] [--skilltab <0|1|2>] [--talk <npc>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]]");
     Environment.ExitCode = 1;
     return;
 }
 
 try
 {
-    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks);
+    using var game = new MushTownGame(shotPath, shotMap, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks, shotWear);
     game.Run();
 }
 catch (Exception ex) when (ex is InvalidDataException or IOException)

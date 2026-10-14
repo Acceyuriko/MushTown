@@ -158,6 +158,7 @@ public partial class MushTownGame
         Sp = 18, // earned 21 (creation 3 + 6 level-ups), spent 3 on Slash Blast
         SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
         Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
+        EquipBag = new Dictionary<int, int> { { ItemData.Mop, 1 }, { ItemData.Sergeant, 1 } },
     };
 
     private void LoadMenuContent()
@@ -168,11 +169,17 @@ public partial class MushTownGame
         foreach (string f in UiFiles) LoadTexture("ui/" + f); // missing file fails loud here
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
-        foreach (int id in ItemData.PotionIds) // USE tab potions: json first (it names the icon), then the icon
+        foreach (int id in ItemData.AllIds) // item defs: json first (it names the icon), then the icon
         {
             var item = LoadJson<ItemData>(Path.Combine(_assetsDir, "item", $"{id}.json"));
             _items[id] = item;
             LoadTexture(item.Image);
+        }
+        foreach (int id in ItemData.EquipIds) // worn slots outside the beginner table would double-draw
+        {
+            string? slot = _items[id].Slot;
+            if (slot == null || !ItemData.BeginnerImgs.ContainsKey(slot))
+                throw new InvalidDataException($"equip {id} has a bad slot");
         }
         foreach (var tab in SkillTabs) // skills: json first (it names every frame), then all art
             foreach ((int id, string? _) in tab)
@@ -793,7 +800,7 @@ public partial class MushTownGame
                 DrawTextCentered("+", fx - _cameraX, fy - _cameraY - 110, new Color(255, 255, 255, 150));
                 continue;
             }
-            DrawAvatar(fx, fy, "stand2", 0, false);
+            DrawAvatar(fx, fy, "stand2", 0, false, s.Equips);
             DrawTag(fx - _cameraX, fy - _cameraY - 130 - shown * 34, s.Name);
             shown++;
         }

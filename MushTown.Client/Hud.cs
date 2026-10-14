@@ -186,6 +186,12 @@ public partial class MushTownGame
                 if (_invTab == 1) // USE tab: click a potion to drink it
                     for (int s = 0; s < ItemData.PotionIds.Length; s++)
                         if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(ItemData.PotionIds[s]);
+                if (_invTab == 0) // EQUIP tab: worn row takes off, bag rows wear
+                    for (int s = 0; s < ItemData.EquipIds.Length; s++)
+                    {
+                        if (HitRect(UseSlotRect(s), gx, gy) && TakeOff(ItemData.EquipIds[s])) PushBuild();
+                        if (HitRect(EquipBagRect(s), gx, gy) && Wear(ItemData.EquipIds[s])) PushBuild();
+                    }
             }
             else if (onSkill)
             {
@@ -249,6 +255,13 @@ public partial class MushTownGame
         return new Rectangle(r.X + 14 + i * 56, r.Y + 95, 48, 48);
     }
 
+    // EQUIP tab bag cells: rows below the worn row, 4 across (same 48px grid).
+    private Rectangle EquipBagRect(int i)
+    {
+        var s = UseSlotRect(i % 4);
+        return new Rectangle(s.X, s.Y + 56 * (1 + i / 4), 48, 48);
+    }
+
     // Click a USE slot: drink one. Empty slots and full pools do nothing.
     private void DrinkPotion(int id)
     {
@@ -256,6 +269,22 @@ public partial class MushTownGame
         if (chara == null) return; // CLI sessions carry no bag
         var item = _items[id];
         Progression.UsePotion(chara, id, item.Hp, item.Mp, OwnHpPct());
+    }
+
+    // Click an EQUIP bag slot: wear one through the shared rule. True when worn.
+    private bool Wear(int id)
+    {
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return false; // CLI sessions carry no bag
+        return Progression.WearEquip(chara, id, _items);
+    }
+
+    // Click a worn slot: back to the bag. Unworn slots do nothing.
+    private bool TakeOff(int id)
+    {
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return false; // CLI sessions carry no bag
+        return Progression.TakeOffEquip(chara, id);
     }
 
     // Skill window job tabs (3 x 100px under the title).
@@ -452,10 +481,23 @@ public partial class MushTownGame
         for (int t = 0; t < TabCount; t++) DrawTab(t);
         _spriteBatch.Draw(Tex("hud_statx.png"), InvXRect(), Color.White);
         var chara = _account?.Slots[_slot];
-        if (_invTab == 1 && chara?.Use != null) // USE tab: owned potions only (other tabs stay empty until W13+)
+        if (_invTab == 0 && chara != null) // EQUIP tab: gold worn row (click takes off) over bag rows (click wears)
+        {
+            var cap = _ui.GetSmall("worn");
+            _spriteBatch.Draw(cap, new Vector2(r.X + 14, r.Y + 78), new Color(255, 220, 0));
+            for (int i = 0; i < ItemData.EquipIds.Length; i++)
+            {
+                int id = ItemData.EquipIds[i];
+                int n = chara.Equips?.Count(w => w == id) ?? 0;
+                if (n > 0) DrawWornSlot(i, id, n);
+                int have = chara.EquipBag?.GetValueOrDefault(id) ?? 0;
+                if (have > 0) DrawInvSlot(EquipBagRect(i), id, have);
+            }
+        }
+        if (_invTab == 1 && chara?.Use != null) // USE tab: owned potions only (Etc/Setup/Cash/Dec stay empty in v1)
             for (int i = 0; i < ItemData.PotionIds.Length; i++)
                 if (chara.Use.TryGetValue(ItemData.PotionIds[i], out int count) && count > 0)
-                    DrawUseSlot(i, ItemData.PotionIds[i], count);
+                    DrawInvSlot(UseSlotRect(i), ItemData.PotionIds[i], count);
         // Official numbers: Arial Bold 12 #606871, right end x+213 top y+484 (font:Meso, vector:Meso).
         _spriteBatch.Draw(Tex("hud_coin.png"), new Vector2(r.X + Layout.Coin.X, r.Y + Layout.Coin.Y), Color.White);
         var meso = _ui.GetMeso((chara?.Mesos ?? 0).ToString("#,##0"));
@@ -469,10 +511,17 @@ public partial class MushTownGame
         _spriteBatch.Draw(Tex(file), new Vector2(tr.X, tr.Y), Color.White);
     }
 
-    // One USE slot: icon centered in the cell, count bottom-right.
-    private void DrawUseSlot(int i, int id, int count)
+    // One worn slot: gold-tinted cell (it reads as equipped, not bagged).
+    private void DrawWornSlot(int i, int id, int count)
     {
         var s = UseSlotRect(i);
+        _spriteBatch.Draw(_pixel, s, new Color(255, 220, 0, 60));
+        DrawInvSlot(s, id, count);
+    }
+
+    // One inventory slot: icon centered in the cell, count bottom-right.
+    private void DrawInvSlot(Rectangle s, int id, int count)
+    {
         var icon = _textures[_items[id].Image];
         _spriteBatch.Draw(icon, new Vector2(s.X + (s.Width - icon.Width) / 2, s.Y + (s.Height - icon.Height) / 2), Color.White);
         var n = _ui.GetSmall(count.ToString());

@@ -175,7 +175,8 @@ public sealed class Account
 }
 
 // One character. X/Y null means never played: spawn at the map portal.
-// Equips null means the beginner set (real loadouts arrive with W17).
+// Equips null means the beginner set (nothing worn); EquipBag null means
+// an empty equip bag (pre-W17 saves never had one).
 // Use null means an empty bag (pre-W10 saves never got the starter kit).
 // SkillLv maps skill -> level (lv 0 = unlearned, no entry); Sp is unspent
 // skill points (pre-W12 saves start at 0 and earn fresh).
@@ -196,7 +197,8 @@ public sealed class CharaSlot
     public int Int { get; set; } = 4;
     public int Luk { get; set; } = 4;
     public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
-    public List<string>? Equips { get; set; }
+    public Dictionary<int, int>? EquipBag { get; set; } // itemId -> count (EQUIP tab bag)
+    public List<int>? Equips { get; set; } // worn equip ids (null = beginner set)
     public Dictionary<int, int> SkillLv { get; set; } = new();
     public List<int> Quests { get; set; } = new(); // accepted quest ids
     public List<int> QuestsDone { get; set; } = new(); // turned-in quest ids

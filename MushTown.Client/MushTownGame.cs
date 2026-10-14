@@ -53,6 +53,7 @@ public partial class MushTownGame : Game
     private readonly int _shotSkill; // --skill <id>: 0 means no skill pose
     private readonly int _shotSkillTab; // --skilltab: which job tab the skill window opens on
     private readonly bool _shotDrop; // --drop: swing until the first kill, show its drops
+    private readonly bool _shotWear; // --wear: the demo wears its whole EQUIP bag
     private readonly int _shotAiticks; // --aiticks <n>: n 100ms AI steps at the posed feet
 
     private SpriteBatch _spriteBatch = null!;
@@ -61,6 +62,7 @@ public partial class MushTownGame : Game
     private MapData _map = null!;
     private int _mapId;
     private readonly Dictionary<string, CharaData> _charas = new();
+    private readonly Dictionary<(string img, string action), CharaData> _gear = new();
     private readonly Dictionary<string, List<int>> _delays = new();
     private List<int> _layers = null!;
     private readonly Dictionary<string, Texture2D> _textures = new();
@@ -160,7 +162,7 @@ public partial class MushTownGame : Game
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0)
+    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
@@ -176,6 +178,7 @@ public partial class MushTownGame : Game
         _shotSkillTab = shotSkillTab;
         _shotDrop = shotDrop;
         _shotAiticks = shotAiticks;
+        _shotWear = shotWear;
         _assetsDir = FindAssetsDir();
         string dir = Path.GetDirectoryName(_assetsDir)!;
         _layoutPath = Path.Combine(dir, "hud-layout.json");
@@ -219,6 +222,16 @@ public partial class MushTownGame : Game
                 throw new InvalidDataException($"character {action} has an empty frame");
             _charas[action] = chara;
             _delays[action] = chara.Frames.Select(f => f.Delay).ToList();
+            foreach (int id in ItemData.EquipIds) // wearable art: same frames as beginner (delays ride the beginner file)
+            {
+                string imgId = id.ToString("D8");
+                var gear = LoadJson<CharaData>(Path.Combine(_assetsDir, "chara", "gear", imgId, $"{action}.json"));
+                if (gear.Frames.Count != chara.Frames.Count)
+                    throw new InvalidDataException($"gear {imgId} {action} has {gear.Frames.Count} frames, want {chara.Frames.Count}");
+                if (gear.Frames.Any(f => f.Parts.Count == 0))
+                    throw new InvalidDataException($"gear {imgId} {action} has an empty frame");
+                _gear[(imgId, action)] = gear;
+            }
         }
 
         // player starts on the ground under the spawn point
@@ -314,8 +327,14 @@ public partial class MushTownGame : Game
         foreach (var chara in _charas.Values)
             foreach (var frame in chara.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
+        foreach (var gear in _gear.Values)
+            foreach (var frame in gear.Frames)
+                foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
-        if (_shotPath != null && _shotScreen is null or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk") // game shots show mobs; menu shots don't
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk";
+        if (_shotWear && !gameShot)
+            throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
+        if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
             SetupShotMobs();
     }
 
@@ -328,6 +347,13 @@ public partial class MushTownGame : Game
     {
         StartLocalWorld();
         SetupShotQuests(); // quest/talk screens run the real accept/open path (other shots no-op)
+        if (_shotWear) // --wear runs the real Wear path on the demo (plain shots grow one, like --skill buffs)
+        {
+            _account ??= new Account { User = "demo" };
+            _account.Slots[_slot] ??= DemoChara();
+            foreach (int id in ItemData.EquipIds)
+                if (!Wear(id)) throw new InvalidDataException($"--wear found no {id} in the demo bag");
+        }
         if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))
             throw new InvalidDataException($"unknown skill: {_shotSkill}");
         if (_shotSkill != 0 && _skills[_shotSkill].Kind == SkillData.KindBuff)
@@ -377,7 +403,7 @@ public partial class MushTownGame : Game
                 if (world.IsDamageSkill(_shotSkill))
                 {
                     int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
-                    foreach (var h in world.SkillStrike(_mapId, _px, _py, true, new Random(0), Progression.Beginner, _shotSkill, pct))
+                    foreach (var h in world.SkillStrike(_mapId, _px, _py, true, new Random(0), OwnBuild(), _shotSkill, pct))
                         ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                     DrainDrops(world);
                 }
@@ -388,7 +414,7 @@ public partial class MushTownGame : Game
                 var rng = new Random(0);
                 bool killed = false;
                 for (int i = 0; i < 20 && !killed; i++)
-                    foreach (var h in world.Strike(_mapId, _px, _py, true, rng, Progression.Beginner))
+                    foreach (var h in world.Strike(_mapId, _px, _py, true, rng, OwnBuild()))
                     {
                         ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                         killed |= h.HpLeft == 0;
@@ -398,7 +424,7 @@ public partial class MushTownGame : Game
             }
             else
             {
-                foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), Progression.Beginner))
+                foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), OwnBuild()))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                 DrainDrops(world);
             }
@@ -1027,8 +1053,8 @@ public partial class MushTownGame : Game
         // by feet height (lower feet draw in front; ties keep this order)
         int feetX = (int)Math.Floor(_px), feetY = (int)Math.Floor(_py);
         var draws = new List<(int y, Action draw)>();
-        draws.Add((feetY, () => DrawAvatar(feetX, feetY, _action, _frame, _facingRight)));
-        foreach (var r in _remotes.Values.OrderBy(r => r.Id))
+        draws.Add((feetY, () => DrawAvatar(feetX, feetY, _action, _frame, _facingRight, _account?.Slots[_slot]?.Equips)));
+        foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers show beginner: worn looks never cross the net in v1 (stats do, via Build)
             draws.Add(((int)Math.Floor(r.Y), () => DrawAvatar((int)Math.Floor(r.X), (int)Math.Floor(r.Y), Net.ActionName(r.Action), r.Frame, r.FacingRight)));
         foreach (int uid in _mobs.Keys.OrderBy(u => u))
         {
@@ -1298,10 +1324,11 @@ public partial class MushTownGame : Game
         GameLog("you died");
     }
 
-    // DEF% from every source: Iron Body while live, Guardian Armor and
-    // Endure always. Mob touches are the only thing it blocks.
+    // DEF% from every source: worn gear, Iron Body while live, Guardian
+    // Armor and Endure always. Mob touches are the only thing it blocks.
     private int OwnDef() =>
-        (_buffMs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0)
+        ItemData.EquipBonus(_account?.Slots[_slot]?.Equips, _items).def
+        + (_buffMs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0)
         + _skills[SkillData.GuardianArmor].DefPct * SkillLv(SkillData.GuardianArmor)
         + _skills[SkillData.Endure].DefPct * SkillLv(SkillData.Endure);
 
@@ -1329,7 +1356,7 @@ public partial class MushTownGame : Game
         _drops[uid] = new DropView { X = x, Y = y, Kind = kind, Id = id, Count = count };
 
     // One drop gone: everyone clears the view, the taker claims the loot.
-    // Only mesos and the two USE potions ever drop, so the names are fixed.
+    // Mesos pile up; known drops land in a bag (equips in EQUIP, potions in USE).
     private void ApplyDropTake(int uid, bool mine, int kind, int id, int count)
     {
         _drops.Remove(uid);
@@ -1340,11 +1367,13 @@ public partial class MushTownGame : Game
             chara.Mesos += id;
             GameLog($"picked up {id} mesos");
         }
-        else
+        else // the server only drops known ids
         {
-            chara.Use ??= new Dictionary<int, int>();
-            chara.Use.TryGetValue(id, out int have);
-            chara.Use[id] = have + count;
+            var bag = _items[id].Slot != null
+                ? chara.EquipBag ??= new Dictionary<int, int>()
+                : chara.Use ??= new Dictionary<int, int>();
+            bag.TryGetValue(id, out int have);
+            bag[id] = have + count;
             GameLog($"picked up {ItemData.Name(id)} x{count}");
         }
     }
@@ -1511,18 +1540,19 @@ public partial class MushTownGame : Game
     }
 
     // Our combat stats for the server (Build) and the local judge. CLI
-    // sessions have no character, so they swing as beginners. Passives fold
-    // in by level; Spirit Blade multiplies the weapon while live.
+    // sessions have no character, so they swing as beginners. Passives and
+    // worn gear fold in by level; Spirit Blade multiplies the weapon live.
     private Build OwnBuild()
     {
         var chara = _account?.Slots[_slot];
         if (chara == null) return Progression.Beginner;
-        int str = chara.Str
+        var worn = ItemData.EquipBonus(chara.Equips, _items);
+        int str = chara.Str + worn.str
             + _skills[SkillData.PhysicalTraining].Str * SkillLv(SkillData.PhysicalTraining)
             + _skills[SkillData.AgileArms].Str * SkillLv(SkillData.AgileArms);
-        int dex = chara.Dex
+        int dex = chara.Dex + worn.dex
             + _skills[SkillData.PhysicalTraining].Dex * SkillLv(SkillData.PhysicalTraining);
-        int atk = Progression.WeaponAtk
+        int atk = (worn.weapon > 0 ? worn.weapon : Progression.WeaponAtk)
             + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor);
         if (_buffMs.ContainsKey(SkillData.SpiritBlade))
             atk = atk * (100 + _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade)) / 100;
@@ -1613,9 +1643,32 @@ public partial class MushTownGame : Game
         foreach (var item in _map.Backs) { if (item.Front) DrawBack(item); }
     }
 
-    private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight)
+    // Worn-or-beginner parts for one frame: beginner parts minus each worn
+    // slot's beginner img, plus the worn gear files, re-sorted back-to-front
+    // (same stable order the exporter bakes). Unknown ids draw nothing.
+    private List<CharaPart> MergeParts(string action, int frame, List<int> worn)
     {
-        foreach (var part in _charas[action].Frames[frame].Parts)
+        var hide = new HashSet<string>();
+        var gearParts = new List<CharaPart>();
+        foreach (int id in worn)
+        {
+            if (!_items.TryGetValue(id, out var d) || d.Slot == null) continue; // hand-made saves may wear anything
+            hide.Add(ItemData.BeginnerImgs[d.Slot]); // boot load rejects slots outside the table
+            gearParts.AddRange(_gear[(id.ToString("D8"), action)].Frames[frame].Parts); // boot load guarantees art for known equips
+        }
+        var parts = new List<CharaPart>();
+        foreach (var p in _charas[action].Frames[frame].Parts)
+            if (!hide.Contains(p.Img)) parts.Add(p);
+        parts.AddRange(gearParts);
+        return parts.OrderByDescending(p => p.Z).ToList();
+    }
+
+    private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, List<int>? worn = null)
+    {
+        var parts = worn == null || worn.Count == 0
+            ? _charas[action].Frames[frame].Parts
+            : MergeParts(action, frame, worn);
+        foreach (var part in parts)
         {
             if (facingRight)
             {
