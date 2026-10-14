@@ -76,6 +76,7 @@ public partial class MushTownGame
     private void EndTalkAndCheckNpcs()
     {
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+        _showShop = false; // the shop is NPC-bound too: a new map closes it
         foreach (var s in _map.Npcs)
             if (!_npcs.ContainsKey(s.NpcId))
                 throw new InvalidDataException($"map {_mapId}: npc art {s.NpcId} not exported");
@@ -165,7 +166,7 @@ public partial class MushTownGame
     // opens the menu. Missing quest/NPC/ground fails loud, like other poses.
     private void SetupShotQuests()
     {
-        if (_shotScreen is not ("quest" or "talk")) return;
+        if (_shotScreen is not ("quest" or "talk" or "shop")) return;
         _account ??= new Account { User = "demo" };
         var chara = _account.Slots[_slot] ??= DemoChara();
         if (_shotScreen == "quest")
@@ -192,6 +193,23 @@ public partial class MushTownGame
         _talkNpc = npc.NpcId;
         _talkQuest = 0;
         _talkPage = 0;
+        if (_shotScreen == "shop") // the same call the talk entry makes (non-keepers fail loud)
+        {
+            if (!NpcHasShop(npc.NpcId))
+                throw new InvalidDataException($"NPC {_shotTalk} keeps no shop");
+            OpenShop();
+        }
+    }
+
+    // v1's only shopkeeper: Pio the Alchemist (the 2nd shop gets a data flag).
+    private static bool NpcHasShop(int npc) => npc == 10000;
+
+    // Talk entry -> shop panel: talk closes, the shop opens on top.
+    private void OpenShop()
+    {
+        _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+        _showShop = true;
+        _topPanel = 5;
     }
 
     // Last-page buttons: Accept/Complete close with a log line, Next flips.
@@ -215,6 +233,7 @@ public partial class MushTownGame
             GameLog(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
             QuestLog.GrantRewards(chara, q);
             GainExp(q.RewardExp);
+            PlaySfx("questclear");
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
             if (_questSel == q.QuestId) _questSel = 0; // turned in: drop the stale selection
         }

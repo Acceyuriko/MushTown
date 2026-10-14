@@ -13,6 +13,7 @@ public sealed class MapData
     public List<LadderItem> Ladders { get; set; } = new();
     public List<LifeItem> Life { get; set; } = new();
     public List<NpcSpawn> Npcs { get; set; } = new();
+    public MiniMapData MiniMap { get; set; } = new();
 }
 
 public sealed class MapInfo
@@ -26,6 +27,26 @@ public sealed class MapInfo
     // Where the player appears. SpawnY is the ground under the spawn portal.
     public int SpawnX { get; set; }
     public int SpawnY { get; set; }
+
+    // Raw WZ info/bgm ("Bgm58/The Beginnig of The Adventure"): the client
+    // turns it into a file key with SoundKey.FromBgm.
+    public string Bgm { get; set; } = "";
+}
+
+// WZ miniMap node: the canvas plus the world rect it covers. The rect's
+// top-left is (-CenterX, -CenterY) (the names lie), size Width x Height.
+// Same mapping as WzComparerR2's minimap renderer (UIMiniMap.cs).
+public sealed class MiniMapData
+{
+    public string Image { get; set; } = "";
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int CenterX { get; set; }
+    public int CenterY { get; set; }
+
+    // World point to a dot inside a drawn box of drawW x drawH.
+    public (int X, int Y) ToDot(float wx, float wy, int drawW, int drawH) =>
+        ((int)((wx + CenterX) / Width * drawW), (int)((wy + CenterY) / Height * drawH));
 }
 
 public sealed class BackItem
@@ -250,6 +271,7 @@ public sealed class ItemData
     public string Image { get; set; } = "";
     public int Hp { get; set; }
     public int Mp { get; set; }
+    public int Price { get; set; } // WZ info/price: what the shop charges (sell pays half, min 1)
     public string? Slot { get; set; } // equip slot (WZ islot); null = consumable
     public int Atk { get; set; } // WZ incPAD
     public int Def { get; set; } // WZ incPDD

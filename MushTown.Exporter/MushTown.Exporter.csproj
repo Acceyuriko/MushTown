@@ -5,6 +5,10 @@
     <ProjectReference Include="..\WzComparerR2\WzComparerR2.WzLib\WzComparerR2.WzLib.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="NLayer" Version="3.0.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>

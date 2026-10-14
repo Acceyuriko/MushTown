@@ -40,6 +40,11 @@ public partial class MushTownGame
     private const int QuestRowH = 22;
     private const int QuestListH = 5 * QuestRowH; // 5 rows, no scroll in v1
     private const int QuestBodyH = QuestListH + 190; // list + detail block
+    private const int SettingsW = 260; // settings window: 2 volume rows
+    private const int SettingsRowH = 38;
+    private const int SettingsBodyH = 10 + 2 * SettingsRowH + 10; // top pad + rows + bottom pad
+    private const int ShopW = 340; // shop window: buy rows + sell rows (height follows the bag)
+    private const int ShopRowH = 40;
     private const int TalkW = 440; // talk panel: body + quest entries + buttons
     private const int TalkBtnW = 90, TalkBtnH = 24;
 
@@ -84,7 +89,7 @@ public partial class MushTownGame
     };
     private readonly Dictionary<int, SkillData> _skills = new();
     private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
-    private bool _showInv, _showStat, _showSubmenu, _showSkill, _showQuest;
+    private bool _showInv, _showStat, _showSubmenu, _showSkill, _showQuest, _showSettings, _showShop;
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
     private bool _iWasDown, _cWasDown, _kWasDown, _vWasDown;
 
@@ -96,11 +101,12 @@ public partial class MushTownGame
     private static Rectangle ExpRect() => new(0, 758, 1366, 10);
     private Point _invPos = new(Layout.Inv.X, Layout.Inv.Y), _statPos = new(Layout.Stat.X, Layout.Stat.Y);
     private Point _skillPos = new(Layout.Skill.X, Layout.Skill.Y);
-    private Point? _dragInv, _dragStat, _dragSkill, _dragQuest; // title grab offsets while held
-    private int _topPanel = 1; // the front panel: 0 = inventory, 1 = stat, 2 = skill, 3 = quest
+    private Point? _dragInv, _dragStat, _dragSkill, _dragQuest, _dragSettings, _dragShop; // title grab offsets while held
+    private int _topPanel = 1; // the front panel: 0 = inventory, 1 = stat, 2 = skill, 3 = quest, 4 = settings, 5 = shop
     private Texture2D _statBack = null!; // navy body backing, corners rounded to match the art
     private Texture2D _skillBack = null!; // same navy, skill window size
     private Texture2D _questBack = null!; // same navy, quest window size
+    private Texture2D _settingsBack = null!; // same navy, settings window size
 
     private Rectangle InvRect() => new(_invPos.X, _invPos.Y, 242, 593);
     private Rectangle StatRect() => new(_statPos.X, _statPos.Y, 448, 422); // title 16 + body 406
@@ -114,16 +120,16 @@ public partial class MushTownGame
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
     {
         bool i = kb.IsKeyDown(Keys.I);
-        if (i && !_iWasDown && _talkNpc == 0) { _showInv = !_showInv; _dragInv = null; if (_showInv) _topPanel = 0; } // hiding mid-drag drops the grab
+        if (i && !_iWasDown && _talkNpc == 0) { _showInv = !_showInv; _dragInv = null; if (_showInv) _topPanel = 0; PlaySfx("click"); } // hiding mid-drag drops the grab
         _iWasDown = i;
         bool c = kb.IsKeyDown(Keys.C);
-        if (c && !_cWasDown && _talkNpc == 0) { _showStat = !_showStat; _dragStat = null; if (_showStat) _topPanel = 1; } // hiding mid-drag drops the grab
+        if (c && !_cWasDown && _talkNpc == 0) { _showStat = !_showStat; _dragStat = null; if (_showStat) _topPanel = 1; PlaySfx("click"); } // hiding mid-drag drops the grab
         _cWasDown = c;
         bool k = kb.IsKeyDown(Keys.K);
-        if (k && !_kWasDown && _talkNpc == 0) { _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; } // hiding mid-drag drops the grab
+        if (k && !_kWasDown && _talkNpc == 0) { _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; PlaySfx("click"); } // hiding mid-drag drops the grab
         _kWasDown = k;
         bool v = kb.IsKeyDown(Keys.V);
-        if (v && !_vWasDown && _talkNpc == 0) { _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) _topPanel = 3; } // hiding mid-drag drops the grab; the modal freezes panels
+        if (v && !_vWasDown && _talkNpc == 0) { _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) _topPanel = 3; PlaySfx("click"); } // hiding mid-drag drops the grab; the modal freezes panels
         _vWasDown = v;
         // Title drag runs on held (down starts it in the chain below).
         if (_dragInv.HasValue)
@@ -146,39 +152,78 @@ public partial class MushTownGame
             if (!held) _dragQuest = null;
             else _questPos = ClampPanel(new Point(gx - _dragQuest.Value.X, gy - _dragQuest.Value.Y), QuestW);
         }
+        if (_dragSettings.HasValue)
+        {
+            if (!held) _dragSettings = null;
+            else _settingsPos = ClampPanel(new Point(gx - _dragSettings.Value.X, gy - _dragSettings.Value.Y), SettingsW);
+        }
+        if (_dragShop.HasValue)
+        {
+            if (!held) _dragShop = null;
+            else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW);
+        }
         if (!click) return;
+        // Any window open/close clicks once (menu, char, submenu, X buttons
+        // all funnel here): snapshot the flags around the click body.
+        bool sub = _showSubmenu, inv = _showInv, stat = _showStat;
+        bool skill = _showSkill, quest = _showQuest, set = _showSettings, shop = _showShop;
+        UpdateHudClick(gx, gy);
+        if (sub != _showSubmenu || inv != _showInv || stat != _showStat
+            || skill != _showSkill || quest != _showQuest || set != _showSettings || shop != _showShop)
+            PlaySfx("click");
+    }
+
+    private void UpdateHudClick(int gx, int gy)
+    {
         if (_talkNpc != 0) { TalkClick(gx, gy); return; } // modal: talk swallows every click
         bool onInv = _showInv && HitRect(InvRect(), gx, gy);
         bool onStat = _showStat && HitRect(StatRect(), gx, gy);
         bool onSkill = _showSkill && HitRect(SkillRect(), gx, gy);
         bool onQuest = _showQuest && HitRect(QuestRect(), gx, gy);
+        bool onSettings = _showSettings && HitRect(SettingsRect(), gx, gy);
+        bool onShop = _showShop && HitRect(ShopRect(), gx, gy);
         // Overlap: the frontmost panel owns the click. The front panel wins
-        // every tie; the back three keep inv < stat < skill < quest order.
+        // every tie; the back five keep inv < stat < skill < quest < settings < shop order.
         // Pairwise elimination leaves the highest z standing, and the survivor
         // comes to front (a click brings its panel to front, even on overlap).
-        int z(int p) => p == _topPanel ? 4 : p;
+        int z(int p) => p == _topPanel ? 6 : p;
         if (onInv && onStat) { if (z(0) < z(1)) onInv = false; else onStat = false; }
         if (onInv && onSkill) { if (z(0) < z(2)) onInv = false; else onSkill = false; }
         if (onInv && onQuest) { if (z(0) < z(3)) onInv = false; else onQuest = false; }
         if (onStat && onSkill) { if (z(1) < z(2)) onStat = false; else onSkill = false; }
         if (onStat && onQuest) { if (z(1) < z(3)) onStat = false; else onQuest = false; }
         if (onSkill && onQuest) { if (z(2) < z(3)) onSkill = false; else onQuest = false; }
+        if (onInv && onSettings) { if (z(0) < z(4)) onInv = false; else onSettings = false; }
+        if (onStat && onSettings) { if (z(1) < z(4)) onStat = false; else onSettings = false; }
+        if (onSkill && onSettings) { if (z(2) < z(4)) onSkill = false; else onSettings = false; }
+        if (onQuest && onSettings) { if (z(3) < z(4)) onQuest = false; else onSettings = false; }
+        if (onInv && onShop) { if (z(0) < z(5)) onInv = false; else onShop = false; }
+        if (onStat && onShop) { if (z(1) < z(5)) onStat = false; else onShop = false; }
+        if (onSkill && onShop) { if (z(2) < z(5)) onSkill = false; else onShop = false; }
+        if (onQuest && onShop) { if (z(3) < z(5)) onQuest = false; else onShop = false; }
+        if (onSettings && onShop) { if (z(4) < z(5)) onSettings = false; else onShop = false; }
         if (onInv) _topPanel = 0;
         else if (onStat) _topPanel = 1;
         else if (onSkill) _topPanel = 2;
         else if (onQuest) _topPanel = 3;
+        else if (onSettings) _topPanel = 4;
+        else if (onShop) _topPanel = 5;
         // Panels draw on top, so a panel click never reaches the bottom bar behind it.
-        if (onInv || onStat || onSkill || onQuest)
+        if (onInv || onStat || onSkill || onQuest || onSettings || onShop)
         {
             _showSubmenu = false;
             if (onInv && HitRect(InvXRect(), gx, gy)) _showInv = false;
             else if (onStat && HitRect(StatXRect(), gx, gy)) _showStat = false;
             else if (onSkill && HitRect(SkillXRect(), gx, gy)) _showSkill = false;
             else if (onQuest && HitRect(QuestXRect(), gx, gy)) _showQuest = false;
+            else if (onSettings && HitRect(SettingsXRect(), gx, gy)) _showSettings = false;
+            else if (onShop && HitRect(ShopXRect(), gx, gy)) _showShop = false;
             else if (onInv && HitRect(InvTitleRect(), gx, gy)) _dragInv = new Point(gx - _invPos.X, gy - _invPos.Y);
             else if (onStat && HitRect(StatTitleRect(), gx, gy)) _dragStat = new Point(gx - _statPos.X, gy - _statPos.Y);
             else if (onSkill && HitRect(SkillTitleRect(), gx, gy)) _dragSkill = new Point(gx - _skillPos.X, gy - _skillPos.Y);
             else if (onQuest && HitRect(QuestTitleRect(), gx, gy)) _dragQuest = new Point(gx - _questPos.X, gy - _questPos.Y);
+            else if (onSettings && HitRect(SettingsTitleRect(), gx, gy)) _dragSettings = new Point(gx - _settingsPos.X, gy - _settingsPos.Y);
+            else if (onShop && HitRect(ShopTitleRect(), gx, gy)) _dragShop = new Point(gx - _shopPos.X, gy - _shopPos.Y);
             else if (onInv)
             {
                 for (int t = 0; t < TabCount; t++)
@@ -207,6 +252,21 @@ public partial class MushTownGame
                 for (int row = 0; row < accepted.Count && row < 5; row++) // draw shows 5: clicks match
                     if (HitRect(QuestRowRect(row), gx, gy)) { _questSel = accepted[row]; break; }
             }
+            else if (onSettings) // volume rows: [-] and [+] step 10, saved at once
+            {
+                if (HitRect(SettingsMinusRect(0), gx, gy)) BumpVolume(true, -10);
+                else if (HitRect(SettingsPlusRect(0), gx, gy)) BumpVolume(true, 10);
+                else if (HitRect(SettingsMinusRect(1), gx, gy)) BumpVolume(false, -10);
+                else if (HitRect(SettingsPlusRect(1), gx, gy)) BumpVolume(false, 10);
+            }
+            else if (onShop) // stock rows buy at WZ price, bag rows sell at half
+            {
+                for (int i = 0; i < Shop.Stock.Length; i++)
+                    if (HitRect(ShopBuyRect(i), gx, gy)) { BuyFromShop(Shop.Stock[i]); break; }
+                var sells = ShopSellRows();
+                for (int i = 0; i < sells.Count; i++)
+                    if (HitRect(ShopSellRect(i), gx, gy)) { SellToShop(sells[i].id); break; }
+            }
             return;
         }
         if (HitRect(MenuBtnRect(), gx, gy)) _showSubmenu = !_showSubmenu;
@@ -214,6 +274,7 @@ public partial class MushTownGame
         else if (_showSubmenu && HitRect(SubRowRect(0), gx, gy)) { _showStat = true; _showSubmenu = false; _topPanel = 1; }
         else if (_showSubmenu && HitRect(SubRowRect(1), gx, gy)) { _showInv = true; _showSubmenu = false; _topPanel = 0; }
         else if (_showSubmenu && HitRect(SubRowRect(2), gx, gy)) { _showQuest = true; _showSubmenu = false; _topPanel = 3; }
+        else if (_showSubmenu && HitRect(SubRowRect(3), gx, gy)) { _showSettings = true; _showSubmenu = false; _topPanel = 4; }
         else if (_showSubmenu && HitRect(SubPopupRect(), gx, gy)) { } // popup padding swallows the click
         else if (_showSubmenu) _showSubmenu = false; // outside click closes (no panel behind to fall through to)
         else if (HitRect(PlateRect(), gx, gy) || HitRect(HpRect(), gx, gy) || HitRect(QslotRect(), gx, gy) || HitRect(ExpRect(), gx, gy)) { } // HUD furniture swallows the click (pre-W14 the world took nothing)
@@ -224,9 +285,9 @@ public partial class MushTownGame
     private static Point ClampPanel(Point p, int w) =>
         new(Math.Clamp(p.X, -w + 80, 1366 - 80), Math.Clamp(p.Y, 0, 768 - 40));
 
-    // Submenu popup: 3-slice bg sized by its own caps, three 109x26 rows inside.
+    // Submenu popup: 3-slice bg sized by its own caps, four 109x26 rows inside.
     private const int SubPopupW = 121;
-    private const int SubRows = 3; // stat, inventory, quest
+    private const int SubRows = 4; // stat, inventory, quest, settings
     private Rectangle SubPopupRect()
     {
         int top = Tex("hud_sub_bg0.png").Height;
@@ -287,6 +348,33 @@ public partial class MushTownGame
         return Progression.TakeOffEquip(chara, id);
     }
 
+    // Click a stock row: buy one at WZ price (a broke wallet logs and skips).
+    private void BuyFromShop(int id)
+    {
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return; // CLI sessions carry no wallet
+        int price = _items[id].Price;
+        if (Shop.Buy(chara, id, price))
+        {
+            GameLog($"bought {ItemData.Name(id)} for {price:#,##0} mesos");
+            PlaySfx("shopbuy");
+        }
+        else GameLog($"not enough mesos for {ItemData.Name(id)} ({price:#,##0})");
+    }
+
+    // Click a bag row: sell one at half price (rows show owned only, so it lands).
+    private void SellToShop(int id)
+    {
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return; // CLI sessions carry no bag
+        var def = _items[id];
+        if (Shop.Sell(chara, id, def))
+        {
+            GameLog($"sold {ItemData.Name(id)} for {Shop.SellPrice(def.Price):#,##0} mesos");
+            PlaySfx("click");
+        }
+    }
+
     // Skill window job tabs (3 x 100px under the title).
     private Rectangle SkillTabRect(int t)
     {
@@ -335,6 +423,71 @@ public partial class MushTownGame
         return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
     }
 
+    private Point _settingsPos = new(Layout.Settings.X, Layout.Settings.Y); // settings window opens centered-ish, drags after
+    private Rectangle SettingsRect() => new(_settingsPos.X, _settingsPos.Y, SettingsW, 16 + SettingsBodyH);
+    private Rectangle SettingsTitleRect() => new(_settingsPos.X, _settingsPos.Y, SettingsW, 16);
+    private Rectangle SettingsXRect()
+    {
+        var r = SettingsRect();
+        return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
+    }
+
+    // Volume row buttons: [-] and [+] boxes around the value.
+    private Rectangle SettingsMinusRect(int i)
+    {
+        var r = SettingsRect();
+        return new Rectangle(r.X + 120, r.Y + 16 + 10 + i * SettingsRowH, 30, 24);
+    }
+
+    private Rectangle SettingsPlusRect(int i)
+    {
+        var r = SettingsRect();
+        return new Rectangle(r.X + 200, r.Y + 16 + 10 + i * SettingsRowH, 30, 24);
+    }
+
+    // Sell rows: owned potions first (stock order), then owned equips (tab
+    // order). Draw and clicks share this list, so row i is always row i.
+    private List<(int id, int count)> ShopSellRows()
+    {
+        var rows = new List<(int, int)>();
+        var chara = _account?.Slots[_slot];
+        if (chara == null) return rows;
+        foreach (int id in ItemData.PotionIds)
+            if (chara.Use?.TryGetValue(id, out int n) == true && n > 0) rows.Add((id, n));
+        foreach (int id in ItemData.EquipIds)
+            if (chara.EquipBag?.TryGetValue(id, out int n) == true && n > 0) rows.Add((id, n));
+        return rows;
+    }
+
+    // Shop rects: mesos line 20, Buy header 18 + stock rows, Sell header 18
+    // + bag rows (an empty bag keeps one row for the "empty" line).
+    private Point _shopPos = new(Layout.Shop.X, Layout.Shop.Y); // shop window opens centered-ish, drags after
+
+    private Rectangle ShopRect()
+    {
+        int sells = Math.Max(1, ShopSellRows().Count);
+        int body = 20 + 18 + Shop.Stock.Length * ShopRowH + 18 + sells * ShopRowH + 10;
+        return new Rectangle(_shopPos.X, _shopPos.Y, ShopW, 16 + body);
+    }
+
+    private Rectangle ShopTitleRect() => new(_shopPos.X, _shopPos.Y, ShopW, 16);
+
+    private Rectangle ShopXRect()
+    {
+        var r = ShopRect();
+        return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
+    }
+
+    private int ShopBuyTop() => _shopPos.Y + 16 + 20 + 18;
+
+    private int ShopSellTop() => ShopBuyTop() + Shop.Stock.Length * ShopRowH + 18;
+
+    private Rectangle ShopBuyRect(int i) =>
+        new(_shopPos.X + ShopW - 80, ShopBuyTop() + i * ShopRowH + 7, 68, 26);
+
+    private Rectangle ShopSellRect(int i) =>
+        new(_shopPos.X + ShopW - 80, ShopSellTop() + i * ShopRowH + 7, 68, 26);
+
     private void DrawHud(int gx, int gy, bool pressed)
     {
         DrawExpBar();
@@ -346,11 +499,14 @@ public partial class MushTownGame
         DrawQslot();
         DrawTracker();
         DrawBossBar();
-        // The front panel draws last (on top); the back three keep inv < stat < skill < quest.
-        if (_topPanel == 0) { if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showInv) DrawInvPanel(); }
-        else if (_topPanel == 1) { if (_showInv) DrawInvPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showStat) DrawStatPanel(); }
-        else if (_topPanel == 2) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showQuest) DrawQuestPanel(); if (_showSkill) DrawSkillPanel(); }
-        else { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); }
+        DrawMinimap(); // always on, top-right; panels and talk draw above it
+        // The front panel draws last (on top); the back five keep inv < stat < skill < quest < settings < shop.
+        if (_topPanel == 0) { if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showInv) DrawInvPanel(); }
+        else if (_topPanel == 1) { if (_showInv) DrawInvPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showStat) DrawStatPanel(); }
+        else if (_topPanel == 2) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSkill) DrawSkillPanel(); }
+        else if (_topPanel == 3) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showQuest) DrawQuestPanel(); }
+        else if (_topPanel == 4) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSettings) DrawSettingsPanel(); }
+        else { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); }
         if (_talkNpc != 0) DrawTalkPanel(gx, gy); // modal: above everything
     }
 
@@ -449,6 +605,10 @@ public partial class MushTownGame
         if (HitRect(qr, gx, gy))
             _spriteBatch.Draw(_pixel, qr, new Color(255, 255, 255, 30));
         _spriteBatch.Draw(_ui.GetSmall("Quest"), new Vector2(qr.X + 8, qr.Y + 6), Color.White);
+        var sr = SubRowRect(3); // settings: same text-row treatment
+        if (HitRect(sr, gx, gy))
+            _spriteBatch.Draw(_pixel, sr, new Color(255, 255, 255, 30));
+        _spriteBatch.Draw(_ui.GetSmall("Settings"), new Vector2(sr.X + 8, sr.Y + 6), Color.White);
     }
 
     private void DrawQslot()
@@ -719,6 +879,102 @@ public partial class MushTownGame
         }
     }
 
+    // Settings window: two volume rows (music, effects). [-]/[+] step 10
+    // and save at once; the value sits right-aligned between the buttons.
+    private void DrawSettingsPanel()
+    {
+        var r = SettingsRect();
+        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
+        _spriteBatch.Draw(_ui.GetSmall("SETTINGS"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
+        _spriteBatch.Draw(Tex("hud_statx.png"), SettingsXRect(), Color.White);
+        _spriteBatch.Draw(_settingsBack, new Vector2(r.X, r.Y + 16), Color.White);
+        string[] labels = { "Music", "Sound" };
+        int[] vols = { _bgmVol, _sfxVol };
+        for (int i = 0; i < 2; i++)
+        {
+            int y = r.Y + 16 + 10 + i * SettingsRowH;
+            _spriteBatch.Draw(_ui.GetSmall(labels[i]), new Vector2(r.X + 12, y + 4), Color.White);
+            var minus = SettingsMinusRect(i);
+            var plus = SettingsPlusRect(i);
+            _spriteBatch.Draw(_pixel, minus, new Color(0, 0, 0, 120));
+            _spriteBatch.Draw(_pixel, plus, new Color(0, 0, 0, 120));
+            var dash = _ui.GetSmall("-");
+            _spriteBatch.Draw(dash, new Vector2(minus.X + (minus.Width - dash.Width) / 2, y + 4), Color.White);
+            var cross = _ui.GetSmall("+");
+            _spriteBatch.Draw(cross, new Vector2(plus.X + (plus.Width - cross.Width) / 2, y + 4), Color.White);
+            var val = _ui.GetSmall(vols[i].ToString());
+            _spriteBatch.Draw(val, new Vector2(plus.X - val.Width, y + 4), Color.White); // right-aligned to the [+] box
+        }
+    }
+
+    // Pio's shop: wallet line, stock rows (icon + name + price + [Buy]),
+    // bag rows (icon + name xN + sell price + [Sell]). Height follows the
+    // bag, so the body is a plain fill, not a fixed rounded backing.
+    private void DrawShopPanel(int gx, int gy)
+    {
+        var chara = _account?.Slots[_slot];
+        var r = ShopRect();
+        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
+        _spriteBatch.Draw(_ui.GetSmall("SHOP"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
+        _spriteBatch.Draw(Tex("hud_statx.png"), ShopXRect(), Color.White);
+        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + 16, r.Width, r.Height - 16), new Color(62, 96, 118));
+        _spriteBatch.Draw(_ui.GetSmall($"Mesos: {(chara?.Mesos ?? 0):#,##0}"), new Vector2(r.X + 12, r.Y + 16 + 4), new Color(255, 220, 0));
+        _spriteBatch.Draw(_ui.GetSmall("Buy"), new Vector2(r.X + 12, r.Y + 16 + 22), Color.White);
+        for (int i = 0; i < Shop.Stock.Length; i++)
+        {
+            int id = Shop.Stock[i];
+            int y = ShopBuyTop() + i * ShopRowH;
+            DrawShopIcon(id, r.X + 12, y);
+            _spriteBatch.Draw(_ui.GetSmall(ItemData.Name(id)), new Vector2(r.X + 52, y + 4), Color.White);
+            _spriteBatch.Draw(_ui.GetSmall($"{_items[id].Price:#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
+            DrawShopButton(ShopBuyRect(i), "Buy", gx, gy);
+        }
+        _spriteBatch.Draw(_ui.GetSmall("Sell"), new Vector2(r.X + 12, ShopSellTop() - 16), Color.White);
+        var sells = ShopSellRows();
+        if (sells.Count == 0)
+            _spriteBatch.Draw(_ui.GetSmall("Your bag is empty."), new Vector2(r.X + 12, ShopSellTop() + 12), new Color(130, 140, 150));
+        for (int i = 0; i < sells.Count; i++)
+        {
+            int y = ShopSellTop() + i * ShopRowH;
+            DrawShopIcon(sells[i].id, r.X + 12, y);
+            _spriteBatch.Draw(_ui.GetSmall($"{ItemData.Name(sells[i].id)} x{sells[i].count}"), new Vector2(r.X + 52, y + 4), Color.White);
+            _spriteBatch.Draw(_ui.GetSmall($"{Shop.SellPrice(_items[sells[i].id].Price):#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
+            DrawShopButton(ShopSellRect(i), "Sell", gx, gy);
+        }
+    }
+
+    private void DrawShopIcon(int id, int x, int y)
+    {
+        var icon = _textures[_items[id].Image];
+        _spriteBatch.Draw(icon, new Vector2(x + (32 - icon.Width) / 2, y + (ShopRowH - icon.Height) / 2), Color.White);
+    }
+
+    private void DrawShopButton(Rectangle b, string label, int gx, int gy)
+    {
+        _spriteBatch.Draw(_pixel, b, HitRect(b, gx, gy) ? new Color(52, 88, 110) : new Color(30, 50, 66));
+        var t = _ui.GetSmall(label);
+        _spriteBatch.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 5), Color.White);
+    }
+
+    // Minimap: the WZ canvas scaled into a 220x160 corner box, portals as
+    // blue dots, the player as a yellow dot. Always on, top-right.
+    private void DrawMinimap()
+    {
+        var tex = _textures[_map.MiniMap.Image];
+        float s = Math.Min(220f / tex.Width, 160f / tex.Height);
+        int w = (int)(tex.Width * s), h = (int)(tex.Height * s);
+        int x = 1366 - 8 - w, y = 8;
+        _spriteBatch.Draw(_pixel, new Rectangle(x - 2, y - 2, w + 4, h + 4), new Color(0, 0, 0, 160));
+        _spriteBatch.Draw(tex, new Rectangle(x, y, w, h), Color.White);
+        foreach (var p in _map.Portals)
+        {
+            var (dx, dy) = _map.MiniMap.ToDot(p.X, p.Y, w, h);
+            _spriteBatch.Draw(_pixel, new Rectangle(x + dx - 1, y + dy - 1, 3, 3), new Color(80, 160, 255));
+        }
+        var (px, py) = _map.MiniMap.ToDot(_px, _py, w, h);
+        _spriteBatch.Draw(_pixel, new Rectangle(x + px - 1, y + py - 1, 3, 3), new Color(255, 220, 0));
+    }
+
     // Quest tracker: always-on lines under the top-left corner (nothing
     // accepted, nothing shown, so old shots stay pixel-identical).
     private void DrawTracker()
@@ -754,7 +1010,8 @@ public partial class MushTownGame
     // menu mode, buttons at the bottom. Height follows the content.
     private Rectangle TalkRect()
     {
-        int lines = TalkLines().Count + (_talkQuest == 0 ? TalkEntries(_talkNpc).Count : 0);
+        int lines = TalkLines().Count + (_talkQuest == 0 ? TalkEntries(_talkNpc).Count : 0)
+            + (_talkQuest == 0 && NpcHasShop(_talkNpc) ? 1 : 0); // the Shop row in menu mode
         int h = 16 + 8 + lines * 16 + 8 + TalkBtnH + 10;
         return new Rectangle((1366 - TalkW) / 2, 340 - h / 2, TalkW, h);
     }
@@ -825,6 +1082,8 @@ public partial class MushTownGame
                 _spriteBatch.Draw(_ui.GetSmall(mark + q.Name), new Vector2(r.X + 16, y), ink);
                 y += 16;
             }
+            if (NpcHasShop(_talkNpc))
+                _spriteBatch.Draw(_ui.GetSmall("Shop"), new Vector2(r.X + 16, y), new Color(255, 220, 0));
         }
         var buttons = TalkButtons();
         for (int i = 0; i < buttons.Count; i++)
@@ -840,10 +1099,12 @@ public partial class MushTownGame
     {
         var buttons = TalkButtons();
         for (int i = 0; i < buttons.Count; i++)
-            if (HitRect(TalkBtnRect(i, buttons.Count), gx, gy)) { TalkAction(buttons[i]); return; }
+            if (HitRect(TalkBtnRect(i, buttons.Count), gx, gy)) { PlaySfx("click"); TalkAction(buttons[i]); return; }
         if (_talkQuest != 0) return;
         var entries = TalkEntries(_talkNpc);
         for (int i = 0; i < entries.Count; i++)
-            if (HitRect(TalkEntryRect(i), gx, gy)) { _talkQuest = entries[i].quest; _talkPage = 0; return; }
+            if (HitRect(TalkEntryRect(i), gx, gy)) { PlaySfx("click"); _talkQuest = entries[i].quest; _talkPage = 0; return; }
+        // A fresh open already clicks via the wrapper (flag flip); a re-open flips nothing, so click by hand.
+        if (NpcHasShop(_talkNpc) && HitRect(TalkEntryRect(entries.Count), gx, gy)) { bool was = _showShop; OpenShop(); if (was) PlaySfx("click"); return; }
     }
 }

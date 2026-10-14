@@ -6,16 +6,16 @@ namespace MushTown.Tests;
 [TestClass]
 public class LayoutTests
 {
-    private const string Full = """{"inv":[1,2],"stat":[3,4],"skill":[19,20],"quest":[21,22],"plate":[5,6],"hpmp":[7,8],"menuBtn":[9,10],"charBtn":[11,12],"qslot":[13,14],"coin":[15,16],"meso":[17,18]}""";
+    private const string Full = """{"inv":[1,2],"stat":[3,4],"skill":[19,20],"quest":[21,22],"settings":[23,24],"shop":[25,26],"plate":[5,6],"hpmp":[7,8],"menuBtn":[9,10],"charBtn":[11,12],"qslot":[13,14],"coin":[15,16],"meso":[17,18]}""";
 
     // Layout fields are shared statics: leave them as found.
-    private ((int X, int Y) inv, (int X, int Y) stat, (int X, int Y) skill, (int X, int Y) quest, (int X, int Y) plate, (int X, int Y) hpmp, (int X, int Y) menuBtn, (int X, int Y) charBtn, (int X, int Y) qslot, (int X, int Y) coin, (int X, int Y) meso) _saved;
+    private ((int X, int Y) inv, (int X, int Y) stat, (int X, int Y) skill, (int X, int Y) quest, (int X, int Y) settings, (int X, int Y) shop, (int X, int Y) plate, (int X, int Y) hpmp, (int X, int Y) menuBtn, (int X, int Y) charBtn, (int X, int Y) qslot, (int X, int Y) coin, (int X, int Y) meso) _saved;
 
     [TestInitialize]
-    public void Save() => _saved = (Layout.Inv, Layout.Stat, Layout.Skill, Layout.Quest, Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot, Layout.Coin, Layout.Meso);
+    public void Save() => _saved = (Layout.Inv, Layout.Stat, Layout.Skill, Layout.Quest, Layout.Settings, Layout.Shop, Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot, Layout.Coin, Layout.Meso);
 
     [TestCleanup]
-    public void Restore() => (Layout.Inv, Layout.Stat, Layout.Skill, Layout.Quest, Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot, Layout.Coin, Layout.Meso) = _saved;
+    public void Restore() => (Layout.Inv, Layout.Stat, Layout.Skill, Layout.Quest, Layout.Settings, Layout.Shop, Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot, Layout.Coin, Layout.Meso) = _saved;
 
     [TestMethod]
     public void Load_FullFile_OverridesAll()
@@ -28,6 +28,8 @@ public class LayoutTests
             Assert.AreEqual((3, 4), Layout.Stat);
             Assert.AreEqual((19, 20), Layout.Skill);
             Assert.AreEqual((21, 22), Layout.Quest);
+            Assert.AreEqual((23, 24), Layout.Settings);
+            Assert.AreEqual((25, 26), Layout.Shop);
             Assert.AreEqual((5, 6), Layout.Plate);
             Assert.AreEqual((7, 8), Layout.HpMp);
             Assert.AreEqual((9, 10), Layout.MenuBtn);
@@ -52,6 +54,8 @@ public class LayoutTests
             Assert.AreEqual((3, 4), Layout.Stat);
             Assert.AreEqual((19, 20), Layout.Skill);
             Assert.AreEqual((21, 22), Layout.Quest);
+            Assert.AreEqual((23, 24), Layout.Settings);
+            Assert.AreEqual((25, 26), Layout.Shop);
             Assert.AreEqual((5, 6), Layout.Plate);
             Assert.AreEqual((7, 8), Layout.HpMp);
             Assert.AreEqual((9, 10), Layout.MenuBtn);

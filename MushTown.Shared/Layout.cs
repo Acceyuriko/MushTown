@@ -11,6 +11,8 @@ public static class Layout
     public static (int X, int Y) Stat = (656, 130);
     public static (int X, int Y) Skill = (326, 130);
     public static (int X, int Y) Quest = (523, 150);
+    public static (int X, int Y) Settings = (553, 300);
+    public static (int X, int Y) Shop = (513, 200);
     public static (int X, int Y) Plate = (0, 723);
     public static (int X, int Y) HpMp = (584, 715);
     public static (int X, int Y) MenuBtn = (266, 724);
@@ -28,6 +30,8 @@ public static class Layout
         var stat = GetPoint(root, "stat", Stat);
         var skill = GetPoint(root, "skill", Skill);
         var quest = GetPoint(root, "quest", Quest);
+        var settings = GetPoint(root, "settings", Settings);
+        var shop = GetPoint(root, "shop", Shop);
         var plate = GetPoint(root, "plate", Plate);
         var hpmp = GetPoint(root, "hpmp", HpMp);
         var menuBtn = GetPoint(root, "menuBtn", MenuBtn);
@@ -35,7 +39,7 @@ public static class Layout
         var qslot = GetPoint(root, "qslot", Qslot);
         var coin = GetPoint(root, "coin", Coin);
         var meso = GetPoint(root, "meso", Meso);
-        Inv = inv; Stat = stat; Skill = skill; Quest = quest; Plate = plate; HpMp = hpmp; MenuBtn = menuBtn;
+        Inv = inv; Stat = stat; Skill = skill; Quest = quest; Settings = settings; Shop = shop; Plate = plate; HpMp = hpmp; MenuBtn = menuBtn;
         CharBtn = charBtn; Qslot = qslot; Coin = coin; Meso = meso;
     }
 

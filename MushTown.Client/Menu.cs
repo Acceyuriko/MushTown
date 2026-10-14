@@ -119,7 +119,7 @@ public partial class MushTownGame
                 "chars" or "delete" or "panel" => Screen.Chars,
                 "job" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" => Screen.Game,
+                "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" => Screen.Game,
                 _ => Screen.Login,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
@@ -127,6 +127,7 @@ public partial class MushTownGame
             if (shotScreen is "stat" or "hud") _showStat = true;
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
             if (shotScreen == "quest") { _showQuest = true; _topPanel = 3; }
+            if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
             if (shotScreen == "hud") _showSubmenu = true;
             if (shotScreen == "register") _registerOpen = true; // the two modal states get their own shots
             if (shotScreen == "delete") _deleteOpen = true;
@@ -181,6 +182,9 @@ public partial class MushTownGame
             if (slot == null || !ItemData.BeginnerImgs.ContainsKey(slot))
                 throw new InvalidDataException($"equip {id} has a bad slot");
         }
+        foreach (int id in ItemData.AllIds) // stale item jsons price 0: the shop would give stock away
+            if (_items[id].Price <= 0)
+                throw new InvalidDataException($"item {id} has a bad price");
         foreach (var tab in SkillTabs) // skills: json first (it names every frame), then all art
             foreach ((int id, string? _) in tab)
             {
@@ -195,6 +199,7 @@ public partial class MushTownGame
         _statBack = RoundedBacking(448, 406, new Color(62, 96, 118), 3);
         _skillBack = RoundedBacking(SkillW, SkillBodyH, new Color(62, 96, 118), 3);
         _questBack = RoundedBacking(QuestW, QuestBodyH, new Color(62, 96, 118), 3);
+        _settingsBack = RoundedBacking(SettingsW, SettingsBodyH, new Color(62, 96, 118), 3);
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
         LoadNpcTextures(); // NPC stand textures (quest json already loaded in Initialize)
     }
@@ -655,6 +660,7 @@ public partial class MushTownGame
         _drops.Clear();
         _numbers.Clear();
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0; // modals never survive the exit (same map skips the reload that clears them)
+        _showShop = false; // NPC-bound like talk
         _talkKey = ""; _questKey = ""; _trackKey = ""; // cached #h names die with the char
         _fx.Clear();
         _skillCdMs.Clear();

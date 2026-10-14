@@ -129,6 +129,11 @@ public static class Export
             Environment.ExitCode = 1;
             return;
         }
+        if (!SoundExport.Run(baseRoot, maps, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         foreach (var map in maps.Values)
             WriteJson(Path.Combine(outDir, "maps", $"{map.MapId}.json"), map);
         var str = WzRoot.LoadCategory(dataDir, "String");
@@ -337,6 +342,38 @@ public static class Export
         map.Info.VrTop = Int(info, "VRTop");
         map.Info.VrRight = Int(info, "VRRight");
         map.Info.VrBottom = Int(info, "VRBottom");
+        map.Info.Bgm = Str(info, "bgm");
+        if (map.Info.Bgm == "")
+        {
+            Console.WriteLine($"map {mapId}: info/bgm missing");
+            return null;
+        }
+
+        // miniMap: the canvas plus the world rect it covers
+        var mm = scene.Nodes["miniMap"];
+        if (mm == null)
+        {
+            Console.WriteLine($"map {mapId}: miniMap node not found");
+            return null;
+        }
+        var (mmpng, _) = WzNodeUtil.ReadCanvas(root, mm.Nodes["canvas"]);
+        if (mmpng == null)
+        {
+            Console.WriteLine($"map {mapId}: miniMap canvas missing");
+            return null;
+        }
+        string mmpath = $"minimap/{mapId}.png";
+        SaveOnce(mmpng, Path.Combine(outDir, mmpath), saved);
+        map.MiniMap.Image = mmpath;
+        map.MiniMap.Width = Int(mm, "width");
+        map.MiniMap.Height = Int(mm, "height");
+        map.MiniMap.CenterX = Int(mm, "centerX");
+        map.MiniMap.CenterY = Int(mm, "centerY");
+        if (map.MiniMap.Width <= 0 || map.MiniMap.Height <= 0)
+        {
+            Console.WriteLine($"map {mapId}: miniMap has a bad rect");
+            return null;
+        }
 
         // spawn portal: node "0" ("sp") when it has tm == NoTarget, else the first
         // portal in file order with tm == NoTarget
@@ -1108,13 +1145,25 @@ public static class Export
                 Console.WriteLine($"potion {id} has no spec");
                 return false;
             }
+            var pinfo = node.Nodes["info"];
+            if (pinfo == null)
+            {
+                Console.WriteLine($"potion {id} has no info");
+                return false;
+            }
             var data = new ItemData
             {
                 ItemId = id,
                 Image = $"item/{id}.png",
                 Hp = Int(spec, "hp"),
                 Mp = Int(spec, "mp"),
+                Price = Int(pinfo, "price"),
             };
+            if (data.Price <= 0)
+            {
+                Console.WriteLine($"potion {id} has a bad price {data.Price}");
+                return false;
+            }
             if (!UiPng.Save(item, "Item", $"Consume/0200.img/{key}/info/icon", Path.Combine(outDir, data.Image)))
                 return false;
             WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
@@ -1126,7 +1175,7 @@ public static class Export
     // One def + icon per wearable gear: Slot and bonuses come from the img's
     // info node. v1 ships only all-supported stats: any other inc* fails loud
     // (a half-working item must never sneak in); reqs/pose/sfx/speed/tuc/
-    // price/cash sit unused by design (ItemData documents the v1 gear rules).
+    // cash sit unused by design (ItemData documents the v1 gear rules).
     private static bool ExportEquips(WzRoot chara, string outDir)
     {
         foreach ((string gear, string _) in CharaGears)
@@ -1155,10 +1204,16 @@ public static class Export
                 Def = Int(info, "incPDD"),
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),
+                Price = Int(info, "price"),
             };
             if (data.Slot == "")
             {
                 Console.WriteLine($"equip {id} has no slot");
+                return false;
+            }
+            if (data.Price <= 0)
+            {
+                Console.WriteLine($"equip {id} has a bad price {data.Price}");
                 return false;
             }
             if (!UiPng.Save(chara, "Character", $@"{gear}\info/icon", Path.Combine(outDir, data.Image)))

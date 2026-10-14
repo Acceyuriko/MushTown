@@ -65,7 +65,7 @@ public static class Dump
         Wz_Png png => $"png {png.Width}x{png.Height} {png.Format}",
         Wz_Vector v => $"vec {v.X},{v.Y}",
         Wz_Uol u => $"uol {u.Uol}",
-        Wz_Sound => "sound",
+        Wz_Sound s => $"sound {s.SoundType} {s.Ms}ms {s.DataLength}b",
         Wz_Video => "video",
         _ => value.ToString() ?? "?"
     };

@@ -254,6 +254,7 @@ public partial class MushTownGame : Game
         }
 
         InitializeMenu(_shotScreen);
+        LoadAudio(); // sounds last: needs the save dir (settings) and the map (BGM)
         base.Initialize();
     }
 
@@ -287,6 +288,10 @@ public partial class MushTownGame : Game
         for (int i = 0; i < portalDelays.Count; i++)
             if (portalDelays[i].Any(x => x <= 0))
                 throw new InvalidDataException($"map {mapId} portal {i} has a bad delay");
+        // stale maps predate bgm/minimap: an empty image would load the assets
+        // dir as a png, a zero width would divide by zero in ToDot
+        if (map.Info.Bgm == "" || map.MiniMap.Image == "" || map.MiniMap.Width <= 0 || map.MiniMap.Height <= 0)
+            throw new InvalidDataException($"map {mapId} is stale: re-run export");
         // all checks passed: commit everything at once, so a bad map leaves
         // the old map untouched and the menu can retry cleanly
         _mapId = mapId;
@@ -296,6 +301,7 @@ public partial class MushTownGame : Game
         _portalAnims = portalAnims;
         _portalDelays = portalDelays;
         EndTalkAndCheckNpcs(); // NPCs are static per map (talk ends with the map)
+        PlayBgm(); // same track across a switch keeps playing
     }
 
     // Stand on this map's spawn ground.
@@ -331,7 +337,7 @@ public partial class MushTownGame : Game
             foreach (var frame in gear.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -455,6 +461,7 @@ public partial class MushTownGame : Game
         foreach (var item in _map.Tiles) LoadTexture(item.Image);
         foreach (var item in _map.Objs) LoadTexture(item.Image);
         foreach (var item in _map.Portals) foreach (var f in item.Frames) LoadTexture(f.Image);
+        LoadTexture(_map.MiniMap.Image);
     }
 
     protected override void Update(GameTime gameTime)
@@ -462,7 +469,7 @@ public partial class MushTownGame : Game
         if (_shotPath != null)
         {
             base.Update(gameTime);
-            return;
+            return; // shots never update: no clicks, no saves, player prefs untouched
         }
 #if DEBUG
         if (_layoutDirty)
@@ -554,6 +561,7 @@ public partial class MushTownGame : Game
         if (freshCtrl && _climb == null && _attackLock <= 0 && HasJudge())
         {
             _attackLock = _delays["swingP1"].Sum();
+            PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
             {
@@ -607,6 +615,7 @@ public partial class MushTownGame : Game
         {
             _vy = OwnJump();
             _canLeap = false;
+            PlaySfx("jump");
             SpawnCastFx(SkillData.WarLeap, _px, _py, _facingRight);
             if (_net != null && _net.Connected) _net.SendSkillCast(SkillData.WarLeap, 0);
         }
@@ -666,6 +675,7 @@ public partial class MushTownGame : Game
             _climb = null;
             _climbMoving = false;
             _vy = OwnJump() / 2;
+            PlaySfx("jump");
             _vx = dir * OwnWalk() * 1.5f;
             _facingRight = dir > 0;
             _ground = null;
@@ -723,6 +733,7 @@ public partial class MushTownGame : Game
         {
             _vy = OwnJump();
             _ground = null;
+            PlaySfx("jump");
         }
         if (wantDrop)
         {
@@ -948,6 +959,7 @@ public partial class MushTownGame : Game
     // here means hand-edited assets.
     private void SwitchMap(int tm, string tn)
     {
+        PlaySfx("portal");
         if (tm != _mapId)
         {
             LoadMapData(tm);
@@ -1134,6 +1146,7 @@ public partial class MushTownGame : Game
             _talkQuest = 0;
             _talkPage = 0;
             _showSubmenu = false;
+            PlaySfx("click");
             return;
         }
     }
@@ -1258,6 +1271,7 @@ public partial class MushTownGame : Game
         m.Action = hpLeft == 0 ? "die1" : "hit1";
         m.Frame = 0;
         m.Timer = 0;
+        PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, _mobData[m.Mob].Boss) : "hit");
         float bodyH = _textures[MobFrames(m.Mob, m.Action)[0].Image].Height;
         float headY = m.Y - bodyH;
         _numbers.Add(new DamageNumber { Text = damage.ToString(), X = m.X, Y = headY });
@@ -1362,6 +1376,7 @@ public partial class MushTownGame : Game
         _drops.Remove(uid);
         var chara = _account?.Slots[_slot];
         if (!mine || chara == null) return;
+        PlaySfx("pickup");
         if (kind == DropKind.Mesos)
         {
             chara.Mesos += id;
@@ -1434,6 +1449,7 @@ public partial class MushTownGame : Game
     private void CastActive(int id)
     {
         _attackLock = _skills[id].CastLockMs;
+        PlaySfx(SwingKey()); // v1 skills whoosh like swings (no per-skill sounds yet)
         SpawnCastFx(id, _px, _py, _facingRight);
         int pct = CastPct(id);
         if (_net != null && _net.Connected) _net.SendSkillCast(id, pct);
@@ -1461,6 +1477,7 @@ public partial class MushTownGame : Game
     private void CastBuff(int id)
     {
         _buffMs[id] = _skills[id].BuffMs;
+        PlaySfx("buff");
         StripLoopFx(id); // recasts re-hang one loop, never stack two
         SpawnLoopFx(id);
         SpawnCastFx(id, _px, _py, _facingRight);
@@ -1589,6 +1606,7 @@ public partial class MushTownGame : Game
         if (ups > 0)
         {
             GameLog($"level up! now Lv.{chara.Level} (STR {chara.Str} DEX {chara.Dex})");
+            PlaySfx("levelup");
             PushBuild();
         }
     }
@@ -1743,7 +1761,9 @@ public partial class MushTownGame : Game
         _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);
         _skillPos = new Point(Layout.Skill.X, Layout.Skill.Y);
         _questPos = new Point(Layout.Quest.X, Layout.Quest.Y);
-        _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; // a reload mid-drag drops the grab
+        _settingsPos = new Point(Layout.Settings.X, Layout.Settings.Y);
+        _shopPos = new Point(Layout.Shop.X, Layout.Shop.Y);
+        _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
     }
 
     private static string FindAssetsDir()
