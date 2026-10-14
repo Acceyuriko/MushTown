@@ -22,10 +22,10 @@ public sealed class TempAssets : IDisposable
             $"\"Info\":{{\"VrLeft\":{vrLeft},\"VrTop\":{vrTop},\"VrRight\":{vrRight},\"VrBottom\":{vrBottom}}}}}");
 
     public void AddMob(int mob, int hp, double def = 0, int exp = 0,
-        int touch = 5, int speed = 40, int aggro = 200) =>
+        int touch = 5, int speed = 40, int aggro = 200, bool boss = false) =>
         File.WriteAllText(Path.Combine(Dir, "mob", $"{mob}.json"),
             $"{{\"MobId\":{mob},\"MaxHp\":{hp},\"Def\":{def.ToString(CultureInfo.InvariantCulture)},\"Exp\":{exp}," +
-            $"\"Touch\":{touch},\"Speed\":{speed},\"Aggro\":{aggro},\"Actions\":[]}}");
+            $"\"Touch\":{touch},\"Speed\":{speed},\"Aggro\":{aggro},\"Boss\":{(boss ? "true" : "false")},\"Actions\":[]}}");
 
     // The server only reads Kind/DmgLo/MobCount/Range, so names and art stay out.
     public void AddSkill(int skill, int range, int mobCount, int kind = 0, int dmgLo = 1)

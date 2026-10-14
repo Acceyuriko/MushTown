@@ -21,17 +21,25 @@ public static class Export
     // same-named twin (String names verified identical). Stats are v1 feel
     // numbers: the modern client keeps them server-side, no maxHP node exists
     // anywhere in the data (verified in W8 recon). EXP pays for levels 1-10
+    // Boss pin: the WZ carries no boss life, so v1 pins Mushmom to map
+    // 2000000 (main ground y=527 runs -212..1440; the pin stands east of the
+    // NPCs). Its attack1 art ships but never plays: v1 bosses touch like
+    // every other mob.
+    private const int BossMushmom = 6130101;
+    private const int BossMap = 2000000, BossX = 1300, BossY = 527;
+
     // (W10 curve: 1035 total, the 23 mobs pay 1225).
     // Touch/speed/aggro (W13 feel): touch is flat contact damage, speed is
     // walk px/s (all slower than the player's 140, so everything outruns),
-    // aggro is chase range in x px. No attack actions exist in the art (all
-    // four twins carry only stand/move/hit1/die1), so contact is the attack.
+    // aggro is chase range in x px. No attack actions play in v1 (the four
+    // twins carry none; Mushmom ships one but contact is the attack).
     private static readonly Dictionary<int, (string art, int hp, double def, int exp, int touch, int speed, int aggro)> Mobs = new()
     {
         [100000] = ("0100100", 40, 0, 35, 4, 40, 180),      // Snail
         [100001] = ("0100101", 55, 0, 50, 6, 45, 220),      // Blue Snail
         [100003] = ("0120100", 70, 0, 65, 8, 35, 200),      // Spore (twin 120100)
         [100004] = ("1210102", 110, 0.05, 95, 12, 55, 280), // Orange Mushroom (twin 1210102)
+        [BossMushmom] = ("6130101", 3000, 0.5, 300, 30, 50, 600), // Mushmom: duo Lv10s chew ~17s through the DEF
     };
 
     // Skill table: v1 feel numbers (SkillData documents the column rules).
@@ -555,6 +563,18 @@ public static class Export
             Console.WriteLine($"  missing {missing} map item(s)");
             return null;
         }
+        // Boss pin (see BossMushmom): the pin must stand on a foothold.
+        if (mapId == BossMap)
+        {
+            var ground = SceneMath.GroundBelow(map.Footholds, BossX, BossY);
+            if (ground == null || SceneMath.FootholdY(ground, BossX) != BossY)
+            {
+                Console.WriteLine($"map {mapId}: boss pin ({BossX},{BossY}) has no ground");
+                return null;
+            }
+            map.Life.Add(new LifeItem { MobId = BossMushmom, X = BossX, Cy = BossY });
+            Console.WriteLine($"map {mapId}: boss {BossMushmom} pinned at ({BossX},{BossY})");
+        }
         return map;
     }
 
@@ -731,7 +751,8 @@ public static class Export
             Exp = Mobs[mobId].exp,
             Touch = Mobs[mobId].touch,
             Speed = Mobs[mobId].speed,
-            Aggro = Mobs[mobId].aggro
+            Aggro = Mobs[mobId].aggro,
+            Boss = mobId == BossMushmom
         };
         foreach (Wz_Node action in img.Nodes)
         {
@@ -740,6 +761,7 @@ public static class Export
             var frames = new List<(int key, Wz_Node node)>();
             foreach (Wz_Node f in action.Nodes)
             {
+                if (f.Text == "info") continue; // attack metadata (effect), not a frame
                 if (!int.TryParse(f.Text, out int key))
                 {
                     Console.WriteLine($"mob {mobId} {action.Text}: non-frame child {f.Text}");

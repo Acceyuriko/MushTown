@@ -316,6 +316,7 @@ public partial class MushTownGame
         if (_showSubmenu) DrawSubmenu(gx, gy, pressed);
         DrawQslot();
         DrawTracker();
+        DrawBossBar();
         // The front panel draws last (on top); the back three keep inv < stat < skill < quest.
         if (_topPanel == 0) { if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showInv) DrawInvPanel(); }
         else if (_topPanel == 1) { if (_showInv) DrawInvPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showStat) DrawStatPanel(); }
@@ -682,6 +683,22 @@ public partial class MushTownGame
             _spriteBatch.Draw(t, new Vector2(10, y), i % 2 == 0 ? new Color(255, 220, 0) : Color.White);
             y += 16;
         }
+    }
+
+    // Boss HP bar (top-center, fixed): shows while a boss lives on this map
+    // (v1 has one: Mushmom). Backing + name/numbers + red bar; death hides it.
+    private void DrawBossBar()
+    {
+        MobView? boss = null;
+        foreach (var m in _mobs.Values)
+            if (m.Hp > 0 && _mobData[m.Mob].Boss) { boss = m; break; }
+        if (boss == null) return;
+        int x = (1366 - BossBarW) / 2;
+        var head = _ui.GetSmall($"{_mobData[boss.Mob].Name}  {boss.Hp} / {boss.MaxHp}");
+        _spriteBatch.Draw(_pixel, new Rectangle(x - 4, 8, BossBarW + 8, 32), new Color(0, 0, 0, 120));
+        _spriteBatch.Draw(head, new Vector2(x + (BossBarW - head.Width) / 2, 10), new Color(255, 220, 0));
+        _spriteBatch.Draw(_pixel, new Rectangle(x, 28, BossBarW, 8), Color.Black);
+        _spriteBatch.Draw(_pixel, new Rectangle(x + 1, 29, Math.Max(1, (BossBarW - 2) * boss.Hp / boss.MaxHp), 6), new Color(220, 60, 60));
     }
 
     // Talk panel (modal): NPC name on top, one page of body, quest entries in

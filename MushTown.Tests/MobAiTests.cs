@@ -138,6 +138,57 @@ public class MobAiTests
         Assert.AreEqual(1, spawns[0].Hp);
     }
 
+    // Boss kill: a fat purse (150-300 mesos, 2 reds, 1 blue) and a 5-min
+    // grave (normals pay 10-30 and re-plant in 10s).
+    [TestMethod]
+    public void Boss_KillDropsPurseAndRespawnsAfter5Min()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":6130101,"X":100,"Cy":100}]""", Flat);
+        assets.AddMob(6130101, 1, boss: true);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+
+        var hits = world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner);
+        Assert.AreEqual(0, hits[0].HpLeft);
+        var fresh = world.TakeDrops();
+        Assert.AreEqual(3, fresh.Count);
+        Assert.AreEqual(DropKind.Mesos, fresh[0].Kind);
+        Assert.IsTrue(fresh[0].Id is >= 150 and <= 300);
+        Assert.AreEqual(DropKind.Item, fresh[1].Kind);
+        Assert.AreEqual(ItemData.RedPotion, fresh[1].Id);
+        Assert.AreEqual(2, fresh[1].Count);
+        Assert.AreEqual(DropKind.Item, fresh[2].Kind);
+        Assert.AreEqual(ItemData.BluePotion, fresh[2].Id);
+        Assert.AreEqual(1, fresh[2].Count);
+        Assert.AreEqual(0, world.Tick(299999, Solo(900)).Spawns.Count);
+        var spawns = world.Tick(1, Solo(900)).Spawns;
+        Assert.AreEqual(1, spawns.Count);
+        Assert.AreEqual(6130101, spawns[0].Mob);
+        Assert.AreEqual(100f, spawns[0].X);
+    }
+
+    // Boss touch reaches wide: the player stands at dx 55 (touch sees 51
+    // after the pace step): the small box (35) misses but the boss box
+    // (60) lands (both mobs pace the same flat, so only the box differs).
+    [TestMethod]
+    public void Boss_TouchReachesWide()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Flat);
+        assets.AddMob(100000, 40);
+        var normal = new MobWorld(assets.Dir);
+        normal.EnterMap(7);
+        Assert.AreEqual(0, normal.Tick(100, Solo(155)).Hurts.Count);
+
+        using var assets2 = new TempAssets();
+        assets2.AddMap(7, """[{"MobId":6130101,"X":100,"Cy":100}]""", Flat);
+        assets2.AddMob(6130101, 40, boss: true);
+        var boss = new MobWorld(assets2.Dir);
+        boss.EnterMap(7);
+        Assert.AreEqual(1, boss.Tick(100, Solo(155)).Hurts.Count);
+    }
+
     // Pickup: the drop must exist, sit on the taker's map, and be near. Gone
     // means gone (the second grab misses), far and wrong-map miss too.
     [TestMethod]

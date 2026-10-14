@@ -161,6 +161,7 @@ public sealed class MobData
     public int Touch { get; set; } // contact damage (flat: mobs roll no variance in v1)
     public int Speed { get; set; } // walk px/s (wander and chase share it)
     public int Aggro { get; set; } // chase range in x px (0 = never chases)
+    public bool Boss { get; set; } // v1 boss (Mushmom only): long grave, fat purse, wide touch, HP bar
     public List<MobAction> Actions { get; set; } = new();
 }
 

@@ -28,6 +28,7 @@ public partial class MushTownGame : Game
     private const float NumberMs = 800; // damage numbers rise and fade over this long
     private const int NumberRise = 60; // px a damage number floats up
     private const int BarWidth = 40; // mob HP bar width, px
+    private const int BossBarW = 400; // boss HP bar width, px
     private const int FxDelay = 100; // skill effect frames share one delay (WZ ships no delays for them)
     private const int FxCastDy = 40; // cast effects center on the torso (bare frames: no WZ origins)
     private const int DashPx = 220; // Rush/Flash Blade carry the caster this far along facing

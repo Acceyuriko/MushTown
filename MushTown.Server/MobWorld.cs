@@ -42,9 +42,12 @@ public sealed class MobWorld
     private const int PushPx = 60; // Rush knocks mobs this far along the dash
     private const int TouchX = 35; // touch box half-size (mob feet vs player feet)
     private const int TouchY = 45;
+    private const int BossTouchX = 60; // Mushmom is ~120px wide: the small box would miss edge touches
+    private const int BossTouchY = 60;
     private const int ChaseDy = 150; // chase only reaches nearby platforms
     private const int TouchCdMs = 1000; // one touch per mob per second max
     private const int RespawnMs = 10000; // graves re-plant after 10s
+    private const int BossRespawnMs = 300000; // the boss rests 5 min between fights
     private const int DropMs = 60000; // drops fade after 60s unclaimed
     public const int PickDx = 90; // pickup reach, x half-box (the client filters Z with these)
     public const int PickDy = 90; // ... and the server judges with them (a miss sends nothing)
@@ -68,6 +71,7 @@ public sealed class MobWorld
         public int Touch;
         public int Speed;
         public int Aggro;
+        public bool Boss;
     }
 
     private sealed class Grave
@@ -93,7 +97,7 @@ public sealed class MobWorld
 
     private readonly string _assetsDir;
     private readonly Dictionary<int, MapData> _maps = new();
-    private readonly Dictionary<int, (int hp, double def, int exp, int touch, int speed, int aggro)> _stats = new();
+    private readonly Dictionary<int, (int hp, double def, int exp, int touch, int speed, int aggro, bool boss)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
     private readonly List<Live> _lives = new();
     private readonly List<Grave> _graves = new();
@@ -139,7 +143,7 @@ public sealed class MobWorld
                     throw new InvalidDataException($"mob {life.MobId} has bad stats (hp {mob.MaxHp}, def {mob.Def}, exp {mob.Exp})");
                 if (mob.Touch < 0 || mob.Speed <= 0 || mob.Aggro < 0)
                     throw new InvalidDataException($"mob {life.MobId} has bad ai stats (touch {mob.Touch}, speed {mob.Speed}, aggro {mob.Aggro})");
-                st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro);
+                st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss);
                 _stats[life.MobId] = st;
             }
             fresh.Add(Plant(_nextUid++, life.MobId, map, life.X, life.Cy, st));
@@ -151,7 +155,7 @@ public sealed class MobWorld
     // One fresh body at the spawn feet (first plant and respawns share it).
     // Mobs face left until the AI turns them.
     private static Live Plant(int uid, int mob, int map, float x, float y,
-        (int hp, double def, int exp, int touch, int speed, int aggro) st) => new()
+        (int hp, double def, int exp, int touch, int speed, int aggro, bool boss) st) => new()
         {
             Uid = uid,
             Mob = mob,
@@ -166,7 +170,8 @@ public sealed class MobWorld
             Exp = st.exp,
             Touch = st.touch,
             Speed = st.speed,
-            Aggro = st.aggro
+            Aggro = st.aggro,
+            Boss = st.boss
         };
 
     // Live mobs on one map, for clients entering it.
@@ -214,7 +219,8 @@ public sealed class MobWorld
             foreach (var p in players)
             {
                 if (p.map != m.Map || m.TouchMs > 0) continue;
-                if (Math.Abs(p.x - m.X) > TouchX || Math.Abs(p.y - m.Y) > TouchY) continue;
+                int tx = m.Boss ? BossTouchX : TouchX, ty = m.Boss ? BossTouchY : TouchY;
+                if (Math.Abs(p.x - m.X) > tx || Math.Abs(p.y - m.Y) > ty) continue;
                 m.TouchMs = TouchCdMs;
                 hurts.Add(new Hurt(p.id, m.Uid, m.Mob, m.Map, m.Touch));
                 break; // one victim per tick per mob
@@ -412,7 +418,8 @@ public sealed class MobWorld
     }
 
     // One damage roll applied to one live mob. The dead leave the world, a
-    // grave (respawn), and their drops: mesos always, a potion sometimes.
+    // grave (respawn), and their drops: mesos always, a potion sometimes
+    // (the boss always pays its purse).
     private Hit HitOne(Live m, int tag, Random rng, Build build, int pct)
     {
         int damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct);
@@ -429,48 +436,47 @@ public sealed class MobWorld
     // for the respawn timer, plus the kill's drops.
     private void Bury(Live m, Random rng)
     {
-        _graves.Add(new Grave { Map = m.Map, Mob = m.Mob, X = m.HomeX, Y = m.HomeY, MsLeft = RespawnMs });
+        _graves.Add(new Grave { Map = m.Map, Mob = m.Mob, X = m.HomeX, Y = m.HomeY, MsLeft = m.Boss ? BossRespawnMs : RespawnMs });
         DropKill(m, rng);
     }
 
-    // One kill's drops: a meso pile (10-30) always, a red potion 10% of the
-    // time, else a blue 4%. Each lands on the ground below its own x (a mob
-    // killed mid-fall must not leave loot hanging); over the void it keeps
-    // the kill height and fades unclaimed. The potion lands a step aside.
+    // One kill's drops: a meso pile (10-30, boss 150-300) always, plus
+    // potions (normals roll one bottle, red 10%, else blue 4%; the boss
+    // always pays 2 reds and a blue). Each lands on the ground below its
+    // own x; over the void it keeps the kill height and fades unclaimed.
     private void DropKill(Live m, Random rng)
     {
         var data = _maps[m.Map]; // lives only exist after EnterMap loaded it
-        float px = Math.Clamp(m.X - 7, data.Info.VrLeft, data.Info.VrRight);
-        var pile = new GroundDrop
+        DropOne(data, m, m.X - 7, DropKind.Mesos, m.Boss ? 150 + rng.Next(151) : 10 + rng.Next(21), 1);
+        if (m.Boss)
         {
-            Uid = _nextDrop++,
-            Map = m.Map,
-            X = px,
-            Y = LandY(data.Footholds, px, m.Y),
-            Kind = DropKind.Mesos,
-            Id = 10 + rng.Next(21),
-            Count = 1,
-            MsLeft = DropMs
-        };
-        _drops.Add(pile);
-        _fresh.Add(new Drop(pile.Uid, pile.Map, pile.X, pile.Y, pile.Kind, pile.Id, pile.Count));
+            DropOne(data, m, m.X + 7, DropKind.Item, ItemData.RedPotion, 2);
+            DropOne(data, m, m.X + 21, DropKind.Item, ItemData.BluePotion, 1);
+            return;
+        }
         double roll = rng.NextDouble();
         int potion = roll < 0.10 ? ItemData.RedPotion : roll < 0.14 ? ItemData.BluePotion : 0;
         if (potion == 0) return;
-        float bx = Math.Clamp(m.X + 7, data.Info.VrLeft, data.Info.VrRight);
-        var bottle = new GroundDrop
+        DropOne(data, m, m.X + 7, DropKind.Item, potion, 1);
+    }
+
+    // One loot drop: clamped inside the VR, lands on the ground below.
+    private void DropOne(MapData data, Live m, float x, int kind, int id, int count)
+    {
+        float cx = Math.Clamp(x, data.Info.VrLeft, data.Info.VrRight);
+        var d = new GroundDrop
         {
             Uid = _nextDrop++,
             Map = m.Map,
-            X = bx,
-            Y = LandY(data.Footholds, bx, m.Y),
-            Kind = DropKind.Item,
-            Id = potion,
-            Count = 1,
+            X = cx,
+            Y = LandY(data.Footholds, cx, m.Y),
+            Kind = kind,
+            Id = id,
+            Count = count,
             MsLeft = DropMs
         };
-        _drops.Add(bottle);
-        _fresh.Add(new Drop(bottle.Uid, bottle.Map, bottle.X, bottle.Y, bottle.Kind, bottle.Id, bottle.Count));
+        _drops.Add(d);
+        _fresh.Add(new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count));
     }
 
     // Drop landing height: the first ground at or below the kill, else the
