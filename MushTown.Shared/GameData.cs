@@ -192,6 +192,18 @@ public sealed class ItemData
     public const int RedPotion = 2000000; // +50 HP (spec hp)
     public const int BluePotion = 2000003; // +100 MP (spec mp)
 
+    // The potion ids v1 knows: the client loads and slots them, quests may
+    // grant them. One list on purpose: a grantable potion the client never
+    // loaded would miss its art. (Equips and ETC join with W17.)
+    public static readonly int[] PotionIds = new[] { RedPotion, BluePotion };
+
+    public static string Name(int id) => id switch
+    {
+        RedPotion => "Red Potion",
+        BluePotion => "Blue Potion",
+        _ => $"item {id}",
+    };
+
     public int ItemId { get; set; }
     public string Image { get; set; } = "";
     public int Hp { get; set; }

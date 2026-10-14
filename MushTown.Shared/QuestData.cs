@@ -16,8 +16,8 @@ public sealed class NpcData
 
 // Exported quest file: assets/quest/{id}.json (official, by id list) or
 // quests/{id}.json (custom, same shape, wins on clash). Kill objectives only
-// in v1 (no item bag yet, so collect quests cannot complete); scripts and
-// options (#L) are out too. Rewards export for W15, which grants them.
+// in v1 (no ETC bag yet, so collect quests cannot complete); scripts and
+// options (#L) are out too. Rewards pay EXP, mesos, and USE potions.
 public sealed class QuestData
 {
     public int QuestId { get; set; }
@@ -36,7 +36,25 @@ public sealed class QuestData
     public List<QuestKill> Kills { get; set; } = new(); // Check/1/mob, key order; v1 takes at most 9 (detail block + single-digit #a order)
     public bool NeedItemsToComplete { get; set; } // Check/1/item non-empty: v1 cannot verify, never completes
     public bool NeedItemsToAccept { get; set; } // Check/0/item non-empty: v1 cannot accept
-    public int RewardExp { get; set; } // Act/1/exp (W15 grants)
+    public int RewardExp { get; set; } // Act/1/exp (TalkAction grants it through GainExp, like kills)
+    public int RewardMeso { get; set; } // Act/1/meso (GrantRewards drops it in the purse)
+    public List<QuestReward> RewardItems { get; set; } = new(); // Act/1/item (potions only in v1: no ETC bag yet)
+    // Turn-in preview + log receipt: one short line per reward, no prefix
+    // (the talk page heads them with "Reward:", the log wraps them in parens).
+    public List<string> RewardLines()
+    {
+        var lines = new List<string>();
+        if (RewardExp > 0) lines.Add($"{RewardExp} EXP");
+        if (RewardMeso > 0) lines.Add($"{RewardMeso} mesos");
+        foreach (var r in RewardItems) lines.Add($"{ItemData.Name(r.Item)} x{r.Count}");
+        return lines;
+    }
+}
+
+public sealed class QuestReward
+{
+    public int Item { get; set; }
+    public int Count { get; set; }
 }
 
 public sealed class QuestKill
@@ -95,8 +113,9 @@ public static class QuestLog
         return true;
     }
 
-    // Turn in (W15 adds the rewards; v1 moves the state only). Counters go
-    // with the hunt: nothing reads them once the quest leaves the log.
+    // Turn-in (moves the state only; TalkAction pays out after this passes).
+    // Counters go with the hunt: nothing reads them once the quest leaves
+    // the log.
     public static bool Complete(CharaSlot chara, QuestData q)
     {
         if (!IsComplete(chara, q)) return false;
@@ -105,6 +124,22 @@ public static class QuestLog
         for (int i = 0; i < q.Kills.Count; i++)
             chara.QuestKills.Remove($"{q.QuestId}:{i}");
         return true;
+    }
+
+    // Turn-in payout: mesos drop in the purse, potions in the USE bag
+    // (pre-W10 saves have no bag yet: build it). EXP is not paid here:
+    // TalkAction routes it through GainExp like kills, so level-ups log and
+    // push the build on the same path.
+    public static void GrantRewards(CharaSlot chara, QuestData q)
+    {
+        chara.Mesos += q.RewardMeso;
+        if (q.RewardItems.Count == 0) return;
+        chara.Use ??= new Dictionary<int, int>();
+        foreach (var r in q.RewardItems)
+        {
+            chara.Use.TryGetValue(r.Item, out int n);
+            chara.Use[r.Item] = n + r.Count;
+        }
     }
 }
 

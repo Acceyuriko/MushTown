@@ -168,7 +168,7 @@ public partial class MushTownGame
         foreach (string f in UiFiles) LoadTexture("ui/" + f); // missing file fails loud here
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
-        foreach (int id in UseIds) // USE tab potions: json first (it names the icon), then the icon
+        foreach (int id in ItemData.PotionIds) // USE tab potions: json first (it names the icon), then the icon
         {
             var item = LoadJson<ItemData>(Path.Combine(_assetsDir, "item", $"{id}.json"));
             _items[id] = item;

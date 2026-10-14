@@ -53,6 +53,13 @@ public partial class MushTownGame
                     throw new InvalidDataException($"custom quest {f} has a zero kill");
                 if (q.Kills.Count > 9)
                     throw new InvalidDataException($"custom quest {f} has {q.Kills.Count} kills (v1 takes 9)");
+                if (q.RewardExp < 0)
+                    throw new InvalidDataException($"custom quest {f} has a negative exp reward");
+                if (q.RewardMeso < 0)
+                    throw new InvalidDataException($"custom quest {f} has a negative meso reward");
+                var bad = q.RewardItems.FirstOrDefault(r => !ItemData.PotionIds.Contains(r.Item) || r.Count <= 0);
+                if (bad != null)
+                    throw new InvalidDataException($"custom quest {f} has a bad item reward (item {bad.Item} x{bad.Count})");
                 _quests[q.QuestId] = q;
             }
     }
@@ -141,7 +148,14 @@ public partial class MushTownGame
         }
         bool offer = !chara.Quests.Contains(q.QuestId);
         if (offer) return q.Say0.Count > 0 ? q.Say0 : new List<string> { q.Offer };
-        if (QuestLog.IsComplete(chara, q)) return q.Say1.Count > 0 ? q.Say1 : new List<string> { q.Done };
+        if (QuestLog.IsComplete(chara, q))
+        {
+            // Turn-in ends with the payout preview (a copy: Say1 is live data).
+            var pages = new List<string>(q.Say1.Count > 0 ? q.Say1 : new List<string> { q.Done });
+            var rewards = q.RewardLines();
+            if (rewards.Count > 0) pages.Add("Reward:\n" + string.Join("\n", rewards));
+            return pages;
+        }
         string stop = q.Stop != "" ? q.Stop : "You are not done yet.";
         return new List<string> { stop };
     }
@@ -197,7 +211,10 @@ public partial class MushTownGame
         }
         if (button == "Complete" && QuestLog.Complete(chara, q))
         {
-            GameLog($"completed: {q.Name}");
+            var rewards = q.RewardLines();
+            GameLog(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
+            QuestLog.GrantRewards(chara, q);
+            GainExp(q.RewardExp);
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
             if (_questSel == q.QuestId) _questSel = 0; // turned in: drop the stale selection
         }

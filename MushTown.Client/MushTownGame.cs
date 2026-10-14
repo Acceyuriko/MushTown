@@ -1344,7 +1344,7 @@ public partial class MushTownGame : Game
             chara.Use ??= new Dictionary<int, int>();
             chara.Use.TryGetValue(id, out int have);
             chara.Use[id] = have + count;
-            GameLog($"picked up {(id == ItemData.RedPotion ? "Red Potion" : "Blue Potion")} x{count}");
+            GameLog($"picked up {ItemData.Name(id)} x{count}");
         }
     }
 

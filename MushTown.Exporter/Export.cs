@@ -811,9 +811,10 @@ public static class Export
         return true;
     }
 
-    // Proof quests (W15 picks the real chain): 1016 carries full Say pages,
+    // Exported quests: 1016 proves full Say pages (its pre is unexported,
+    // so it never offers), 1027 is the W15 chain finale (Mai to Lucas talk),
     // 36301 is scripted with empty Say (the client falls back to summaries).
-    private static readonly int[] QuestIds = new[] { 1016, 36301 };
+    private static readonly int[] QuestIds = new[] { 1016, 1027, 36301 };
 
     private static bool ExportQuests(WzRoot baseRoot, string outDir)
     {
@@ -854,7 +855,28 @@ public static class Export
                 NeedItemsToComplete = check1?.Nodes["item"]?.Nodes.Count > 0,
                 NeedItemsToAccept = check0?.Nodes["item"]?.Nodes.Count > 0,
                 RewardExp = QNum(img.Nodes["Act"]?.Nodes["1"]?.Nodes["exp"]),
+                RewardMeso = QNum(img.Nodes["Act"]?.Nodes["1"]?.Nodes["meso"]),
             };
+            if (data.RewardExp < 0)
+            {
+                Console.WriteLine($"quest {questId} has a negative exp reward");
+                return false;
+            }
+            if (data.RewardMeso < 0)
+            {
+                Console.WriteLine($"quest {questId} has a negative meso reward");
+                return false;
+            }
+            foreach (Wz_Node it in img.Nodes["Act"]?.Nodes["1"]?.Nodes["item"]?.Nodes ?? Enumerable.Empty<Wz_Node>())
+            {
+                int item = QNum(it.Nodes["id"]), count = QNum(it.Nodes["count"]);
+                if (!ItemData.PotionIds.Contains(item) || count <= 0)
+                {
+                    Console.WriteLine($"quest {questId} has a bad item reward (item {item} x{count})");
+                    return false;
+                }
+                data.RewardItems.Add(new QuestReward { Item = item, Count = count });
+            }
             foreach (var side in new[] { check0, check1 })
                 foreach (Wz_Node pre in side?.Nodes["quest"]?.Nodes ?? Enumerable.Empty<Wz_Node>())
                     if (QNum(pre.Nodes["state"]) == 2)

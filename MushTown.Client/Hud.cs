@@ -43,8 +43,6 @@ public partial class MushTownGame
     private const int TalkW = 440; // talk panel: body + quest entries + buttons
     private const int TalkBtnW = 90, TalkBtnH = 24;
 
-    // USE tab slots, fixed order: red potion, blue potion (starters and W13 drops share them).
-    private static readonly int[] UseIds = new[] { ItemData.RedPotion, ItemData.BluePotion };
     private readonly Dictionary<int, ItemData> _items = new();
 
     // Skill window tabs (one per job) + rows: skill id + fixed cast key
@@ -186,8 +184,8 @@ public partial class MushTownGame
                 for (int t = 0; t < TabCount; t++)
                     if (HitRect(TabRect(t), gx, gy)) { _invTab = t; break; }
                 if (_invTab == 1) // USE tab: click a potion to drink it
-                    for (int s = 0; s < UseIds.Length; s++)
-                        if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(UseIds[s]);
+                    for (int s = 0; s < ItemData.PotionIds.Length; s++)
+                        if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(ItemData.PotionIds[s]);
             }
             else if (onSkill)
             {
@@ -454,9 +452,9 @@ public partial class MushTownGame
         _spriteBatch.Draw(Tex("hud_statx.png"), InvXRect(), Color.White);
         var chara = _account?.Slots[_slot];
         if (_invTab == 1 && chara?.Use != null) // USE tab: owned potions only (other tabs stay empty until W13+)
-            for (int i = 0; i < UseIds.Length; i++)
-                if (chara.Use.TryGetValue(UseIds[i], out int count) && count > 0)
-                    DrawUseSlot(i, UseIds[i], count);
+            for (int i = 0; i < ItemData.PotionIds.Length; i++)
+                if (chara.Use.TryGetValue(ItemData.PotionIds[i], out int count) && count > 0)
+                    DrawUseSlot(i, ItemData.PotionIds[i], count);
         // Official numbers: Arial Bold 12 #606871, right end x+213 top y+484 (font:Meso, vector:Meso).
         _spriteBatch.Draw(Tex("hud_coin.png"), new Vector2(r.X + Layout.Coin.X, r.Y + Layout.Coin.Y), Color.White);
         var meso = _ui.GetMeso((chara?.Mesos ?? 0).ToString("#,##0"));
