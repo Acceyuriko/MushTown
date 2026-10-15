@@ -6,16 +6,16 @@ namespace MushTown.Tests;
 [TestClass]
 public class CharLayoutTests
 {
-    private const string Full = """{"slotTopX":[1,2,3,4,5,6],"slotBotX":[7,8,9,10,11,12],"slotTopY":13,"slotBotY":14,"slotW":15,"slotH":16,"tagUp":17,"pillar":[18,19],"pill":[20,21],"board":[22,23],"boardCount":[24,25],"pager":[26,27],"pagerGlass":28,"pageL":[47,48],"pageR":[49,50],"new":[29,30],"delete":[31,32],"select":[33,34],"back":[35,36],"delPanel":[37,38],"delSize":[39,40],"delTextY":41,"delYes":[42,43],"delNo":[44,45],"errorY":46}""";
+    private const string Full = """{"slotTopX":[1,2,3,4,5,6],"slotBotX":[7,8,9,10,11,12],"slotTopY":13,"slotBotY":14,"slotW":15,"slotH":16,"tagDown":17,"pillar":[18,19],"pill":[20,21],"board":[22,23],"boardCount":[24,25],"pager":[26,27],"pagerGlass":28,"pageL":[47,48],"pageR":[49,50],"new":[29,30],"delete":[31,32],"select":[33,34],"back":[35,36],"delPanel":[37,38],"delSize":[39,40],"delTextY":41,"delYes":[42,43],"delNo":[44,45],"errorY":46}""";
 
     // CharLayout fields are shared statics: leave them as found.
-    private (int[] slotTopX, int[] slotBotX, int slotTopY, int slotBotY, int slotW, int slotH, int tagUp, (int X, int Y) pillar, (int X, int Y) pill, (int X, int Y) board, (int X, int Y) boardCount, (int X, int Y) pager, int pagerGlass, (int X, int Y) pageL, (int X, int Y) pageR, (int X, int Y) @new, (int X, int Y) delete, (int X, int Y) select, (int X, int Y) back, (int X, int Y) delPanel, (int X, int Y) delSize, int delTextY, (int X, int Y) delYes, (int X, int Y) delNo, int errorY) _saved;
+    private (int[] slotTopX, int[] slotBotX, int slotTopY, int slotBotY, int slotW, int slotH, int tagDown, (int X, int Y) pillar, (int X, int Y) pill, (int X, int Y) board, (int X, int Y) boardCount, (int X, int Y) pager, int pagerGlass, (int X, int Y) pageL, (int X, int Y) pageR, (int X, int Y) @new, (int X, int Y) delete, (int X, int Y) select, (int X, int Y) back, (int X, int Y) delPanel, (int X, int Y) delSize, int delTextY, (int X, int Y) delYes, (int X, int Y) delNo, int errorY) _saved;
 
     [TestInitialize]
-    public void Save() => _saved = (CharLayout.SlotTopX, CharLayout.SlotBotX, CharLayout.SlotTopY, CharLayout.SlotBotY, CharLayout.SlotW, CharLayout.SlotH, CharLayout.TagUp, CharLayout.Pillar, CharLayout.Pill, CharLayout.Board, CharLayout.BoardCount, CharLayout.Pager, CharLayout.PagerGlass, CharLayout.PageL, CharLayout.PageR, CharLayout.New, CharLayout.Delete, CharLayout.Select, CharLayout.Back, CharLayout.DelPanel, CharLayout.DelSize, CharLayout.DelTextY, CharLayout.DelYes, CharLayout.DelNo, CharLayout.ErrorY);
+    public void Save() => _saved = (CharLayout.SlotTopX, CharLayout.SlotBotX, CharLayout.SlotTopY, CharLayout.SlotBotY, CharLayout.SlotW, CharLayout.SlotH, CharLayout.TagDown, CharLayout.Pillar, CharLayout.Pill, CharLayout.Board, CharLayout.BoardCount, CharLayout.Pager, CharLayout.PagerGlass, CharLayout.PageL, CharLayout.PageR, CharLayout.New, CharLayout.Delete, CharLayout.Select, CharLayout.Back, CharLayout.DelPanel, CharLayout.DelSize, CharLayout.DelTextY, CharLayout.DelYes, CharLayout.DelNo, CharLayout.ErrorY);
 
     [TestCleanup]
-    public void Restore() => (CharLayout.SlotTopX, CharLayout.SlotBotX, CharLayout.SlotTopY, CharLayout.SlotBotY, CharLayout.SlotW, CharLayout.SlotH, CharLayout.TagUp, CharLayout.Pillar, CharLayout.Pill, CharLayout.Board, CharLayout.BoardCount, CharLayout.Pager, CharLayout.PagerGlass, CharLayout.PageL, CharLayout.PageR, CharLayout.New, CharLayout.Delete, CharLayout.Select, CharLayout.Back, CharLayout.DelPanel, CharLayout.DelSize, CharLayout.DelTextY, CharLayout.DelYes, CharLayout.DelNo, CharLayout.ErrorY) = _saved;
+    public void Restore() => (CharLayout.SlotTopX, CharLayout.SlotBotX, CharLayout.SlotTopY, CharLayout.SlotBotY, CharLayout.SlotW, CharLayout.SlotH, CharLayout.TagDown, CharLayout.Pillar, CharLayout.Pill, CharLayout.Board, CharLayout.BoardCount, CharLayout.Pager, CharLayout.PagerGlass, CharLayout.PageL, CharLayout.PageR, CharLayout.New, CharLayout.Delete, CharLayout.Select, CharLayout.Back, CharLayout.DelPanel, CharLayout.DelSize, CharLayout.DelTextY, CharLayout.DelYes, CharLayout.DelNo, CharLayout.ErrorY) = _saved;
 
     [TestMethod]
     public void Load_FullFile_OverridesAll()
@@ -30,7 +30,7 @@ public class CharLayoutTests
             Assert.AreEqual(14, CharLayout.SlotBotY);
             Assert.AreEqual(15, CharLayout.SlotW);
             Assert.AreEqual(16, CharLayout.SlotH);
-            Assert.AreEqual(17, CharLayout.TagUp);
+            Assert.AreEqual(17, CharLayout.TagDown);
             Assert.AreEqual((18, 19), CharLayout.Pillar);
             Assert.AreEqual((20, 21), CharLayout.Pill);
             Assert.AreEqual((22, 23), CharLayout.Board);

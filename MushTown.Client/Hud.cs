@@ -234,8 +234,8 @@ public partial class MushTownGame
                 if (_invTab == 0) // EQUIP tab: worn row takes off, bag rows wear
                     for (int s = 0; s < ItemData.EquipIds.Length; s++)
                     {
-                        if (HitRect(UseSlotRect(s), gx, gy) && TakeOff(ItemData.EquipIds[s])) PushBuild();
-                        if (HitRect(EquipBagRect(s), gx, gy) && Wear(ItemData.EquipIds[s])) PushBuild();
+                        if (HitRect(WornRect(s), gx, gy) && TakeOff(ItemData.EquipIds[s])) { PushBuild(); PushName(); }
+                        if (HitRect(EquipBagRect(s), gx, gy) && Wear(ItemData.EquipIds[s])) { PushBuild(); PushName(); }
                     }
             }
             else if (onSkill)
@@ -316,11 +316,18 @@ public partial class MushTownGame
         return new Rectangle(r.X + 14 + i * 56, r.Y + 95, 48, 48);
     }
 
-    // EQUIP tab bag cells: rows below the worn row, 4 across (same 48px grid).
+    // EQUIP tab worn cells: the gold row, wraps 4-across like the bag.
+    private Rectangle WornRect(int i)
+    {
+        var s = UseSlotRect(i % 4);
+        return new Rectangle(s.X, s.Y + 56 * (i / 4), 48, 48);
+    }
+
+    // EQUIP tab bag cells: rows below the worn rows, 4 across (same 48px grid).
     private Rectangle EquipBagRect(int i)
     {
         var s = UseSlotRect(i % 4);
-        return new Rectangle(s.X, s.Y + 56 * (1 + i / 4), 48, 48);
+        return new Rectangle(s.X, s.Y + 56 * ((ItemData.EquipIds.Length + 3) / 4 + i / 4), 48, 48);
     }
 
     // Click a USE slot: drink one. Empty slots and full pools do nothing.
@@ -674,7 +681,7 @@ public partial class MushTownGame
     // One worn slot: gold-tinted cell (it reads as equipped, not bagged).
     private void DrawWornSlot(int i, int id, int count)
     {
-        var s = UseSlotRect(i);
+        var s = WornRect(i);
         _spriteBatch.Draw(_pixel, s, new Color(255, 220, 0, 60));
         DrawInvSlot(s, id, count);
     }

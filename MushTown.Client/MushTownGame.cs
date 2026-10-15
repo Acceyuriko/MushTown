@@ -238,7 +238,7 @@ public partial class MushTownGame : Game
                 throw new InvalidDataException($"character {action} has an empty frame");
             _charas[action] = chara;
             _delays[action] = chara.Frames.Select(f => f.Delay).ToList();
-            foreach (int id in ItemData.EquipIds) // wearable art: same frames as beginner (delays ride the beginner file)
+            foreach (int id in ItemData.ArtGearIds) // wearable art: same frames as beginner (delays ride the beginner file)
             {
                 string imgId = id.ToString("D8");
                 var gear = LoadJson<CharaData>(Path.Combine(_assetsDir, "chara", "gear", imgId, $"{action}.json"));
@@ -864,11 +864,13 @@ public partial class MushTownGame : Game
                 _net.SendState(_mapId, _px, _py, Net.ActionCode(_action), (byte)_frame, _facingRight);
             while (_net.TryTake(out var e))
                 if (e.Gone)
-                    _remotes.Remove(e.Id);
+                    _remotes.Remove(e.Id); // the name stays: ids never repeat, and a map-switch Gone is not a goodbye
                 else if (e.Map != _mapId)
                     _remotes.Remove(e.Id); // peer on another map: not shown here
                 else if (e.Frame < _charas[Net.ActionName(e.Action)].Frames.Count)
                     _remotes[e.Id] = e; // bad frame: not ours, drop it
+            while (_net.TryTakeName(out var n))
+                _names[n.Id] = n;
             while (_net.TryTakeMob(out var m))
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
@@ -1081,9 +1083,25 @@ public partial class MushTownGame : Game
         // by feet height (lower feet draw in front; ties keep this order)
         int feetX = (int)Math.Floor(_px), feetY = (int)Math.Floor(_py);
         var draws = new List<(int y, Action draw)>();
-        draws.Add((feetY, () => DrawAvatar(feetX, feetY, _action, _frame, _facingRight, _save?.Slots[_slot]?.Equips)));
-        foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers show beginner: worn looks never cross the net in v1 (stats do, via Build)
-            draws.Add(((int)Math.Floor(r.Y), () => DrawAvatar((int)Math.Floor(r.X), (int)Math.Floor(r.Y), Net.ActionName(r.Action), r.Frame, r.FacingRight)));
+        var hero = _save?.Slots[_slot];
+        draws.Add((feetY, () =>
+        {
+            DrawAvatar(feetX, feetY, _action, _frame, _facingRight, hero?.Equips);
+            if (hero != null)
+                DrawName(feetX - _cameraX, feetY + NameDown - _cameraY, hero.Name, PlateFor(hero.Equips));
+        }
+        ));
+        foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers show beginner art (only the name plate crosses, via Name)
+        {
+            int rx = (int)Math.Floor(r.X), ry = (int)Math.Floor(r.Y);
+            draws.Add((ry, () =>
+            {
+                DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight);
+                if (_names.TryGetValue(r.Id, out var n))
+                    DrawName(rx - _cameraX, ry + NameDown - _cameraY, n.Name, n.Plate);
+            }
+            ));
+        }
         foreach (int uid in _mobs.Keys.OrderBy(u => u))
         {
             var m = _mobs[uid];
@@ -1612,6 +1630,13 @@ public partial class MushTownGame : Game
     // Builds change on level-up, learn, and buff edges: push them all.
     private void PushBuild() => _net?.SendBuild(OwnBuild());
 
+    // Our name + plate, so peers draw our tag (CLI sessions have no chara: skip).
+    private void PushName()
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara != null) _net?.SendName(chara.Name, PlateFor(chara.Equips));
+    }
+
     // A kill we landed (net or local): claim the EXP. A level-up pushes our
     // new build to the server (the local judge reads it fresh every swing).
     private void GainExp(int exp)
@@ -1687,8 +1712,10 @@ public partial class MushTownGame : Game
         foreach (int id in worn)
         {
             if (!_items.TryGetValue(id, out var d) || d.Slot == null) continue; // hand-made saves may wear anything
-            hide.Add(ItemData.BeginnerImgs[d.Slot]); // boot load rejects slots outside the table
-            gearParts.AddRange(_gear[(id.ToString("D8"), action)].Frames[frame].Parts); // boot load guarantees art for known equips
+            var key = (id.ToString("D8"), action);
+            if (!_gear.TryGetValue(key, out var gear)) continue; // art-less gear (rings): nothing to draw or hide
+            hide.Add(ItemData.BeginnerImgs[d.Slot]); // boot load rejects art slots outside the table
+            gearParts.AddRange(gear.Frames[frame].Parts); // boot load guarantees art for art gear
         }
         var parts = new List<CharaPart>();
         foreach (var p in _charas[action].Frames[frame].Parts)

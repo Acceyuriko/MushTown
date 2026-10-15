@@ -20,6 +20,7 @@ public static class Net
     public const byte DropSpawn = 13; // server -> client: int uid, int map, float x, float y, int kind, int id, int count
     public const byte DropTake = 14; // server -> client: int uid, int map, int taker, int kind, int id, int count (taker 0 = expired)
     public const byte Pickup = 15;   // client -> server: int uid (the drop to grab; server checks map + reach)
+    public const byte Name = 16;     // client -> server: string name, int plate; relay adds int id first
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -82,6 +83,10 @@ public static class Net
 // or Gone when a peer left (then only Id means anything).
 public readonly record struct RemoteEvent(
     bool Gone, int Id, int Map, float X, float Y, byte Action, byte Frame, bool FacingRight);
+
+// One peer's name for the game loop: sent on connect and re-sent when the
+// plate changes (ring worn or taken off). Plate is the NameTag node (0 = plain).
+public readonly record struct NameEvent(int Id, string Name, int Plate);
 
 // One mob event from the server: a spawn (Spawn true, Mob/MaxHp set, HpLeft
 // is the live HP) or a hit (Spawn false, Damage/HpLeft set, HpLeft 0 means dead).

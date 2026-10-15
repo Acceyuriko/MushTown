@@ -66,7 +66,7 @@ public partial class MushTownGame
     private static readonly string[] UiFiles = new[]
     {
         "worldbg.png",
-        "selectworld.png", "tag_l.png", "tag_m.png", "tag_r.png",
+        "selectworld.png",
         "cs_select_n.png", "cs_select_h.png", "cs_select_p.png",
         "cs_new_n.png", "cs_new_h.png", "cs_new_p.png",
         "cs_delete_n.png", "cs_delete_h.png", "cs_delete_p.png",
@@ -275,7 +275,7 @@ public partial class MushTownGame
         Sp = 18, // earned 21 (creation 3 + 6 level-ups), spent 3 on Slash Blast
         SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
         Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
-        EquipBag = new Dictionary<int, int> { { ItemData.Mop, 1 }, { ItemData.Sergeant, 1 } },
+        EquipBag = new Dictionary<int, int> { { ItemData.Mop, 1 }, { ItemData.Sergeant, 1 }, { ItemData.BambooRing, 1 }, { ItemData.InkRing, 1 }, { ItemData.IslandRing, 1 } },
     };
 
     private void LoadMenuContent()
@@ -305,14 +305,19 @@ public partial class MushTownGame
             _items[id] = item;
             LoadTexture(item.Image);
         }
-        foreach (int id in ItemData.EquipIds) // worn slots outside the beginner table would double-draw
+        foreach (int id in ItemData.EquipIds) // art slots must hide a beginner img; rings carry no art
         {
             string? slot = _items[id].Slot;
-            if (slot == null || !ItemData.BeginnerImgs.ContainsKey(slot))
+            if (slot == null || (!ItemData.BeginnerImgs.ContainsKey(slot) && slot != "Ri"))
                 throw new InvalidDataException($"equip {id} has a bad slot");
+            if (slot == "Ri" && _items[id].NameTag == 0)
+                throw new InvalidDataException($"equip {id} has no nametag");
+            if (ItemData.BeginnerImgs.ContainsKey(slot) && !ItemData.ArtGearIds.Contains(id))
+                throw new InvalidDataException($"equip {id} has art but is not art gear");
         }
-        foreach (int id in ItemData.AllIds) // stale item jsons price 0: the shop would give stock away
-            if (_items[id].Price <= 0)
+        LoadNameTags(); // ring plates ride the defs above
+        foreach (int id in ItemData.AllIds) // stale jsons price 0, except rings (cash gear carries no meso price)
+            if (_items[id].Price <= 0 && _items[id].NameTag == 0)
                 throw new InvalidDataException($"item {id} has a bad price");
         foreach (var tab in SkillTabs) // skills: json first (it names every frame), then all art
             foreach ((int id, string? _) in tab)
@@ -393,7 +398,7 @@ public partial class MushTownGame
         _net = new NetClient(GameLog);
         _net.Connect(host ? "127.0.0.1" : joinHost!);
         var chara = _save?.Slots[_slot];
-        if (chara != null) PushBuild(); // CLI sessions skip: the server defaults them to beginner
+        if (chara != null) { PushBuild(); PushName(); } // CLI sessions skip: the server defaults them to beginner
     }
 
     private void MenuTextInput(char c)
@@ -701,6 +706,7 @@ public partial class MushTownGame
         }
         SnapCamera();
         _remotes.Clear();
+        _names.Clear(); // ids restart every server run: peer tags must not cross sessions
         try
         {
             StartNet(mode == "host", mode == "host" ? null : mode);
@@ -915,7 +921,7 @@ public partial class MushTownGame
                 DrawAvatar(fx, fy, "walk2", _walkFrame, faceRight, s.Equips);
             }
             else DrawAvatar(fx, fy, "stand2", 0, faceRight, s.Equips);
-            DrawTag(fx, fy - CharLayout.TagUp, s.Name);
+            DrawName(fx, fy + CharLayout.TagDown, s.Name, PlateFor(s.Equips));
         }
         var pill = WorldPillRect();
         DrawUi("selectworld.png", pill.X, pill.Y);
@@ -1097,21 +1103,6 @@ public partial class MushTownGame
     {
         _spriteBatch.Draw(_textures["ui/" + file], new Vector2(x, y), null, Color.White, 0f,
             Vector2.Zero, 1f, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
-    }
-
-    // Fitted nametag: dark 3-slice pill with the name centered on it.
-    private void DrawTag(int cx, int y, string name)
-    {
-        var tex = _ui.Get(name);
-        var l = _textures["ui/tag_l.png"];
-        var m = _textures["ui/tag_m.png"];
-        var r = _textures["ui/tag_r.png"];
-        int w = tex.Width + 24;
-        int x = cx - w / 2;
-        _spriteBatch.Draw(l, new Vector2(x, y), Color.White);
-        _spriteBatch.Draw(m, new Rectangle(x + l.Width, y, w - l.Width - r.Width, m.Height), Color.White);
-        _spriteBatch.Draw(r, new Vector2(x + w - r.Width, y), Color.White);
-        _spriteBatch.Draw(tex, new Vector2(cx - tex.Width / 2, y + (m.Height - tex.Height) / 2), Color.White);
     }
 
     private void DrawText(string text, int x, int y, Color color)

@@ -14,7 +14,7 @@ public static class CharLayout
     public static int SlotBotY = 580; // bottom shelf feet line
     public static int SlotW = 120; // click rect size (feet-anchored)
     public static int SlotH = 170;
-    public static int TagUp = 140; // name tag floats this high above the feet
+    public static int TagDown = 6; // name tag hangs this far below the feet
     public static (int X, int Y) Pillar = (-66, -164); // totem offset from feet (WZ origin 66,164)
     public static (int X, int Y) Pill = (1135, 33); // server pill top-left
     public static (int X, int Y) Board = (1135, 100); // slots board top-left
@@ -45,7 +45,7 @@ public static class CharLayout
         var slotBotY = GetInt(root, "slotBotY", SlotBotY);
         var slotW = GetInt(root, "slotW", SlotW);
         var slotH = GetInt(root, "slotH", SlotH);
-        var tagUp = GetInt(root, "tagUp", TagUp);
+        var tagDown = GetInt(root, "tagDown", TagDown);
         var pillar = GetPoint(root, "pillar", Pillar);
         var pill = GetPoint(root, "pill", Pill);
         var board = GetPoint(root, "board", Board);
@@ -65,7 +65,7 @@ public static class CharLayout
         var delNo = GetPoint(root, "delNo", DelNo);
         var errorY = GetInt(root, "errorY", ErrorY);
         SlotTopX = slotTopX; SlotBotX = slotBotX; SlotTopY = slotTopY; SlotBotY = slotBotY;
-        SlotW = slotW; SlotH = slotH; TagUp = tagUp; Pillar = pillar; Pill = pill; Board = board;
+        SlotW = slotW; SlotH = slotH; TagDown = tagDown; Pillar = pillar; Pill = pill; Board = board;
         BoardCount = boardCount; Pager = pager; PagerGlass = pagerGlass; PageL = pageL; PageR = pageR;
         New = @new; Delete = delete;
         Select = select; Back = back; DelPanel = delPanel; DelSize = delSize;

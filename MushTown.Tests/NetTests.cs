@@ -173,6 +173,37 @@ public sealed class NetTests
         Assert.AreEqual(b.PlayerId, goneAtC2.Id);
     }
 
+    // Names relay to peers with the sender id attached; a newcomer gets
+    // the existing names on connect; a re-send overwrites (ring change).
+    [TestMethod]
+    public void Loopback_NameRelaysToPeer()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(10000);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 12);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 12);
+        b.Connect("127.0.0.1", Net.Port + 12);
+
+        a.SendName("hero", 58);
+        var atB = WaitTakeName(b);
+        Assert.AreEqual(a.PlayerId, atB.Id);
+        Assert.AreEqual("hero", atB.Name);
+        Assert.AreEqual(58, atB.Plate);
+
+        using var c = new NetClient(_ => { });
+        c.Connect("127.0.0.1", Net.Port + 12);
+        var atC = WaitTakeName(c); // the newcomer learns a's tag
+        Assert.AreEqual(a.PlayerId, atC.Id);
+        Assert.AreEqual("hero", atC.Name);
+
+        a.SendName("hero", 0); // ring taken off
+        var atB2 = WaitTakeName(b);
+        Assert.AreEqual(0, atB2.Plate);
+    }
+
     private static RemoteEvent WaitTake(NetClient client)
     {
         for (int i = 0; i < 500; i++)
@@ -181,6 +212,17 @@ public sealed class NetTests
             Thread.Sleep(10);
         }
         Assert.Fail("timed out waiting for a net event");
+        throw new InvalidOperationException("unreachable");
+    }
+
+    private static NameEvent WaitTakeName(NetClient client)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            if (client.TryTakeName(out var e)) return e;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for a name event");
         throw new InvalidOperationException("unreachable");
     }
 }

@@ -16,6 +16,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<MoveEvent> _moveEvents = new();
     private readonly ConcurrentQueue<HurtEvent> _hurtEvents = new();
     private readonly ConcurrentQueue<DropEvent> _dropEvents = new();
+    private readonly ConcurrentQueue<NameEvent> _nameEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -137,6 +138,13 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.Pickup, w => w.Write(uid)));
     }
 
+    // Our name + plate, so peers draw our tag (sent on connect, re-sent on ring change).
+    public void SendName(string name, int plate)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.Name, w => { w.Write(name); w.Write(plate); }));
+    }
+
     private void SendFrame(byte[] frame)
     {
         try
@@ -162,6 +170,8 @@ public sealed class NetClient : IDisposable
     public bool TryTakeHurt(out HurtEvent e) => _hurtEvents.TryDequeue(out e);
 
     public bool TryTakeDrop(out DropEvent e) => _dropEvents.TryDequeue(out e);
+
+    public bool TryTakeName(out NameEvent e) => _nameEvents.TryDequeue(out e);
 
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
@@ -227,6 +237,19 @@ public sealed class NetClient : IDisposable
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), 0, 0,
                 BitConverter.ToInt32(p, 13), BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21),
                 BitConverter.ToInt32(p, 9)));
+        else if (p[0] == Net.Name && p.Length > 9)
+        {
+            try
+            {
+                using var ms = new MemoryStream(p, 1, p.Length - 1);
+                using var r = new BinaryReader(ms);
+                _nameEvents.Enqueue(new NameEvent(r.ReadInt32(), r.ReadString(), r.ReadInt32()));
+            }
+            catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
+            {
+                _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
+            }
+        }
         else
             _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
     }

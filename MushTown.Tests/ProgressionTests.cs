@@ -154,6 +154,8 @@ public class ProgressionTests
     {
         [ItemData.Mop] = new ItemData { ItemId = ItemData.Mop, Slot = "Wp", Atk = 47 },
         [1442000] = new ItemData { ItemId = 1442000, Slot = "Wp", Atk = 32 },
+        [ItemData.BambooRing] = new ItemData { ItemId = ItemData.BambooRing, Slot = "Ri", NameTag = 58 },
+        [ItemData.InkRing] = new ItemData { ItemId = ItemData.InkRing, Slot = "Ri", NameTag = 59 },
     };
 
     // Wearing swaps the same-slot piece out; wearing the worn id again is a
@@ -181,6 +183,26 @@ public class ProgressionTests
 
         chara.EquipBag.Remove(1442000);
         Assert.IsFalse(Progression.WearEquip(chara, 1442000, EquipDefs())); // not in the bag
+    }
+
+    // Rings share one finger: wearing a second swaps the first out, and a
+    // ring coexists with the weapon (different slots).
+    [TestMethod]
+    public void WearEquip_RingsSwapOneFinger()
+    {
+        var chara = new CharaSlot
+        {
+            Name = "hero",
+            EquipBag = new Dictionary<int, int> { { ItemData.Mop, 1 }, { ItemData.BambooRing, 1 }, { ItemData.InkRing, 1 } },
+        };
+        Assert.IsTrue(Progression.WearEquip(chara, ItemData.Mop, EquipDefs()));
+        Assert.IsTrue(Progression.WearEquip(chara, ItemData.BambooRing, EquipDefs()));
+        Assert.AreEqual(2, chara.Equips.Count);
+        Assert.IsTrue(Progression.WearEquip(chara, ItemData.InkRing, EquipDefs()));
+        Assert.AreEqual(2, chara.Equips.Count);
+        Assert.IsTrue(chara.Equips.Contains(ItemData.Mop));
+        Assert.IsTrue(chara.Equips.Contains(ItemData.InkRing));
+        Assert.AreEqual(1, chara.EquipBag[ItemData.BambooRing]); // swapped out
     }
 
     // Takeoff returns the piece to the bag; unworn slots do nothing.

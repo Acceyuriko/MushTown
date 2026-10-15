@@ -24,9 +24,10 @@ public sealed class GameServer : IDisposable
     private readonly Action<string> _log;
     private readonly int _port;
     private readonly MobWorld _mobs;
-    private readonly object _mobLock = new(); // guards _pos/_builds and the MobWorld (read loops run per client)
+    private readonly object _mobLock = new(); // guards _pos/_builds/_names and the MobWorld (read loops run per client)
     private readonly Dictionary<int, (int map, float x, float y, bool facing)> _pos = new();
     private readonly Dictionary<int, Build> _builds = new(); // combat stats per client (missing = beginner default)
+    private readonly Dictionary<int, (string name, int plate)> _names = new(); // name tags per client (missing = CLI session)
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private DiscoverResponder? _responder; // answers LAN scans while we run (same lifetime as the listener)
@@ -123,6 +124,9 @@ public sealed class GameServer : IDisposable
             _clients[id] = client;
             _log($"client {id} connected");
             Send(client, Net.Encode(Net.Welcome, w => w.Write(id)));
+            lock (_mobLock) // the newcomer needs its peers' tags (states carry no names)
+                foreach (var kv in _names)
+                    Send(client, NameFrame(kv.Key, kv.Value.name, kv.Value.plate));
             // the newcomer's map is unknown until its first State; live states
             // fill peers in within a frame, so no history is sent here
             _ = Task.Run(() => ReadLoop(id, client, ct), ct);
@@ -156,16 +160,22 @@ public sealed class GameServer : IDisposable
         {
             _pos.Remove(id);
             _builds.Remove(id);
+            _names.Remove(id);
         }
         client.Tcp.Close();
         Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
         _log($"client {id} left");
     }
 
-    // Clients send State, Attack, Build, SkillCast, and Pickup; anything else means a foreign client.
+    // Clients send State, Attack, Build, SkillCast, Pickup, and Name; anything else means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
+        if (payload[0] == Net.Name)
+        {
+            OnName(id, payload);
+            return;
+        }
         if (payload[0] == Net.Attack && payload.Length == 1)
         {
             OnAttack(id);
@@ -206,6 +216,36 @@ public sealed class GameServer : IDisposable
         if (first || switched) PushMobs(id, map);
         Broadcast(Net.Frame(payload), id);
     }
+
+    // A client's name + plate: stored and relayed to every other client (a
+    // re-send after a ring change overwrites). Malformed means a foreign client.
+    private void OnName(int id, byte[] payload)
+    {
+        string name;
+        int plate;
+        try
+        {
+            using var ms = new MemoryStream(payload, 1, payload.Length - 1);
+            using var r = new BinaryReader(ms);
+            name = r.ReadString();
+            plate = r.ReadInt32();
+        }
+        catch (Exception ex) when (ex is IOException or FormatException)
+        {
+            throw new InvalidDataException($"bad name from {id} ({ex.Message})");
+        }
+        lock (_mobLock)
+            _names[id] = (name, plate);
+        Broadcast(NameFrame(id, name, plate), id);
+    }
+
+    private static byte[] NameFrame(int id, string name, int plate) =>
+        Net.Encode(Net.Name, w =>
+        {
+            w.Write(id);
+            w.Write(name);
+            w.Write(plate);
+        });
 
     // The Attack carries no body: the swing is judged from the sender's last
     // State (its position and facing) and its Build (combat stats; CLI

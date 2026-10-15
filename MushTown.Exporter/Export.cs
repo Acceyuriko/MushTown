@@ -85,9 +85,6 @@ public static class Export
     {
         ("LoginBack.img/WorldSelect/default/0/0", "worldbg.png"),
         ("Login.img/CharSelect/selectWorld", "selectworld.png"),
-        ("Login.img/CharSelect/nameTag/0/0", "tag_l.png"),
-        ("Login.img/CharSelect/nameTag/0/1", "tag_m.png"),
-        ("Login.img/CharSelect/nameTag/0/2", "tag_r.png"),
         ("Login.img/ClassSelect/list/backgrnd", "listbg.png"),
         ("Login.img/ClassSelect/list/class/button:classEnabled/110/normal/0", "cell_hero.png"),
         ("Login.img/ClassSelect/button:make/normal/0", "btn_make.png"),
@@ -255,6 +252,11 @@ public static class Export
             }
         }
         if (!ExportUiFrames(ui, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
+        if (!ExportNameTag(ui, outDir))
         {
             Environment.ExitCode = 1;
             return;
@@ -705,6 +707,20 @@ public static class Export
         (@"Coat\01040039.img", @"Coat\01040036.img"),
         (@"Weapon\01442004.img", @"Weapon\01442000.img"),
     };
+
+    // Def + icon per wearable: art-less rings ride along (no doll pixels).
+    private static readonly string[] EquipGearPaths = new[]
+    {
+        @"Coat\01040039.img",
+        @"Weapon\01442004.img",
+        @"Ring\01112134.img",
+        @"Ring\01112135.img",
+        @"Ring\01112162.img",
+    };
+
+    // Name tag plates, one per shipped ring (the ring's info/nameTag names
+    // its node): 58 bamboo, 59 ink-and-wash, 129 island travel.
+    private static readonly int[] NameTagNodes = new[] { 58, 59, 129 };
     // img/action/frame with a uol resolved at both levels (AvatarCanvas.cs:1203-1226)
     private static Wz_Node? FindImgFrame(WzRoot looseRoot, string img, string action, int frameIdx)
     {
@@ -1206,6 +1222,45 @@ public static class Export
         return true;
     }
 
+    // Name tag plates: 3 slices + origins + name color per node.
+    private static bool ExportNameTag(WzRoot ui, string outDir)
+    {
+        foreach (int node in NameTagNodes)
+        {
+            string tag = $"NameTag.img/{node}";
+            if (!UiPng.TryRead(ui, "UI", $"{tag}/w", out var w, out var wO)
+                || !UiPng.TryRead(ui, "UI", $"{tag}/c", out var c, out var cO)
+                || !UiPng.TryRead(ui, "UI", $"{tag}/e", out var e, out var eO))
+                return false;
+            if (wO == null || cO == null || eO == null)
+            {
+                Console.WriteLine($"{tag}: a slice has no origin");
+                return false;
+            }
+            int clr = Int(ui.Find(tag), "clr", int.MinValue);
+            if (clr == int.MinValue)
+            {
+                Console.WriteLine($"{tag}: no clr");
+                return false;
+            }
+            WzNodeUtil.SavePng(w, Path.Combine(outDir, "ui", "tag", $"ring{node}_w.png"));
+            WzNodeUtil.SavePng(c, Path.Combine(outDir, "ui", "tag", $"ring{node}_c.png"));
+            WzNodeUtil.SavePng(e, Path.Combine(outDir, "ui", "tag", $"ring{node}_e.png"));
+            WriteJson(Path.Combine(outDir, "ui", "tag", $"ring{node}.json"), new NameTagData
+            {
+                Clr = clr,
+                WOx = wO.X,
+                WOy = wO.Y,
+                COx = cO.X,
+                COy = cO.Y,
+                EOx = eO.X,
+                EOy = eO.Y,
+            });
+            Console.WriteLine($"nametag {node}: {w.Width}x{w.Height}/{c.Width}x{c.Height}/{e.Width}x{e.Height} clr={clr}");
+        }
+        return true;
+    }
+
     private static bool ExportDamageSkin(WzRoot effect, string outDir)
     {
         var data = new DmgData();
@@ -1280,9 +1335,11 @@ public static class Export
     // cash sit unused by design (ItemData documents the v1 gear rules).
     private static bool ExportEquips(WzRoot chara, string outDir)
     {
-        foreach ((string gear, string _) in CharaGears)
+        var shipped = new List<int>();
+        foreach (string gear in EquipGearPaths)
         {
             int id = int.Parse(ImgId(gear));
+            shipped.Add(id);
             var info = chara.Find($@"{gear}\info");
             if (info == null)
             {
@@ -1307,13 +1364,14 @@ public static class Export
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),
                 Price = Int(info, "price"),
+                NameTag = Int(info, "nameTag"),
             };
             if (data.Slot == "")
             {
                 Console.WriteLine($"equip {id} has no slot");
                 return false;
             }
-            if (data.Price <= 0)
+            if (data.Price <= 0 && Int(info, "cash") == 0) // cash gear carries no meso price
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
                 return false;
@@ -1322,7 +1380,7 @@ public static class Export
                 return false;
             WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
         }
-        Console.WriteLine("equips: 1040039 1442004");
+        Console.WriteLine($"equips: {string.Join(" ", shipped)}");
         return true;
     }
 

@@ -218,6 +218,9 @@ public sealed class ItemData
     public const int BluePotion = 2000003; // +100 MP (spec mp)
     public const int Mop = 1442004; // Janitor's Mop (Wp, PAD 47): Mushmom purse
     public const int Sergeant = 1040039; // Red Sergeant (Ma, DEX 1/PDD 25): orange rare
+    public const int BambooRing = 1112134; // Bamboo Name Tag Ring (Ri, plate 58): cash shop (later)
+    public const int InkRing = 1112135; // Ink-and-Wash Painting Name Tag Ring (Ri, plate 59): cash shop (later)
+    public const int IslandRing = 1112162; // Island Travel Name Tag Ring (Ri, plate 129): cash shop (later)
 
     // The potion ids v1 knows: the client loads and slots them, quests may
     // grant them. One list on purpose: a grantable potion the client never
@@ -227,7 +230,11 @@ public sealed class ItemData
     // The equip ids v1 knows: the client loads defs/icons/art, bags and
     // wears them, mobs drop them. (1040038 skipped: its official name is
     // unfit; cap-class gear skipped: hats re-hang the hair.)
-    public static readonly int[] EquipIds = new[] { Mop, Sergeant };
+    public static readonly int[] EquipIds = new[] { Mop, Sergeant, BambooRing, InkRing, IslandRing };
+
+    // The equips with doll art: rings carry no worn pixels (info-only), so
+    // the boot art load and the slot table skip them (the merge does too).
+    public static readonly int[] ArtGearIds = new[] { Mop, Sergeant };
 
     // Every loadable item def + icon (potions, then equips).
     public static readonly int[] AllIds = PotionIds.Concat(EquipIds).ToArray();
@@ -264,6 +271,9 @@ public sealed class ItemData
         BluePotion => "Blue Potion",
         Mop => "Janitor's Mop",
         Sergeant => "Red Sergeant",
+        BambooRing => "Bamboo Name Tag Ring",
+        InkRing => "Ink-and-Wash Painting Name Tag Ring",
+        IslandRing => "Island Travel Name Tag Ring",
         _ => $"item {id}",
     };
 
@@ -277,6 +287,7 @@ public sealed class ItemData
     public int Def { get; set; } // WZ incPDD
     public int Str { get; set; } // WZ incSTR
     public int Dex { get; set; } // WZ incDEX
+    public int NameTag { get; set; } // WZ info/nameTag: UI NameTag.img node (0 = plain black box)
 }
 
 // Basic damage skin digits: assets/effect/dmg.json (BasicEff.img NoRed0,
@@ -312,6 +323,20 @@ public sealed class UiFrame
     public int Delay { get; set; } // frame time in ms
     public int A0 { get; set; } // start alpha (missing in WZ means 255)
     public int A1 { get; set; } // end alpha (missing means hold A0)
+}
+
+// Exported name tag plate: assets/ui/tag/ring{node}.json + ring{node}_{w,c,e}.png.
+// A 3-slice bar (UI NameTag.img node): origins anchor each canvas (draw pos =
+// anchor minus origin), Clr tints the name. Slice png sizes come from the art.
+public sealed class NameTagData
+{
+    public int Clr { get; set; }
+    public int WOx { get; set; }
+    public int WOy { get; set; }
+    public int COx { get; set; }
+    public int COy { get; set; }
+    public int EOx { get; set; }
+    public int EOy { get; set; }
 }
 
 // Exported character action: assets/chara/body/{action}.json (beginner full
