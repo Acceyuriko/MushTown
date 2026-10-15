@@ -225,6 +225,7 @@ public partial class MushTownGame : Game
         Window.ClientSizeChanged += OnClientSizeChanged;
 
         LoadQuestData(); // NPC/quest json before maps (views validate placements)
+        LoadManifest(); // the ship list loads before any scan proves against it
         LoadItemDefs(); // scanned roster before the doll art loop (and before customs validate rewards)
         ValidateCustomQuests();
         LoadSkillDefs();

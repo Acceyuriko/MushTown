@@ -267,6 +267,12 @@ public static class Export
             Environment.ExitCode = 1;
             return;
         }
+        WriteJson(Path.Combine(outDir, "manifest.json"), new ManifestData
+        {
+            Potions = PotionIds.OrderBy(x => x).ToList(),
+            Equips = EquipGearPaths.Select(g => int.Parse(ImgId(g))).OrderBy(x => x).ToList(),
+            Skills = Skills.Keys.OrderBy(x => x).ToList(),
+        });
         Console.WriteLine("export done -> " + Path.GetFullPath(outDir));
     }
 
@@ -708,6 +714,8 @@ public static class Export
         (@"Coat\01040039.img", @"Coat\01040036.img"),
         (@"Weapon\01442004.img", @"Weapon\01442000.img"),
     };
+
+    private static readonly int[] PotionIds = new[] { ItemData.RedPotion, ItemData.BluePotion };
 
     // Def + icon per wearable: art-less rings ride along (no doll pixels).
     private static readonly string[] EquipGearPaths = new[]
@@ -1295,7 +1303,7 @@ public static class Export
     // spec node; icons are the info/icon canvases (_outlink to _Canvas).
     private static bool ExportPotions(WzRoot item, WzRoot str, string outDir)
     {
-        foreach (int id in new[] { ItemData.RedPotion, ItemData.BluePotion })
+        foreach (int id in PotionIds)
         {
             string key = id.ToString("D8"); // 02000000
             var node = item.Find($"Consume/0200.img/{key}");

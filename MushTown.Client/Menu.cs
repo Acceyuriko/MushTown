@@ -289,6 +289,12 @@ public partial class MushTownGame
                 $"missing exported dir: {Path.GetFullPath(dir)} (run: dotnet run --project MushTown.Exporter -- export)", dir);
     }
 
+    // Manifest first: the ship list every scan-loaded def set proves against.
+    private void LoadManifest()
+    {
+        _manifest = LoadJson<ManifestData>(Path.Combine(_assetsDir, "manifest.json"));
+    }
+
     private void LoadItemDefs()
     {
         string dir = Path.Combine(_assetsDir, "item");
@@ -300,6 +306,9 @@ public partial class MushTownGame
         }
         _potions = _items.Values.Where(d => d.Slot == null).Select(d => d.ItemId).OrderBy(id => id).ToList();
         _equips = _items.Values.Where(d => d.Slot != null).Select(d => d.ItemId).OrderBy(id => id).ToList();
+        foreach (int id in _manifest.Potions.Concat(_manifest.Equips)) // the ship list proves complete: listed but unscanned fails here
+            if (!_items.ContainsKey(id))
+                throw new InvalidDataException($"manifest lists item {id} with no exported def");
         foreach (int id in Shop.Stock) // the shop indexes defs by stock id: a missing def fails here, not at draw time
             if (!_items.ContainsKey(id))
                 throw new InvalidDataException($"shop stocks {id} with no exported def");
@@ -337,6 +346,9 @@ public partial class MushTownGame
             foreach ((int id, string? _) in tab)
                 if (!_skills.ContainsKey(id))
                     throw new InvalidDataException($"skill tab lists {id} with no exported def");
+        foreach (int id in _manifest.Skills)
+            if (!_skills.ContainsKey(id))
+                throw new InvalidDataException($"manifest lists skill {id} with no exported def");
     }
 
     private void LoadMenuContent()

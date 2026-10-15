@@ -49,6 +49,7 @@ public partial class MushTownGame
     private const int TalkBtnW = 90, TalkBtnH = 24;
 
     private readonly Dictionary<int, ItemData> _items = new();
+    private ManifestData _manifest = null!;
 
     // Scanned tab rosters (LoadItemDefs): consumables slot USE, equips slot
     // EQUIP, both in id order. Clicks and draws share them, so cell i is
