@@ -316,6 +316,8 @@ public partial class MushTownGame
             }
             if (item.Price <= 0 && item.NameTag == 0) // stale jsons price 0, except rings (cash gear carries no meso price)
                 throw new InvalidDataException($"item {id} has a bad price");
+            if (item.Name == "") // pre-name jsons would print blank labels
+                throw new InvalidDataException($"item {id} has no name");
         }
     }
 

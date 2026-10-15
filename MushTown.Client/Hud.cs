@@ -366,13 +366,14 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions carry no wallet
-        int price = _items[id].Price;
+        var def = _items[id];
+        int price = def.Price;
         if (Shop.Buy(chara, id, price))
         {
-            GameLog($"bought {ItemData.Name(id)} for {price:#,##0} mesos");
+            GameLog($"bought {def.Name} for {price:#,##0} mesos");
             PlaySfx("shopbuy");
         }
-        else GameLog($"not enough mesos for {ItemData.Name(id)} ({price:#,##0})");
+        else GameLog($"not enough mesos for {def.Name} ({price:#,##0})");
     }
 
     // Click a bag row: sell one at half price (rows show owned only, so it lands).
@@ -383,7 +384,7 @@ public partial class MushTownGame
         var def = _items[id];
         if (Shop.Sell(chara, id, def))
         {
-            GameLog($"sold {ItemData.Name(id)} for {Shop.SellPrice(def.Price):#,##0} mesos");
+            GameLog($"sold {def.Name} for {Shop.SellPrice(def.Price):#,##0} mesos");
             PlaySfx("click");
         }
     }
@@ -936,10 +937,11 @@ public partial class MushTownGame
         for (int i = 0; i < Shop.Stock.Length; i++)
         {
             int id = Shop.Stock[i];
+            var def = _items[id];
             int y = ShopBuyTop() + i * ShopRowH;
             DrawShopIcon(id, r.X + 12, y);
-            _spriteBatch.Draw(_ui.GetSmall(ItemData.Name(id)), new Vector2(r.X + 52, y + 4), Color.White);
-            _spriteBatch.Draw(_ui.GetSmall($"{_items[id].Price:#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
+            _spriteBatch.Draw(_ui.GetSmall(def.Name), new Vector2(r.X + 52, y + 4), Color.White);
+            _spriteBatch.Draw(_ui.GetSmall($"{def.Price:#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
             DrawShopButton(ShopBuyRect(i), "Buy", gx, gy);
         }
         _spriteBatch.Draw(_ui.GetSmall("Sell"), new Vector2(r.X + 12, ShopSellTop() - 16), Color.White);
@@ -950,7 +952,7 @@ public partial class MushTownGame
         {
             int y = ShopSellTop() + i * ShopRowH;
             DrawShopIcon(sells[i].id, r.X + 12, y);
-            _spriteBatch.Draw(_ui.GetSmall($"{ItemData.Name(sells[i].id)} x{sells[i].count}"), new Vector2(r.X + 52, y + 4), Color.White);
+            _spriteBatch.Draw(_ui.GetSmall($"{_items[sells[i].id].Name} x{sells[i].count}"), new Vector2(r.X + 52, y + 4), Color.White);
             _spriteBatch.Draw(_ui.GetSmall($"{Shop.SellPrice(_items[sells[i].id].Price):#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
             DrawShopButton(ShopSellRect(i), "Sell", gx, gy);
         }

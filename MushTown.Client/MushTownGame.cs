@@ -1427,7 +1427,7 @@ public partial class MushTownGame : Game
                 : chara.Use ??= new Dictionary<int, int>();
             bag.TryGetValue(id, out int have);
             bag[id] = have + count;
-            GameLog($"picked up {ItemData.Name(id)} x{count}");
+            GameLog($"picked up {_items[id].Name} x{count}");
         }
     }
 

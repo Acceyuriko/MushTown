@@ -157,7 +157,7 @@ public partial class MushTownGame
         {
             // Turn-in ends with the payout preview (a copy: Say1 is live data).
             var pages = new List<string>(q.Say1.Count > 0 ? q.Say1 : new List<string> { q.Done });
-            var rewards = q.RewardLines();
+            var rewards = q.RewardLines(id => _items[id].Name);
             if (rewards.Count > 0) pages.Add("Reward:\n" + string.Join("\n", rewards));
             return pages;
         }
@@ -233,7 +233,7 @@ public partial class MushTownGame
         }
         if (button == "Complete" && QuestLog.Complete(chara, q))
         {
-            var rewards = q.RewardLines();
+            var rewards = q.RewardLines(id => _items[id].Name);
             GameLog(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
             QuestLog.GrantRewards(chara, q);
             GainExp(q.RewardExp);

@@ -159,8 +159,8 @@ public class QuestTests
             RewardMeso = 30,
             RewardItems = new() { new() { Item = ItemData.RedPotion, Count = 3 } },
         };
-        CollectionAssert.AreEqual(new[] { "50 EXP", "30 mesos", "Red Potion x3" }, q.RewardLines());
-        Assert.AreEqual(0, new QuestData().RewardLines().Count);
+        CollectionAssert.AreEqual(new[] { "50 EXP", "30 mesos", "Red Potion x3" }, q.RewardLines(_ => "Red Potion"));
+        Assert.AreEqual(0, new QuestData().RewardLines(_ => "").Count);
     }
 
     // Meso-only payouts never touch the bag: a pre-W10 null bag stays null.

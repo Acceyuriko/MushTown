@@ -41,12 +41,12 @@ public sealed class QuestData
     public List<QuestReward> RewardItems { get; set; } = new(); // Act/1/item (potions only in v1: no ETC bag yet)
     // Turn-in preview + log receipt: one short line per reward, no prefix
     // (the talk page heads them with "Reward:", the log wraps them in parens).
-    public List<string> RewardLines()
+    public List<string> RewardLines(Func<int, string> itemName)
     {
         var lines = new List<string>();
         if (RewardExp > 0) lines.Add($"{RewardExp} EXP");
         if (RewardMeso > 0) lines.Add($"{RewardMeso} mesos");
-        foreach (var r in RewardItems) lines.Add($"{ItemData.Name(r.Item)} x{r.Count}");
+        foreach (var r in RewardItems) lines.Add($"{itemName(r.Item)} x{r.Count}");
         return lines;
     }
 }

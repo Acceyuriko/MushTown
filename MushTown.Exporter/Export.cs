@@ -221,12 +221,12 @@ public static class Export
             return;
         }
         var item = WzRoot.LoadCategory(dataDir, "Item");
-        if (!ExportPotions(item, outDir))
+        if (!ExportPotions(item, str, outDir))
         {
             Environment.ExitCode = 1;
             return;
         }
-        if (!ExportEquips(chara, outDir))
+        if (!ExportEquips(chara, str, outDir))
         {
             Environment.ExitCode = 1;
             return;
@@ -1293,7 +1293,7 @@ public static class Export
 
     // W10 potions: red (+50 HP) and blue (+100 MP). Heals come from the WZ
     // spec node; icons are the info/icon canvases (_outlink to _Canvas).
-    private static bool ExportPotions(WzRoot item, string outDir)
+    private static bool ExportPotions(WzRoot item, WzRoot str, string outDir)
     {
         foreach (int id in new[] { ItemData.RedPotion, ItemData.BluePotion })
         {
@@ -1316,9 +1316,16 @@ public static class Export
                 Console.WriteLine($"potion {id} has no info");
                 return false;
             }
+            string name = str.Find($@"Consume.img\{id}\name")?.GetValueEx<string>("") ?? "";
+            if (name == "")
+            {
+                Console.WriteLine($"potion {id} has no String name");
+                return false;
+            }
             var data = new ItemData
             {
                 ItemId = id,
+                Name = name,
                 Image = $"item/{id}.png",
                 Hp = Int(spec, "hp"),
                 Mp = Int(spec, "mp"),
@@ -1341,7 +1348,7 @@ public static class Export
     // info node. v1 ships only all-supported stats: any other inc* fails loud
     // (a half-working item must never sneak in); reqs/pose/sfx/speed/tuc/
     // cash sit unused by design (ItemData documents the v1 gear rules).
-    private static bool ExportEquips(WzRoot chara, string outDir)
+    private static bool ExportEquips(WzRoot chara, WzRoot str, string outDir)
     {
         var shipped = new List<int>();
         foreach (string gear in EquipGearPaths)
@@ -1362,9 +1369,17 @@ public static class Export
                     return false;
                 }
             }
+            string cat = gear.Split('\\')[0]; // Coat/Weapon/Ring: the Eqp.img shelf matches the Character folder
+            string name = str.Find($@"Eqp.img\Eqp\{cat}\{id}\name")?.GetValueEx<string>("") ?? "";
+            if (name == "")
+            {
+                Console.WriteLine($"equip {id} has no String name");
+                return false;
+            }
             var data = new ItemData
             {
                 ItemId = id,
+                Name = name,
                 Image = $"item/{id}.png",
                 Slot = Str(info, "islot"),
                 Atk = Int(info, "incPAD"),

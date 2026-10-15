@@ -252,19 +252,8 @@ public sealed class ItemData
         return (weapon, str, dex, def);
     }
 
-    public static string Name(int id) => id switch
-    {
-        RedPotion => "Red Potion",
-        BluePotion => "Blue Potion",
-        Mop => "Janitor's Mop",
-        Sergeant => "Red Sergeant",
-        BambooRing => "Bamboo Name Tag Ring",
-        InkRing => "Ink-and-Wash Painting Name Tag Ring",
-        IslandRing => "Island Travel Name Tag Ring",
-        _ => $"item {id}",
-    };
-
     public int ItemId { get; set; }
+    public string Name { get; set; } = ""; // String.wz name (Consume/Eqp): the exporter fails loud when missing
     public string Image { get; set; } = "";
     public int Hp { get; set; }
     public int Mp { get; set; }
