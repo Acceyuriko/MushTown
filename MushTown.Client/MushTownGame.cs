@@ -228,6 +228,7 @@ public partial class MushTownGame : Game
         LoadManifest(); // the ship list loads before any scan proves against it
         LoadItemDefs(); // scanned roster before the doll art loop (and before customs validate rewards)
         ValidateCustomQuests();
+        ValidateDropTables(); // after item defs (drop ids prove against them)
         LoadSkillDefs();
         _mapId = _shotPath != null ? _shotMap : SpawnMapId;
         LoadMapData(_mapId);

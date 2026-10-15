@@ -330,6 +330,22 @@ public partial class MushTownGame
         }
     }
 
+    // Drop tables name real items: the server rolls these ids straight into
+    // Pickup, where an unknown id would crash, so boot proves them here.
+    private void ValidateDropTables()
+    {
+        string dir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "drops");
+        if (!Directory.Exists(dir))
+            throw new FileNotFoundException($"missing drop tables: {Path.GetFullPath(dir)} (repo data: restore it from git)", dir);
+        foreach (string f in Directory.GetFiles(dir, "*.json"))
+        {
+            var table = LoadJson<DropData>(f);
+            foreach (var d in table.Items)
+                if (!_items.ContainsKey(d.Item))
+                    throw new InvalidDataException($"drop table {table.MobId} names item {d.Item} with no exported def");
+        }
+    }
+
     // Skill defs (Initialize phase, same reason). Tabs keep their own roster
     // (window placement + hotkeys); a tabbed skill without a def fails loud
     // instead of drawing blank.

@@ -99,6 +99,7 @@ public sealed class MobWorld
     private readonly Dictionary<int, MapData> _maps = new();
     private readonly Dictionary<int, (int hp, double def, int exp, int touch, int speed, int aggro, bool boss)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
+    private readonly Dictionary<int, DropData> _dropTables = new();
     private readonly List<Live> _lives = new();
     private readonly List<Grave> _graves = new();
     private readonly List<GroundDrop> _drops = new();
@@ -145,6 +146,7 @@ public sealed class MobWorld
                     throw new InvalidDataException($"mob {life.MobId} has bad ai stats (touch {mob.Touch}, speed {mob.Speed}, aggro {mob.Aggro})");
                 st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss);
                 _stats[life.MobId] = st;
+                _dropTables[life.MobId] = LoadDropTable(life.MobId);
             }
             fresh.Add(Plant(_nextUid++, life.MobId, map, life.X, life.Cy, st));
         }
@@ -440,29 +442,44 @@ public sealed class MobWorld
         DropKill(m, rng);
     }
 
-    // One kill's drops: a meso pile (10-30, boss 150-300) always, plus
-    // potions (normals roll one bottle, red 10%, else blue 4%; the boss
-    // always pays 2 reds and a blue). Gear: the boss always drops the mop,
-    // the orange mushroom (100004) rarely drops the sergeant coat (5%).
-    // Each lands on the ground below its own x; over the void it keeps the
-    // kill height and fades unclaimed.
+    // One mob's drop table (drops/{mob}.json, repo data): a meso range plus
+    // per-item chances. Ranges fail loud here; the client proves item ids
+    // against its defs at boot (join mode trusts the host's rolls like
+    // every other server-sent id). The pre-check names the hand-data fix
+    // (restore from git): a bare missing-file error would not say where
+    // the file comes from.
+    private DropData LoadDropTable(int mobId)
+    {
+        string path = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "drops", $"{mobId}.json");
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"missing drop table for mob {mobId}: {Path.GetFullPath(path)} (repo data: restore it from git)", path);
+        var table = LoadJson<DropData>(path);
+        if (table.MobId != mobId)
+            throw new InvalidDataException($"drop table {mobId} names mob {table.MobId}");
+        if (table.MesoMin < 0 || table.MesoMax < table.MesoMin)
+            throw new InvalidDataException($"drop table {mobId} has a bad meso range ({table.MesoMin}-{table.MesoMax})");
+        foreach (var d in table.Items)
+            if (d.Chance <= 0 || d.Chance > 1 || d.Count <= 0)
+                throw new InvalidDataException($"drop table {mobId} has a bad entry (item {d.Item}, chance {d.Chance}, count {d.Count})");
+        return table;
+    }
+
+    // One kill's drops from the mob's table: a meso pile in range always,
+    // then each listed item rolled independently (a 10% red + 4% blue
+    // rarely pays both). Paying entries compact into 14px slots from +7,
+    // so a coat with no potion lands at +7, not the old fixed +21.
     private void DropKill(Live m, Random rng)
     {
         var data = _maps[m.Map]; // lives only exist after EnterMap loaded it
-        DropOne(data, m, m.X - 7, DropKind.Mesos, m.Boss ? 150 + rng.Next(151) : 10 + rng.Next(21), 1);
-        if (m.Boss)
+        var table = _dropTables[m.Mob]; // EnterMap loads every spawned mob's table
+        DropOne(data, m, m.X - 7, DropKind.Mesos, table.MesoMin + rng.Next(table.MesoMax - table.MesoMin + 1), 1);
+        int slot = 0;
+        foreach (var d in table.Items)
         {
-            DropOne(data, m, m.X + 7, DropKind.Item, ItemData.RedPotion, 2);
-            DropOne(data, m, m.X + 21, DropKind.Item, ItemData.BluePotion, 1);
-            DropOne(data, m, m.X + 35, DropKind.Item, ItemData.Mop, 1);
-            return;
+            if (rng.NextDouble() >= d.Chance) continue;
+            DropOne(data, m, m.X + 7 + 14 * slot, DropKind.Item, d.Item, d.Count);
+            slot++;
         }
-        double roll = rng.NextDouble();
-        int potion = roll < 0.10 ? ItemData.RedPotion : roll < 0.14 ? ItemData.BluePotion : 0;
-        if (potion != 0)
-            DropOne(data, m, m.X + 7, DropKind.Item, potion, 1);
-        if (m.Mob == 100004 && rng.NextDouble() < 0.05) // orange mushroom: the sergeant coat
-            DropOne(data, m, m.X + 21, DropKind.Item, ItemData.Sergeant, 1);
     }
 
     // One loot drop: clamped inside the VR, lands on the ground below.

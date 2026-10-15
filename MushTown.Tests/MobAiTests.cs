@@ -192,7 +192,7 @@ public class MobAiTests
         Assert.AreEqual(1, boss.Tick(100, Solo(155)).Hurts.Count);
     }
 
-    // Orange rare: seed 4 pays the sergeant coat (the 5% roll; the
+    // Orange rare: seed 12 pays the sergeant coat (the 5% roll; the
     // potion seeds pin their drops the same way).
     [TestMethod]
     public void Orange_KillMayDropSergeantCoat()
@@ -200,10 +200,11 @@ public class MobAiTests
         using var assets = new TempAssets();
         assets.AddMap(7, """[{"MobId":100004,"X":100,"Cy":100}]""", Flat);
         assets.AddMob(100004, 1);
+        assets.AddDrops(100004, """[{"Item":2000000,"Chance":0.1,"Count":1},{"Item":2000003,"Chance":0.04,"Count":1},{"Item":1040039,"Chance":0.05,"Count":1}]""");
         var world = new MobWorld(assets.Dir);
         world.EnterMap(7);
 
-        var hits = world.Strike(7, 60, 100, true, new Random(4), Progression.Beginner);
+        var hits = world.Strike(7, 60, 100, true, new Random(12), Progression.Beginner);
         Assert.AreEqual(0, hits[0].HpLeft);
         var coat = world.TakeDrops().Find(d => d.Kind == DropKind.Item && d.Id == ItemData.Sergeant);
         Assert.IsNotNull(coat);
@@ -224,6 +225,30 @@ public class MobAiTests
         var hits = world.Strike(7, 60, 100, true, new Random(4), Progression.Beginner);
         Assert.AreEqual(0, hits[0].HpLeft);
         Assert.IsNull(world.TakeDrops().Find(d => d.Kind == DropKind.Item && d.Id == ItemData.Sergeant));
+    }
+
+    // A spawned mob without a table fails loud at EnterMap (no silent mesos-only).
+    [TestMethod]
+    public void EnterMap_MissingDropTable_Throws()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Flat);
+        assets.AddMob(100000, 1);
+        File.Delete(Path.Combine(Path.GetDirectoryName(assets.Dir)!, "drops", "100000.json"));
+        var world = new MobWorld(assets.Dir);
+        Assert.ThrowsException<FileNotFoundException>(() => world.EnterMap(7));
+    }
+
+    // A bad chance fails loud at EnterMap (rolls never see it).
+    [TestMethod]
+    public void EnterMap_BadDropChance_Throws()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Flat);
+        assets.AddMob(100000, 1);
+        assets.AddDrops(100000, """[{"Item":2000000,"Chance":2,"Count":1}]""");
+        var world = new MobWorld(assets.Dir);
+        Assert.ThrowsException<InvalidDataException>(() => world.EnterMap(7));
     }
 
     // Pickup: the drop must exist, sit on the taker's map, and be near. Gone
@@ -269,7 +294,7 @@ public class MobAiTests
     }
 
     // Potions drop sometimes (fixed seeds: the first red lands on seed 7,
-    // the first blue on seed 12 — the test fails if the rolls ever drift).
+    // the first blue on seed 4 — the test fails if the rolls ever drift).
     [TestMethod]
     public void Kill_DropsPotionsSometimes()
     {
@@ -289,7 +314,7 @@ public class MobAiTests
             }
         }
         Assert.AreEqual(7, red);
-        Assert.AreEqual(12, blue);
+        Assert.AreEqual(4, blue);
     }
 
     // VR walls turn the mob in place (no slide past, no teleport onto the
