@@ -45,9 +45,9 @@
 **W6 已完成：彩虹岛全境可走。** 6 张图闭集合：传送门（↑进，动画实机渲染）、
 梯绳爬行、单向平台下落、趴下、按图隔离的多人同步。
 
-**W7 已完成：账号大厅。** 本地账号（PBKDF2）+ 3 角色栏 + 位置存档
-（`data/accounts.json`，原子写）：注册→建角→下线→重登，数据不丢。
-无参数进登录菜单；`--host/--join/--shot` 照旧直跳（无存档）。
+**W7 已完成：存档大厅。** 本地存档（无账号无密码）+ 每档 3 角色栏 + 位置存档
+（`data/saves.json`，原子写）：建角→下线→重登，数据不丢。
+无参数进存档菜单；`--host/--join/--shot` 照旧直跳（无存档）。
 
 ## 常用命令
 
@@ -61,15 +61,15 @@ dotnet run --project MushTown.Exporter -- dump [路径] [深度]         # 看 B
 dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度] # 看某个分类 wz（如 Character）里的节点
 dotnet run --project MushTown.Exporter -- find <节点名>              # 按名字定位节点
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录] # 导出 assets/
-dotnet run --project MushTown.Client                                # 打开游戏窗口（账号登录菜单）
+dotnet run --project MushTown.Client                                # 打开游戏窗口（存档菜单）
 dotnet run --project MushTown.Client -- --host                       # 开房（本机当主机，无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>                   # 加入主机（本机双开用 127.0.0.1）
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen login|server|chars|job|setup|register|delete|panel]  # 截图后退出（frame 从 0 数）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen saves|server|chars|job|setup|delete|panel]  # 截图后退出（frame 从 0 数）
 git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```
 
 Data路径参数只有 `smoke` 和 `export` 认（默认 `E:\游戏\maplestory\appdata\Data`）；
 `dump`/`catdump`/`find` 固定用默认路径，第二个参数已经是它们自己的参数。
 
-导出产物写到 `assets/`、账号数据写到 `data/`、日志写到 `logs/`，三者都在 `.gitignore` 里：
+导出产物写到 `assets/`、存档数据写到 `data/`、日志写到 `logs/`，三者都在 `.gitignore` 里：
 游戏素材是 Nexon 版权内容，不进仓库。

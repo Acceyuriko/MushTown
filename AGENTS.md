@@ -31,9 +31,9 @@ dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度]  # 
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录]  # 导出 assets/
 dotnet run --project MushTown.Exporter -- find <节点名>      # 按名字定位 WZ 节点
 dotnet run --project MushTown.Exporter -- questscan <npcid> [<npcid>...]  # 列出起止于这些 NPC 的任务
-dotnet run --project MushTown.Client                        # 打开游戏窗口（账号登录菜单）
+dotnet run --project MushTown.Client                        # 打开游戏窗口（存档菜单）
 dotnet run --project MushTown.Client -- --host               # 开房（无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>           # 加入主机
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen login|server|chars|job|setup|register|delete|panel|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab 0] [--talk <npc>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]  # 截图后退出（验收用，frame 从 0 数，--hit 摆拍打怪，--skill 摆拍技能，--skilltab 选技能页，--drop 摆拍掉落，--wear 穿满 demo 装备，--aiticks 跑 n 步 AI，quest 摆拍任务窗+追踪，talk+--talk 摆拍 NPC 对话，settings 摆拍音量窗，shop+--talk 摆拍商店）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen saves|server|chars|job|setup|delete|panel|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab 0] [--talk <npc>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]  # 截图后退出（验收用，frame 从 0 数，--hit 摆拍打怪，--skill 摆拍技能，--skilltab 选技能页，--drop 摆拍掉落，--wear 穿满 demo 装备，--aiticks 跑 n 步 AI，quest 摆拍任务窗+追踪，talk+--talk 摆拍 NPC 对话，settings 摆拍音量窗，shop+--talk 摆拍商店）
 git clone --recurse-submodules <仓库>                       # 克隆要带子模块
 ```

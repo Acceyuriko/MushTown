@@ -157,8 +157,10 @@ public partial class MushTownGame : Game
     }
 
     private readonly string _layoutPath;
+    private readonly string _menuLayoutPath;
 #if DEBUG
     private FileSystemWatcher? _layoutWatcher;
+    private FileSystemWatcher? _menuLayoutWatcher;
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
@@ -182,6 +184,7 @@ public partial class MushTownGame : Game
         _assetsDir = FindAssetsDir();
         string dir = Path.GetDirectoryName(_assetsDir)!;
         _layoutPath = Path.Combine(dir, "hud-layout.json");
+        _menuLayoutPath = Path.Combine(dir, "menu-layout.json");
         TryReloadLayout();
 #if DEBUG
         _layoutWatcher = new FileSystemWatcher(dir, Path.GetFileName(_layoutPath));
@@ -189,6 +192,11 @@ public partial class MushTownGame : Game
         _layoutWatcher.Renamed += (_, _) => _layoutDirty = true; // some editors save by rename
         _layoutWatcher.Created += (_, _) => _layoutDirty = true; // ...or delete-then-create
         _layoutWatcher.EnableRaisingEvents = true;
+        _menuLayoutWatcher = new FileSystemWatcher(dir, Path.GetFileName(_menuLayoutPath));
+        _menuLayoutWatcher.Changed += (_, _) => _layoutDirty = true;
+        _menuLayoutWatcher.Renamed += (_, _) => _layoutDirty = true;
+        _menuLayoutWatcher.Created += (_, _) => _layoutDirty = true;
+        _menuLayoutWatcher.EnableRaisingEvents = true;
 #endif
         _graphics = new GraphicsDeviceManager(this);
         IsMouseVisible = true;
@@ -355,8 +363,8 @@ public partial class MushTownGame : Game
         SetupShotQuests(); // quest/talk screens run the real accept/open path (other shots no-op)
         if (_shotWear) // --wear runs the real Wear path on the demo (plain shots grow one, like --skill buffs)
         {
-            _account ??= new Account { User = "demo" };
-            _account.Slots[_slot] ??= DemoChara();
+            _save ??= new SaveData();
+            _save.Slots[_slot] ??= DemoChara();
             foreach (int id in ItemData.EquipIds)
                 if (!Wear(id)) throw new InvalidDataException($"--wear found no {id} in the demo bag");
         }
@@ -366,8 +374,8 @@ public partial class MushTownGame : Game
         {
             // buff shots run the real path (learn, pay, cast): a demo that
             // cannot afford the pose fails loud instead of faking it
-            _account ??= new Account { User = "demo" };
-            var chara = _account.Slots[_slot] ??= DemoChara();
+            _save ??= new SaveData();
+            var chara = _save.Slots[_slot] ??= DemoChara();
             var data = _skills[_shotSkill];
             if (!chara.SkillLv.ContainsKey(_shotSkill) && !Progression.LearnSkill(chara, data))
                 throw new InvalidDataException($"--skill {_shotSkill} cannot learn: demo Lv.{chara.Level} needs Lv.{data.ReqLevel}");
@@ -396,7 +404,7 @@ public partial class MushTownGame : Game
             {
                 if (_skills[_shotSkill].Kind == SkillData.KindPassive)
                     throw new InvalidDataException($"--skill {_shotSkill} is passive (no art to pose)");
-                var chara = _account?.Slots[_slot];
+                var chara = _save?.Slots[_slot];
                 if (chara != null) // window shots learn and pay best-effort (cooldowns show); plain shots have no one
                 {
                     if (!chara.SkillLv.ContainsKey(_shotSkill)) Progression.LearnSkill(chara, _skills[_shotSkill]);
@@ -489,7 +497,7 @@ public partial class MushTownGame : Game
         if (kb.IsKeyDown(Keys.Escape))
         {
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before exiting
-            if (_account != null) { ToChars(); base.Update(gameTime); return; } // menu session: Esc saves and steps out
+            if (_save != null) { ToChars(); base.Update(gameTime); return; } // menu session: Esc saves and steps out
             else Exit(); // CLI session has no menu to return to
         }
         // Talk needs presence: walking out of reach closes the modal.
@@ -525,7 +533,7 @@ public partial class MushTownGame : Game
             if (_buffMs[id] <= 0) EndBuff(id);
         }
         TickRegen(dtMs);
-        if (_account?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
+        if (_save?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
             c.Hp = Math.Min(c.Hp, Progression.BuffedMaxHp(c.Level, OwnHpPct()));
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
@@ -1009,7 +1017,7 @@ public partial class MushTownGame : Game
                 var ms = Mouse.GetState();
                 var (gx, gy) = MouseGamePos(ms);
                 DrawHud(gx, gy, ms.LeftButton == ButtonState.Pressed);
-                DrawLogOverlay(gx, gy);
+                DrawLogOverlay(gx, gy, ms.LeftButton == ButtonState.Pressed);
             }
             else DrawHud(-10, -10, false); // shots: clean art, no hover, no log
             _spriteBatch.End();
@@ -1065,7 +1073,7 @@ public partial class MushTownGame : Game
         // by feet height (lower feet draw in front; ties keep this order)
         int feetX = (int)Math.Floor(_px), feetY = (int)Math.Floor(_py);
         var draws = new List<(int y, Action draw)>();
-        draws.Add((feetY, () => DrawAvatar(feetX, feetY, _action, _frame, _facingRight, _account?.Slots[_slot]?.Equips)));
+        draws.Add((feetY, () => DrawAvatar(feetX, feetY, _action, _frame, _facingRight, _save?.Slots[_slot]?.Equips)));
         foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers show beginner: worn looks never cross the net in v1 (stats do, via Build)
             draws.Add(((int)Math.Floor(r.Y), () => DrawAvatar((int)Math.Floor(r.X), (int)Math.Floor(r.Y), Net.ActionName(r.Action), r.Frame, r.FacingRight)));
         foreach (int uid in _mobs.Keys.OrderBy(u => u))
@@ -1313,7 +1321,7 @@ public partial class MushTownGame : Game
     // (judged at the corpse, not the spawn).
     private bool ApplyHurt(int damage)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return false; // CLI sessions have no one to hurt
         int dealt = Progression.ApplyHurt(chara, damage, OwnDef());
         if (dealt == 0) return false; // harmless touch: no number, no death
@@ -1341,7 +1349,7 @@ public partial class MushTownGame : Game
     // DEF% from every source: worn gear, Iron Body while live, Guardian
     // Armor and Endure always. Mob touches are the only thing it blocks.
     private int OwnDef() =>
-        ItemData.EquipBonus(_account?.Slots[_slot]?.Equips, _items).def
+        ItemData.EquipBonus(_save?.Slots[_slot]?.Equips, _items).def
         + (_buffMs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0)
         + _skills[SkillData.GuardianArmor].DefPct * SkillLv(SkillData.GuardianArmor)
         + _skills[SkillData.Endure].DefPct * SkillLv(SkillData.Endure);
@@ -1374,7 +1382,7 @@ public partial class MushTownGame : Game
     private void ApplyDropTake(int uid, bool mine, int kind, int id, int count)
     {
         _drops.Remove(uid);
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (!mine || chara == null) return;
         PlaySfx("pickup");
         if (kind == DropKind.Mesos)
@@ -1401,7 +1409,7 @@ public partial class MushTownGame : Game
     // sessions carry no character (no pools), so they cannot cast, like potions.
     private bool TryPaySkill(int id)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return false;
         var skill = _skills[id];
         chara.SkillLv.TryGetValue(id, out int lv);
@@ -1414,7 +1422,7 @@ public partial class MushTownGame : Game
 
     private int SkillLv(int id)
     {
-        if (_account?.Slots[_slot] is not CharaSlot chara) return 0;
+        if (_save?.Slots[_slot] is not CharaSlot chara) return 0;
         return chara.SkillLv.TryGetValue(id, out int lv) ? lv : 0;
     }
 
@@ -1539,7 +1547,7 @@ public partial class MushTownGame : Game
         _regenMs -= dtMs;
         if (_regenMs > 0) return;
         _regenMs += RegenTickMs;
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         int lv = SkillLv(SkillData.SelfRecovery);
         if (chara == null || lv <= 0) return;
         chara.Hp = Math.Min(chara.Hp + _skills[SkillData.SelfRecovery].RegenHp * lv,
@@ -1561,7 +1569,7 @@ public partial class MushTownGame : Game
     // worn gear fold in by level; Spirit Blade multiplies the weapon live.
     private Build OwnBuild()
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return Progression.Beginner;
         var worn = ItemData.EquipBonus(chara.Equips, _items);
         int str = chara.Str + worn.str
@@ -1600,7 +1608,7 @@ public partial class MushTownGame : Game
     // new build to the server (the local judge reads it fresh every swing).
     private void GainExp(int exp)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions have no one to level
         int ups = Progression.ApplyExp(chara, exp, OwnHpPct());
         if (ups > 0)
@@ -1757,6 +1765,8 @@ public partial class MushTownGame : Game
     private void ReloadLayout()
     {
         Layout.Load(_layoutPath);
+        MenuLayout.Load(_menuLayoutPath);
+        if (_ui != null) _ui.RefreshListFonts(); // null only on the ctor reload, before content loads
         _invPos = new Point(Layout.Inv.X, Layout.Inv.Y);
         _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);
         _skillPos = new Point(Layout.Skill.X, Layout.Skill.Y);

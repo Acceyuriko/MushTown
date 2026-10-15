@@ -77,21 +77,12 @@ public static class Export
         [SkillData.Endure] = new() { ReqLevel = 10, MaxLevel = 10, Kind = SkillData.KindPassive, HpPct = 3, DefPct = 2 },
     };
 
-    // W7.5 lobby art: (node path, file name). Normal button states only;
+    // Saves lobby art: (node path, file name). Normal button states only;
     // hover is a white overlay drawn by the client, so no hover art needed.
     // Must match Menu.cs UiFiles: every file there must be listed here.
     private static readonly (string node, string file)[] UiFiles = new[]
     {
-        ("LoginBack.img/Title/0", "loginbg.png"),
-        ("Login.img/Title_new/backgrd", "loginwin.png"),
-        ("Login.img/Title_new/BtLogin/normal/0", "btn_login.png"),
         ("LoginBack.img/WorldSelect/default/0/0", "worldbg.png"),
-        ("Login.img/WorldSelect/worldList/top", "row_top.png"),
-        ("Login.img/WorldSelect/worldList/middle", "row_mid.png"),
-        ("Login.img/WorldSelect/worldList/bottom", "row_bot.png"),
-        ("Login.img/WorldSelect/channelList/common/top", "ch_top.png"),
-        ("Login.img/WorldSelect/channelList/common/middle", "ch_mid.png"),
-        ("Login.img/WorldSelect/channelList/common/bottom", "ch_bot.png"),
         ("Login.img/CharSelect/canvas:charInfo", "charinfo.png"),
         ("Login.img/CharSelect/BtSelect/normal/0", "btn_start.png"),
         ("Login.img/CharSelect/BtNew/normal/0", "btn_create.png"),

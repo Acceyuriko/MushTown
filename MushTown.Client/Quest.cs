@@ -101,21 +101,21 @@ public partial class MushTownGame
 
     private string QText(string raw)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         return QuestText.Render(raw, chara ?? new CharaSlot { Name = "hero" }, MobName, NpcName);
     }
 
     // One of our kills: quest counters tick up (capped per objective).
     private void BumpQuestKills(int mob)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara != null) QuestLog.BumpKills(chara, _quests.Values, mob);
     }
 
     // Talk menu entries: (quest id, offer?) for this NPC, offers first.
     private List<(int quest, bool offer)> TalkEntries(int npc)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         var entries = new List<(int, bool)>();
         if (chara == null) return entries;
         var all = _quests.Values.OrderBy(q => q.QuestId).ToList();
@@ -129,7 +129,7 @@ public partial class MushTownGame
     // Gold "!" over quest-relevant NPCs (an offer, or a ready turn-in).
     private bool NpcHasWork(int npc)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return false;
         return _quests.Values.Any(q =>
             (q.Npc0 == npc && QuestLog.CanAccept(chara, q))
@@ -140,7 +140,7 @@ public partial class MushTownGame
     // (scripted quests export empty Say: summaries fill in).
     private List<string> TalkPages()
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         var q = _quests.GetValueOrDefault(_talkQuest);
         if (q == null || chara == null)
         {
@@ -167,8 +167,8 @@ public partial class MushTownGame
     private void SetupShotQuests()
     {
         if (_shotScreen is not ("quest" or "talk" or "shop")) return;
-        _account ??= new Account { User = "demo" };
-        var chara = _account.Slots[_slot] ??= DemoChara();
+        _save ??= new SaveData();
+        var chara = _save.Slots[_slot] ??= DemoChara();
         if (_shotScreen == "quest")
         {
             if (!_quests.TryGetValue(90001, out var q) || !QuestLog.Accept(chara, q))
@@ -220,7 +220,7 @@ public partial class MushTownGame
     {
         if (button == "Bye") { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; return; }
         if (button == "Next") { _talkPage++; return; }
-        var chara = _account?.Slots[_slot]!;
+        var chara = _save?.Slots[_slot]!;
         var q = _quests.GetValueOrDefault(_talkQuest)!;
         if (button == "Accept" && QuestLog.Accept(chara, q))
         {
@@ -242,7 +242,7 @@ public partial class MushTownGame
     // Tracker lines (cached: quest state changes rarely, frames do not).
     private List<string> TrackerLines()
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null || chara.Quests.Count == 0) return new List<string>();
         string key = string.Join(";", chara.Quests.OrderBy(id => id)
             .Select(id => _quests.TryGetValue(id, out var q)

@@ -18,7 +18,7 @@ public partial class MushTownGame
 
     private void LoadAudio()
     {
-        _settingsPath = Path.Combine(Path.GetDirectoryName(_accountsPath)!, "settings.json");
+        _settingsPath = Path.Combine(Path.GetDirectoryName(_savesPath)!, "settings.json");
         LoadSettings();
         foreach (string key in SoundKey.Sfx)
             _sfx[key] = LoadWav(Path.Combine(_assetsDir, "sound", key + ".wav"));
@@ -39,7 +39,7 @@ public partial class MushTownGame
 
     private void SaveSettings()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); // fresh checkouts have no data/ yet (AccountStore.Save does the same)
+        Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); // fresh checkouts have no data/ yet (SaveStore.Save does the same)
         File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgmVol, Sfx = _sfxVol }));
     }
 
@@ -95,5 +95,5 @@ public partial class MushTownGame
 
     // The mop whooshes like a polearm; bare beginner hands swing a sword.
     private string SwingKey() =>
-        _account?.Slots[_slot]?.Equips?.Contains(ItemData.Mop) == true ? "swing_pole" : "swing_sword";
+        _save?.Slots[_slot]?.Equips?.Contains(ItemData.Mop) == true ? "swing_pole" : "swing_sword";
 }

@@ -1,0 +1,25 @@
+{
+  "_help": "Wooden sign board geometry in 1366x768 space (saves + server screens). slice/overlapTop/botUp seal the top-middle-bottom joints. bodyPadTop/bodyPadBottom frame the rows; middleExtraH grows the middle (rows stay centered). listSize/cancelSize are display px (text is NOT shrunk by scale); textMargin/textGap/textDown/cancelDown are menu px (shrunk by scale). Keys may be omitted (keeps current value). DEBUG builds reload this file live on save.",
+  "slice": 48,
+  "overlapTop": 64,
+  "botUp": 150,
+  "rowGap": 12,
+  "bodyPadTop": 21,
+  "bodyPadBottom": 21,
+  "middleExtraH": 80,
+  "serverRowW": 448,
+  "serverRowH": 105,
+  "textMargin": 60,
+  "textDown": 0,
+  "listSize": 20,
+  "textGap": 24,
+  "cancelSize": 20,
+  "cancelDown": 0,
+  "scale": 0.7,
+  "log": [
+    1199,
+    699
+  ]
+}
+
+

@@ -1,34 +1,55 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace MushTown.Shared;
 
-// Local accounts: one file per PC (data/accounts.json), PBKDF2 passwords.
-// The server never sees these; on LAN your character travels with you and
-// same names on two PCs are the players' own fault.
-public sealed class AccountStore
+// Local saves: one file per PC (data/saves.json). No accounts, no passwords:
+// your saves stay on your PC and travel with you to any host you join.
+// One save holds one playthrough's heroes. The two consts below are the only
+// caps, so raising them later needs no format change (short files grow with
+// fresh saves). Every slot always holds a save: the constructor fills all
+// three and Load heals nulls from old files, so readers use ! on Saves[i].
+public sealed class SaveStore
 {
-    public Dictionary<string, Account> Users { get; set; } = new();
+    public const int MaxSaves = 3;
+    public const int MaxHeroes = 3;
+
+    public List<SaveData?> Saves { get; set; } = new();
+
+    public SaveStore()
+    {
+        for (int i = 0; i < MaxSaves; i++) Saves.Add(new SaveData());
+    }
+
+    private static void Pad<T>(List<T?> list, int n) where T : class
+    {
+        while (list.Count < n) list.Add(null);
+    }
 
     // Missing file means first run: start empty. Bad JSON fails loud.
-    public static AccountStore Load(string path)
+    public static SaveStore Load(string path)
     {
-        if (!File.Exists(path)) return new AccountStore();
-        AccountStore store;
+        if (!File.Exists(path)) return new SaveStore();
+        SaveStore store;
         try
         {
-            store = JsonSerializer.Deserialize<AccountStore>(File.ReadAllText(path))
+            store = JsonSerializer.Deserialize<SaveStore>(File.ReadAllText(path))
                 ?? throw new InvalidDataException($"corrupt save file: {path}");
         }
         catch (JsonException ex)
         {
             throw new InvalidDataException($"corrupt save file: {path}", ex);
         }
-        if (store.Users == null)
+        if (store.Saves == null || store.Saves.Count > MaxSaves)
             throw new InvalidDataException($"corrupt save file: {path}");
-        foreach (var pair in store.Users)
-            if (pair.Key != pair.Value?.User || pair.Value?.Slots is not { Length: 3 })
+        Pad(store.Saves, MaxSaves);
+        for (int i = 0; i < store.Saves.Count; i++)
+        {
+            if (store.Saves[i] == null) { store.Saves[i] = new SaveData(); continue; } // old files: nulls heal
+            var save = store.Saves[i]!;
+            if (save.Slots == null || save.Slots.Count > MaxHeroes)
                 throw new InvalidDataException($"corrupt save file: {path}");
+            Pad(save.Slots, MaxHeroes);
+        }
         return store;
     }
 
@@ -41,36 +62,21 @@ public sealed class AccountStore
         File.Move(tmp, path, true);
     }
 
-    public Account Register(string user, string password)
-    {
-        CheckId(user, "username");
-        CheckPassword(password);
-        if (Users.ContainsKey(user))
-            throw new InvalidDataException($"username {user} is taken");
-        var account = new Account { User = user };
-        account.SetPassword(password);
-        Users[user] = account;
-        return account;
-    }
-
-    public Account Login(string user, string password)
-    {
-        if (!Users.TryGetValue(user, out var account) || !account.CheckPassword(password))
-            throw new InvalidDataException("wrong username or password");
-        return account;
-    }
-
-    public CharaSlot CreateChara(string user, int slot, string name)
+    public CharaSlot CreateHero(int save, int slot, string name)
     {
         CheckId(name, "character name");
-        if ((uint)slot >= 3)
+        if ((uint)save >= MaxSaves)
+            throw new InvalidDataException($"bad save slot {save}");
+        if ((uint)slot >= MaxHeroes)
             throw new InvalidDataException($"bad slot {slot}");
-        foreach (var a in Users.Values)
-            foreach (var s in a.Slots)
-                if (s?.Name == name)
+        foreach (var s in Saves)
+        {
+            foreach (var h in s!.Slots)
+                if (h?.Name == name)
                     throw new InvalidDataException($"character name {name} is taken");
-        var account = Users[user];
-        if (account.Slots[slot] != null)
+        }
+        var heroes = Saves[save]!.Slots;
+        if (heroes[slot] != null)
             throw new InvalidDataException($"slot {slot} is taken");
         var chara = new CharaSlot
         {
@@ -79,19 +85,19 @@ public sealed class AccountStore
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
         };
-        account.Slots[slot] = chara;
+        heroes[slot] = chara;
         return chara;
     }
 
-    public void DeleteChara(string user, int slot)
+    public void DeleteHero(int save, int slot)
     {
-        if ((uint)slot >= 3)
-            throw new InvalidDataException($"bad slot {slot}");
-        Users[user].Slots[slot] = null; // unknown user is a programmer bug (menus always pass a logged-in user)
+        if ((uint)save >= MaxSaves || (uint)slot >= MaxHeroes)
+            throw new InvalidDataException($"bad slot {save}:{slot}");
+        Saves[save]!.Slots[slot] = null; // an empty save here is a programmer bug (menus always pass a live save)
     }
 
-    // One charset for usernames and character names: the client reuses this
-    // while typing so the two can never drift apart.
+    // One charset for character names: the client reuses this while typing
+    // so the two can never drift apart.
     public static bool IsIdChar(char c) =>
         c is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '_' or '-';
 
@@ -100,21 +106,15 @@ public sealed class AccountStore
         if (id.Length is < 1 or > 12 || !id.All(IsIdChar))
             throw new InvalidDataException($"bad {what} {id} (1-12 letters, digits, _ or -)");
     }
-
-    private static void CheckPassword(string password)
-    {
-        if (password.Length is < 1 or > 32 || !password.All(c => c is >= ' ' and <= '~'))
-            throw new InvalidDataException("bad password (1-32 printable ASCII)");
-    }
 }
 
-// Saved login: who is in plus the last host pick, so the next launch
+// Saved session: which save is in plus the last host pick, so the next launch
 // opens on characters. A cache, not data: missing/unreadable file or bad
-// JSON means logged out, where AccountStore.Load would throw.
+// JSON means no session, where SaveStore.Load would throw.
 public sealed class Session
 {
-    public string? User { get; set; }
-    public string? Host { get; set; } // null = this PC (host here); else the LAN IP to join. Old files lack it (null = own).
+    public int Slot { get; set; }
+    public string? Host { get; set; } // null = this PC (host here); else the LAN IP to join
 
     public static Session? TryLoad(string path)
     {
@@ -129,7 +129,7 @@ public sealed class Session
         }
     }
 
-    // Atomic write, same as accounts: crash leaves old or new, never half.
+    // Atomic write, same as saves: crash leaves old or new, never half.
     public void Save(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -139,39 +139,17 @@ public sealed class Session
     }
 }
 
-public sealed class Account
+// One save: one playthrough's heroes (null = empty hero slot).
+public sealed class SaveData
 {
-    public string User { get; set; } = "";
-    public string Salt { get; set; } = "";
-    public string Hash { get; set; } = "";
-    public CharaSlot?[] Slots { get; set; } = new CharaSlot?[3];
+    public List<CharaSlot?> Slots { get; set; } = new();
 
-    public void SetPassword(string password)
+    // New saves start fully padded: shot poses index Slots directly.
+    // (Load replaces this list with the file content, then pads again.)
+    public SaveData()
     {
-        byte[] salt = RandomNumberGenerator.GetBytes(16);
-        Salt = Convert.ToBase64String(salt);
-        Hash = Convert.ToBase64String(HashPassword(password, salt));
+        while (Slots.Count < SaveStore.MaxHeroes) Slots.Add(null);
     }
-
-    public bool CheckPassword(string password)
-    {
-        try
-        {
-            byte[] salt = Convert.FromBase64String(Salt);
-            byte[] want = Convert.FromBase64String(Hash);
-            if (salt.Length != 16 || want.Length != 32)
-                throw new InvalidDataException($"corrupt password entry for {User}, fix the file or re-register");
-            byte[] got = HashPassword(password, salt);
-            return CryptographicOperations.FixedTimeEquals(want, got);
-        }
-        catch (Exception ex) when (ex is FormatException or ArgumentException)
-        {
-            throw new InvalidDataException($"corrupt password entry for {User}, fix the file or re-register", ex);
-        }
-    }
-
-    private static byte[] HashPassword(string password, byte[] salt) =>
-        Rfc2898DeriveBytes.Pbkdf2(password, salt, 100_000, HashAlgorithmName.SHA256, 32);
 }
 
 // One character. X/Y null means never played: spawn at the map portal.

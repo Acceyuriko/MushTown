@@ -326,7 +326,7 @@ public partial class MushTownGame
     // Click a USE slot: drink one. Empty slots and full pools do nothing.
     private void DrinkPotion(int id)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions carry no bag
         var item = _items[id];
         Progression.UsePotion(chara, id, item.Hp, item.Mp, OwnHpPct());
@@ -335,7 +335,7 @@ public partial class MushTownGame
     // Click an EQUIP bag slot: wear one through the shared rule. True when worn.
     private bool Wear(int id)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return false; // CLI sessions carry no bag
         return Progression.WearEquip(chara, id, _items);
     }
@@ -343,7 +343,7 @@ public partial class MushTownGame
     // Click a worn slot: back to the bag. Unworn slots do nothing.
     private bool TakeOff(int id)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return false; // CLI sessions carry no bag
         return Progression.TakeOffEquip(chara, id);
     }
@@ -351,7 +351,7 @@ public partial class MushTownGame
     // Click a stock row: buy one at WZ price (a broke wallet logs and skips).
     private void BuyFromShop(int id)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions carry no wallet
         int price = _items[id].Price;
         if (Shop.Buy(chara, id, price))
@@ -365,7 +365,7 @@ public partial class MushTownGame
     // Click a bag row: sell one at half price (rows show owned only, so it lands).
     private void SellToShop(int id)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions carry no bag
         var def = _items[id];
         if (Shop.Sell(chara, id, def))
@@ -392,7 +392,7 @@ public partial class MushTownGame
     // Click a [+]: learn one level. CLI sessions carry no character.
     private bool LearnSkill(int id)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         return chara != null && Progression.LearnSkill(chara, _skills[id]);
     }
 
@@ -450,7 +450,7 @@ public partial class MushTownGame
     private List<(int id, int count)> ShopSellRows()
     {
         var rows = new List<(int, int)>();
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara == null) return rows;
         foreach (int id in ItemData.PotionIds)
             if (chara.Use?.TryGetValue(id, out int n) == true && n > 0) rows.Add((id, n));
@@ -521,7 +521,7 @@ public partial class MushTownGame
     {
         var r = ExpRect();
         _spriteBatch.Draw(Tex("hud_expback.png"), r, Color.White);
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara != null && chara.Exp > 0) // CLI sessions have no EXP: the bar stays empty
         {
             var gauge = Tex("hud_expgauge.png");
@@ -536,7 +536,7 @@ public partial class MushTownGame
     {
         var r = PlateRect();
         _spriteBatch.Draw(Tex("hud_plate.png"), r, Color.White);
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         int x = r.X + 28; // WZ levelPos; digits step 10 (numInterval)
         foreach (char ch in (chara?.Level ?? 1).ToString())
         {
@@ -556,7 +556,7 @@ public partial class MushTownGame
         // fills at bg+(4,4)/(4,25), cover at bg+(3,3), numbers centered on
         // x+101 (vector:hp/mp), tops y+7/y+28. Bars always full: nothing
         // drains HP/MP until W13 mob hits (W13 adds the clip then).
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         int maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct()), maxMp = Progression.MaxMp(chara?.Level ?? 1);
         _spriteBatch.Draw(Tex("hud_hpfill.png"), new Vector2(r.X + 4, r.Y + 4), Color.White);
         _spriteBatch.Draw(Tex("hud_mpfill.png"), new Vector2(r.X + 4, r.Y + 25), Color.White);
@@ -640,7 +640,7 @@ public partial class MushTownGame
         _spriteBatch.Draw(Tex("hud_inv.png"), r, Color.White);
         for (int t = 0; t < TabCount; t++) DrawTab(t);
         _spriteBatch.Draw(Tex("hud_statx.png"), InvXRect(), Color.White);
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (_invTab == 0 && chara != null) // EQUIP tab: gold worn row (click takes off) over bag rows (click wears)
         {
             var cap = _ui.GetSmall("worn");
@@ -729,7 +729,7 @@ public partial class MushTownGame
         int by = r.Y + 16;
         _spriteBatch.Draw(_statBack, new Vector2(r.X, by), Color.White);
         _spriteBatch.Draw(Tex("hud_stat.png"), new Vector2(r.X, by), Color.White);
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         var build = OwnBuild(); // STR/DEX/range show skilled values (passives and buffs feed combat)
         int maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct()), maxMp = Progression.MaxMp(chara?.Level ?? 1);
         var cp = _ui.GetSmall("0"); // value only; "Combat Power" is baked in the art (no formula yet)
@@ -774,7 +774,7 @@ public partial class MushTownGame
             var ink = t == _skillTab ? new Color(255, 220, 0) : new Color(130, 140, 150);
             _spriteBatch.Draw(_ui.GetSmall(SkillTabNames[t]), new Vector2(tab.X + 8, tab.Y + 2), ink);
         }
-        int sp = _account?.Slots[_slot]?.Sp ?? 0;
+        int sp = _save?.Slots[_slot]?.Sp ?? 0;
         _spriteBatch.Draw(_ui.GetSmall(sp > 0 ? $"SP: {sp} (click + to learn)" : $"SP: {sp}"),
             new Vector2(r.X + 16, by + 26), Color.White);
         var rows = SkillTabs[_skillTab];
@@ -785,7 +785,7 @@ public partial class MushTownGame
     private void DrawSkillRow(int id, string? key, int x, int y)
     {
         var skill = _skills[id];
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         int level = chara?.Level ?? 1;
         int lv = 0;
         chara?.SkillLv.TryGetValue(id, out lv);
@@ -820,7 +820,7 @@ public partial class MushTownGame
     // quest's progress below (objectives with live counts + turn-in).
     private List<int> QuestRows()
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         // Unknown ids (removed custom file, stale save) hide everywhere: the
         // tracker skips them too, so draw, click, and tracker agree.
         return chara == null ? new List<int>()
@@ -835,7 +835,7 @@ public partial class MushTownGame
 
     private void DrawQuestPanel()
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         var r = QuestRect();
         _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
         _spriteBatch.Draw(_ui.GetSmall("QUEST"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
@@ -912,7 +912,7 @@ public partial class MushTownGame
     // bag, so the body is a plain fill, not a fixed rounded backing.
     private void DrawShopPanel(int gx, int gy)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         var r = ShopRect();
         _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
         _spriteBatch.Draw(_ui.GetSmall("SHOP"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
@@ -1019,7 +1019,7 @@ public partial class MushTownGame
     private List<string> TalkLines()
     {
         // Counters ride the key: a kill under the open modal re-renders #a.
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         var quest = _quests.GetValueOrDefault(_talkQuest);
         string kills = quest == null || chara == null ? ""
             : string.Join(",", quest.Kills.Select((_, i) => QuestLog.KillCount(chara, _talkQuest, i)));
@@ -1036,7 +1036,7 @@ public partial class MushTownGame
     {
         var q = _quests.GetValueOrDefault(_talkQuest);
         if (q == null) return new List<string> { "Bye" };
-        var chara = _account?.Slots[_slot]!; // quest mode needs an entry click, which needs a chara
+        var chara = _save?.Slots[_slot]!; // quest mode needs an entry click, which needs a chara
         bool last = _talkPage >= TalkPages().Count - 1;
         bool offer = !chara.Quests.Contains(q.QuestId);
         if (offer) return last ? new List<string> { "Accept", "Bye" } : new List<string> { "Next", "Bye" };
@@ -1059,7 +1059,7 @@ public partial class MushTownGame
 
     private void DrawTalkPanel(int gx, int gy)
     {
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         var r = TalkRect();
         _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
         _spriteBatch.Draw(_ui.GetSmall(_npcs[_talkNpc].Name), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));

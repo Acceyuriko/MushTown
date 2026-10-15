@@ -6,29 +6,28 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// W7.5 lobby: login -> server/channel -> characters -> job -> setup -> game.
+// Lobby: saves -> server -> characters -> job -> setup -> game.
 // Art is official modern UI from assets/ui (normal states only, hover is a
 // white overlay); every string is baked white and tinted at draw time.
-// W7 logic (accounts, slots, save, net) is reused unchanged.
 public partial class MushTownGame
 {
-    private enum Screen { Login, Server, Chars, Job, Setup, Game }
+    private enum Screen { Saves, Server, Chars, Job, Setup, Game }
 
     private Screen _screen = Screen.Game;
-    private AccountStore _store = new();
-    private string _accountsPath = "";
+    private SaveStore _store = new();
+    private string _savesPath = "";
     private string _sessionPath = "";
-    private Account? _account;
+    private SaveData? _save;
+    private int _saveSlot;
     private int _slot;
     private string? _hostPick; // null = this PC (host here), else the LAN IP to join
     private Task<List<FoundHost>>? _scanTask; // a running LAN scan (UpdateServer collects it; shots never start one)
     private List<FoundHost> _hosts = new();
     private bool _scanWasDown;
-    private bool _registerOpen;
     private bool _jobPicked;
     private bool _deleteOpen;
     private string _focus = "";
-    private string _user = "", _pass = "", _name = "";
+    private string _name = "";
     private string _error = "";
     private bool _mouseWasDown, _enterWasDown, _escWasDown, _backWasDown;
     private float _backTimer;
@@ -44,40 +43,82 @@ public partial class MushTownGame
     private static readonly Color Ink = new(50, 50, 50); // dark text on white art
     private static readonly Color Hint = new(153, 153, 153); // official hint gray
     private static readonly Color ErrRed = new(220, 60, 50);
+    private static readonly Color ListGray = new(140, 149, 153); // official font:charNumNormal #8C9599
+    private static readonly Color MenuInk = new(43, 8, 5); // baked button text median, sampled off btn_astra
 
     // Must match Export.cs UiFiles: every name here must be exported, or LoadTexture throws.
     private static readonly string[] UiFiles = new[]
     {
-        "loginbg.png", "loginwin.png", "btn_login.png",
-        "worldbg.png", "row_top.png", "row_mid.png", "row_bot.png",
-        "ch_top.png", "ch_mid.png", "ch_bot.png",
+        "worldbg.png",
         "charinfo.png", "btn_start.png", "btn_create.png", "btn_delete.png",
         "btn_deleteyes.png", "selectworld.png", "tag_l.png", "tag_m.png", "tag_r.png",
         "listbg.png", "cell_hero.png", "btn_make.png",
         "setupbg.png", "btn_confirm.png", "btn_cancel.png",
     };
 
+    // Wooden sign art (tracked art/menu/*.png, like custom quests/): the menu
+    // board plus its pill buttons. Missing file fails loud, same as exports.
+    private static readonly string[] MenuFiles = new[]
+    {
+        "sign_top.png", "sign_mid.png", "sign_bot.png",
+        "btn_blank.png", "btn_exit.png", "btn_log.png",
+        "btn_astra.png", "btn_blackveil.png", "btn_crimson.png",
+    };
+
+    private Texture2D MenuTex(string file) => _textures["menu/" + file];
+
+    // Wooden sign board (saves + server): a header sign, a stretchable cream
+    // body, a mushroom base. Rows are baked pill buttons with gaps between;
+    // the Exit and Cancel plaques match each other. All numbers live in
+    // menu-layout.json (DEBUG builds reload it live); code only centers.
+    private static readonly string[] SaveNames = { "Astra", "Blackveil", "Crimson" };
+    private static readonly string[] SaveBtnFiles = { "btn_astra.png", "btn_blackveil.png", "btn_crimson.png" };
+    private int SaveRowH(int i) => MenuTex(i < SaveStore.MaxSaves ? SaveBtnFiles[i] : "btn_exit.png").Height;
+    private int SaveRowsH()
+    {
+        int t = 0;
+        for (int i = 0; i < SaveRows(); i++) t += SaveRowH(i);
+        return t + MenuLayout.RowGap * (SaveRows() - 1);
+    }
+    private int ServerRowsH(int rows) => rows * MenuLayout.ServerRowH + MenuLayout.RowGap * (rows - 1);
+    private int SaveBodyH() => MenuLayout.BodyPadTop + SaveRowsH() + MenuLayout.BodyPadBottom + MenuLayout.MiddleExtraH;
+    private int ServerBodyH(int rows) => MenuLayout.BodyPadTop + ServerRowsH(rows) + MenuLayout.BodyPadBottom + MenuLayout.MiddleExtraH;
+    private int PanelTop(int bodyH) => (GameHeight - (MenuTex("sign_top.png").Height + bodyH + MenuTex("sign_bot.png").Height - MenuLayout.OverlapTop - MenuLayout.BotUp)) / 2;
+    private int BodyY(int bodyH) => PanelTop(bodyH) + MenuTex("sign_top.png").Height - MenuLayout.OverlapTop;
+    private int PanelBottom(int bodyH) => BodyY(bodyH) + bodyH - MenuLayout.BotUp + MenuTex("sign_bot.png").Height;
+    // Menu space shrinks toward the panel center: layout math above runs
+    // full-size (the file's numbers), every rect below comes out scaled.
+    private float MS => MenuLayout.Scale;
+    private int MSS(int v) => (int)(v * MS);
+    private int MSX(int x) => GameWidth / 2 + (int)((x - GameWidth / 2) * MS);
+    private int PanelTopS(int bodyH) => (GameHeight - (int)((MenuTex("sign_top.png").Height + bodyH + MenuTex("sign_bot.png").Height - MenuLayout.OverlapTop - MenuLayout.BotUp) * MS)) / 2;
+    private int MSY(int y, int bodyH) => PanelTopS(bodyH) + (int)((y - PanelTop(bodyH)) * MS);
+    private Rectangle MSR(Rectangle r, int bodyH) => new(MSX(r.X), MSY(r.Y, bodyH), MSS(r.Width), MSS(r.Height));
+    private int PanelBottomS(int bodyH) => MSY(PanelBottom(bodyH), bodyH);
+    private Rectangle SaveRowRect(int i)
+    {
+        int bodyH = SaveBodyH();
+        int y = BodyY(bodyH) + (bodyH - SaveRowsH()) / 2; // rows stay centered when the middle grows
+        for (int k = 0; k < i; k++) y += SaveRowH(k) + MenuLayout.RowGap;
+        var t = MenuTex(i < SaveStore.MaxSaves ? SaveBtnFiles[i] : "btn_exit.png");
+        return MSR(new Rectangle((GameWidth - t.Width) / 2, y, t.Width, t.Height), bodyH);
+    }
+    private Rectangle ServerRowRect(int i, int rows)
+    {
+        int bodyH = ServerBodyH(rows);
+        return MSR(new Rectangle((GameWidth - MenuLayout.ServerRowW) / 2,
+            BodyY(bodyH) + (bodyH - ServerRowsH(rows)) / 2 + i * (MenuLayout.ServerRowH + MenuLayout.RowGap),
+            MenuLayout.ServerRowW, MenuLayout.ServerRowH), bodyH);
+    }
+
     // Menu geometry in game pixels (1366x768), shared by click and draw code.
     // First pass from WZ origins/vectors, tuned against screenshots after.
-    private static Rectangle WinRect() => new(517, 261, 332, 246);
-    private static Rectangle IdRect() => new(544, 291, 278, 45);
-    private static Rectangle PwRect() => new(544, 337, 278, 44);
-    private static Rectangle LoginBtnRect() => new(544, 393, 278, 53);
-    private static Rectangle RegTextRect() => new(517, 464, 166, 30);
-    private static Rectangle QuitTextRect() => new(683, 464, 166, 30);
-    private static Rectangle RegPanelRect() => new(483, 204, 400, 360);
-    private static Rectangle RegUserRect() => new(513, 290, 340, 44);
-    private static Rectangle RegPassRect() => new(513, 370, 340, 44);
-    private static Rectangle RegGoRect() => new(513, 428, 165, 48);
-    private static Rectangle RegBackRect() => new(688, 428, 165, 48);
-    private static Rectangle ServerRowRect(int i) => new(1184, 12 + i * 50, 170, 50);
     private static Rectangle CharInfoRect() => new(1135, 336, 200, 292);
     private static Rectangle StartBtnRect() => new(1145, 554, 180, 61);
     private static Rectangle WorldPillRect() => new(1135, 33, 200, 57);
     private static Rectangle CreateBtnRect() => new(498, 667, 170, 41);
     private static Rectangle DeleteBtnRect() => new(586, 722, 160, 33);
     private static Rectangle CancelBtnRect() => new(30, 695, 167, 43);
-    private static Rectangle LogoutTextRect() => new(210, 695, 120, 43);
     private static Rectangle DeletePanelRect() => new(483, 284, 400, 200);
     private static Rectangle DeleteYesRect() => new(508, 410, 180, 30);
     private static Rectangle DeleteNoRect() => new(700, 402, 167, 43);
@@ -88,7 +129,7 @@ public partial class MushTownGame
     private static Rectangle NameFieldRect() => new(660, 258, 304, 40);
     private static Rectangle ConfirmBtnRect() => new(660, 320, 166, 43);
     private static Rectangle SetupCancelRect() => new(846, 320, 167, 43);
-    private static Rectangle LogButtonRect() => new(1266, 708, 80, 40);
+    private static Rectangle LogButtonRect() => new(MenuLayout.Log.X, MenuLayout.Log.Y, 157, 59); // btn_log 373x140 at 0.42
     private static Rectangle LogPanelRect() => new(900, 228, 446, 470);
 
     // Mode for StartGame: null pick = host here, else join that IP.
@@ -98,29 +139,32 @@ public partial class MushTownGame
 
     private void InitializeMenu(string? shotScreen)
     {
+        if (SaveNames.Length != SaveStore.MaxSaves || SaveBtnFiles.Length != SaveStore.MaxSaves)
+            throw new InvalidDataException("save names/buttons drifted from MaxSaves");
         string dataDir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "data");
-        _accountsPath = Path.Combine(dataDir, "accounts.json");
+        _savesPath = Path.Combine(dataDir, "saves.json");
         _sessionPath = Path.Combine(dataDir, "session.json");
         Window.TextInput += (_, e) => MenuTextInput(e.Character);
-        if (_shotPath == null && !_host && _joinHost == null) // real menu session only: CLI never touches accounts
+        if (_shotPath == null && !_host && _joinHost == null) // real menu session only: CLI never touches saves
         {
-            _store = AccountStore.Load(_accountsPath);
+            _store = SaveStore.Load(_savesPath);
             _rollLog ??= new RollLog(NetLogPath());
-            if (!TryRestoreSession()) _screen = Screen.Login;
+            if (!TryRestoreSession()) _screen = Screen.Saves;
         }
-        if (shotScreen != null) // menu screenshots ride on a demo account
+        if (shotScreen != null) // menu screenshots ride on a demo save
         {
-            _account = new Account { User = "demo" };
-            _account.Slots[0] = DemoChara();
-            _account.Slots[2] = new CharaSlot { Name = "mage", Level = 2, Map = 20000, Hp = Progression.MaxHp(2), Mp = Progression.MaxMp(2) };
+            _store = DemoStore();
+            _saveSlot = 0;
+            _save = _store.Saves[0];
             _screen = shotScreen switch
             {
+                "saves" => Screen.Saves,
                 "server" => Screen.Server,
                 "chars" or "delete" or "panel" => Screen.Chars,
                 "job" => Screen.Job,
                 "setup" => Screen.Setup,
                 "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" => Screen.Game,
-                _ => Screen.Login,
+                _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
@@ -129,14 +173,22 @@ public partial class MushTownGame
             if (shotScreen == "quest") { _showQuest = true; _topPanel = 3; }
             if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
             if (shotScreen == "hud") _showSubmenu = true;
-            if (shotScreen == "register") _registerOpen = true; // the two modal states get their own shots
-            if (shotScreen == "delete") _deleteOpen = true;
+            if (shotScreen == "delete") _deleteOpen = true; // the modal state gets its own shot
+            if (shotScreen == "server") _hosts = new List<FoundHost> { new("192.168.1.4", Net.Port, "ACCEYURIKO") };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
             if (_screen == Screen.Setup) { _name = "newhero"; _focus = "name"; }
-            if (shotScreen == "register") _focus = "user"; // shots mirror real focus (gold borders included)
             _panelOpen = shotScreen == "panel"; // art shots stay clean; the panel shot pairs with chars (Start sits under it)
-            GameLog("MushTown w7.5 menu shot");
+            GameLog("MushTown saves menu shot");
         }
+    }
+
+    // The shot dummy: Astra holds the Lv.7 hero plus a mage, Blackveil is empty.
+    private static SaveStore DemoStore()
+    {
+        var store = new SaveStore();
+        store.Saves[0]!.Slots[0] = DemoChara();
+        store.Saves[0]!.Slots[2] = new CharaSlot { Name = "mage", Level = 2, Map = 20000, Hp = Progression.MaxHp(2), Mp = Progression.MaxMp(2) };
+        return store;
     }
 
     // The Lv.7 shot dummy: leveled stats (6 level-ups at +4/+1), half-full
@@ -164,10 +216,19 @@ public partial class MushTownGame
 
     private void LoadMenuContent()
     {
-        _ui = new UiText(GraphicsDevice);
+        _ui = new UiText(GraphicsDevice, Path.Combine(_assetsDir, "fonts"));
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
         foreach (string f in UiFiles) LoadTexture("ui/" + f); // missing file fails loud here
+        string menuDir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "art", "menu");
+        foreach (string f in MenuFiles)
+        {
+            string path = Path.Combine(menuDir, f);
+            if (!File.Exists(path))
+                throw new FileNotFoundException($"missing menu art: {Path.GetFullPath(path)}", path);
+            using var stream = File.OpenRead(path);
+            _textures["menu/" + f] = Texture2D.FromStream(GraphicsDevice, stream);
+        }
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
         foreach (int id in ItemData.AllIds) // item defs: json first (it names the icon), then the icon
@@ -252,17 +313,14 @@ public partial class MushTownGame
         }
         _net = new NetClient(GameLog);
         _net.Connect(host ? "127.0.0.1" : joinHost!);
-        var chara = _account?.Slots[_slot];
+        var chara = _save?.Slots[_slot];
         if (chara != null) PushBuild(); // CLI sessions skip: the server defaults them to beginner
     }
 
     private void MenuTextInput(char c)
     {
         if (!FocusBelongs() || c is < ' ' or > '~') return;
-        string id = _focus;
-        if (id == "user" && _user.Length < 12 && AccountStore.IsIdChar(c)) _user += c;
-        else if (id == "pass" && _pass.Length < 32) _pass += c;
-        else if (id == "name" && _name.Length < 12 && AccountStore.IsIdChar(c)) _name += c;
+        if (_focus == "name" && _name.Length < 12 && SaveStore.IsIdChar(c)) _name += c;
     }
 
     // One hit test for clicks and hovers (the menu Update keeps a short closure over this).
@@ -270,12 +328,7 @@ public partial class MushTownGame
         gx >= r.X && gx < r.X + r.Width && gy >= r.Y && gy < r.Y + r.Height;
 
     // Typing and backspace only reach the focused field when it belongs to this screen.
-    private bool FocusBelongs() => _screen switch
-    {
-        Screen.Login => _focus is "user" or "pass",
-        Screen.Setup => _focus == "name",
-        _ => false,
-    };
+    private bool FocusBelongs() => _screen == Screen.Setup && _focus == "name";
 
     private (int gx, int gy) MouseGamePos(MouseState ms)
     {
@@ -324,7 +377,7 @@ public partial class MushTownGame
         if (click && _panelOpen && hit(LogPanelRect())) return; // the open log panel swallows its own clicks (Start sits under it)
         switch (_screen)
         {
-            case Screen.Login: UpdateLogin(click, enter, esc, hit); break;
+            case Screen.Saves: UpdateSaves(click, enter, esc, hit); break;
             case Screen.Server: UpdateServer(click, enter, esc, hit, r); break;
             case Screen.Chars: UpdateChars(click, enter, esc, hit); break;
             case Screen.Job: UpdateJob(click, enter, esc, hit); break;
@@ -332,30 +385,29 @@ public partial class MushTownGame
         }
     }
 
-    private void UpdateLogin(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
+    // Three save rows, then Exit. Enter opens the first save with heroes
+    // (or the first save when none have any yet).
+    private void UpdateSaves(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
     {
-        if (_registerOpen)
-        {
-            if (esc) { CloseRegister(); return; }
-            if (click && hit(RegUserRect())) _focus = "user";
-            else if (click && hit(RegPassRect())) _focus = "pass";
-            else if ((click && hit(RegGoRect())) || enter) DoRegister();
-            else if (click && hit(RegBackRect())) CloseRegister();
-            else if (click && !hit(RegPanelRect())) CloseRegister(); // outside click closes (delete does the same)
-            return;
-        }
-        if (click && hit(IdRect())) _focus = "user";
-        else if (click && hit(PwRect())) _focus = "pass";
-        else if ((click && hit(LoginBtnRect())) || enter) DoLogin();
-        else if (click && hit(RegTextRect())) { _registerOpen = true; _focus = "user"; }
-        else if (click && hit(QuitTextRect())) Exit();
+        int rows = SaveRows();
+        if (enter) { ActivateFirstSave(); return; }
+        for (int i = 0; i < rows; i++)
+            if (click && hit(SaveRowRect(i))) { ActivateSaveRow(i); return; }
     }
 
-    // The register panel closes from three paths (Esc, Back, outside click).
-    private void CloseRegister()
+    private int SaveRows() => SaveStore.MaxSaves + 1; // saves, then Exit
+
+    private void ActivateFirstSave()
     {
-        _registerOpen = false;
-        _focus = "user";
+        for (int i = 0; i < SaveStore.MaxSaves; i++)
+            if (_store.Saves[i]!.Slots.Any(h => h != null)) { PickSave(i); return; }
+        PickSave(0); // no heroes anywhere: Enter opens the first save
+    }
+
+    private void ActivateSaveRow(int i)
+    {
+        if (i < SaveStore.MaxSaves) { PickSave(i); return; }
+        Exit();
     }
 
     // This PC first, then every host the LAN scan found. Enter picks this
@@ -363,16 +415,20 @@ public partial class MushTownGame
     private void UpdateServer(bool click, bool enter, bool esc, Func<Rectangle, bool> hit, bool r)
     {
         if (_scanTask != null && _scanTask.IsCompleted) { _hosts = _scanTask.Result; _scanTask = null; }
-        if (esc || (click && hit(CancelBtnRect())))
+        int rows = 2 + _hosts.Count; // This PC + LAN hosts + Cancel at the end
+        if (esc)
         {
-            _screen = Screen.Chars; // back to characters: logout is its own button now (quitting with Esc used to log out)
+            _screen = Screen.Saves;
             _focus = "";
             return;
         }
         if (enter) { EnterChars(null); return; }
-        for (int i = 0; i < 1 + _hosts.Count; i++)
-            if (click && hit(ServerRowRect(i))) { EnterChars(i == 0 ? null : _hosts[i - 1].Ip); return; }
-        if (click && hit(LogoutTextRect())) Logout();
+        for (int i = 0; i < rows; i++)
+            if (click && hit(ServerRowRect(i, rows)))
+            {
+                if (i == rows - 1) { _screen = Screen.Saves; _focus = ""; return; }
+                EnterChars(i == 0 ? null : _hosts[i - 1].Ip); return;
+            }
         if (r && _scanTask == null) _scanTask = Discovery.ScanAsync();
     }
 
@@ -397,10 +453,10 @@ public partial class MushTownGame
         if (esc || (click && hit(CancelBtnRect()))) { EnterServer(); return; }
         try
         {
-            if (((click && hit(StartBtnRect())) || enter) && _account!.Slots[_slot] != null)
+            if (((click && hit(StartBtnRect())) || enter) && _save!.Slots[_slot] != null)
                 StartGame(ServerMode());
-            else if (click && hit(CreateBtnRect())) EnterJob(FirstEmptySlot());
-            else if (click && hit(DeleteBtnRect()) && _account!.Slots[_slot] != null) _deleteOpen = true;
+            else if (click && hit(CreateBtnRect())) EnterJob(FirstEmptyHeroSlot());
+            else if (click && hit(DeleteBtnRect()) && _save!.Slots[_slot] != null) _deleteOpen = true;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException
             && ex is not FileNotFoundException and not DirectoryNotFoundException)
@@ -410,10 +466,10 @@ public partial class MushTownGame
         }
         // buttons win over avatars (no overlap on the spawn map, verified in w75_chars)
         if (_screen != Screen.Chars) return; // Start may have entered the game above: no avatar check on the new camera
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < SaveStore.MaxHeroes; i++)
             if (click && hit(AvatarRect(i)))
             {
-                if (_account!.Slots[i] == null) EnterJob(i); // empty slot goes straight to the job screen
+                if (_save!.Slots[i] == null) EnterJob(i); // empty slot goes straight to the job screen
                 else _slot = i;
                 return;
             }
@@ -442,86 +498,43 @@ public partial class MushTownGame
     private void MenuBackspace()
     {
         if (!FocusBelongs()) return;
-        if (_focus == "user" && _user.Length > 0) _user = _user[..^1];
-        else if (_focus == "pass" && _pass.Length > 0) _pass = _pass[..^1];
-        else if (_focus == "name" && _name.Length > 0) _name = _name[..^1];
+        if (_focus == "name" && _name.Length > 0) _name = _name[..^1];
     }
 
-    private void DoLogin()
-    {
-        try
-        {
-            _account = _store.Login(_user, _pass);
-            _hostPick = null;
-            SaveSession();
-            _pass = "";
-            EnterServer();
-        }
-        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
-        {
-            _account = null; // a failed SaveSession must not leave a login behind
-            _error = ex.Message;
-        }
-    }
-
-    private void DoRegister()
-    {
-        bool created = false;
-        try
-        {
-            _account = _store.Register(_user, _pass); // one hash: reuse the new account, don't log in again
-            created = true; // from here a failed Save must roll the new user back out
-            _hostPick = null;
-            SaveSession();
-            _store.Save(_accountsPath);
-            GameLog($"registered {_user}");
-            _pass = "";
-            _registerOpen = false;
-            EnterServer();
-        }
-        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
-        {
-            if (created) { _store.Users.Remove(_user); _account = null; }
-            _error = ex.Message;
-        }
-    }
-
-    private void Logout()
-    {
-        try { File.Delete(_sessionPath); } // missing file is a no-op (a failed save or an outside delete)
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _error = ex.Message;
-            return; // still logged in: the session survived, so stay put
-        }
-        _account = null;
-        _focus = "user";
-        _screen = Screen.Login;
-    }
-
-    // Stay logged in: a past session skips login and the server pick (the pick
-    // defaults to this PC at login and updates on every EnterChars, so Chars can
-    // always land somewhere valid; Cancel still goes back to re-pick).
+    // A past session skips saves and the server pick (the pick defaults to
+    // this PC and updates on every EnterChars, so Chars can always land
+    // somewhere valid; Cancel still goes back to re-pick).
     private bool TryRestoreSession()
     {
         var s = Session.TryLoad(_sessionPath);
-        if (s?.User == null || !_store.Users.TryGetValue(s.User, out var account)
+        if (s == null || (uint)s.Slot >= SaveStore.MaxSaves
             || (s.Host != null && !System.Net.IPAddress.TryParse(s.Host, out _)))
             return false;
-        _account = account;
-        _user = account.User; // logout shows the last name, like a typed login
+        _saveSlot = s.Slot;
+        _save = _store.Saves[s.Slot];
         _hostPick = s.Host;
         _focus = "";
-        SelectFirstChara();
-        GameLog($"welcome back {_account.User}");
+        SelectFirstHero();
+        GameLog($"welcome back to {SaveNames[_saveSlot]}");
         _screen = Screen.Chars;
         return true;
     }
 
-    // The login cache: who is in plus the host pick, so the next launch
-    // opens on characters. Written on login, register, and every server pick.
+    // The session cache: which save is in plus the host pick, so the next
+    // launch opens on characters. Written on every save and server pick.
     private void SaveSession() =>
-        new Session { User = _account!.User, Host = _hostPick }.Save(_sessionPath);
+        new Session { Slot = _saveSlot, Host = _hostPick }.Save(_sessionPath);
+
+    // Save confirmed: pick a host next (the pick writes the session too).
+    private void PickSave(int slot)
+    {
+        _saveSlot = slot;
+        _save = _store.Saves[slot];
+        _hostPick = null;
+        try { SaveSession(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _error = ex.Message; } // cache only: still enter
+        EnterServer();
+    }
 
     // Server choice confirmed: characters become the hub (first occupied selected).
     private void EnterChars(string? host)
@@ -530,23 +543,23 @@ public partial class MushTownGame
         try { SaveSession(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _error = ex.Message; } // cache only: still enter
         _focus = "";
-        SelectFirstChara();
+        SelectFirstHero();
         GameLog($"server: {ServerLabel()}");
         _screen = Screen.Chars;
     }
 
     // First filled slot (or 0 when all are empty).
-    private void SelectFirstChara()
+    private void SelectFirstHero()
     {
         _slot = 0;
-        for (int i = 0; i < 3; i++)
-            if (_account!.Slots[i] != null) { _slot = i; break; }
+        for (int i = 0; i < SaveStore.MaxHeroes; i++)
+            if (_save!.Slots[i] != null) { _slot = i; break; }
     }
 
-    private int FirstEmptySlot()
+    private int FirstEmptyHeroSlot()
     {
-        for (int i = 0; i < 3; i++)
-            if (_account!.Slots[i] == null) return i;
+        for (int i = 0; i < SaveStore.MaxHeroes; i++)
+            if (_save!.Slots[i] == null) return i;
         throw new InvalidDataException("slots full, delete one first");
     }
 
@@ -562,9 +575,9 @@ public partial class MushTownGame
         bool created = false;
         try
         {
-            _store.CreateChara(_account!.User, _slot, _name);
+            _store.CreateHero(_saveSlot, _slot, _name);
             created = true; // from here a failed Save must roll the new slot back out
-            _store.Save(_accountsPath);
+            _store.Save(_savesPath);
             GameLog($"created {_name}");
             _name = "";
             _focus = "";
@@ -572,25 +585,25 @@ public partial class MushTownGame
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
-            if (created) _account!.Slots[_slot] = null;
+            if (created) _save!.Slots[_slot] = null;
             _error = ex.Message;
         }
     }
 
     private void DoDelete()
     {
-        CharaSlot? old = _account!.Slots[_slot];
+        CharaSlot? old = _save!.Slots[_slot];
         try
         {
-            _store.DeleteChara(_account.User, _slot);
-            _store.Save(_accountsPath);
+            _store.DeleteHero(_saveSlot, _slot);
+            _store.Save(_savesPath);
             GameLog($"deleted {old!.Name}");
-            SelectFirstChara(); // the deleted slot is empty now: show a filled one (or nothing when all are empty)
+            SelectFirstHero(); // the deleted slot is empty now: show a filled one (or nothing when all are empty)
             _deleteOpen = false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _account.Slots[_slot] = old; // a failed Save must roll the slot back out
+            _save.Slots[_slot] = old; // a failed Save must roll the slot back out
             _deleteOpen = false;
             _error = ex.Message;
         }
@@ -599,7 +612,7 @@ public partial class MushTownGame
     // mode: "host" = host here, else join that IP.
     private void StartGame(string mode)
     {
-        var chara = _account!.Slots[_slot]!;
+        var chara = _save!.Slots[_slot]!;
         if (chara.Map != _mapId) LoadMapData(chara.Map);
         LoadMapTextures(); // always: a failed texture load must retry, not skip into missing art
         if (chara.X != null && chara.Y != null)
@@ -689,16 +702,16 @@ public partial class MushTownGame
 
     private void SaveChara()
     {
-        // CLI bypass has no account; menus never entered the game either:
+        // CLI bypass has no save; menus never entered the game either:
         // saving menu-time coordinates would wipe the real saved position.
-        // Shots never save: shot mode rides on a demo account plus an empty
-        // store, so saving would wipe the player's real accounts file.
-        if (_shotPath != null || _account == null || _screen != Screen.Game) return;
-        var chara = _account.Slots[_slot]!;
+        // Shots never save: shot mode rides on a demo store, so saving
+        // would wipe the player's real saves file.
+        if (_shotPath != null || _save == null || _screen != Screen.Game) return;
+        var chara = _save.Slots[_slot]!;
         chara.Map = _mapId;
         chara.X = (int)Math.Floor(_px);
         chara.Y = (int)Math.Floor(_py);
-        _store.Save(_accountsPath);
+        _store.Save(_savesPath);
         GameLog($"saved {chara.Name} at map {chara.Map} ({chara.X},{chara.Y})");
     }
 
@@ -730,77 +743,119 @@ public partial class MushTownGame
     {
         GraphicsDevice.Clear(_screen == Screen.Chars ? new Color(120, 170, 210) : _screen == Screen.Job ? new Color(16, 24, 64) : new Color(20, 24, 48));
         _spriteBatch.Begin(blendState: BlendState.NonPremultiplied);
-        var (gx, gy) = MouseGamePos(Mouse.GetState());
+        var ms0 = Mouse.GetState();
+        var (gx, gy) = MouseGamePos(ms0);
+        bool down = ms0.LeftButton == ButtonState.Pressed;
 
         switch (_screen)
         {
-            case Screen.Login: DrawLogin(gx, gy); break;
-            case Screen.Server: DrawServer(gx, gy); break;
+            case Screen.Saves: DrawSaves(gx, gy, down); break;
+            case Screen.Server: DrawServer(gx, gy, down); break;
             case Screen.Chars: DrawChars(gx, gy); break;
             case Screen.Job: DrawJob(gx, gy); break;
             case Screen.Setup: DrawSetup(gx, gy); break;
         }
-        DrawLogOverlay(gx, gy);
+        DrawLogOverlay(gx, gy, down);
         _spriteBatch.End();
     }
 
-    private void DrawLogin(int gx, int gy)
+    // The sign board: header, 3-slice body (the cream center stretches),
+    // base. The caps' solid bars overlap the body 12px so no background
+    // shows at the joints; the leaf tips stop short of the buttons.
+    private void DrawSign(int bodyH)
     {
-        DrawUi("loginbg.png", 0, 0);
-        var w = WinRect();
-        DrawUi("loginwin.png", w.X, w.Y);
-        DrawUiBox(IdRect(), _user, "Login ID", _focus == "user");
-        DrawUiBox(PwRect(), new string('*', _pass.Length), "Password", _focus == "pass");
-        DrawImgButton("btn_login.png", LoginBtnRect(), gx, gy);
-        DrawTextButton(RegTextRect(), "Register", gx, gy);
-        DrawTextButton(QuitTextRect(), "Quit", gx, gy);
-        if (_error != "" && !_registerOpen) DrawTextCentered(_error, 683, 522, ErrRed);
-        if (!_registerOpen) return;
-        DrawDim(120);
-        DrawWhitePanel(RegPanelRect());
-        DrawTextCentered("Register", 683, 234, Ink);
-        DrawText("Login ID", 513, 262, Hint);
-        DrawUiBox(RegUserRect(), _user, "", _focus == "user");
-        DrawText("Password", 513, 342, Hint);
-        DrawUiBox(RegPassRect(), new string('*', _pass.Length), "", _focus == "pass");
-        DrawTextButton(RegGoRect(), "Register", gx, gy);
-        DrawTextButton(RegBackRect(), "Back", gx, gy);
-        if (_error != "") DrawTextCentered(_error, 683, 488, ErrRed);
+        int x = (GameWidth - MenuTex("sign_mid.png").Width) / 2;
+        int top = PanelTop(bodyH), body = BodyY(bodyH);
+        var mid = MenuTex("sign_mid.png");
+        // Chained bounds: each slice starts where the last ended, so separate
+        // truncations can never open a 1px seam at the joints.
+        int y0 = MSY(body, bodyH), y1 = y0 + MSS(MenuLayout.Slice);
+        int y3 = MSY(body + bodyH, bodyH), y2 = y3 - MSS(MenuLayout.Slice);
+        int dx = MSX(x), dw = MSS(mid.Width);
+        _spriteBatch.Draw(mid, new Rectangle(dx, y0, dw, y1 - y0),
+            new Rectangle(0, 0, mid.Width, MenuLayout.Slice), Color.White);
+        _spriteBatch.Draw(mid, new Rectangle(dx, y1, dw, y2 - y1),
+            new Rectangle(0, MenuLayout.Slice, mid.Width, mid.Height - MenuLayout.Slice * 2), Color.White);
+        _spriteBatch.Draw(mid, new Rectangle(dx, y2, dw, y3 - y2),
+            new Rectangle(0, mid.Height - MenuLayout.Slice, mid.Width, MenuLayout.Slice), Color.White);
+        var head = MenuTex("sign_top.png");
+        _spriteBatch.Draw(head, MSR(new Rectangle((GameWidth - head.Width) / 2, top, head.Width, head.Height), bodyH), Color.White);
+        var foot = MenuTex("sign_bot.png");
+        _spriteBatch.Draw(foot, MSR(new Rectangle((GameWidth - foot.Width) / 2, body + bodyH - MenuLayout.BotUp, foot.Width, foot.Height), bodyH), Color.White);
     }
 
-    private void DrawServer(int gx, int gy)
+    // Wooden buttons answer with transparency: hover 0.9, pressed 0.6.
+    private static float BtnAlpha(Rectangle r, int gx, int gy, bool down) =>
+        !HitRect(r, gx, gy) ? 1f : down ? 0.6f : 0.9f;
+
+    // One server row: blank pill plus name left + IP right. Text bakes at
+    // display size and draws unscaled (scaling the bake blurs it).
+    private void DrawServerRow(Rectangle r, string name, string ip, int gx, int gy, bool down)
+    {
+        _spriteBatch.Draw(MenuTex("btn_blank.png"), r, Color.White * BtnAlpha(r, gx, gy, down));
+        var tr = _ui.GetList(ip);
+        int m = MSS(MenuLayout.TextMargin);
+        var tl = _ui.GetList(TruncateList(name, r.Width - m - tr.Width - m - MSS(MenuLayout.TextGap)));
+        int cy = r.Y + (r.Height - tl.Height) / 2 + MSS(MenuLayout.TextDown);
+        _spriteBatch.Draw(tl, new Vector2(r.X + m, cy), MenuInk);
+        _spriteBatch.Draw(tr, new Vector2(r.Right - m - tr.Width, cy), ListGray);
+    }
+
+    // Cancel plaque: the last server row, blank pill plus centered label.
+    private void DrawCancelRow(Rectangle r, int gx, int gy, bool down)
+    {
+        _spriteBatch.Draw(MenuTex("btn_blank.png"), r, Color.White * BtnAlpha(r, gx, gy, down));
+        var t = _ui.GetListCancel("Cancel");
+        int cy = r.Y + (r.Height - t.Height) / 2 + MSS(MenuLayout.CancelDown);
+        _spriteBatch.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, cy), MenuInk);
+    }
+
+    // Cuts text to a pixel width (server names can run past the row).
+    private string TruncateList(string text, int maxWidth)
+    {
+        if (_ui.GetList(text).Width <= maxWidth) return text;
+        while (text.Length > 0 && _ui.GetList(text + "…").Width > maxWidth) text = text[..^1];
+        return text + "…";
+    }
+
+    private void DrawSaves(int gx, int gy, bool down)
     {
         DrawUi("worldbg.png", 0, 0);
-        // The frame hugs the rows: top once, mid tiled, bot at the content end.
-        int rows = 1 + _hosts.Count;
-        int bottom = 12 + rows * 50;
-        DrawUi("row_top.png", 1184, 12);
-        int topH = Tex("row_top.png").Height, midH = Tex("row_mid.png").Height;
-        for (int y = 12 + topH; y < bottom; y += midH) DrawUi("row_mid.png", 1184, y);
-        DrawUi("row_bot.png", 1184, bottom);
+        int bodyH = SaveBodyH();
+        DrawSign(bodyH);
+        for (int i = 0; i < SaveRows(); i++)
+        {
+            var r = SaveRowRect(i);
+            var t = MenuTex(i < SaveStore.MaxSaves ? SaveBtnFiles[i] : "btn_exit.png");
+            _spriteBatch.Draw(t, r, Color.White * BtnAlpha(r, gx, gy, down));
+        }
+        if (_error != "") DrawTextCentered(_error, 683, PanelBottomS(bodyH) + 8, ErrRed);
+    }
+
+    private void DrawServer(int gx, int gy, bool down)
+    {
+        DrawUi("worldbg.png", 0, 0);
+        int rows = 2 + _hosts.Count, bodyH = ServerBodyH(rows);
+        DrawSign(bodyH);
         for (int i = 0; i < rows; i++)
         {
-            var r = ServerRowRect(i);
-            DrawHover(r, gx, gy, 60);
-            string name = i == 0 ? "This PC" : _hosts[i - 1].Name;
-            string sub = i == 0 ? "host here" : _hosts[i - 1].Ip;
-            DrawTextCentered(name, r.X + r.Width / 2, r.Y + 6, Ink);
-            DrawTextCentered(sub, r.X + r.Width / 2, r.Y + 26, Hint);
+            var r = ServerRowRect(i, rows);
+            if (i == 0) DrawServerRow(r, "This PC", "host here", gx, gy, down);
+            else if (i < rows - 1) DrawServerRow(r, _hosts[i - 1].Name, _hosts[i - 1].Ip, gx, gy, down);
+            else DrawCancelRow(r, gx, gy, down);
         }
-        DrawTextCentered(_scanTask != null ? "Searching..." : "R: Refresh", 683, 500, Hint);
-        DrawImgButton("btn_cancel.png", CancelBtnRect(), gx, gy);
-        DrawTextButton(LogoutTextRect(), "Logout", gx, gy);
-        if (_error != "") DrawTextCentered(_error, 683, 540, ErrRed);
+        DrawTextCentered(_scanTask != null ? "Searching..." : "R: Refresh", 683, PanelBottomS(bodyH) + 8, Hint);
+        if (_error != "") DrawTextCentered(_error, 683, PanelBottomS(bodyH) + 32, ErrRed);
     }
 
     private void DrawChars(int gx, int gy)
     {
         DrawMapBack();
         int shown = 0; // tags stagger across 3 heights by draw order: clamped neighbors never share one
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < SaveStore.MaxHeroes; i++)
         {
             var (fx, fy) = AvatarFeet(i);
-            var s = _account!.Slots[i];
+            var s = _save!.Slots[i];
             if (s == null)
             {
                 DrawTextCentered("+", fx - _cameraX, fy - _cameraY - 110, new Color(255, 255, 255, 150));
@@ -814,7 +869,7 @@ public partial class MushTownGame
         var pill = WorldPillRect();
         DrawUi("selectworld.png", pill.X, pill.Y);
         DrawTextCentered(ServerLabel(), pill.X + pill.Width / 2, pill.Y + 15, Ink);
-        var sel = _account!.Slots[_slot];
+        var sel = _save!.Slots[_slot];
         if (sel != null)
         {
             var p = CharInfoRect();
@@ -869,9 +924,10 @@ public partial class MushTownGame
         if (_error != "") DrawTextCentered(_error, 817, 375, ErrRed);
     }
 
-    private void DrawLogOverlay(int gx, int gy)
+    private void DrawLogOverlay(int gx, int gy, bool down)
     {
-        DrawButton(LogButtonRect(), "日志", gx, gy);
+        var log = LogButtonRect();
+        _spriteBatch.Draw(MenuTex("btn_log.png"), log, Color.White * BtnAlpha(log, gx, gy, down));
         if (!_panelOpen) return;
         List<string>? snap = null;
         lock (_logLock)
@@ -884,7 +940,10 @@ public partial class MushTownGame
         }
         if (snap != null)
         {
-            var tex = _ui.BakeBlock(snap, LogPanelRect().Width - 20); // bake first: a failed bake keeps the old panel
+            int w = LogPanelRect().Width - 20;
+            var wrapped = snap.SelectMany(l => _ui.WrapBig(l, w)).ToList();
+            if (wrapped.Count > 12) wrapped.RemoveRange(0, wrapped.Count - 12);
+            var tex = _ui.BakeBlock(wrapped, w); // bake first: a failed bake keeps the old panel
             _panelTex?.Dispose();
             _panelTex = tex;
         }
@@ -925,14 +984,6 @@ public partial class MushTownGame
         _spriteBatch.Draw(tex, new Vector2(cx - tex.Width / 2, y), color);
     }
 
-    private void DrawButton(Rectangle r, string text, int gx, int gy)
-    {
-        bool hover = HitRect(r, gx, gy);
-        _spriteBatch.Draw(_pixel, r, hover ? new Color(80, 95, 180) : new Color(60, 70, 140));
-        var tex = _ui.Get(text);
-        _spriteBatch.Draw(tex, new Vector2(r.X + (r.Width - tex.Width) / 2, r.Y + (r.Height - tex.Height) / 2), Color.White);
-    }
-
     // Art button: the png carries its own label, hover is a white overlay.
     private void DrawImgButton(string file, Rectangle r, int gx, int gy)
     {
@@ -940,7 +991,7 @@ public partial class MushTownGame
         DrawHover(r, gx, gy, 40);
     }
 
-    // Full-screen dim behind a modal (register and delete).
+    // Full-screen dim behind the delete modal.
     private void DrawDim(int alpha)
     {
         _spriteBatch.Draw(_pixel, new Rectangle(0, 0, GameWidth, GameHeight), new Color(0, 0, 0, alpha));
@@ -952,20 +1003,13 @@ public partial class MushTownGame
         if (HitRect(r, gx, gy)) _spriteBatch.Draw(_pixel, r, new Color(255, 255, 255, alpha));
     }
 
-    // Self-drawn white modal panel (register and delete have no official art).
+
+
+    // Self-drawn white modal panel (the delete modal has no official art).
     private void DrawWhitePanel(Rectangle r)
     {
         _spriteBatch.Draw(_pixel, r, Color.White);
         DrawBoxBorder(r, new Color(150, 150, 150));
-    }
-
-    private void DrawTextButton(Rectangle r, string text, int gx, int gy)
-    {
-        bool hover = HitRect(r, gx, gy);
-        DrawHover(r, gx, gy, 60);
-        var tex = _ui.Get(text);
-        _spriteBatch.Draw(tex, new Vector2(r.X + (r.Width - tex.Width) / 2, r.Y + (r.Height - tex.Height) / 2),
-            hover ? Ink : Hint);
     }
 
     private void DrawUiBox(Rectangle r, string text, string hint, bool focused)
