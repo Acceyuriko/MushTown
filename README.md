@@ -23,6 +23,8 @@
 - 本机装有 MapleStory 客户端（冒烟测试默认指向 `E:\游戏\maplestory\appdata\Data`，
   可用命令行参数指定别的路径）
 - `git clone --recurse-submodules` 拉取子模块
+- 选人背景图自备：`assets/back/charselect.png`（版权原因不进仓库，缺了进选人屏直接报错）。
+  找一张 1366×768 或同比例的图放过去即可，`export` 不管它。
 
 ## 当前状态
 
@@ -64,7 +66,7 @@ dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录] # �
 dotnet run --project MushTown.Client                                # 打开游戏窗口（存档菜单）
 dotnet run --project MushTown.Client -- --host                       # 开房（本机当主机，无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>                   # 加入主机（本机双开用 127.0.0.1）
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen saves|server|chars|job|setup|delete|panel]  # 截图后退出（frame 从 0 数）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|setup|delete|panel|inv|use|stat|hud|skill|quest|talk|settings|shop]  # 截图后退出（frame 从 0 数）
 git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```
 

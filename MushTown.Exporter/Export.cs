@@ -77,17 +77,13 @@ public static class Export
         [SkillData.Endure] = new() { ReqLevel = 10, MaxLevel = 10, Kind = SkillData.KindPassive, HpPct = 3, DefPct = 2 },
     };
 
-    // Saves lobby art: (node path, file name). Normal button states only;
-    // hover is a white overlay drawn by the client, so no hover art needed.
+    // Saves lobby art: (node path, file name). Char-select buttons carry
+    // real 3-state art (_n/_h/_p); job/setup buttons keep one normal PNG
+    // with a client hover overlay.
     // Must match Menu.cs UiFiles: every file there must be listed here.
     private static readonly (string node, string file)[] UiFiles = new[]
     {
         ("LoginBack.img/WorldSelect/default/0/0", "worldbg.png"),
-        ("Login.img/CharSelect/canvas:charInfo", "charinfo.png"),
-        ("Login.img/CharSelect/BtSelect/normal/0", "btn_start.png"),
-        ("Login.img/CharSelect/BtNew/normal/0", "btn_create.png"),
-        ("Login.img/CharSelect/BtDelete/normal/0", "btn_delete.png"),
-        ("Login.img/CharSelect/BtDeleteConfirm/normal/0", "btn_deleteyes.png"),
         ("Login.img/CharSelect/selectWorld", "selectworld.png"),
         ("Login.img/CharSelect/nameTag/0/0", "tag_l.png"),
         ("Login.img/CharSelect/nameTag/0/1", "tag_m.png"),
@@ -98,6 +94,60 @@ public static class Export
         ("LoginBack.img/CustomizeChar/000/0/0", "setupbg.png"),
         ("Login.img/CustomizeChar/000/BtYes/normal/0", "btn_confirm.png"),
         ("Login.img/CustomizeChar/000/BtNo/normal/0", "btn_cancel.png"),
+        ("Login.img/CharSelect/BtSelect/normal/0", "cs_select_n.png"),
+        ("Login.img/CharSelect/BtSelect/mouseOver/0", "cs_select_h.png"),
+        ("Login.img/CharSelect/BtSelect/pressed/0", "cs_select_p.png"),
+        ("Login.img/CharSelect/BtNew/normal/0", "cs_new_n.png"),
+        ("Login.img/CharSelect/BtNew/mouseOver/0", "cs_new_h.png"),
+        ("Login.img/CharSelect/BtNew/pressed/0", "cs_new_p.png"),
+        ("Login.img/CharSelect/BtDelete/normal/0", "cs_delete_n.png"),
+        ("Login.img/CharSelect/BtDelete/mouseOver/0", "cs_delete_h.png"),
+        ("Login.img/CharSelect/BtDelete/pressed/0", "cs_delete_p.png"),
+        ("Login.img/CharSelect/BtDelete/sprite/0/0", "cs_delglass.png"),
+        ("Login.img/Common/BtPreview/normal/0", "cs_back_n.png"),
+        ("Login.img/Common/BtPreview/mouseOver/0", "cs_back_h.png"),
+        ("Login.img/Common/BtPreview/pressed/0", "cs_back_p.png"),
+        ("Login.img/CharSelect/BtDeleteConfirm/normal/0", "cs_delyes_n.png"),
+        ("Login.img/CharSelect/BtDeleteConfirm/mouseOver/0", "cs_delyes_h.png"),
+        ("Login.img/CharSelect/BtDeleteConfirm/pressed/0", "cs_delyes_p.png"),
+        ("Login.img/CharSelect/BtDeleteCancel/normal/0", "cs_delno_n.png"),
+        ("Login.img/CharSelect/BtDeleteCancel/mouseOver/0", "cs_delno_h.png"),
+        ("Login.img/CharSelect/BtDeleteCancel/pressed/0", "cs_delno_p.png"),
+        ("Login.img/CharSelect/slotJobBoard/closed/canvas:closeBackgrnd", "cs_board.png"),
+        ("Login.img/CharSelect/adventure/0", "cs_pillar.png"),
+        ("Login.img/CharSelect/page/backgrnd", "cs_page_bg.png"),
+        ("Login.img/CharSelect/page/sprite:base/0/0", "cs_page_base.png"),
+        ("Login.img/CharSelect/page/button:pageL/normal/0", "cs_page_l_n.png"),
+        ("Login.img/CharSelect/page/button:pageL/mouseOver/0", "cs_page_l_h.png"),
+        ("Login.img/CharSelect/page/button:pageL/pressed/0", "cs_page_l_p.png"),
+        ("Login.img/CharSelect/page/button:pageR/normal/0", "cs_page_r_n.png"),
+        ("Login.img/CharSelect/page/button:pageR/mouseOver/0", "cs_page_r_h.png"),
+        ("Login.img/CharSelect/page/button:pageR/pressed/0", "cs_page_r_p.png"),
+        ("Login.img/CharSelect/page/button:page1/normal/0", "cs_page_1_n.png"),
+        ("Login.img/CharSelect/page/button:page1/mouseOver/0", "cs_page_1_h.png"),
+        ("Login.img/CharSelect/page/button:page1/pressed/0", "cs_page_1_p.png"),
+        ("Login.img/CharSelect/page/button:page2/normal/0", "cs_page_2_n.png"),
+        ("Login.img/CharSelect/page/button:page2/mouseOver/0", "cs_page_2_h.png"),
+        ("Login.img/CharSelect/page/button:page2/pressed/0", "cs_page_2_p.png"),
+        ("Login.img/CharSelect/page/button:page3/normal/0", "cs_page_3_n.png"),
+        ("Login.img/CharSelect/page/button:page3/mouseOver/0", "cs_page_3_h.png"),
+        ("Login.img/CharSelect/page/button:page3/pressed/0", "cs_page_3_p.png"),
+        ("Login.img/CharSelect/page/button:page4/normal/0", "cs_page_4_n.png"),
+        ("Login.img/CharSelect/page/button:page4/mouseOver/0", "cs_page_4_h.png"),
+        ("Login.img/CharSelect/page/button:page4/pressed/0", "cs_page_4_p.png"),
+        ("Login.img/CharSelect/page/button:page5/normal/0", "cs_page_5_n.png"),
+        ("Login.img/CharSelect/page/button:page5/mouseOver/0", "cs_page_5_h.png"),
+        ("Login.img/CharSelect/page/button:page5/pressed/0", "cs_page_5_p.png"),
+    };
+
+    // Animated char-select overlays: (node path, file stem). Each numbered
+    // child is one frame; ExportUiFrames writes ui/{stem}_{f}.png plus a
+    // ui/{stem}.json of origins, delays, and fades.
+    private static readonly (string node, string stem)[] UiFrameSets = new[]
+    {
+        ("Login.img/CharSelect/character/0", "cs_ghost"),
+        ("Login.img/CharSelect/effect/0", "cs_portal"),
+        ("Login.img/CharSelect/effect/1", "cs_motes"),
     };
 
     public static void Run(string dataDir, string outDir)
@@ -203,6 +253,11 @@ public static class Export
                 Environment.ExitCode = 1;
                 return;
             }
+        }
+        if (!ExportUiFrames(ui, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
         }
         if (!ExportHud(ui, outDir))
         {
@@ -1092,6 +1147,62 @@ public static class Export
                 return false;
         }
         Console.WriteLine($"hud: {files.Count} files");
+        return true;
+    }
+
+    private static bool ExportUiFrames(WzRoot ui, string outDir)
+    {
+        foreach ((string node, string stem) in UiFrameSets)
+        {
+            var set = WzNodeUtil.ResolveUol(ui.Find(node));
+            if (set == null)
+            {
+                Console.WriteLine($"node not found: {node}");
+                return false;
+            }
+            var data = new UiFramesData();
+            int slash = node.LastIndexOf('/');
+            var off = ui.Find(node[..slash] + "/offset" + node[(slash + 1)..])?.Value as Wz_Vector;
+            data.OffX = off?.X ?? 0; // no offset node (ghost): anchor on the feet
+            data.OffY = off?.Y ?? 0;
+            for (int f = 0; ; f++)
+            {
+                var frame = WzNodeUtil.ResolveUol(set.Nodes[f.ToString()]);
+                if (frame == null) break;
+                var origin = frame.Nodes["origin"]?.Value as Wz_Vector;
+                if (origin == null)
+                {
+                    Console.WriteLine($"{node}/{f}: no origin");
+                    return false;
+                }
+                int delay = Int(frame, "delay", -1);
+                if (delay < 0)
+                {
+                    Console.WriteLine($"{node}/{f}: no delay");
+                    return false;
+                }
+                string path = $"ui/{stem}_{f}.png";
+                if (!UiPng.Save(ui, "UI", $"{node}/{f}", Path.Combine(outDir, path)))
+                    return false;
+                int a0 = Int(frame, "a0", 255);
+                data.Frames.Add(new UiFrame
+                {
+                    Image = path,
+                    Ox = origin.X,
+                    Oy = origin.Y,
+                    Delay = delay,
+                    A0 = a0,
+                    A1 = Int(frame, "a1", a0),
+                });
+            }
+            if (data.Frames.Count == 0)
+            {
+                Console.WriteLine($"{node}: no frames");
+                return false;
+            }
+            WriteJson(Path.Combine(outDir, "ui", $"{stem}.json"), data);
+            Console.WriteLine($"{stem}: {data.Frames.Count} frames off={data.OffX},{data.OffY}");
+        }
         return true;
     }
 

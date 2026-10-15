@@ -1,8 +1,9 @@
 using System.Text.Json;
+using static MushTown.Shared.LayoutJson;
 
 namespace MushTown.Shared;
 
-// menu-layout.json (repo root): wooden sign board geometry in 1366x768
+// layouts/menu-layout.json: wooden sign board geometry in 1366x768
 // space (saves + server screens). Missing keys keep their current values,
 // so the file may list only what you tweak.
 public static class MenuLayout
@@ -53,29 +54,5 @@ public static class MenuLayout
         BodyPadBottom = bodyPadBottom; MiddleExtraH = middleExtraH; ServerRowW = serverRowW;
         ServerRowH = serverRowH; TextMargin = textMargin; TextDown = textDown; ListSize = listSize;
         TextGap = textGap; CancelSize = cancelSize; CancelDown = cancelDown; Scale = scale; Log = log;
-    }
-
-    private static int GetInt(JsonElement root, string key, int def)
-    {
-        if (!root.TryGetProperty(key, out var el)) return def;
-        if (el.ValueKind != JsonValueKind.Number || !el.TryGetInt32(out int v)) throw new JsonException($"bad int \"{key}\"");
-        return v;
-    }
-
-    private static float GetFloat(JsonElement root, string key, float def)
-    {
-        if (!root.TryGetProperty(key, out var el)) return def;
-        if (el.ValueKind != JsonValueKind.Number || !el.TryGetDouble(out double v)) throw new JsonException($"bad number \"{key}\"");
-        return (float)v;
-    }
-
-    private static (int X, int Y) GetPoint(JsonElement root, string key, (int X, int Y) def)
-    {
-        if (!root.TryGetProperty(key, out var el)) return def;
-        if (el.ValueKind != JsonValueKind.Array || el.GetArrayLength() != 2
-            || el[0].ValueKind != JsonValueKind.Number || el[1].ValueKind != JsonValueKind.Number
-            || !el[0].TryGetInt32(out int x) || !el[1].TryGetInt32(out int y))
-            throw new JsonException($"bad point \"{key}\"");
-        return (x, y);
     }
 }

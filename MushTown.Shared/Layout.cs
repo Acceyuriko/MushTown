@@ -1,8 +1,9 @@
 using System.Text.Json;
+using static MushTown.Shared.LayoutJson;
 
 namespace MushTown.Shared;
 
-// hud-layout.json (repo root): HUD widget top-left positions in 1366x768
+// layouts/hud-layout.json: HUD widget top-left positions in 1366x768
 // space. Sizes stay in code (they must match the art). Missing keys keep
 // their current values, so the file may list only what you tweak.
 public static class Layout
@@ -41,14 +42,5 @@ public static class Layout
         var meso = GetPoint(root, "meso", Meso);
         Inv = inv; Stat = stat; Skill = skill; Quest = quest; Settings = settings; Shop = shop; Plate = plate; HpMp = hpmp; MenuBtn = menuBtn;
         CharBtn = charBtn; Qslot = qslot; Coin = coin; Meso = meso;
-    }
-
-    private static (int X, int Y) GetPoint(JsonElement root, string key, (int X, int Y) def)
-    {
-        if (!root.TryGetProperty(key, out var el)) return def;
-        if (el.ValueKind != JsonValueKind.Array || el.GetArrayLength() != 2
-            || !el[0].TryGetInt32(out int x) || !el[1].TryGetInt32(out int y))
-            throw new JsonException($"bad point \"{key}\"");
-        return (x, y);
     }
 }

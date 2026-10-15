@@ -22,7 +22,9 @@ public partial class MushTownGame
         LoadSettings();
         foreach (string key in SoundKey.Sfx)
             _sfx[key] = LoadWav(Path.Combine(_assetsDir, "sound", key + ".wav"));
-        _bgm!.Volume = _bgmVol / 100f; // Initialize loads the map first: the boot track plays, retune it to the saved volume
+        // Initialize loads the map first, so the boot track plays already (shots
+        // stay silent: no track); retune it to the saved volume.
+        if (_bgm != null) _bgm.Volume = _bgmVol / 100f;
     }
 
     private void LoadSettings()
@@ -73,6 +75,7 @@ public partial class MushTownGame
         _bgm?.Dispose();
         _bgmEffect?.Dispose(); // the instance does not own its buffer: drop it too
         GameLog($"bgm: {_map.Info.Bgm}");
+        if (_shotPath != null) return; // shots pose silent: no music blast
         _bgmEffect = LoadWav(Path.Combine(_assetsDir, "sound", key + ".wav"));
         _bgm = _bgmEffect.CreateInstance();
         _bgm.IsLooped = true;

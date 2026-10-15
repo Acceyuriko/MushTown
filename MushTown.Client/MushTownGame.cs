@@ -158,9 +158,11 @@ public partial class MushTownGame : Game
 
     private readonly string _layoutPath;
     private readonly string _menuLayoutPath;
+    private readonly string _charLayoutPath;
 #if DEBUG
     private FileSystemWatcher? _layoutWatcher;
     private FileSystemWatcher? _menuLayoutWatcher;
+    private FileSystemWatcher? _charLayoutWatcher;
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
@@ -182,9 +184,10 @@ public partial class MushTownGame : Game
         _shotAiticks = shotAiticks;
         _shotWear = shotWear;
         _assetsDir = FindAssetsDir();
-        string dir = Path.GetDirectoryName(_assetsDir)!;
+        string dir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "layouts");
         _layoutPath = Path.Combine(dir, "hud-layout.json");
         _menuLayoutPath = Path.Combine(dir, "menu-layout.json");
+        _charLayoutPath = Path.Combine(dir, "charselect-layout.json");
         TryReloadLayout();
 #if DEBUG
         _layoutWatcher = new FileSystemWatcher(dir, Path.GetFileName(_layoutPath));
@@ -197,6 +200,11 @@ public partial class MushTownGame : Game
         _menuLayoutWatcher.Renamed += (_, _) => _layoutDirty = true;
         _menuLayoutWatcher.Created += (_, _) => _layoutDirty = true;
         _menuLayoutWatcher.EnableRaisingEvents = true;
+        _charLayoutWatcher = new FileSystemWatcher(dir, Path.GetFileName(_charLayoutPath));
+        _charLayoutWatcher.Changed += (_, _) => _layoutDirty = true;
+        _charLayoutWatcher.Renamed += (_, _) => _layoutDirty = true;
+        _charLayoutWatcher.Created += (_, _) => _layoutDirty = true;
+        _charLayoutWatcher.EnableRaisingEvents = true;
 #endif
         _graphics = new GraphicsDeviceManager(this);
         IsMouseVisible = true;
@@ -488,7 +496,7 @@ public partial class MushTownGame : Game
 #endif
         if (_screen != Screen.Game)
         {
-            UpdateMenu();
+            UpdateMenu((float)gameTime.ElapsedGameTime.TotalMilliseconds);
             base.Update(gameTime);
             return;
         }
@@ -1766,6 +1774,7 @@ public partial class MushTownGame : Game
     {
         Layout.Load(_layoutPath);
         MenuLayout.Load(_menuLayoutPath);
+        CharLayout.Load(_charLayoutPath);
         if (_ui != null) _ui.RefreshListFonts(); // null only on the ctor reload, before content loads
         _invPos = new Point(Layout.Inv.X, Layout.Inv.Y);
         _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);

@@ -11,7 +11,7 @@ namespace MushTown.Shared;
 public sealed class SaveStore
 {
     public const int MaxSaves = 3;
-    public const int MaxHeroes = 3;
+    public const int MaxHeroes = 60; // 12 per page x 5 pages, like the official select
 
     public List<SaveData?> Saves { get; set; } = new();
 
@@ -54,12 +54,24 @@ public sealed class SaveStore
     }
 
     // Atomic write: a crash leaves the old file or the new one, never half.
+    // Trailing empty slots trim off (60-wide files stay small); Load pads back.
     public void Save(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var slim = new SaveStore
+        {
+            Saves = Saves.Select(s => s == null ? null : new SaveData { Slots = Trimmed(s.Slots) }).ToList(),
+        };
         string tmp = path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(this));
+        File.WriteAllText(tmp, JsonSerializer.Serialize(slim));
         File.Move(tmp, path, true);
+    }
+
+    private static List<CharaSlot?> Trimmed(List<CharaSlot?> slots)
+    {
+        var kept = slots.ToList();
+        while (kept.Count > 0 && kept[^1] == null) kept.RemoveAt(kept.Count - 1);
+        return kept;
     }
 
     public CharaSlot CreateHero(int save, int slot, string name)
@@ -94,6 +106,17 @@ public sealed class SaveStore
         if ((uint)save >= MaxSaves || (uint)slot >= MaxHeroes)
             throw new InvalidDataException($"bad slot {save}:{slot}");
         Saves[save]!.Slots[slot] = null; // an empty save here is a programmer bug (menus always pass a live save)
+        CompactHeroes(save); // the rest slide left: heroes always pack from slot 0, in order
+    }
+
+    // Stable pack: filled slots move to the front, order kept.
+    private void CompactHeroes(int save)
+    {
+        var heroes = Saves[save]!.Slots;
+        int next = 0;
+        for (int i = 0; i < heroes.Count; i++)
+            if (heroes[i] != null) heroes[next++] = heroes[i];
+        for (int i = next; i < heroes.Count; i++) heroes[i] = null;
     }
 
     // One charset for character names: the client reuses this while typing
@@ -105,37 +128,6 @@ public sealed class SaveStore
     {
         if (id.Length is < 1 or > 12 || !id.All(IsIdChar))
             throw new InvalidDataException($"bad {what} {id} (1-12 letters, digits, _ or -)");
-    }
-}
-
-// Saved session: which save is in plus the last host pick, so the next launch
-// opens on characters. A cache, not data: missing/unreadable file or bad
-// JSON means no session, where SaveStore.Load would throw.
-public sealed class Session
-{
-    public int Slot { get; set; }
-    public string? Host { get; set; } // null = this PC (host here); else the LAN IP to join
-
-    public static Session? TryLoad(string path)
-    {
-        if (!File.Exists(path)) return null;
-        try
-        {
-            return JsonSerializer.Deserialize<Session>(File.ReadAllText(path));
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    // Atomic write, same as saves: crash leaves old or new, never half.
-    public void Save(string path)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        string tmp = path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(this));
-        File.Move(tmp, path, true);
     }
 }
 

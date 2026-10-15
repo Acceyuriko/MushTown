@@ -292,6 +292,28 @@ public sealed class DmgDigit
     public string Image { get; set; } = "";
     public int Oy { get; set; }
 }
+
+// Animated char-select overlay: assets/ui/{stem}.json (ghost, portal,
+// motes). One frame per numbered WZ child; alpha runs A0->A1 over Delay.
+// The anchor is the slot feet plus Off (portal/motes carry WZ offsets,
+// the ghost has none and anchors straight on the feet).
+public sealed class UiFramesData
+{
+    public int OffX { get; set; }
+    public int OffY { get; set; }
+    public List<UiFrame> Frames { get; set; } = new();
+}
+
+public sealed class UiFrame
+{
+    public string Image { get; set; } = "";
+    public int Ox { get; set; } // origin: anchor minus this draws the frame
+    public int Oy { get; set; }
+    public int Delay { get; set; } // frame time in ms
+    public int A0 { get; set; } // start alpha (missing in WZ means 255)
+    public int A1 { get; set; } // end alpha (missing means hold A0)
+}
+
 // Exported character action: assets/chara/body/{action}.json (beginner full
 // merge) or assets/chara/gear/{imgId}/{action}.json (one gear's parts).
 public sealed class CharaData

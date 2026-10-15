@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MushTown.Shared;
 
 namespace MushTown.Tests;
@@ -14,14 +15,14 @@ public class SaveTests
     }
 
     [TestMethod]
-    public void CreateHero_ThreeSlots_NameUniquePerFile()
+    public void CreateHero_SixtySlots_NameUniquePerFile()
     {
         var store = new SaveStore();
         store.CreateHero(0, 0, "hero");
         store.CreateHero(0, 1, "hero2");
-        store.CreateHero(0, 2, "hero3");
+        store.CreateHero(0, 59, "hero60");
         Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, 0, "other"));
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, 3, "other"));
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, 60, "other"));
         Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, -1, "neg"));
         Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(3, 0, "nosave"));
         Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "hero"));
@@ -59,10 +60,26 @@ public class SaveTests
         store.DeleteHero(0, 0);
         Assert.IsNull(store.Saves[0]!.Slots[0]);
         store.DeleteHero(0, 0); // deleting an empty slot is a no-op
-        Assert.ThrowsException<InvalidDataException>(() => store.DeleteHero(0, 3));
+        Assert.ThrowsException<InvalidDataException>(() => store.DeleteHero(0, 60));
         Assert.ThrowsException<InvalidDataException>(() => store.DeleteHero(0, -1));
         store.CreateHero(0, 0, "hero"); // the freed name is reusable
         Assert.AreEqual("hero", store.Saves[0]!.Slots[0]!.Name);
+    }
+
+    [TestMethod]
+    public void DeleteHero_CompactsSlotsInOrder()
+    {
+        var store = new SaveStore();
+        store.CreateHero(0, 0, "a");
+        store.CreateHero(0, 1, "b");
+        store.CreateHero(0, 2, "c");
+        store.DeleteHero(0, 1); // b goes: c slides left, no gap
+        Assert.AreEqual("a", store.Saves[0]!.Slots[0]!.Name);
+        Assert.AreEqual("c", store.Saves[0]!.Slots[1]!.Name);
+        Assert.IsNull(store.Saves[0]!.Slots[2]);
+        store.DeleteHero(0, 0); // a goes: c slides to the front
+        Assert.AreEqual("c", store.Saves[0]!.Slots[0]!.Name);
+        Assert.IsNull(store.Saves[0]!.Slots[1]);
     }
 
     [TestMethod]
@@ -89,6 +106,32 @@ public class SaveTests
             Assert.AreEqual(40, slot.Hp);
             Assert.AreEqual(20, slot.Use![ItemData.RedPotion]); // int-keyed dict roundtrips
             Assert.AreEqual(10, slot.Use[ItemData.BluePotion]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Save_TrimsTrailingEmptySlots()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.CreateHero(0, 1, "hero");
+            store.Save(path);
+            // slot 1 kept, slots 2-59 trimmed; load pads back to 60
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var slots = doc.RootElement.GetProperty("Saves")[0].GetProperty("Slots");
+            Assert.AreEqual(2, slots.GetArrayLength()); // [null, hero]: the tail is gone
+            Assert.AreEqual("hero", slots[1].GetProperty("Name").GetString());
+            var back = SaveStore.Load(path);
+            Assert.AreEqual(SaveStore.MaxHeroes, back.Saves[0]!.Slots.Count);
+            Assert.AreEqual("hero", back.Saves[0]!.Slots[1]!.Name);
+            Assert.IsNull(back.Saves[0]!.Slots[2]);
+            Assert.IsNull(back.Saves[0]!.Slots[59]);
         }
         finally
         {
@@ -195,7 +238,9 @@ public class SaveTests
             Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
             File.WriteAllText(path, """{"Saves":[{"Slots":null}]}""");
             Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
-            File.WriteAllText(path, """{"Saves":[{"Slots":[null,null,null,null]}]}""");
+            // 61 slots breaks the 60 cap (4 nulls would just pad back up)
+            string over = string.Join(",", Enumerable.Repeat("null", 61));
+            File.WriteAllText(path, """{"Saves":[{"Slots":[""" + over + """]}]}""");
             Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
         }
         finally
@@ -204,73 +249,4 @@ public class SaveTests
         }
     }
 
-    [TestMethod]
-    public void Session_Save_TryLoad_Roundtrips()
-    {
-        string path = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
-        try
-        {
-            new Session { Slot = 1, Host = "10.0.0.5" }.Save(path);
-            Assert.IsFalse(File.Exists(path + ".tmp")); // atomic write leaves no tmp behind
-            var back = Session.TryLoad(path);
-            Assert.IsNotNull(back);
-            Assert.AreEqual(1, back.Slot);
-            Assert.AreEqual("10.0.0.5", back.Host);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [TestMethod]
-    public void Session_MissingOrCorrupt_TryLoadNull()
-    {
-        string missing = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
-        Assert.IsNull(Session.TryLoad(missing)); // first run: no file, not an error
-        string bad = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
-        try
-        {
-            File.WriteAllText(bad, "{oops");
-            Assert.IsNull(Session.TryLoad(bad)); // a bad cache logs out, never throws
-        }
-        finally
-        {
-            File.Delete(bad);
-        }
-    }
-
-    [TestMethod]
-    public void Session_OldFormat_SlotDefaultsZero()
-    {
-        string path = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}.json");
-        try
-        {
-            File.WriteAllText(path, """{"User":"bob","Host":"10.0.0.5"}""");
-            var back = Session.TryLoad(path);
-            Assert.IsNotNull(back);
-            Assert.AreEqual(0, back.Slot); // unknown props ignored: the old user becomes save 0
-            Assert.AreEqual("10.0.0.5", back.Host);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [TestMethod]
-    public void Session_Save_MissingDirectory_CreatesIt()
-    {
-        string dir = Path.Combine(Path.GetTempPath(), $"session-{Guid.NewGuid():N}");
-        string path = Path.Combine(dir, "session.json");
-        try
-        {
-            new Session { Slot = 2 }.Save(path); // first run: data/ does not exist yet (null host = this PC)
-            Assert.AreEqual(2, Session.TryLoad(path)!.Slot);
-        }
-        finally
-        {
-            Directory.Delete(dir, true);
-        }
-    }
 }

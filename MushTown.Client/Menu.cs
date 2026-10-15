@@ -16,7 +16,6 @@ public partial class MushTownGame
     private Screen _screen = Screen.Game;
     private SaveStore _store = new();
     private string _savesPath = "";
-    private string _sessionPath = "";
     private SaveData? _save;
     private int _saveSlot;
     private int _slot;
@@ -39,6 +38,21 @@ public partial class MushTownGame
     private bool _panelOpen;
     private Texture2D? _panelTex;
     private bool _panelDirty = true;
+    private int _page; // char-select page 0-4 (12 slots each)
+    private int _walkFrame;
+    private float _walkT;
+    private int _walkSlot = -1; // walk restarts when the selection moves
+    private UiClip _ghost = null!;
+    private UiClip _portal = null!;
+    private UiClip _motes = null!;
+
+    // One looping overlay clip: frames plus their player state.
+    private sealed class UiClip
+    {
+        public UiFramesData Data = new();
+        public int Frame;
+        public float Timer;
+    }
 
     private static readonly Color Ink = new(50, 50, 50); // dark text on white art
     private static readonly Color Hint = new(153, 153, 153); // official hint gray
@@ -47,11 +61,26 @@ public partial class MushTownGame
     private static readonly Color MenuInk = new(43, 8, 5); // baked button text median, sampled off btn_astra
 
     // Must match Export.cs UiFiles: every name here must be exported, or LoadTexture throws.
+    // Char-select buttons carry real 3-state art (_n/_h/_p); frame sets
+    // (cs_ghost/cs_portal/cs_motes) load through LoadUiClip instead.
     private static readonly string[] UiFiles = new[]
     {
         "worldbg.png",
-        "charinfo.png", "btn_start.png", "btn_create.png", "btn_delete.png",
-        "btn_deleteyes.png", "selectworld.png", "tag_l.png", "tag_m.png", "tag_r.png",
+        "selectworld.png", "tag_l.png", "tag_m.png", "tag_r.png",
+        "cs_select_n.png", "cs_select_h.png", "cs_select_p.png",
+        "cs_new_n.png", "cs_new_h.png", "cs_new_p.png",
+        "cs_delete_n.png", "cs_delete_h.png", "cs_delete_p.png",
+        "cs_back_n.png", "cs_back_h.png", "cs_back_p.png",
+        "cs_delyes_n.png", "cs_delyes_h.png", "cs_delyes_p.png",
+        "cs_delno_n.png", "cs_delno_h.png", "cs_delno_p.png",
+        "cs_board.png", "cs_pillar.png", "cs_page_bg.png", "cs_page_base.png", "cs_delglass.png",
+        "cs_page_l_n.png", "cs_page_l_h.png", "cs_page_l_p.png",
+        "cs_page_r_n.png", "cs_page_r_h.png", "cs_page_r_p.png",
+        "cs_page_1_n.png", "cs_page_1_h.png", "cs_page_1_p.png",
+        "cs_page_2_n.png", "cs_page_2_h.png", "cs_page_2_p.png",
+        "cs_page_3_n.png", "cs_page_3_h.png", "cs_page_3_p.png",
+        "cs_page_4_n.png", "cs_page_4_h.png", "cs_page_4_p.png",
+        "cs_page_5_n.png", "cs_page_5_h.png", "cs_page_5_p.png",
         "listbg.png", "cell_hero.png", "btn_make.png",
         "setupbg.png", "btn_confirm.png", "btn_cancel.png",
     };
@@ -70,7 +99,7 @@ public partial class MushTownGame
     // Wooden sign board (saves + server): a header sign, a stretchable cream
     // body, a mushroom base. Rows are baked pill buttons with gaps between;
     // the Exit and Cancel plaques match each other. All numbers live in
-    // menu-layout.json (DEBUG builds reload it live); code only centers.
+    // layouts/menu-layout.json (DEBUG builds reload it live); code only centers.
     private static readonly string[] SaveNames = { "Astra", "Blackveil", "Crimson" };
     private static readonly string[] SaveBtnFiles = { "btn_astra.png", "btn_blackveil.png", "btn_crimson.png" };
     private int SaveRowH(int i) => MenuTex(i < SaveStore.MaxSaves ? SaveBtnFiles[i] : "btn_exit.png").Height;
@@ -111,17 +140,48 @@ public partial class MushTownGame
             MenuLayout.ServerRowW, MenuLayout.ServerRowH), bodyH);
     }
 
-    // Menu geometry in game pixels (1366x768), shared by click and draw code.
-    // First pass from WZ origins/vectors, tuned against screenshots after.
-    private static Rectangle CharInfoRect() => new(1135, 336, 200, 292);
-    private static Rectangle StartBtnRect() => new(1145, 554, 180, 61);
-    private static Rectangle WorldPillRect() => new(1135, 33, 200, 57);
-    private static Rectangle CreateBtnRect() => new(498, 667, 170, 41);
-    private static Rectangle DeleteBtnRect() => new(586, 722, 160, 33);
-    private static Rectangle CancelBtnRect() => new(30, 695, 167, 43);
-    private static Rectangle DeletePanelRect() => new(483, 284, 400, 200);
-    private static Rectangle DeleteYesRect() => new(508, 410, 180, 30);
-    private static Rectangle DeleteNoRect() => new(700, 402, 167, 43);
+    // Char select in game pixels (1366x768), shared by click and draw code.
+    // All numbers live in layouts/charselect-layout.json (DEBUG builds reload it
+    // live); code only centers. Button sizes come from the art.
+    private const int PageSlots = 12;
+    private const int Pages = 5;
+    private static (int fx, int fy) SlotFeet(int cell) =>
+        cell < 6 ? (CharLayout.SlotTopX[cell], CharLayout.SlotTopY) : (CharLayout.SlotBotX[cell - 6], CharLayout.SlotBotY);
+    private static Rectangle SlotRect(int cell)
+    {
+        var (fx, fy) = SlotFeet(cell);
+        return new Rectangle(fx - CharLayout.SlotW / 2, fy - CharLayout.SlotH, CharLayout.SlotW, CharLayout.SlotH);
+    }
+    private Rectangle UiRect(string file, int x, int y)
+    {
+        var t = _textures["ui/" + file];
+        return new Rectangle(x, y, t.Width, t.Height);
+    }
+    private static Rectangle WorldPillRect() => new(CharLayout.Pill.X, CharLayout.Pill.Y, 200, 57);
+    private Rectangle BoardRect() => UiRect("cs_board.png", CharLayout.Board.X, CharLayout.Board.Y);
+    private Rectangle SelectBtnRect() => UiRect("cs_select_n.png", CharLayout.Select.X, CharLayout.Select.Y);
+    private Rectangle NewBtnRect() => UiRect("cs_new_n.png", CharLayout.New.X, CharLayout.New.Y);
+    private Rectangle DeleteBtnRect() => UiRect("cs_delete_n.png", CharLayout.Delete.X, CharLayout.Delete.Y);
+    private Rectangle BackBtnRect() => UiRect("cs_back_n.png", CharLayout.Back.X, CharLayout.Back.Y);
+    private Rectangle PagerBgRect() => UiRect("cs_page_bg.png", CharLayout.Pager.X, CharLayout.Pager.Y);
+    // Pager cells: L, five digits, R. The arrows sit apart in the black
+    // bar ends (layout file); digits tile the white bar (~37.6px each).
+    // Digit art (30x33) overflows the 26px bar height, like the official look.
+    private Rectangle PageLRect() => UiRect("cs_page_l_n.png", CharLayout.PageL.X, CharLayout.PageL.Y);
+    private Rectangle PageRRect() => UiRect("cs_page_r_n.png", CharLayout.PageR.X, CharLayout.PageR.Y);
+    private Rectangle PageCellRect(int cell)
+    {
+        var bg = PagerBgRect();
+        if (cell == 0) return PageLRect();
+        if (cell == 6) return PageRRect();
+        // Digits tile the whole bar now the arrows moved out (188/5 = 37.6px each).
+        float pitch = bg.Width / 5f;
+        int x0 = bg.X + (int)((cell - 1) * pitch);
+        return new Rectangle(x0, bg.Y, bg.X + (int)(cell * pitch) - x0, bg.Height);
+    }
+    private static Rectangle DeletePanelRect() => new(CharLayout.DelPanel.X, CharLayout.DelPanel.Y, CharLayout.DelSize.X, CharLayout.DelSize.Y);
+    private Rectangle DeleteYesRect() => UiRect("cs_delyes_n.png", CharLayout.DelYes.X, CharLayout.DelYes.Y);
+    private Rectangle DeleteNoRect() => UiRect("cs_delno_n.png", CharLayout.DelNo.X, CharLayout.DelNo.Y);
     private static Rectangle ListBgRect() => new(526, 87, 313, 593);
     private static Rectangle CellRect() => new(554, 147, 152, 74);
     private static Rectangle MakeBtnRect() => new(489, 692, 200, 57);
@@ -141,15 +201,16 @@ public partial class MushTownGame
     {
         if (SaveNames.Length != SaveStore.MaxSaves || SaveBtnFiles.Length != SaveStore.MaxSaves)
             throw new InvalidDataException("save names/buttons drifted from MaxSaves");
+        if (PageSlots * Pages != SaveStore.MaxHeroes)
+            throw new InvalidDataException("char pages drifted from MaxHeroes");
         string dataDir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "data");
         _savesPath = Path.Combine(dataDir, "saves.json");
-        _sessionPath = Path.Combine(dataDir, "session.json");
         Window.TextInput += (_, e) => MenuTextInput(e.Character);
         if (_shotPath == null && !_host && _joinHost == null) // real menu session only: CLI never touches saves
         {
             _store = SaveStore.Load(_savesPath);
             _rollLog ??= new RollLog(NetLogPath());
-            if (!TryRestoreSession()) _screen = Screen.Saves;
+            _screen = Screen.Saves; // every launch starts at saves (no session skip)
         }
         if (shotScreen != null) // menu screenshots ride on a demo save
         {
@@ -160,7 +221,7 @@ public partial class MushTownGame
             {
                 "saves" => Screen.Saves,
                 "server" => Screen.Server,
-                "chars" or "delete" or "panel" => Screen.Chars,
+                "chars" or "chars2" or "delete" or "panel" => Screen.Chars,
                 "job" => Screen.Job,
                 "setup" => Screen.Setup,
                 "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" => Screen.Game,
@@ -174,8 +235,11 @@ public partial class MushTownGame
             if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
             if (shotScreen == "hud") _showSubmenu = true;
             if (shotScreen == "delete") _deleteOpen = true; // the modal state gets its own shot
+            if (shotScreen == "chars2") _page = 1; // empty page: the demo fills page 1 only
+            if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
             if (shotScreen == "server") _hosts = new List<FoundHost> { new("192.168.1.4", Net.Port, "ACCEYURIKO") };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
+            if (shotScreen == "chars2") _slot = PageSlots; // empty slot: no start/delete on the empty-page shot
             if (_screen == Screen.Setup) { _name = "newhero"; _focus = "name"; }
             _panelOpen = shotScreen == "panel"; // art shots stay clean; the panel shot pairs with chars (Start sits under it)
             GameLog("MushTown saves menu shot");
@@ -220,6 +284,10 @@ public partial class MushTownGame
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
         foreach (string f in UiFiles) LoadTexture("ui/" + f); // missing file fails loud here
+        LoadTexture("back/charselect.png"); // select backdrop: the user's fig2 crop
+        _ghost = LoadUiClip("cs_ghost");
+        _portal = LoadUiClip("cs_portal");
+        _motes = LoadUiClip("cs_motes");
         string menuDir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "art", "menu");
         foreach (string f in MenuFiles)
         {
@@ -263,6 +331,17 @@ public partial class MushTownGame
         _settingsBack = RoundedBacking(SettingsW, SettingsBodyH, new Color(62, 96, 118), 3);
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
         LoadNpcTextures(); // NPC stand textures (quest json already loaded in Initialize)
+        if (_shotPath != null && _screen == Screen.Chars)
+        {
+            // frozen mid-motion: Update never runs in shots
+            const int ghostPose = 4, portalPose = 2, motesPose = 1;
+            if (_ghost.Data.Frames.Count < ghostPose + 1 || _portal.Data.Frames.Count < portalPose + 1 || _motes.Data.Frames.Count < motesPose + 1)
+                throw new InvalidDataException("select clips lost frames: re-check shot poses");
+            _ghost.Frame = ghostPose;
+            _portal.Frame = portalPose;
+            _motes.Frame = motesPose; // the mid-cycle flash frame would white out the shot
+            _walkFrame = Math.Min(1, _delays["walk2"].Count - 1);
+        }
     }
 
     protected override void UnloadContent()
@@ -347,7 +426,7 @@ public partial class MushTownGame
         return edge;
     }
 
-    private void UpdateMenu()
+    private void UpdateMenu(float dtMs)
     {
         var ms = Mouse.GetState();
         var (gx, gy) = MouseGamePos(ms);
@@ -379,7 +458,7 @@ public partial class MushTownGame
         {
             case Screen.Saves: UpdateSaves(click, enter, esc, hit); break;
             case Screen.Server: UpdateServer(click, enter, esc, hit, r); break;
-            case Screen.Chars: UpdateChars(click, enter, esc, hit); break;
+            case Screen.Chars: UpdateChars(click, enter, esc, hit, dtMs); break;
             case Screen.Job: UpdateJob(click, enter, esc, hit); break;
             case Screen.Setup: UpdateSetup(click, enter, esc, hit); break;
         }
@@ -441,8 +520,15 @@ public partial class MushTownGame
         _scanTask = Discovery.ScanAsync();
     }
 
-    private void UpdateChars(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
+    private void UpdateChars(bool click, bool enter, bool esc, Func<Rectangle, bool> hit, float dtMs)
     {
+        AdvanceClip(_ghost, dtMs);
+        AdvanceClip(_portal, dtMs);
+        AdvanceClip(_motes, dtMs);
+        if (_walkSlot != _slot) { _walkSlot = _slot; _walkFrame = 0; _walkT = 0; } // fresh selection walks from frame 0
+        _walkT += dtMs;
+        var delays = _delays["walk2"];
+        if (_walkT >= delays[_walkFrame]) { _walkT -= delays[_walkFrame]; _walkFrame = (_walkFrame + 1) % delays.Count; }
         if (_deleteOpen)
         {
             if (esc || (click && hit(DeleteNoRect()))) { _deleteOpen = false; return; }
@@ -450,27 +536,33 @@ public partial class MushTownGame
             else if (click && !hit(DeletePanelRect())) _deleteOpen = false;
             return;
         }
-        if (esc || (click && hit(CancelBtnRect()))) { EnterServer(); return; }
+        if (esc || (click && hit(BackBtnRect()))) { EnterServer(); return; }
+        for (int c = 0; c < 7; c++) // pager before slots (the bar overlaps the bottom row's click rects)
+        {
+            if (!click || !hit(PageCellRect(c))) continue;
+            _page = c == 0 ? Math.Max(0, _page - 1) : c == 6 ? Math.Min(Pages - 1, _page + 1) : c - 1;
+            return;
+        }
         try
         {
-            if (((click && hit(StartBtnRect())) || enter) && _save!.Slots[_slot] != null)
+            if (((click && hit(SelectBtnRect())) || enter) && _save!.Slots[_slot] != null)
                 StartGame(ServerMode());
-            else if (click && hit(CreateBtnRect())) EnterJob(FirstEmptyHeroSlot());
+            else if (click && hit(NewBtnRect())) EnterJob(FirstEmptyHeroSlot());
             else if (click && hit(DeleteBtnRect()) && _save!.Slots[_slot] != null) _deleteOpen = true;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException
             && ex is not FileNotFoundException and not DirectoryNotFoundException)
         {
             _error = ex.Message; // save/net/data failures become menu errors (missing art crashes loud above)
-            ToChars(); // a failed Start may have moved the map/camera: step back out so chars draws the spawn view again
+            ToChars(); // a failed Start may have moved the map/camera: step back out
         }
-        // buttons win over avatars (no overlap on the spawn map, verified in w75_chars)
-        if (_screen != Screen.Chars) return; // Start may have entered the game above: no avatar check on the new camera
-        for (int i = 0; i < SaveStore.MaxHeroes; i++)
-            if (click && hit(AvatarRect(i)))
+        // buttons win over slots; Start may have entered the game above
+        if (_screen != Screen.Chars) return;
+        for (int cell = 0; cell < PageSlots; cell++)
+            if (click && hit(SlotRect(cell)))
             {
-                if (_save!.Slots[i] == null) EnterJob(i); // empty slot goes straight to the job screen
-                else _slot = i;
+                int i = _page * PageSlots + cell;
+                if (_save!.Slots[i] != null) _slot = i; // empty slots ignore clicks: only Create starts a hero
                 return;
             }
     }
@@ -501,59 +593,37 @@ public partial class MushTownGame
         if (_focus == "name" && _name.Length > 0) _name = _name[..^1];
     }
 
-    // A past session skips saves and the server pick (the pick defaults to
-    // this PC and updates on every EnterChars, so Chars can always land
-    // somewhere valid; Cancel still goes back to re-pick).
-    private bool TryRestoreSession()
-    {
-        var s = Session.TryLoad(_sessionPath);
-        if (s == null || (uint)s.Slot >= SaveStore.MaxSaves
-            || (s.Host != null && !System.Net.IPAddress.TryParse(s.Host, out _)))
-            return false;
-        _saveSlot = s.Slot;
-        _save = _store.Saves[s.Slot];
-        _hostPick = s.Host;
-        _focus = "";
-        SelectFirstHero();
-        GameLog($"welcome back to {SaveNames[_saveSlot]}");
-        _screen = Screen.Chars;
-        return true;
-    }
-
-    // The session cache: which save is in plus the host pick, so the next
-    // launch opens on characters. Written on every save and server pick.
-    private void SaveSession() =>
-        new Session { Slot = _saveSlot, Host = _hostPick }.Save(_sessionPath);
-
-    // Save confirmed: pick a host next (the pick writes the session too).
+    // Save confirmed: pick a host next.
     private void PickSave(int slot)
     {
         _saveSlot = slot;
         _save = _store.Saves[slot];
         _hostPick = null;
-        try { SaveSession(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _error = ex.Message; } // cache only: still enter
         EnterServer();
     }
+
+    // Char select draws in screen pixels (no map behind it now): park the
+    // camera at the origin; StartGame snaps it back on entry.
+    private void ZeroCamera() { _camX = _camY = 0; _cameraX = _cameraY = 0; }
 
     // Server choice confirmed: characters become the hub (first occupied selected).
     private void EnterChars(string? host)
     {
         _hostPick = host;
-        try { SaveSession(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _error = ex.Message; } // cache only: still enter
         _focus = "";
+        ZeroCamera();
         SelectFirstHero();
         GameLog($"server: {ServerLabel()}");
         _screen = Screen.Chars;
     }
 
-    // First filled slot (or 0 when all are empty).
+    // First filled slot (or 0 when all are empty); the page follows it.
     private void SelectFirstHero()
     {
         _slot = 0;
         for (int i = 0; i < SaveStore.MaxHeroes; i++)
             if (_save!.Slots[i] != null) { _slot = i; break; }
+        _page = _slot / PageSlots;
     }
 
     private int FirstEmptyHeroSlot()
@@ -581,6 +651,7 @@ public partial class MushTownGame
             GameLog($"created {_name}");
             _name = "";
             _focus = "";
+            _page = _slot / PageSlots; // the new char stays on screen
             _screen = Screen.Chars;
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
@@ -592,18 +663,20 @@ public partial class MushTownGame
 
     private void DoDelete()
     {
-        CharaSlot? old = _save!.Slots[_slot];
+        string name = _save!.Slots[_slot]!.Name;
+        var backup = _save.Slots.ToList(); // delete compacts: roll back the whole row, not one slot
         try
         {
             _store.DeleteHero(_saveSlot, _slot);
             _store.Save(_savesPath);
-            GameLog($"deleted {old!.Name}");
+            GameLog($"deleted {name}");
             SelectFirstHero(); // the deleted slot is empty now: show a filled one (or nothing when all are empty)
             _deleteOpen = false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _save.Slots[_slot] = old; // a failed Save must roll the slot back out
+            _save.Slots.Clear();
+            _save.Slots.AddRange(backup); // a failed Save must roll the row back out
             _deleteOpen = false;
             _error = ex.Message;
         }
@@ -679,18 +752,7 @@ public partial class MushTownGame
         _skillCdMs.Clear();
         _buffMs.Clear();
         _orbs = 0;
-        try
-        {
-            // the chars screen always shows the spawn map, whatever was played last
-            if (_mapId != SpawnMapId) { LoadMapData(SpawnMapId); LoadMapTextures(); }
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException
-            && ex is not FileNotFoundException and not DirectoryNotFoundException)
-        {
-            if (_error == "") _error = ex.Message; // a save failure above outranks this backdrop failure
-        }
-        Spawn();
-        SnapCamera();
+        ZeroCamera(); // no map behind the select screen anymore
         var kb = Keyboard.GetState(); // held Enter/Back must not fall through as a fresh press
         _enterWasDown = kb.IsKeyDown(Keys.Enter);
         _backWasDown = kb.IsKeyDown(Keys.Back);
@@ -723,22 +785,6 @@ public partial class MushTownGame
         return _panelOpen && HitRect(LogPanelRect(), gx, gy);
     }
 
-    // Feet of slot i on the spawn ground (all three share the line, clamped inside it).
-    private (int fx, int fy) AvatarFeet(int i)
-    {
-        int a = Math.Min(_spawnGround.X1, _spawnGround.X2);
-        int b = Math.Max(_spawnGround.X1, _spawnGround.X2);
-        // a stub shorter than 40 leaves no room to spread: stack all three mid-ground
-        int fx = b - a < 40 ? (a + b) / 2 : Math.Clamp(_map.Info.SpawnX + (i - 1) * 150, a + 20, b - 20);
-        return (fx, SceneMath.FootholdY(_spawnGround, fx));
-    }
-
-    private Rectangle AvatarRect(int i)
-    {
-        var (fx, fy) = AvatarFeet(i);
-        return new Rectangle(fx - _cameraX - 70, fy - _cameraY - 170, 140, 170);
-    }
-
     private void DrawMenu()
     {
         GraphicsDevice.Clear(_screen == Screen.Chars ? new Color(120, 170, 210) : _screen == Screen.Job ? new Color(16, 24, 64) : new Color(20, 24, 48));
@@ -751,7 +797,7 @@ public partial class MushTownGame
         {
             case Screen.Saves: DrawSaves(gx, gy, down); break;
             case Screen.Server: DrawServer(gx, gy, down); break;
-            case Screen.Chars: DrawChars(gx, gy); break;
+            case Screen.Chars: DrawChars(gx, gy, down); break;
             case Screen.Job: DrawJob(gx, gy); break;
             case Screen.Setup: DrawSetup(gx, gy); break;
         }
@@ -848,48 +894,126 @@ public partial class MushTownGame
         if (_error != "") DrawTextCentered(_error, 683, PanelBottomS(bodyH) + 32, ErrRed);
     }
 
-    private void DrawChars(int gx, int gy)
+    private void DrawChars(int gx, int gy, bool down)
     {
-        DrawMapBack();
-        int shown = 0; // tags stagger across 3 heights by draw order: clamped neighbors never share one
-        for (int i = 0; i < SaveStore.MaxHeroes; i++)
+        _spriteBatch.Draw(_textures["back/charselect.png"], new Rectangle(0, 0, GameWidth, GameHeight), Color.White);
+        for (int cell = 0; cell < PageSlots; cell++)
         {
-            var (fx, fy) = AvatarFeet(i);
+            int i = _page * PageSlots + cell;
+            var (fx, fy) = SlotFeet(cell);
             var s = _save!.Slots[i];
-            if (s == null)
+            bool faceRight = cell % 6 < 3; // outer slots face the middle
+            if (s == null) { DrawClip(_ghost, fx, fy, !faceRight); continue; } // raw art faces right
+            if (i == _slot)
             {
-                DrawTextCentered("+", fx - _cameraX, fy - _cameraY - 110, new Color(255, 255, 255, 150));
-                continue;
+                // The totem sits behind the walker, mirrored with the facing.
+                var pt = _textures["ui/cs_pillar.png"];
+                int px = faceRight ? fx + CharLayout.Pillar.X : fx - (pt.Width + CharLayout.Pillar.X);
+                DrawUi("cs_pillar.png", px, fy + CharLayout.Pillar.Y, !faceRight);
+                DrawClip(_portal, fx, fy);
+                DrawClip(_motes, fx, fy); // glow stays behind: the walker stays crisp
+                DrawAvatar(fx, fy, "walk2", _walkFrame, faceRight, s.Equips);
             }
-            DrawAvatar(fx, fy, "stand2", 0, false, s.Equips);
-            DrawTag(fx - _cameraX, fy - _cameraY - 130 - shown * 34, s.Name);
-            shown++;
+            else DrawAvatar(fx, fy, "stand2", 0, faceRight, s.Equips);
+            DrawTag(fx, fy - CharLayout.TagUp, s.Name);
         }
-        DrawMapFront();
         var pill = WorldPillRect();
         DrawUi("selectworld.png", pill.X, pill.Y);
         DrawTextCentered(ServerLabel(), pill.X + pill.Width / 2, pill.Y + 15, Ink);
+        var b = BoardRect();
+        DrawUi("cs_board.png", b.X, b.Y);
+        int filled = _save!.Slots.Count(s => s != null);
+        DrawSmallCentered($"{filled}/{SaveStore.MaxHeroes}", b.X + CharLayout.BoardCount.X, b.Y + CharLayout.BoardCount.Y, Color.White);
+        var pager = PagerBgRect();
+        // Frosted glass: the black backing (wider than the white bar, covers
+        // L/R too) dims the bushes behind; alpha comes from the layout file.
+        var bb = _textures["ui/cs_page_base.png"];
+        _spriteBatch.Draw(bb, new Vector2(pager.X + (pager.Width - bb.Width) / 2, pager.Y),
+            new Color(255, 255, 255, CharLayout.PagerGlass));
+        DrawUi("cs_page_bg.png", pager.X, pager.Y);
+        for (int c = 0; c < 7; c++)
+        {
+            var r = PageCellRect(c);
+            if (c - 1 == _page) // current page: blue thumb over the glass
+                DrawRound(new Rectangle(r.X + (r.Width - 30) / 2, r.Y + (r.Height - 30) / 2, 30, 30), 7, new Color(63, 195, 220));
+            string stem = c == 0 ? "page_l" : c == 6 ? "page_r" : $"page_{c}";
+            var t = _textures[$"ui/cs_{stem}_{CsState(r, gx, gy, down, c - 1 == _page)}.png"];
+            // digit art overflows its cell: center it like the official bar
+            int dx = c == 0 || c == 6 ? r.X : r.X + (r.Width - t.Width) / 2;
+            int dy = c == 0 || c == 6 ? r.Y : r.Y + (r.Height - t.Height) / 2;
+            _spriteBatch.Draw(t, new Vector2(dx, dy), Color.White);
+        }
         var sel = _save!.Slots[_slot];
+        if (sel != null) DrawCsButton("select", SelectBtnRect(), gx, gy, down);
+        DrawCsButton("new", NewBtnRect(), gx, gy, down);
         if (sel != null)
         {
-            var p = CharInfoRect();
-            DrawUi("charinfo.png", p.X, p.Y);
-            DrawTextCentered($"Lv {sel.Level}", p.X + 100, p.Y + 21, Ink);
-            DrawTextCentered(sel.Name, p.X + 100, p.Y + 73, Ink);
-            DrawTextCentered("Hero", p.X + 100, p.Y + 110, Ink); // dummy job until the real job system lands
-            DrawTextCentered("0", p.X + 100, p.Y + 178, Ink); // no combat yet (W8): attack power reads 0
-            DrawImgButton("btn_start.png", StartBtnRect(), gx, gy);
+            var d = DeleteBtnRect();
+            // Official glass (160x33, same size as the text art above it).
+            _spriteBatch.Draw(_textures["ui/cs_delglass.png"], new Vector2(d.X, d.Y),
+                new Color(255, 255, 255, CharLayout.PagerGlass));
+            DrawCsButton("delete", d, gx, gy, down);
         }
-        DrawImgButton("btn_create.png", CreateBtnRect(), gx, gy);
-        if (sel != null) DrawImgButton("btn_delete.png", DeleteBtnRect(), gx, gy);
-        DrawImgButton("btn_cancel.png", CancelBtnRect(), gx, gy);
-        if (_error != "") DrawTextCentered(_error, 683, 640, ErrRed);
+        var back = BackBtnRect();
+        DrawGlass(back);
+        DrawCsButton("back", back, gx, gy, down);
+        if (_error != "") DrawTextCentered(_error, 683, CharLayout.ErrorY, ErrRed);
         if (!_deleteOpen) return;
         DrawDim(120);
         DrawWhitePanel(DeletePanelRect());
-        DrawTextCentered($"Delete {sel!.Name}?", 683, 320, Ink);
-        DrawImgButton("btn_deleteyes.png", DeleteYesRect(), gx, gy);
-        DrawImgButton("btn_cancel.png", DeleteNoRect(), gx, gy);
+        DrawTextCentered($"Delete {sel!.Name}?", 683, CharLayout.DelTextY, Ink);
+        DrawCsButton("delyes", DeleteYesRect(), gx, gy, down);
+        DrawCsButton("delno", DeleteNoRect(), gx, gy, down);
+    }
+
+    private UiClip LoadUiClip(string stem)
+    {
+        var c = new UiClip { Data = LoadJson<UiFramesData>(Path.Combine(_assetsDir, "ui", $"{stem}.json")) };
+        if (c.Data.Frames.Count == 0)
+            throw new InvalidDataException($"{stem} has no frames");
+        foreach (var f in c.Data.Frames)
+        {
+            if (f.Delay <= 0)
+                throw new InvalidDataException($"{stem} has a bad delay");
+            LoadTexture(f.Image);
+        }
+        return c;
+    }
+
+    private static void AdvanceClip(UiClip c, float dtMs)
+    {
+        c.Timer += dtMs;
+        if (c.Timer < c.Data.Frames[c.Frame].Delay) return;
+        c.Timer -= c.Data.Frames[c.Frame].Delay; // keep the overflow (single step: 100ms+ delays, 16ms ticks)
+        c.Frame = (c.Frame + 1) % c.Data.Frames.Count;
+    }
+
+    // One overlay frame: the anchor is the slot feet plus the set offset,
+    // alpha runs A0->A1 across the frame's delay. Flip mirrors the art
+    // around the anchor (ghosts face the shelf middle).
+    private void DrawClip(UiClip c, int fx, int fy, bool flip = false)
+    {
+        var f = c.Data.Frames[c.Frame];
+        float k = Math.Clamp(c.Timer / f.Delay, 0f, 1f);
+        int a = f.A0 + (int)((f.A1 - f.A0) * k);
+        var tex = _textures[f.Image];
+        int ox = flip ? tex.Width - f.Ox : f.Ox;
+        _spriteBatch.Draw(tex, new Vector2(fx + c.Data.OffX - ox, fy + c.Data.OffY - f.Oy), null,
+            new Color(255, 255, 255, a), 0f, Vector2.Zero, 1f,
+            flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+    }
+
+    private static string CsState(Rectangle r, int gx, int gy, bool down, bool pressed) =>
+        pressed ? "p" : !HitRect(r, gx, gy) ? "n" : down ? "p" : "h";
+
+    // Official 3-state button: stem names cs_{stem}_{n,h,p}.png.
+    private void DrawCsButton(string stem, Rectangle r, int gx, int gy, bool down) =>
+        DrawUi($"cs_{stem}_{CsState(r, gx, gy, down, false)}.png", r.X, r.Y);
+
+    private void DrawSmallCentered(string text, int cx, int y, Color color)
+    {
+        var tex = _ui.GetSmall(text);
+        _spriteBatch.Draw(tex, new Vector2(cx - tex.Width / 2, y), color);
     }
 
     private void DrawJob(int gx, int gy)
@@ -953,9 +1077,26 @@ public partial class MushTownGame
             _spriteBatch.Draw(_panelTex, new Vector2(r.X + 10, r.Y + 10), Color.White);
     }
 
-    private void DrawUi(string file, int x, int y)
+    // Solid rounded rect, rows shrink near the edges. The pager thumb and
+    // the back glass use it (the WZ has neither; client-drawn).
+    private void DrawRound(Rectangle r, int radius, Color color)
     {
-        _spriteBatch.Draw(_textures["ui/" + file], new Vector2(x, y), Color.White);
+        for (int y = 0; y < r.Height; y++)
+        {
+            int d = y < radius ? radius - y : y >= r.Height - radius ? y - (r.Height - radius - 1) : 0;
+            int inset = d == 0 ? 0 : radius - (int)Math.Sqrt(radius * radius - d * d);
+            _spriteBatch.Draw(_pixel, new Rectangle(r.X + inset, r.Y + y, r.Width - inset * 2, 1), color);
+        }
+    }
+
+    // Dark glass behind a text-only button, same strength as the pager bar.
+    // Corner radius 8 matches the official delete backing (no WZ art for back).
+    private void DrawGlass(Rectangle r) => DrawRound(r, 8, new Color(0, 0, 0, CharLayout.PagerGlass));
+
+    private void DrawUi(string file, int x, int y, bool flip = false)
+    {
+        _spriteBatch.Draw(_textures["ui/" + file], new Vector2(x, y), null, Color.White, 0f,
+            Vector2.Zero, 1f, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
     }
 
     // Fitted nametag: dark 3-slice pill with the name centered on it.
