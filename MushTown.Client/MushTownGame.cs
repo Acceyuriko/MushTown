@@ -225,8 +225,12 @@ public partial class MushTownGame : Game
         Window.ClientSizeChanged += OnClientSizeChanged;
 
         LoadQuestData(); // NPC/quest json before maps (views validate placements)
+        LoadItemDefs(); // scanned roster before the doll art loop (and before customs validate rewards)
+        ValidateCustomQuests();
+        LoadSkillDefs();
         _mapId = _shotPath != null ? _shotMap : SpawnMapId;
         LoadMapData(_mapId);
+        var artGears = _equips.Where(id => _items[id].HasArt).ToList();
         foreach (string action in Net.Actions)
         {
             var chara = LoadJson<CharaData>(Path.Combine(_assetsDir, "chara", "body", $"{action}.json"));
@@ -238,7 +242,7 @@ public partial class MushTownGame : Game
                 throw new InvalidDataException($"character {action} has an empty frame");
             _charas[action] = chara;
             _delays[action] = chara.Frames.Select(f => f.Delay).ToList();
-            foreach (int id in ItemData.ArtGearIds) // wearable art: same frames as beginner (delays ride the beginner file)
+            foreach (int id in artGears) // wearable art: same frames as beginner (delays ride the beginner file)
             {
                 string imgId = id.ToString("D8");
                 var gear = LoadJson<CharaData>(Path.Combine(_assetsDir, "chara", "gear", imgId, $"{action}.json"));
@@ -373,7 +377,7 @@ public partial class MushTownGame : Game
         {
             _save ??= new SaveData();
             _save.Slots[_slot] ??= DemoChara();
-            foreach (int id in ItemData.EquipIds)
+            foreach (int id in _equips)
                 if (!Wear(id)) throw new InvalidDataException($"--wear found no {id} in the demo bag");
         }
         if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))

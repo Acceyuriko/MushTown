@@ -103,7 +103,7 @@ public static class Progression
     // slot never holds two). Empty slots do nothing. True when worn.
     public static bool WearEquip(CharaSlot chara, int id, IReadOnlyDictionary<int, ItemData> defs)
     {
-        var def = defs[id]; // callers only pass EquipIds (client boot proves their slots)
+        var def = defs[id]; // callers only pass loaded equips (client boot proves their slots)
         if (chara.EquipBag == null || !chara.EquipBag.TryGetValue(id, out int have) || have <= 0) return false;
         chara.EquipBag[id] = have - 1;
         if (chara.EquipBag[id] == 0) chara.EquipBag.Remove(id);

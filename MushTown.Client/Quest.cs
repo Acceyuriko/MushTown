@@ -22,9 +22,7 @@ public partial class MushTownGame
     {
         string npcDir = Path.Combine(_assetsDir, "npc"), questDir = Path.Combine(_assetsDir, "quest");
         foreach (string dir in new[] { npcDir, questDir })
-            if (!Directory.Exists(dir))
-                throw new FileNotFoundException(
-                    $"missing exported dir: {Path.GetFullPath(dir)} (run: dotnet run --project MushTown.Exporter -- export)", dir);
+            RequireExportDir(dir);
         foreach (string f in Directory.GetFiles(npcDir, "*.json"))
         {
             var npc = LoadJson<NpcData>(f);
@@ -35,33 +33,39 @@ public partial class MushTownGame
             var q = LoadJson<QuestData>(f);
             _quests[q.QuestId] = q;
         }
-        // Custom quests/ (same shape, wins on clash, so W15 can fix data).
+    }
+
+    // Custom quests/ (same shape, wins on clash, so data fixes need no
+    // re-export). Runs after LoadItemDefs: reward validation reads the defs.
+    private void ValidateCustomQuests()
+    {
         string custom = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "quests");
-        if (Directory.Exists(custom))
-            foreach (string f in Directory.GetFiles(custom, "*.json"))
-            {
-                var q = LoadJson<QuestData>(f);
-                if (q.QuestId == 0)
-                    throw new InvalidDataException($"custom quest {f} has id 0");
-                if (q.Name == "")
-                    throw new InvalidDataException($"custom quest {f} has no name");
-                if (q.Npc0 == 0 || q.Npc1 == 0)
-                    throw new InvalidDataException($"custom quest {f} has no giver or turn-in");
-                if (q.Pre.Any(p => p == 0))
-                    throw new InvalidDataException($"custom quest {f} has a zero pre id");
-                if (q.Kills.Any(k => k.Mob == 0 || k.Count == 0))
-                    throw new InvalidDataException($"custom quest {f} has a zero kill");
-                if (q.Kills.Count > 9)
-                    throw new InvalidDataException($"custom quest {f} has {q.Kills.Count} kills (v1 takes 9)");
-                if (q.RewardExp < 0)
-                    throw new InvalidDataException($"custom quest {f} has a negative exp reward");
-                if (q.RewardMeso < 0)
-                    throw new InvalidDataException($"custom quest {f} has a negative meso reward");
-                var bad = q.RewardItems.FirstOrDefault(r => !ItemData.PotionIds.Contains(r.Item) || r.Count <= 0);
-                if (bad != null)
-                    throw new InvalidDataException($"custom quest {f} has a bad item reward (item {bad.Item} x{bad.Count})");
-                _quests[q.QuestId] = q;
-            }
+        if (!Directory.Exists(custom))
+            return;
+        foreach (string f in Directory.GetFiles(custom, "*.json"))
+        {
+            var q = LoadJson<QuestData>(f);
+            if (q.QuestId == 0)
+                throw new InvalidDataException($"custom quest {f} has id 0");
+            if (q.Name == "")
+                throw new InvalidDataException($"custom quest {f} has no name");
+            if (q.Npc0 == 0 || q.Npc1 == 0)
+                throw new InvalidDataException($"custom quest {f} has no giver or turn-in");
+            if (q.Pre.Any(p => p == 0))
+                throw new InvalidDataException($"custom quest {f} has a zero pre id");
+            if (q.Kills.Any(k => k.Mob == 0 || k.Count == 0))
+                throw new InvalidDataException($"custom quest {f} has a zero kill");
+            if (q.Kills.Count > 9)
+                throw new InvalidDataException($"custom quest {f} has {q.Kills.Count} kills (v1 takes 9)");
+            if (q.RewardExp < 0)
+                throw new InvalidDataException($"custom quest {f} has a negative exp reward");
+            if (q.RewardMeso < 0)
+                throw new InvalidDataException($"custom quest {f} has a negative meso reward");
+            var bad = q.RewardItems.FirstOrDefault(r => !_items.TryGetValue(r.Item, out var d) || d.Slot != null || r.Count <= 0);
+            if (bad != null)
+                throw new InvalidDataException($"custom quest {f} has a bad item reward (item {bad.Item} x{bad.Count})");
+            _quests[q.QuestId] = q;
+        }
     }
 
     // Quest content pass: NPC stand textures (json already loaded in Initialize).

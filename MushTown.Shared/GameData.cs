@@ -214,6 +214,10 @@ public sealed class MobFrame
 // Icons are the WZ info/icon canvas.
 public sealed class ItemData
 {
+    // Ids the code branches on (drops, shop stock, demo bags, swing sound,
+    // tests). The roster itself is the scanned item dir: adding an item
+    // means exporting it, no list edit here. (1040038 skipped: its official
+    // name is unfit; cap-class gear skipped: hats re-hang the hair.)
     public const int RedPotion = 2000000; // +50 HP (spec hp)
     public const int BluePotion = 2000003; // +100 MP (spec mp)
     public const int Mop = 1442004; // Janitor's Mop (Wp, PAD 47): Mushmom purse
@@ -221,23 +225,6 @@ public sealed class ItemData
     public const int BambooRing = 1112134; // Bamboo Name Tag Ring (Ri, plate 58): cash shop (later)
     public const int InkRing = 1112135; // Ink-and-Wash Painting Name Tag Ring (Ri, plate 59): cash shop (later)
     public const int IslandRing = 1112162; // Island Travel Name Tag Ring (Ri, plate 129): cash shop (later)
-
-    // The potion ids v1 knows: the client loads and slots them, quests may
-    // grant them. One list on purpose: a grantable potion the client never
-    // loaded would miss its art.
-    public static readonly int[] PotionIds = new[] { RedPotion, BluePotion };
-
-    // The equip ids v1 knows: the client loads defs/icons/art, bags and
-    // wears them, mobs drop them. (1040038 skipped: its official name is
-    // unfit; cap-class gear skipped: hats re-hang the hair.)
-    public static readonly int[] EquipIds = new[] { Mop, Sergeant, BambooRing, InkRing, IslandRing };
-
-    // The equips with doll art: rings carry no worn pixels (info-only), so
-    // the boot art load and the slot table skip them (the merge does too).
-    public static readonly int[] ArtGearIds = new[] { Mop, Sergeant };
-
-    // Every loadable item def + icon (potions, then equips).
-    public static readonly int[] AllIds = PotionIds.Concat(EquipIds).ToArray();
 
     // Beginner img per worn slot: the doll merge draws these when the slot
     // sits empty (only slots with v1 equips need entries).
@@ -288,6 +275,7 @@ public sealed class ItemData
     public int Str { get; set; } // WZ incSTR
     public int Dex { get; set; } // WZ incDEX
     public int NameTag { get; set; } // WZ info/nameTag: UI NameTag.img node (0 = plain black box)
+    public bool HasArt { get; set; } // the exporter wrote doll frames for this equip (rings carry none)
 }
 
 // Basic damage skin digits: assets/effect/dmg.json (BasicEff.img NoRed0,

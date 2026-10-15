@@ -50,6 +50,12 @@ public partial class MushTownGame
 
     private readonly Dictionary<int, ItemData> _items = new();
 
+    // Scanned tab rosters (LoadItemDefs): consumables slot USE, equips slot
+    // EQUIP, both in id order. Clicks and draws share them, so cell i is
+    // always the same item on both paths.
+    private List<int> _potions = new();
+    private List<int> _equips = new();
+
     // Skill window tabs (one per job) + rows: skill id + fixed cast key
     // (null = passive, no key; rebinds wait for the settings week).
     private static readonly string[] SkillTabNames = { "Warrior", "Fighter", "Crusader" };
@@ -229,13 +235,13 @@ public partial class MushTownGame
                 for (int t = 0; t < TabCount; t++)
                     if (HitRect(TabRect(t), gx, gy)) { _invTab = t; break; }
                 if (_invTab == 1) // USE tab: click a potion to drink it
-                    for (int s = 0; s < ItemData.PotionIds.Length; s++)
-                        if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(ItemData.PotionIds[s]);
+                    for (int s = 0; s < _potions.Count; s++)
+                        if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(_potions[s]);
                 if (_invTab == 0) // EQUIP tab: worn row takes off, bag rows wear
-                    for (int s = 0; s < ItemData.EquipIds.Length; s++)
+                    for (int s = 0; s < _equips.Count; s++)
                     {
-                        if (HitRect(WornRect(s), gx, gy) && TakeOff(ItemData.EquipIds[s])) { PushBuild(); PushName(); }
-                        if (HitRect(EquipBagRect(s), gx, gy) && Wear(ItemData.EquipIds[s])) { PushBuild(); PushName(); }
+                        if (HitRect(WornRect(s), gx, gy) && TakeOff(_equips[s])) { PushBuild(); PushName(); }
+                        if (HitRect(EquipBagRect(s), gx, gy) && Wear(_equips[s])) { PushBuild(); PushName(); }
                     }
             }
             else if (onSkill)
@@ -327,7 +333,7 @@ public partial class MushTownGame
     private Rectangle EquipBagRect(int i)
     {
         var s = UseSlotRect(i % 4);
-        return new Rectangle(s.X, s.Y + 56 * ((ItemData.EquipIds.Length + 3) / 4 + i / 4), 48, 48);
+        return new Rectangle(s.X, s.Y + 56 * ((_equips.Count + 3) / 4 + i / 4), 48, 48);
     }
 
     // Click a USE slot: drink one. Empty slots and full pools do nothing.
@@ -452,16 +458,16 @@ public partial class MushTownGame
         return new Rectangle(r.X + 200, r.Y + 16 + 10 + i * SettingsRowH, 30, 24);
     }
 
-    // Sell rows: owned potions first (stock order), then owned equips (tab
-    // order). Draw and clicks share this list, so row i is always row i.
+    // Sell rows: owned potions first, then owned equips (both in tab order).
+    // Draw and clicks share this list, so row i is always row i.
     private List<(int id, int count)> ShopSellRows()
     {
         var rows = new List<(int, int)>();
         var chara = _save?.Slots[_slot];
         if (chara == null) return rows;
-        foreach (int id in ItemData.PotionIds)
+        foreach (int id in _potions)
             if (chara.Use?.TryGetValue(id, out int n) == true && n > 0) rows.Add((id, n));
-        foreach (int id in ItemData.EquipIds)
+        foreach (int id in _equips)
             if (chara.EquipBag?.TryGetValue(id, out int n) == true && n > 0) rows.Add((id, n));
         return rows;
     }
@@ -652,9 +658,9 @@ public partial class MushTownGame
         {
             var cap = _ui.GetSmall("worn");
             _spriteBatch.Draw(cap, new Vector2(r.X + 14, r.Y + 78), new Color(255, 220, 0));
-            for (int i = 0; i < ItemData.EquipIds.Length; i++)
+            for (int i = 0; i < _equips.Count; i++)
             {
-                int id = ItemData.EquipIds[i];
+                int id = _equips[i];
                 int n = chara.Equips?.Count(w => w == id) ?? 0;
                 if (n > 0) DrawWornSlot(i, id, n);
                 int have = chara.EquipBag?.GetValueOrDefault(id) ?? 0;
@@ -662,9 +668,9 @@ public partial class MushTownGame
             }
         }
         if (_invTab == 1 && chara?.Use != null) // USE tab: owned potions only (Etc/Setup/Cash/Dec stay empty in v1)
-            for (int i = 0; i < ItemData.PotionIds.Length; i++)
-                if (chara.Use.TryGetValue(ItemData.PotionIds[i], out int count) && count > 0)
-                    DrawInvSlot(UseSlotRect(i), ItemData.PotionIds[i], count);
+            for (int i = 0; i < _potions.Count; i++)
+                if (chara.Use.TryGetValue(_potions[i], out int count) && count > 0)
+                    DrawInvSlot(UseSlotRect(i), _potions[i], count);
         // Official numbers: Arial Bold 12 #606871, right end x+213 top y+484 (font:Meso, vector:Meso).
         _spriteBatch.Draw(Tex("hud_coin.png"), new Vector2(r.X + Layout.Coin.X, r.Y + Layout.Coin.Y), Color.White);
         var meso = _ui.GetMeso((chara?.Mesos ?? 0).ToString("#,##0"));

@@ -278,6 +278,65 @@ public partial class MushTownGame
         EquipBag = new Dictionary<int, int> { { ItemData.Mop, 1 }, { ItemData.Sergeant, 1 }, { ItemData.BambooRing, 1 }, { ItemData.InkRing, 1 }, { ItemData.IslandRing, 1 } },
     };
 
+    // Item defs (Initialize phase: the doll art loop needs the roster before
+    // LoadContent runs). The scan is the roster: every item/*.json loads,
+    // consumables (Slot null) slot the USE tab, the rest the EQUIP tab, both
+    // in id order. Boot checks fail loud on stale jsons.
+    private static void RequireExportDir(string dir)
+    {
+        if (!Directory.Exists(dir))
+            throw new FileNotFoundException(
+                $"missing exported dir: {Path.GetFullPath(dir)} (run: dotnet run --project MushTown.Exporter -- export)", dir);
+    }
+
+    private void LoadItemDefs()
+    {
+        string dir = Path.Combine(_assetsDir, "item");
+        RequireExportDir(dir);
+        foreach (string f in Directory.GetFiles(dir, "*.json"))
+        {
+            var item = LoadJson<ItemData>(f);
+            _items[item.ItemId] = item;
+        }
+        _potions = _items.Values.Where(d => d.Slot == null).Select(d => d.ItemId).OrderBy(id => id).ToList();
+        _equips = _items.Values.Where(d => d.Slot != null).Select(d => d.ItemId).OrderBy(id => id).ToList();
+        foreach (int id in Shop.Stock) // the shop indexes defs by stock id: a missing def fails here, not at draw time
+            if (!_items.ContainsKey(id))
+                throw new InvalidDataException($"shop stocks {id} with no exported def");
+        foreach (var (id, item) in _items)
+        {
+            if (item.Slot != null) // equips: the slot must hide a beginner img or be a ring; rings name a plate
+            {
+                if (!ItemData.BeginnerImgs.ContainsKey(item.Slot) && item.Slot != "Ri")
+                    throw new InvalidDataException($"equip {id} has a bad slot");
+                if (item.Slot == "Ri" && item.NameTag == 0)
+                    throw new InvalidDataException($"equip {id} has no nametag");
+                if (ItemData.BeginnerImgs.ContainsKey(item.Slot) && !item.HasArt)
+                    throw new InvalidDataException($"equip {id} has no art");
+            }
+            if (item.Price <= 0 && item.NameTag == 0) // stale jsons price 0, except rings (cash gear carries no meso price)
+                throw new InvalidDataException($"item {id} has a bad price");
+        }
+    }
+
+    // Skill defs (Initialize phase, same reason). Tabs keep their own roster
+    // (window placement + hotkeys); a tabbed skill without a def fails loud
+    // instead of drawing blank.
+    private void LoadSkillDefs()
+    {
+        string dir = Path.Combine(_assetsDir, "skill");
+        RequireExportDir(dir);
+        foreach (string f in Directory.GetFiles(dir, "*.json"))
+        {
+            var skill = LoadJson<SkillData>(f);
+            _skills[skill.SkillId] = skill;
+        }
+        foreach (var tab in SkillTabs)
+            foreach ((int id, string? _) in tab)
+                if (!_skills.ContainsKey(id))
+                    throw new InvalidDataException($"skill tab lists {id} with no exported def");
+    }
+
     private void LoadMenuContent()
     {
         _ui = new UiText(GraphicsDevice, Path.Combine(_assetsDir, "fonts"));
@@ -299,37 +358,16 @@ public partial class MushTownGame
         }
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
-        foreach (int id in ItemData.AllIds) // item defs: json first (it names the icon), then the icon
-        {
-            var item = LoadJson<ItemData>(Path.Combine(_assetsDir, "item", $"{id}.json"));
-            _items[id] = item;
-            LoadTexture(item.Image);
-        }
-        foreach (int id in ItemData.EquipIds) // art slots must hide a beginner img; rings carry no art
-        {
-            string? slot = _items[id].Slot;
-            if (slot == null || (!ItemData.BeginnerImgs.ContainsKey(slot) && slot != "Ri"))
-                throw new InvalidDataException($"equip {id} has a bad slot");
-            if (slot == "Ri" && _items[id].NameTag == 0)
-                throw new InvalidDataException($"equip {id} has no nametag");
-            if (ItemData.BeginnerImgs.ContainsKey(slot) && !ItemData.ArtGearIds.Contains(id))
-                throw new InvalidDataException($"equip {id} has art but is not art gear");
-        }
+        foreach (var item in _items.Values) LoadTexture(item.Image); // icons for the scanned defs
         LoadNameTags(); // ring plates ride the defs above
-        foreach (int id in ItemData.AllIds) // stale jsons price 0, except rings (cash gear carries no meso price)
-            if (_items[id].Price <= 0 && _items[id].NameTag == 0)
-                throw new InvalidDataException($"item {id} has a bad price");
-        foreach (var tab in SkillTabs) // skills: json first (it names every frame), then all art
-            foreach ((int id, string? _) in tab)
-            {
-                var skill = LoadJson<SkillData>(Path.Combine(_assetsDir, "skill", $"{id}.json"));
-                _skills[id] = skill;
-                LoadTexture(skill.Icon);
-                LoadTexture(skill.Disabled);
-                foreach (string f in skill.Effect) LoadTexture(f);
-                foreach (string f in skill.Hit) LoadTexture(f);
-                foreach (string f in skill.Affected) LoadTexture(f);
-            }
+        foreach (var skill in _skills.Values) // art for the scanned defs (frames ride the json)
+        {
+            LoadTexture(skill.Icon);
+            LoadTexture(skill.Disabled);
+            foreach (string f in skill.Effect) LoadTexture(f);
+            foreach (string f in skill.Hit) LoadTexture(f);
+            foreach (string f in skill.Affected) LoadTexture(f);
+        }
         _statBack = RoundedBacking(448, 406, new Color(62, 96, 118), 3);
         _skillBack = RoundedBacking(SkillW, SkillBodyH, new Color(62, 96, 118), 3);
         _questBack = RoundedBacking(QuestW, QuestBodyH, new Color(62, 96, 118), 3);

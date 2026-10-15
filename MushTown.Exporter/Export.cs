@@ -185,11 +185,6 @@ public static class Export
                 return;
             }
         }
-        if (!ExportQuests(baseRoot, outDir))
-        {
-            Environment.ExitCode = 1;
-            return;
-        }
         var chara = WzRoot.LoadCategory(dataDir, "Character");
         foreach (string action in Net.Actions)
         {
@@ -232,6 +227,12 @@ public static class Export
             return;
         }
         if (!ExportEquips(chara, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
+        // Quests run after items: reward validation reads the exported defs.
+        if (!ExportQuests(baseRoot, outDir))
         {
             Environment.ExitCode = 1;
             return;
@@ -1030,7 +1031,14 @@ public static class Export
             foreach (Wz_Node it in img.Nodes["Act"]?.Nodes["1"]?.Nodes["item"]?.Nodes ?? Enumerable.Empty<Wz_Node>())
             {
                 int item = QNum(it.Nodes["id"]), count = QNum(it.Nodes["count"]);
-                if (!ItemData.PotionIds.Contains(item) || count <= 0)
+                string defPath = Path.Combine(outDir, "item", $"{item}.json");
+                if (!File.Exists(defPath))
+                {
+                    Console.WriteLine($"quest {questId} rewards an unexported item {item}");
+                    return false;
+                }
+                var def = JsonSerializer.Deserialize<ItemData>(File.ReadAllText(defPath));
+                if (def == null || def.Slot != null || count <= 0) // rewards must be consumables (no ETC bag yet)
                 {
                     Console.WriteLine($"quest {questId} has a bad item reward (item {item} x{count})");
                     return false;
@@ -1365,6 +1373,7 @@ public static class Export
                 Dex = Int(info, "incDEX"),
                 Price = Int(info, "price"),
                 NameTag = Int(info, "nameTag"),
+                HasArt = CharaGears.Any(g => ImgId(g.gear) == id.ToString("D8")),
             };
             if (data.Slot == "")
             {
