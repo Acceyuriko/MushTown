@@ -309,9 +309,6 @@ public partial class MushTownGame
         foreach (int id in _manifest.Potions.Concat(_manifest.Equips)) // the ship list proves complete: listed but unscanned fails here
             if (!_items.ContainsKey(id))
                 throw new InvalidDataException($"manifest lists item {id} with no exported def");
-        foreach (int id in Shop.Stock) // the shop indexes defs by stock id: a missing def fails here, not at draw time
-            if (!_items.ContainsKey(id))
-                throw new InvalidDataException($"shop stocks {id} with no exported def");
         foreach (var (id, item) in _items)
         {
             if (item.Slot != null) // equips: the slot must hide a beginner img or be a ring; rings name a plate
@@ -343,6 +340,25 @@ public partial class MushTownGame
             foreach (var d in table.Items)
                 if (!_items.ContainsKey(d.Item))
                     throw new InvalidDataException($"drop table {table.MobId} names item {d.Item} with no exported def");
+        }
+    }
+
+    // Keeper stocks (shops/{npc}.json, repo data): Pio's potions today, more
+    // keepers tomorrow. An NPC keeps a shop iff its file exists.
+    private void LoadShops()
+    {
+        string dir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "shops");
+        if (!Directory.Exists(dir))
+            throw new FileNotFoundException($"missing shops: {Path.GetFullPath(dir)} (repo data: restore it from git)", dir);
+        foreach (string f in Directory.GetFiles(dir, "*.json"))
+        {
+            var shop = LoadJson<ShopData>(f);
+            if (shop.Npc == 0)
+                throw new InvalidDataException($"shop {f} has no keeper");
+            foreach (int id in shop.Stock) // the buy rows index defs by stock id: a missing def fails here
+                if (!_items.ContainsKey(id))
+                    throw new InvalidDataException($"shop {shop.Npc} stocks {id} with no exported def");
+            _shops[shop.Npc] = shop;
         }
     }
 

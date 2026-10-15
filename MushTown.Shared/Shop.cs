@@ -1,12 +1,10 @@
 namespace MushTown.Shared;
 
-// Pio's potion shop (v1's only shop): buys red/blue at WZ price, sells
-// back anything in the bags at half (min 1). Worn gear never sells (take
-// it off first: the sell list shows bags only).
+// Buy/sell math (per-keeper stocks live in shops/): buys at WZ price,
+// sells back anything in the bags at half (min 1). Worn gear never sells
+// (take it off first: the sell list shows bags only).
 public static class Shop
 {
-    public static readonly int[] Stock = new[] { ItemData.RedPotion, ItemData.BluePotion };
-
     public static int SellPrice(int price) => Math.Max(1, price / 2);
 
     public static bool Buy(CharaSlot chara, int id, int price)

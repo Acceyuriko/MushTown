@@ -97,6 +97,8 @@ public partial class MushTownGame
     private readonly Dictionary<int, SkillData> _skills = new();
     private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
     private bool _showInv, _showStat, _showSubmenu, _showSkill, _showQuest, _showSettings, _showShop;
+    private readonly Dictionary<int, ShopData> _shops = new(); // keeper stocks (LoadShops)
+    private List<int> _shopStock = null!; // the open shop's stock (OpenShop snapshots it: talk state clears)
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
     private bool _iWasDown, _cWasDown, _kWasDown, _vWasDown;
 
@@ -268,8 +270,8 @@ public partial class MushTownGame
             }
             else if (onShop) // stock rows buy at WZ price, bag rows sell at half
             {
-                for (int i = 0; i < Shop.Stock.Length; i++)
-                    if (HitRect(ShopBuyRect(i), gx, gy)) { BuyFromShop(Shop.Stock[i]); break; }
+                for (int i = 0; i < _shopStock.Count; i++)
+                    if (HitRect(ShopBuyRect(i), gx, gy)) { BuyFromShop(_shopStock[i]); break; }
                 var sells = ShopSellRows();
                 for (int i = 0; i < sells.Count; i++)
                     if (HitRect(ShopSellRect(i), gx, gy)) { SellToShop(sells[i].id); break; }
@@ -481,7 +483,7 @@ public partial class MushTownGame
     private Rectangle ShopRect()
     {
         int sells = Math.Max(1, ShopSellRows().Count);
-        int body = 20 + 18 + Shop.Stock.Length * ShopRowH + 18 + sells * ShopRowH + 10;
+        int body = 20 + 18 + _shopStock.Count * ShopRowH + 18 + sells * ShopRowH + 10;
         return new Rectangle(_shopPos.X, _shopPos.Y, ShopW, 16 + body);
     }
 
@@ -495,7 +497,7 @@ public partial class MushTownGame
 
     private int ShopBuyTop() => _shopPos.Y + 16 + 20 + 18;
 
-    private int ShopSellTop() => ShopBuyTop() + Shop.Stock.Length * ShopRowH + 18;
+    private int ShopSellTop() => ShopBuyTop() + _shopStock.Count * ShopRowH + 18;
 
     private Rectangle ShopBuyRect(int i) =>
         new(_shopPos.X + ShopW - 80, ShopBuyTop() + i * ShopRowH + 7, 68, 26);
@@ -935,9 +937,9 @@ public partial class MushTownGame
         _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + 16, r.Width, r.Height - 16), new Color(62, 96, 118));
         _spriteBatch.Draw(_ui.GetSmall($"Mesos: {(chara?.Mesos ?? 0):#,##0}"), new Vector2(r.X + 12, r.Y + 16 + 4), new Color(255, 220, 0));
         _spriteBatch.Draw(_ui.GetSmall("Buy"), new Vector2(r.X + 12, r.Y + 16 + 22), Color.White);
-        for (int i = 0; i < Shop.Stock.Length; i++)
+        for (int i = 0; i < _shopStock.Count; i++)
         {
-            int id = Shop.Stock[i];
+            int id = _shopStock[i];
             var def = _items[id];
             int y = ShopBuyTop() + i * ShopRowH;
             DrawShopIcon(id, r.X + 12, y);
@@ -1121,6 +1123,6 @@ public partial class MushTownGame
         for (int i = 0; i < entries.Count; i++)
             if (HitRect(TalkEntryRect(i), gx, gy)) { PlaySfx("click"); _talkQuest = entries[i].quest; _talkPage = 0; return; }
         // A fresh open already clicks via the wrapper (flag flip); a re-open flips nothing, so click by hand.
-        if (NpcHasShop(_talkNpc) && HitRect(TalkEntryRect(entries.Count), gx, gy)) { bool was = _showShop; OpenShop(); if (was) PlaySfx("click"); return; }
+        if (NpcHasShop(_talkNpc) && HitRect(TalkEntryRect(entries.Count), gx, gy)) { bool was = _showShop; OpenShop(_talkNpc); if (was) PlaySfx("click"); return; }
     }
 }

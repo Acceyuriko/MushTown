@@ -229,6 +229,7 @@ public partial class MushTownGame : Game
         LoadItemDefs(); // scanned roster before the doll art loop (and before customs validate rewards)
         ValidateCustomQuests();
         ValidateDropTables(); // after item defs (drop ids prove against them)
+        LoadShops(); // keeper stocks prove against the same defs
         LoadSkillDefs();
         _mapId = _shotPath != null ? _shotMap : SpawnMapId;
         LoadMapData(_mapId);
