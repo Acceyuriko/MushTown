@@ -1,8 +1,16 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: U1 committed, U2 in progress (overnight autonomous run:
+Status: U2 committed, U3 in progress (overnight autonomous run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- U2 HUD art (done): plate, HP/MP, quickslot, tracker, boss bar,
+  minimap in-tree. New visuals: Picture, LiveLabel, PlateLevel,
+  BarNumber, Tracker, BossBar, Minimap; Label gains Tint (quickslot
+  gray); GameObject gains NoHit (art skips hit tests, subtrees
+  included). 7 code draws deleted. No new unit tests (all new code
+  needs textures; shots are the proof). Review R1 clean (0 P0/P1;
+  2 P2 fixed). Gates 0/0 + 203/203. 10/10 shots match HEAD.
+  Playtest pending.
 - U1 art core (done): Bar visual (back + partial fill + cover,
   SceneMath.BarWidth int math, no clamp/guards: corrupt saves break
   like legacy) + EXP bar and menu/char buttons in-tree (Image art

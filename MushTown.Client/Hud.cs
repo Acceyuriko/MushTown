@@ -321,7 +321,74 @@ public partial class MushTownGame
         menuBtn.Add(new Rect(MenuBtnRect()));
         menuBtn.Add(new Image("ui/hud_btn_menu")); // art rides the button now (was DrawHudButton)
         menuBtn.Add(new Button { LegacyId = "menu", Kind = ButtonKind.Click, OnClick = () => _submenu.Enabled = !_submenu.Enabled });
-        _gameScene.Add(menuBtn); // last (topmost): legacy checks menu/char before the submenu and furniture
+        _gameScene.Add(menuBtn); // topmost hit: legacy checks menu/char before the submenu and furniture (art roots added after are NoHit)
+        var plate = new GameObject { NoHit = true }; // art-only roots below: the furniture keeps swallowing plate/HP/quickslot/exp; tracker/boss/minimap pass clicks through like before
+        plate.Add(new Rect(PlateRect()));
+        plate.Add(new Picture("ui/hud_plate.png"));
+        plate.Add(new PlateLevel(() => _save?.Slots[_slot]?.Level ?? 1));
+        plate.Add(new Picture("ui/hud_lvtag.png", 8, 13));
+        plate.Add(new LiveLabel(() => _save?.Slots[_slot]?.Name ?? "", 67, 13, Color.White)); // WZ namePos; CLI sessions have no name (empty draws nothing)
+        _gameScene.Add(plate);
+        var hpmp = new GameObject { NoHit = true };
+        hpmp.Add(new Rect(HpRect()));
+        hpmp.Add(new Picture("ui/hud_hpbg.png"));
+        hpmp.Add(new Picture("ui/hud_hpfill.png", 4, 4)); // fills at bg+(4,4)/(4,25), cover at bg+(3,3), numbers centered on x+101. Bars always full: nothing drains HP/MP until W13 mob hits (W13 adds the clip then).
+        hpmp.Add(new Picture("ui/hud_mpfill.png", 4, 25));
+        hpmp.Add(new BarNumber(HpText, 101, 7));
+        hpmp.Add(new BarNumber(MpText, 101, 28));
+        hpmp.Add(new Picture("ui/hud_hpcover.png", 3, 3));
+        _gameScene.Add(hpmp);
+        var qslot = new GameObject { NoHit = true };
+        qslot.Add(new Rect(QslotRect()));
+        qslot.Add(new Picture("ui/hud_qslot.png"));
+        (string file, string action)[] keys = new[] { ("hud_key_ctrl.png", "Attack"), ("hud_key_alt.png", "Jump"), ("hud_key_i.png", "Items"), ("hud_key_c.png", "Stats") }; // fixed W9 hotkeys: official key art top-left (icons arrive with skills/potions)
+        for (int i = 0; i < keys.Length; i++)
+        {
+            var s = QslotCell(i);
+            var cell = new GameObject(); // NoHit rides the qslot parent (Hit skips the whole subtree)
+            cell.Add(new Rect(s));
+            cell.Add(new Picture("ui/" + keys[i].file, 2, 2));
+            var a = _ui.GetSmall(keys[i].action);
+            cell.Add(new Label(keys[i].action, (s.Width - a.Width) / 2, 2 + Tex(keys[i].file).Height) { Tint = Color.Gray });
+            qslot.AddChild(cell);
+        }
+        var gloss = new GameObject(); // NoHit rides the qslot parent (Hit skips the whole subtree)
+        gloss.Add(new Rect(QslotRect()));
+        gloss.Add(new Picture("ui/hud_qslotcover.png")); // gloss stretched onto the cells: bottom flush with EXP top
+        qslot.AddChild(gloss);
+        _gameScene.Add(qslot);
+        var tracker = new GameObject { NoHit = true };
+        tracker.Add(new Tracker(TrackerLines));
+        _gameScene.Add(tracker);
+        var bossBar = new GameObject { NoHit = true };
+        bossBar.Add(new BossBar(BossBarW, FindBoss));
+        _gameScene.Add(bossBar);
+        var minimap = new GameObject { NoHit = true };
+        minimap.Add(new Minimap(() => _map, () => _px, () => _py));
+        _gameScene.Add(minimap);
+    }
+
+    // The living boss on this map, if any (v1 has one: Mushmom).
+    private (string Name, int Hp, int MaxHp)? FindBoss()
+    {
+        foreach (var m in _mobs.Values)
+            if (m.Hp > 0 && _mobData[m.Mob].Boss)
+                return (_mobData[m.Mob].Name, m.Hp, m.MaxHp);
+        return null;
+    }
+
+    private string HpText()
+    {
+        var chara = _save?.Slots[_slot];
+        int maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct());
+        return $"{chara?.Hp ?? maxHp}/{maxHp}";
+    }
+
+    private string MpText()
+    {
+        var chara = _save?.Slots[_slot];
+        int maxMp = Progression.MaxMp(chara?.Level ?? 1);
+        return $"{chara?.Mp ?? maxMp}/{maxMp}";
     }
 
     // Live EXP for the bar (CLI sessions have none: the fill stays empty).
@@ -749,13 +816,7 @@ public partial class MushTownGame
     private void DrawHud(int gx, int gy, bool pressed)
     {
         _gfx.Pressed = pressed;
-        _scenes.Current?.Draw(_gfx); // first: the HP background's bottom rows hang 3px over the exp strip (disabled subtrees skip themselves)
-        DrawPlate();
-        DrawHpMp();
-        DrawQslot();
-        DrawTracker();
-        DrawBossBar();
-        DrawMinimap(); // always on, top-right; panels and talk draw above it
+        _scenes.Current?.Draw(_gfx); // HUD art lives in the tree now (exp, buttons, submenu, plate, HP/MP, quickslot, tracker, boss bar, minimap); panels and talk draw above it
         // The front panel draws last (on top); the back five keep inv < stat < skill < quest < settings < shop.
         if (_topPanel == 0) { if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showInv) DrawInvPanel(); }
         else if (_topPanel == 1) { if (_showInv) DrawInvPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showStat) DrawStatPanel(); }
@@ -769,81 +830,6 @@ public partial class MushTownGame
             var icon = _textures[_items[_hand.Id].Image];
             _spriteBatch.Draw(icon, new Vector2(gx - icon.Width / 2, gy - icon.Height / 2), Color.White);
         }
-    }
-
-    private void DrawPlate()
-    {
-        var r = PlateRect();
-        _spriteBatch.Draw(Tex("hud_plate.png"), r, Color.White);
-        var chara = _save?.Slots[_slot];
-        int x = r.X + 28; // WZ levelPos; digits step 10 (numInterval)
-        foreach (char ch in (chara?.Level ?? 1).ToString())
-        {
-            _spriteBatch.Draw(Tex($"hud_lv{ch}.png"), new Vector2(x, r.Y + 11), Color.White);
-            x += 10;
-        }
-        _spriteBatch.Draw(Tex("hud_lvtag.png"), new Vector2(r.X + 8, r.Y + 13), Color.White);
-        if (chara != null) // WZ namePos; CLI sessions have no name
-            _spriteBatch.Draw(_ui.GetSmall(chara.Name), new Vector2(r.X + 67, r.Y + 13), Color.White);
-    }
-
-    private void DrawHpMp()
-    {
-        var r = HpRect();
-        _spriteBatch.Draw(Tex("hud_hpbg.png"), r, Color.White);
-        // main/status/normal anchors (canvas draws at anchor minus origin):
-        // fills at bg+(4,4)/(4,25), cover at bg+(3,3), numbers centered on
-        // x+101 (vector:hp/mp), tops y+7/y+28. Bars always full: nothing
-        // drains HP/MP until W13 mob hits (W13 adds the clip then).
-        var chara = _save?.Slots[_slot];
-        int maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct()), maxMp = Progression.MaxMp(chara?.Level ?? 1);
-        _spriteBatch.Draw(Tex("hud_hpfill.png"), new Vector2(r.X + 4, r.Y + 4), Color.White);
-        _spriteBatch.Draw(Tex("hud_mpfill.png"), new Vector2(r.X + 4, r.Y + 25), Color.White);
-        DrawBarNumber($"{chara?.Hp ?? maxHp}/{maxHp}", r.X + 101, r.Y + 7);
-        DrawBarNumber($"{chara?.Mp ?? maxMp}/{maxMp}", r.X + 101, r.Y + 28);
-        _spriteBatch.Draw(Tex("hud_hpcover.png"), new Vector2(r.X + 3, r.Y + 3), Color.White);
-    }
-
-    // Art digits centered on the official x; the "/" is baked 12px
-    // (font:number is Arial 12; the WZ separator name breaks path lookup).
-    private void DrawBarNumber(string text, int centerX, int topY)
-    {
-        int dh = Tex("hud_num0.png").Height;
-        int w = 0;
-        foreach (char ch in text) w += ch == '/' ? _ui.GetSmall("/").Width : Tex($"hud_num{ch}.png").Width;
-        int x = centerX - w / 2;
-        foreach (char ch in text)
-        {
-            if (ch == '/')
-            {
-                var s = _ui.GetSmall("/");
-                _spriteBatch.Draw(s, new Vector2(x, topY + (dh - s.Height) / 2), Color.White);
-                x += s.Width;
-            }
-            else
-            {
-                var d = Tex($"hud_num{ch}.png");
-                _spriteBatch.Draw(d, new Vector2(x, topY), Color.White);
-                x += d.Width;
-            }
-        }
-    }
-
-    private void DrawQslot()
-    {
-        var r = QslotRect();
-        _spriteBatch.Draw(Tex("hud_qslot.png"), r, Color.White);
-        // Fixed W9 hotkeys: official key art top-left (icons arrive with skills/potions).
-        (string file, string action)[] slots = new[] { ("hud_key_ctrl.png", "Attack"), ("hud_key_alt.png", "Jump"), ("hud_key_i.png", "Items"), ("hud_key_c.png", "Stats") };
-        for (int i = 0; i < slots.Length; i++)
-        {
-            var s = QslotCell(i);
-            var k = Tex(slots[i].file);
-            var a = _ui.GetSmall(slots[i].action);
-            _spriteBatch.Draw(k, new Vector2(s.X + 2, s.Y + 2), Color.White);
-            _spriteBatch.Draw(a, new Vector2(s.X + (s.Width - a.Width) / 2, s.Y + 2 + k.Height), Color.Gray);
-        }
-        _spriteBatch.Draw(Tex("hud_qslotcover.png"), r, Color.White); // gloss stretched onto the cells: bottom flush with EXP top
     }
 
     private static Rectangle QslotCell(int i)
@@ -1177,54 +1163,6 @@ public partial class MushTownGame
 
     // Minimap: the WZ canvas scaled into a 220x160 corner box, portals as
     // blue dots, the player as a yellow dot. Always on, top-right.
-    private void DrawMinimap()
-    {
-        var tex = _textures[_map.MiniMap.Image];
-        float s = Math.Min(220f / tex.Width, 160f / tex.Height);
-        int w = (int)(tex.Width * s), h = (int)(tex.Height * s);
-        int x = 1366 - 8 - w, y = 8;
-        _spriteBatch.Draw(_pixel, new Rectangle(x - 2, y - 2, w + 4, h + 4), new Color(0, 0, 0, 160));
-        _spriteBatch.Draw(tex, new Rectangle(x, y, w, h), Color.White);
-        foreach (var p in _map.Portals)
-        {
-            var (dx, dy) = _map.MiniMap.ToDot(p.X, p.Y, w, h);
-            _spriteBatch.Draw(_pixel, new Rectangle(x + dx - 1, y + dy - 1, 3, 3), new Color(80, 160, 255));
-        }
-        var (px, py) = _map.MiniMap.ToDot(_px, _py, w, h);
-        _spriteBatch.Draw(_pixel, new Rectangle(x + px - 1, y + py - 1, 3, 3), new Color(255, 220, 0));
-    }
-
-    // Quest tracker: always-on lines under the top-left corner (nothing
-    // accepted, nothing shown, so old shots stay pixel-identical).
-    private void DrawTracker()
-    {
-        int y = 10;
-        var lines = TrackerLines();
-        for (int i = 0; i < lines.Count; i++) // name/detail pairs: even lines are gold names
-        {
-            var t = _ui.GetSmall(lines[i]);
-            _spriteBatch.Draw(_pixel, new Rectangle(6, y - 2, t.Width + 8, 16), new Color(0, 0, 0, 120));
-            _spriteBatch.Draw(t, new Vector2(10, y), i % 2 == 0 ? new Color(255, 220, 0) : Color.White);
-            y += 16;
-        }
-    }
-
-    // Boss HP bar (top-center, fixed): shows while a boss lives on this map
-    // (v1 has one: Mushmom). Backing + name/numbers + red bar; death hides it.
-    private void DrawBossBar()
-    {
-        MobView? boss = null;
-        foreach (var m in _mobs.Values)
-            if (m.Hp > 0 && _mobData[m.Mob].Boss) { boss = m; break; }
-        if (boss == null) return;
-        int x = (1366 - BossBarW) / 2;
-        var head = _ui.GetSmall($"{_mobData[boss.Mob].Name}  {boss.Hp} / {boss.MaxHp}");
-        _spriteBatch.Draw(_pixel, new Rectangle(x - 4, 8, BossBarW + 8, 32), new Color(0, 0, 0, 120));
-        _spriteBatch.Draw(head, new Vector2(x + (BossBarW - head.Width) / 2, 10), new Color(255, 220, 0));
-        _spriteBatch.Draw(_pixel, new Rectangle(x, 28, BossBarW, 8), Color.Black);
-        _spriteBatch.Draw(_pixel, new Rectangle(x + 1, 29, Math.Max(1, (BossBarW - 2) * boss.Hp / boss.MaxHp), 6), new Color(220, 60, 60));
-    }
-
     // Talk panel (modal): NPC name on top, one page of body, quest entries in
     // menu mode, buttons at the bottom. Height follows the content.
     private Rectangle TalkRect()

@@ -28,6 +28,7 @@ public sealed class GameObject
 {
     public bool Enabled = true;
     public bool Modal; // swallows clicks below, even outside its rect (first user: delete modal, W2)
+    public bool NoHit; // art-only: hit-testing skips it (first users: HUD art, U2)
     public GameObject? Parent { get; private set; }
     private readonly List<Component> _components = new();
     private readonly List<GameObject> _children = new();
@@ -97,7 +98,7 @@ public sealed class Scene
         for (int i = objs.Count - 1; i >= 0; i--)
         {
             var o = objs[i];
-            if (!o.Enabled) continue;
+            if (!o.Enabled || o.NoHit) continue;
             var child = Hit(o.Children, gx, gy);
             if (child != null) return child;
             var r = o.Get<Rect>();
