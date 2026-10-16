@@ -63,86 +63,6 @@ public sealed class QuestKill
     public int Count { get; set; }
 }
 
-// Client-side quest state machine (LAN trusts the client, like MP/CD: no
-// protocol). Progress key "qid:index" counts capped kills per objective.
-public static class QuestLog
-{
-    // Talk reach: clicking an NPC past this box does nothing.
-    public const int TalkDx = 90;
-    public const int TalkDy = 90;
-
-    public static bool CanAccept(CharaSlot chara, QuestData q) =>
-        !q.NeedItemsToAccept
-        && chara.Level >= q.LvMin
-        && (q.LvMax == 0 || chara.Level <= q.LvMax)
-        && !chara.Quests.Contains(q.QuestId)
-        && !chara.QuestsDone.Contains(q.QuestId)
-        && q.Pre.All(p => chara.QuestsDone.Contains(p));
-
-    public static bool Accept(CharaSlot chara, QuestData q)
-    {
-        if (!CanAccept(chara, q)) return false;
-        chara.Quests.Add(q.QuestId);
-        return true;
-    }
-
-    // One of our kills: every accepted quest hunting this mob ticks up (capped).
-    public static void BumpKills(CharaSlot chara, IEnumerable<QuestData> quests, int mob)
-    {
-        foreach (var q in quests)
-        {
-            if (!chara.Quests.Contains(q.QuestId)) continue;
-            for (int i = 0; i < q.Kills.Count; i++)
-            {
-                if (q.Kills[i].Mob != mob) continue;
-                string key = $"{q.QuestId}:{i}";
-                chara.QuestKills.TryGetValue(key, out int n);
-                chara.QuestKills[key] = Math.Min(q.Kills[i].Count, n + 1);
-            }
-        }
-    }
-
-    public static int KillCount(CharaSlot chara, int quest, int index) =>
-        chara.QuestKills.TryGetValue($"{quest}:{index}", out int n) ? n : 0;
-
-    public static bool IsComplete(CharaSlot chara, QuestData q)
-    {
-        if (!chara.Quests.Contains(q.QuestId) || q.NeedItemsToComplete) return false;
-        for (int i = 0; i < q.Kills.Count; i++)
-            if (KillCount(chara, q.QuestId, i) < q.Kills[i].Count) return false;
-        return true;
-    }
-
-    // Turn-in (moves the state only; TalkAction pays out after this passes).
-    // Counters go with the hunt: nothing reads them once the quest leaves
-    // the log.
-    public static bool Complete(CharaSlot chara, QuestData q)
-    {
-        if (!IsComplete(chara, q)) return false;
-        chara.Quests.Remove(q.QuestId);
-        chara.QuestsDone.Add(q.QuestId);
-        for (int i = 0; i < q.Kills.Count; i++)
-            chara.QuestKills.Remove($"{q.QuestId}:{i}");
-        return true;
-    }
-
-    // Turn-in payout: mesos drop in the purse, potions in the USE bag
-    // (pre-W10 saves have no bag yet: build it). EXP is not paid here:
-    // TalkAction routes it through GainExp like kills, so level-ups log and
-    // push the build on the same path.
-    public static void GrantRewards(CharaSlot chara, QuestData q)
-    {
-        chara.Mesos += q.RewardMeso;
-        if (q.RewardItems.Count == 0) return;
-        chara.Use ??= new Dictionary<int, int>();
-        foreach (var r in q.RewardItems)
-        {
-            chara.Use.TryGetValue(r.Item, out int n);
-            chara.Use[r.Item] = n + r.Count;
-        }
-    }
-}
-
 // Quest text renderer: official strings carry #markup#. Formats are bare
 // (#b/#e/#r open, #n/#k reset); h/p/m/t/o/i/c take #x<arg>:# form. Codes:
 // h (hero name), p (npc name), m/t (map/item id stubs: no name tables in
@@ -151,7 +71,7 @@ public static class QuestLog
 // Passes are disjoint by code letter, so their order is free.
 public static class QuestText
 {
-    public static string Render(string raw, CharaSlot chara, Func<int, string> mobName, Func<int, string> npcName)
+    public static string Render(string raw, CharaSlot chara, Func<int, int, int> kills, Func<int, string> mobName, Func<int, string> npcName)
     {
         string s = raw.Replace("\r\n", "\n");
         s = Regex.Replace(s, @"#L\d+#", "");
@@ -164,7 +84,7 @@ public static class QuestText
             // A malformed qid counts as quest 0 (no such key: renders 0, never throws).
             int qid = int.TryParse(m.Groups[1].Value, out int q) ? q : 0;
             int ord = int.Parse(m.Groups[2].Value);
-            return $"{QuestLog.KillCount(chara, qid, ord - 1)}";
+            return $"{kills(qid, ord - 1)}";
         });
         s = Regex.Replace(s, @"#[bernk]", "");
         s = Regex.Replace(s, @"#([hpmtioc])([^#:]*):?#", m =>

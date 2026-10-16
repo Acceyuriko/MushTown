@@ -95,6 +95,8 @@ public partial class MushTownGame
         [SkillData.Endure] = "+Max HP/DEF",
     };
     private readonly Dictionary<int, SkillData> _skills = new();
+    private SkillCost _skillCost = null!; // live casts over _skills (same dict ref)
+    private SkillDamage _skillDmg = null!;
     private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
     private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
     private readonly SceneManager _scenes = new();
@@ -1072,7 +1074,7 @@ public partial class MushTownGame
         for (int i = 0; i < rows.Count && i < 5; i++)
         {
             var q = _quests[rows[i]];
-            bool done = QuestLog.IsComplete(chara!, q); // rows exist only with a chara
+            bool done = _questLog.State(rows[i]).IsComplete(chara!); // rows exist only with a chara
             var ink = rows[i] == _questSel ? new Color(255, 220, 0)
                 : done ? new Color(120, 255, 120) : Color.White;
             _spriteBatch.Draw(_ui.GetSmall((done ? "? " : "") + q.Name),
@@ -1080,7 +1082,7 @@ public partial class MushTownGame
         }
         if (chara != null && _quests.TryGetValue(_questSel, out var sel) && chara.Quests.Contains(_questSel))
         {
-            string key = _questSel + ":" + string.Join(",", sel.Kills.Select((_, i) => QuestLog.KillCount(chara, _questSel, i)));
+            string key = _questSel + ":" + string.Join(",", sel.Kills.Select((_, i) => _questLog.KillCount(chara, _questSel, i)));
             if (key != _questKey)
             {
                 _questKey = key;
@@ -1096,7 +1098,7 @@ public partial class MushTownGame
             for (int i = 0; i < sel.Kills.Count; i++)
             {
                 var k = sel.Kills[i];
-                int n = QuestLog.KillCount(chara, _questSel, i);
+                int n = _questLog.KillCount(chara, _questSel, i);
                 var ink = n >= k.Count ? new Color(120, 255, 120) : Color.White;
                 _spriteBatch.Draw(_ui.GetSmall($"{MobName(k.Mob)} {n}/{k.Count}"), new Vector2(r.X + 12, y), ink);
                 y += 16;
@@ -1250,7 +1252,7 @@ public partial class MushTownGame
         var chara = _save?.Slots[_slot];
         var quest = _quests.GetValueOrDefault(_talkQuest);
         string kills = quest == null || chara == null ? ""
-            : string.Join(",", quest.Kills.Select((_, i) => QuestLog.KillCount(chara, _talkQuest, i)));
+            : string.Join(",", quest.Kills.Select((_, i) => _questLog.KillCount(chara, _talkQuest, i)));
         string key = $"{_talkNpc}:{_talkQuest}:{_talkPage}:{kills}";
         if (key != _talkKey)
         {
@@ -1268,7 +1270,7 @@ public partial class MushTownGame
         bool last = _talkPage >= TalkPages().Count - 1;
         bool offer = !chara.Quests.Contains(q.QuestId);
         if (offer) return last ? new List<string> { "Accept", "Bye" } : new List<string> { "Next", "Bye" };
-        if (QuestLog.IsComplete(chara, q)) return last ? new List<string> { "Complete", "Bye" } : new List<string> { "Next", "Bye" };
+        if (_questLog.State(q.QuestId).IsComplete(chara)) return last ? new List<string> { "Complete", "Bye" } : new List<string> { "Next", "Bye" };
         return new List<string> { "Bye" };
     }
 
@@ -1304,7 +1306,7 @@ public partial class MushTownGame
             for (int i = 0; i < entries.Count; i++)
             {
                 var q = _quests[entries[i].quest];
-                bool ready = !entries[i].offer && chara != null && QuestLog.IsComplete(chara, q);
+                bool ready = !entries[i].offer && chara != null && _questLog.State(entries[i].quest).IsComplete(chara);
                 var ink = entries[i].offer || ready ? new Color(255, 220, 0) : new Color(130, 140, 150);
                 string mark = entries[i].offer ? "! " : ready ? "? " : "";
                 _spriteBatch.Draw(_ui.GetSmall(mark + q.Name), new Vector2(r.X + 16, y), ink);

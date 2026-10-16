@@ -402,6 +402,8 @@ public partial class MushTownGame
         foreach (int id in _manifest.Skills)
             if (!_skills.ContainsKey(id))
                 throw new InvalidDataException($"manifest lists skill {id} with no exported def");
+        _skillCost = new SkillCost(_skills);
+        _skillDmg = new SkillDamage(_skills);
     }
 
     private void LoadMenuContent()
@@ -1049,6 +1051,7 @@ public partial class MushTownGame
     private void StartGame(string mode)
     {
         var chara = _save!.Slots[_slot]!;
+        _questLog.Sync(chara); // slot switches swap the chara: rebuild live states from the save
         if (chara.Map != _mapId) LoadMapData(chara.Map);
         LoadMapTextures(); // always: a failed texture load must retry, not skip into missing art
         if (chara.X != null && chara.Y != null)

@@ -18,29 +18,38 @@ public class QuestTests
         Kills = new List<QuestKill> { new() { Mob = mob, Count = count } },
     };
 
+    private static QuestLog Log(params QuestData[] qs) =>
+        new(qs.ToDictionary(q => q.QuestId));
+
+    private static Func<int, int, int> KillsOf(CharaSlot chara) => (qid, idx) =>
+        chara.QuestKills.TryGetValue($"{qid}:{idx}", out int n) ? n : 0;
+
     // Accept gates: level band, pre quests, item need, and repeat state.
     [TestMethod]
     public void Accept_GatesLevelPreItemsAndState()
     {
         var q = KillQuest();
+        var log = Log(q, new QuestData { QuestId = 2, LvMin = 1, LvMax = 8 },
+            new QuestData { QuestId = 3, Pre = new List<int> { 1019 } },
+            new QuestData { QuestId = 4, NeedItemsToAccept = true });
         var accepted = Chara();
-        Assert.IsTrue(QuestLog.Accept(accepted, q));
-        Assert.IsFalse(QuestLog.Accept(accepted, q)); // already accepted
+        Assert.IsTrue(log.Accept(accepted, q.QuestId));
+        Assert.IsFalse(log.Accept(accepted, q.QuestId)); // already accepted
 
         var done = Chara();
         done.QuestsDone.Add(q.QuestId);
-        Assert.IsFalse(QuestLog.CanAccept(done, q));
-        Assert.IsFalse(QuestLog.Accept(done, q));
+        Assert.IsFalse(log.CanAccept(done, q.QuestId));
+        Assert.IsFalse(log.Accept(done, q.QuestId));
 
-        Assert.IsFalse(QuestLog.CanAccept(Chara(0), KillQuest())); // below LvMin
-        Assert.IsFalse(QuestLog.CanAccept(Chara(9), new QuestData { QuestId = 2, LvMin = 1, LvMax = 8 }));
-        Assert.IsTrue(QuestLog.CanAccept(Chara(8), new QuestData { QuestId = 2, LvMin = 1, LvMax = 8 }));
-        Assert.IsTrue(QuestLog.CanAccept(Chara(99), KillQuest())); // LvMax 0 = no cap
-        Assert.IsFalse(QuestLog.CanAccept(Chara(), new QuestData { QuestId = 3, Pre = new List<int> { 1019 } }));
+        Assert.IsFalse(log.CanAccept(Chara(0), q.QuestId)); // below LvMin
+        Assert.IsFalse(log.CanAccept(Chara(9), 2));
+        Assert.IsTrue(log.CanAccept(Chara(8), 2));
+        Assert.IsTrue(log.CanAccept(Chara(99), q.QuestId)); // LvMax 0 = no cap
+        Assert.IsFalse(log.CanAccept(Chara(), 3));
         var pre = Chara();
         pre.QuestsDone.Add(1019);
-        Assert.IsTrue(QuestLog.CanAccept(pre, new QuestData { QuestId = 3, Pre = new List<int> { 1019 } }));
-        Assert.IsFalse(QuestLog.CanAccept(Chara(), new QuestData { QuestId = 4, NeedItemsToAccept = true }));
+        Assert.IsTrue(log.CanAccept(pre, 3));
+        Assert.IsFalse(log.CanAccept(Chara(), 4));
     }
 
     // Kills tick only accepted quests hunting this mob, capped per objective.
@@ -48,15 +57,14 @@ public class QuestTests
     public void BumpKills_CapsPerObjective()
     {
         var chara = Chara();
-        var hunted = KillQuest(90001);
-        var other = KillQuest(90009, mob: 100001);
-        QuestLog.Accept(chara, hunted);
-        QuestLog.BumpKills(chara, new[] { hunted, other }, 100001); // wrong mob for 90001
-        Assert.AreEqual(0, QuestLog.KillCount(chara, 90001, 0));
-        Assert.AreEqual(0, QuestLog.KillCount(chara, 90009, 0)); // never accepted
+        var log = Log(KillQuest(90001), KillQuest(90009, mob: 100001));
+        log.Accept(chara, 90001);
+        log.BumpKills(chara, 100001); // wrong mob for 90001
+        Assert.AreEqual(0, log.KillCount(chara, 90001, 0));
+        Assert.AreEqual(0, log.KillCount(chara, 90009, 0)); // never accepted
         for (int i = 0; i < 7; i++)
-            QuestLog.BumpKills(chara, new[] { hunted, other }, 100000);
-        Assert.AreEqual(5, QuestLog.KillCount(chara, 90001, 0));
+            log.BumpKills(chara, 100000);
+        Assert.AreEqual(5, log.KillCount(chara, 90001, 0));
     }
 
     // Complete moves accepted -> done only when every kill lands (item quests
@@ -65,27 +73,27 @@ public class QuestTests
     public void Complete_MovesAcceptedToDoneOnlyWhenComplete()
     {
         var chara = Chara();
-        var q = KillQuest();
-        Assert.IsFalse(QuestLog.IsComplete(chara, q)); // not accepted yet
-        QuestLog.Accept(chara, q);
+        var item = KillQuest(90003);
+        item.NeedItemsToComplete = true;
+        var log = Log(KillQuest(), item,
+            new QuestData { QuestId = 90002, Npc0 = 1541000, Npc1 = 1541000 }, KillQuest(90005));
+        Assert.IsFalse(log.IsComplete(chara, 90001)); // not accepted yet
+        log.Accept(chara, 90001);
         chara.QuestKills["90001:0"] = 4;
-        Assert.IsFalse(QuestLog.Complete(chara, q));
+        Assert.IsFalse(log.Complete(chara, 90001));
         chara.QuestKills["90001:0"] = 5;
-        Assert.IsTrue(QuestLog.Complete(chara, q));
+        Assert.IsTrue(log.Complete(chara, 90001));
         Assert.IsFalse(chara.Quests.Contains(90001));
         Assert.IsTrue(chara.QuestsDone.Contains(90001));
 
-        var item = KillQuest(90003);
-        item.NeedItemsToComplete = true;
-        QuestLog.Accept(chara, item);
+        log.Accept(chara, 90003);
         chara.QuestKills["90003:0"] = 5;
-        Assert.IsFalse(QuestLog.IsComplete(chara, item));
+        Assert.IsFalse(log.IsComplete(chara, 90003));
 
-        var talk = new QuestData { QuestId = 90002, Npc0 = 1541000, Npc1 = 1541000 };
-        QuestLog.Accept(chara, talk);
-        Assert.IsTrue(QuestLog.IsComplete(chara, talk));
-        Assert.IsTrue(QuestLog.Complete(chara, talk));
-        Assert.IsFalse(QuestLog.Complete(Chara(), KillQuest(90005))); // never accepted
+        log.Accept(chara, 90002);
+        Assert.IsTrue(log.IsComplete(chara, 90002));
+        Assert.IsTrue(log.Complete(chara, 90002));
+        Assert.IsFalse(log.Complete(Chara(), 90005)); // never accepted
     }
 
     // One mob shared by two objectives: both tick, each capped on its own.
@@ -102,14 +110,15 @@ public class QuestTests
                 new() { Mob = 100000, Count = 3 },
             },
         };
-        QuestLog.Accept(chara, q);
-        QuestLog.BumpKills(chara, new[] { q }, 100000);
-        Assert.AreEqual(1, QuestLog.KillCount(chara, 6, 0));
-        Assert.AreEqual(1, QuestLog.KillCount(chara, 6, 1));
+        var log = Log(q);
+        log.Accept(chara, 6);
+        log.BumpKills(chara, 100000);
+        Assert.AreEqual(1, log.KillCount(chara, 6, 0));
+        Assert.AreEqual(1, log.KillCount(chara, 6, 1));
         for (int i = 0; i < 5; i++)
-            QuestLog.BumpKills(chara, new[] { q }, 100000);
-        Assert.AreEqual(2, QuestLog.KillCount(chara, 6, 0));
-        Assert.AreEqual(3, QuestLog.KillCount(chara, 6, 1));
+            log.BumpKills(chara, 100000);
+        Assert.AreEqual(2, log.KillCount(chara, 6, 0));
+        Assert.AreEqual(3, log.KillCount(chara, 6, 1));
     }
 
     // Turn-in archives the counters: nothing reads them once the quest leaves.
@@ -119,31 +128,35 @@ public class QuestTests
         var chara = Chara();
         var q = KillQuest();
         q.Kills.Add(new QuestKill { Mob = 100001, Count = 2 });
-        QuestLog.Accept(chara, q);
+        var log = Log(q);
+        log.Accept(chara, 90001);
         chara.QuestKills["90001:0"] = 5;
         chara.QuestKills["90001:1"] = 2;
-        Assert.IsTrue(QuestLog.Complete(chara, q));
+        Assert.IsTrue(log.Complete(chara, 90001));
         Assert.IsFalse(chara.QuestKills.ContainsKey("90001:0"));
         Assert.IsFalse(chara.QuestKills.ContainsKey("90001:1"));
     }
 
     // Turn-in payout: mesos drop in the purse, potions in the USE bag (a
-    // pre-W10 save has no bag yet: the first payout builds it).
+    // pre-W10 save has no bag yet: the first payout builds it). Returns the
+    // EXP grant for the caller to route through GainExp.
     [TestMethod]
-    public void GrantRewards_PaysMesoAndPotions()
+    public void TurnIn_PaysMesoPotionsAndExp()
     {
         var chara = Chara();
         var q = new QuestData
         {
             QuestId = 7,
+            RewardExp = 40,
             RewardMeso = 30,
             RewardItems = new() { new() { Item = ItemData.RedPotion, Count = 3 } },
         };
-        QuestLog.GrantRewards(chara, q);
+        var log = Log(q);
+        Assert.AreEqual(40, log.TurnIn(chara, 7));
         Assert.AreEqual(30, chara.Mesos);
         Assert.AreEqual(3, chara.Use![ItemData.RedPotion]);
         // Same payout again: stacks like later chain quests paying the same potion.
-        QuestLog.GrantRewards(chara, q);
+        log.TurnIn(chara, 7);
         Assert.AreEqual(60, chara.Mesos);
         Assert.AreEqual(6, chara.Use![ItemData.RedPotion]);
     }
@@ -165,12 +178,59 @@ public class QuestTests
 
     // Meso-only payouts never touch the bag: a pre-W10 null bag stays null.
     [TestMethod]
-    public void GrantRewards_MesoOnlyKeepsNullBag()
+    public void TurnIn_MesoOnlyKeepsNullBag()
     {
         var chara = Chara();
-        QuestLog.GrantRewards(chara, new QuestData { QuestId = 9, RewardMeso = 20 });
+        var log = Log(new QuestData { QuestId = 9, RewardMeso = 20 });
+        log.TurnIn(chara, 9);
         Assert.AreEqual(20, chara.Mesos);
         Assert.IsNull(chara.Use);
+    }
+
+    // States spawn on accept and leave on turn-in; reads fail loud missing.
+    [TestMethod]
+    public void States_SpawnOnAcceptDespawnOnComplete()
+    {
+        var chara = Chara();
+        var log = Log(KillQuest());
+        Assert.ThrowsException<InvalidDataException>(() => log.State(90001));
+        log.Accept(chara, 90001);
+        Assert.AreEqual(90001, log.State(90001).QuestId);
+        chara.QuestKills["90001:0"] = 5;
+        Assert.IsTrue(log.Complete(chara, 90001));
+        Assert.ThrowsException<InvalidDataException>(() => log.State(90001));
+    }
+
+    // Sync rebuilds states from the save: loads and slot switches swap the
+    // chara under the global log. Unknown ids spawn nothing.
+    [TestMethod]
+    public void Sync_RebuildsStatesFromSave()
+    {
+        var log = Log(KillQuest(90001), KillQuest(90002));
+        var a = Chara();
+        a.Quests.Add(90001);
+        a.Quests.Add(99999); // removed custom file: no state, no throw
+        log.Sync(a);
+        Assert.AreEqual(90001, log.State(90001).QuestId);
+        var b = Chara();
+        b.Quests.Add(90002);
+        log.Sync(b);
+        Assert.ThrowsException<InvalidDataException>(() => log.State(90001));
+        Assert.AreEqual(90002, log.State(90002).QuestId);
+        log.Sync(null);
+        Assert.ThrowsException<InvalidDataException>(() => log.State(90002));
+    }
+
+    // Factory registry: a registered builder runs for its quest id.
+    [TestMethod]
+    public void Factory_OverrideHonored()
+    {
+        bool ran = false;
+        var f = new QuestStateFactory();
+        f.Register(90001, (id, log) => { ran = true; return new QuestState(id, log); });
+        var log = new QuestLog(new[] { KillQuest() }.ToDictionary(q => q.QuestId), f);
+        log.Accept(Chara(), 90001);
+        Assert.IsTrue(ran);
     }
 
     // The W15 acceptance bar, executable: a fresh hero walks the real chain
@@ -230,14 +290,15 @@ public class QuestTests
         // double-dips 5 (1270 total still lands Lv11). The hero accepts 1027
         // on arrival (its LvMax 10 only gates the accept, and the hero is ~6)
         // and turns it in last, back at Lucas.
+        var log = new QuestLog(quests);
         foreach (int id in order.Take(4))
-            RunChainQuest(chara, quests.Values.ToList(), quests[id], pay);
-        Assert.IsTrue(QuestLog.Accept(chara, quests[1027]), "chain stuck at 1027");
+            RunChainQuest(chara, log, quests[id], pay);
+        Assert.IsTrue(log.Accept(chara, 1027), "chain stuck at 1027");
         foreach (int id in order.Skip(4))
-            RunChainQuest(chara, quests.Values.ToList(), quests[id], pay);
-        Assert.IsTrue(QuestLog.IsComplete(chara, quests[1027]));
-        Assert.IsTrue(QuestLog.Complete(chara, quests[1027]));
-        QuestLog.GrantRewards(chara, quests[1027]);
+            RunChainQuest(chara, log, quests[id], pay);
+        Assert.IsTrue(log.IsComplete(chara, 1027));
+        Assert.IsTrue(log.Complete(chara, 1027));
+        log.TurnIn(chara, 1027);
         Progression.ApplyExp(chara, quests[1027].RewardExp);
         Assert.AreEqual(11, chara.Level); // 1445 - 1250 = 195 into Lv11
         Assert.AreEqual(195, chara.Exp);
@@ -246,18 +307,18 @@ public class QuestTests
         Assert.AreEqual(15, chara.Use![ItemData.BluePotion]);
     }
 
-    private static void RunChainQuest(CharaSlot chara, List<QuestData> all, QuestData q, Dictionary<int, int> pay)
+    private static void RunChainQuest(CharaSlot chara, QuestLog log, QuestData q, Dictionary<int, int> pay)
     {
-        Assert.IsTrue(QuestLog.Accept(chara, q), $"chain stuck at {q.QuestId}");
+        Assert.IsTrue(log.Accept(chara, q.QuestId), $"chain stuck at {q.QuestId}");
         foreach (var k in q.Kills)
             for (int i = 0; i < k.Count; i++)
             {
-                QuestLog.BumpKills(chara, all, k.Mob);
+                log.BumpKills(chara, k.Mob);
                 Progression.ApplyExp(chara, pay[k.Mob]); // each kill pays, like GainExp
             }
-        Assert.IsTrue(QuestLog.IsComplete(chara, q), $"chain cannot finish {q.QuestId}");
-        Assert.IsTrue(QuestLog.Complete(chara, q));
-        QuestLog.GrantRewards(chara, q);
+        Assert.IsTrue(log.IsComplete(chara, q.QuestId), $"chain cannot finish {q.QuestId}");
+        Assert.IsTrue(log.Complete(chara, q.QuestId));
+        log.TurnIn(chara, q.QuestId);
         Progression.ApplyExp(chara, q.RewardExp);
     }
 
@@ -268,7 +329,7 @@ public class QuestTests
         chara.QuestKills["1016:0"] = 3;
         string s = QuestText.Render(
             "Hi #h0#, hunt #o100100#s for #p12100# (#a10161# of 5) in map #m60000#.",
-            chara, id => $"mob{id}", id => $"npc{id}");
+            chara, KillsOf(chara), id => $"mob{id}", id => $"npc{id}");
         Assert.AreEqual("Hi hero, hunt mob100100s for npc12100 (3 of 5) in map map 60000.", s);
     }
 
@@ -278,11 +339,11 @@ public class QuestTests
     {
         string s = QuestText.Render(
             "#bBold#k #eEvent#n #rRed#k#i4036846:# #L1#Pick me#l #questorder1# #t4036846:# x#c4036846#\r\nNext",
-            Chara(), id => $"mob{id}", id => $"npc{id}");
+            Chara(), (_, _) => 0, id => $"mob{id}", id => $"npc{id}");
         Assert.AreEqual("Bold Event Red Pick me  item 4036846 x0\nNext", s);
-        Assert.AreEqual("NPC x", QuestText.Render("#px#", Chara(), id => "", id => ""));
-        Assert.AreEqual("mob x", QuestText.Render("#ox#", Chara(), id => "", id => ""));
-        Assert.AreEqual("Pick me", QuestText.Render("#L1#Pick me#l#", Chara(), id => "", id => "")); // close with #
-        Assert.AreEqual("0", QuestText.Render("#a99999999999#", Chara(), id => "", id => "")); // huge qid: 0, no throw
+        Assert.AreEqual("NPC x", QuestText.Render("#px#", Chara(), (_, _) => 0, id => "", id => ""));
+        Assert.AreEqual("mob x", QuestText.Render("#ox#", Chara(), (_, _) => 0, id => "", id => ""));
+        Assert.AreEqual("Pick me", QuestText.Render("#L1#Pick me#l#", Chara(), (_, _) => 0, id => "", id => "")); // close with #
+        Assert.AreEqual("0", QuestText.Render("#a99999999999#", Chara(), (_, _) => 0, id => "", id => "")); // huge qid: 0, no throw
     }
 }

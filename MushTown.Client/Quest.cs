@@ -8,6 +8,7 @@ public partial class MushTownGame
 {
     private readonly Dictionary<int, NpcData> _npcs = new();
     private readonly Dictionary<int, QuestData> _quests = new();
+    private QuestLog _questLog = null!; // live states over _quests (same dict ref: customs show up live)
     private readonly Dictionary<int, string> _mobNames = new();
     private int _talkNpc; // talking to (0 = none)
     private int _talkQuest; // quest in offer/turn-in flow (0 = menu)
@@ -33,6 +34,7 @@ public partial class MushTownGame
             var q = LoadJson<QuestData>(f);
             _quests[q.QuestId] = q;
         }
+        _questLog = new QuestLog(_quests);
     }
 
     // Custom quests/ (same shape, wins on clash, so data fixes need no
@@ -105,15 +107,15 @@ public partial class MushTownGame
 
     private string QText(string raw)
     {
-        var chara = _save?.Slots[_slot];
-        return QuestText.Render(raw, chara ?? new CharaSlot { Name = "hero" }, MobName, NpcName);
+        var chara = _save?.Slots[_slot] ?? new CharaSlot { Name = "hero" };
+        return QuestText.Render(raw, chara, (qid, idx) => _questLog.KillCount(chara, qid, idx), MobName, NpcName);
     }
 
     // One of our kills: quest counters tick up (capped per objective).
     private void BumpQuestKills(int mob)
     {
         var chara = _save?.Slots[_slot];
-        if (chara != null) QuestLog.BumpKills(chara, _quests.Values, mob);
+        if (chara != null) _questLog.BumpKills(chara, mob);
     }
 
     // Talk menu entries: (quest id, offer?) for this NPC, offers first.
@@ -124,7 +126,7 @@ public partial class MushTownGame
         if (chara == null) return entries;
         var all = _quests.Values.OrderBy(q => q.QuestId).ToList();
         foreach (var q in all)
-            if (q.Npc0 == npc && QuestLog.CanAccept(chara, q)) entries.Add((q.QuestId, true));
+            if (q.Npc0 == npc && _questLog.CanAccept(chara, q.QuestId)) entries.Add((q.QuestId, true));
         foreach (var q in all)
             if (q.Npc1 == npc && chara.Quests.Contains(q.QuestId)) entries.Add((q.QuestId, false));
         return entries;
@@ -136,8 +138,8 @@ public partial class MushTownGame
         var chara = _save?.Slots[_slot];
         if (chara == null) return false;
         return _quests.Values.Any(q =>
-            (q.Npc0 == npc && QuestLog.CanAccept(chara, q))
-            || (q.Npc1 == npc && QuestLog.IsComplete(chara, q)));
+            (q.Npc0 == npc && _questLog.CanAccept(chara, q.QuestId))
+            || (q.Npc1 == npc && _questLog.IsComplete(chara, q.QuestId)));
     }
 
     // Current talk pages: menu shows the greeting, offer/turn-in show Say
@@ -153,7 +155,7 @@ public partial class MushTownGame
         }
         bool offer = !chara.Quests.Contains(q.QuestId);
         if (offer) return q.Say0.Count > 0 ? q.Say0 : new List<string> { q.Offer };
-        if (QuestLog.IsComplete(chara, q))
+        if (_questLog.State(q.QuestId).IsComplete(chara)) // turn-in path: taken, so the state exists
         {
             // Turn-in ends with the payout preview (a copy: Say1 is live data).
             var pages = new List<string>(q.Say1.Count > 0 ? q.Say1 : new List<string> { q.Done });
@@ -175,12 +177,12 @@ public partial class MushTownGame
         var chara = _save.Slots[_slot] ??= DemoChara();
         if (_shotScreen == "quest")
         {
-            if (!_quests.TryGetValue(90001, out var q) || !QuestLog.Accept(chara, q))
+            if (!_quests.TryGetValue(90001, out var q) || !_questLog.Accept(chara, 90001))
                 throw new InvalidDataException("quest shot needs custom quest 90001");
             if (q.Kills.Count == 0)
                 throw new InvalidDataException("quest shot needs custom quest 90001 with kills");
             for (int i = 0; i < 2; i++)
-                QuestLog.BumpKills(chara, new[] { q }, q.Kills[0].Mob); // 2 kills through the real path
+                _questLog.BumpKills(chara, q.Kills[0].Mob); // 2 kills through the real path
             _questSel = 90001;
             return;
         }
@@ -228,17 +230,16 @@ public partial class MushTownGame
         if (button == "Next") { _talkPage++; return; }
         var chara = _save?.Slots[_slot]!;
         var q = _quests.GetValueOrDefault(_talkQuest)!;
-        if (button == "Accept" && QuestLog.Accept(chara, q))
+        if (button == "Accept" && _questLog.Accept(chara, _talkQuest))
         {
             GameLog($"accepted: {q.Name}");
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         }
-        if (button == "Complete" && QuestLog.Complete(chara, q))
+        if (button == "Complete" && _questLog.Complete(chara, _talkQuest))
         {
             var rewards = q.RewardLines(id => _items[id].Name);
             GameLog(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
-            QuestLog.GrantRewards(chara, q);
-            GainExp(q.RewardExp);
+            GainExp(_questLog.TurnIn(chara, _talkQuest)); // payout lands before the EXP, like before
             PlaySfx("questclear");
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
             if (_questSel == q.QuestId) _questSel = 0; // turned in: drop the stale selection
@@ -252,7 +253,7 @@ public partial class MushTownGame
         if (chara == null || chara.Quests.Count == 0) return new List<string>();
         string key = string.Join(";", chara.Quests.OrderBy(id => id)
             .Select(id => _quests.TryGetValue(id, out var q)
-                ? id + ":" + string.Join(",", q.Kills.Select((_, i) => QuestLog.KillCount(chara, id, i)))
+                ? id + ":" + string.Join(",", q.Kills.Select((_, i) => _questLog.KillCount(chara, id, i)))
                 : id + "?"));
         if (key == _trackKey) return _trackLines;
         _trackKey = key;
@@ -261,15 +262,16 @@ public partial class MushTownGame
         {
             if (!_quests.TryGetValue(id, out var q)) continue;
             lines.Add(q.Name);
+            var st = _questLog.State(id); // taken + known: the state exists
             if (q.NeedItemsToComplete)
                 lines.Add("  Need items"); // v1 has no bag: say so instead of looping Talk-to
-            else if (QuestLog.IsComplete(chara, q))
+            else if (st.IsComplete(chara))
                 lines.Add($"  Done - talk to {NpcName(q.Npc1)}");
             else if (q.Kills.Count > 0)
             {
                 int i = 0; // first unmet kill (some unmet: complete/item cases returned above)
-                while (i < q.Kills.Count && QuestLog.KillCount(chara, id, i) >= q.Kills[i].Count) i++;
-                lines.Add($"  {MobName(q.Kills[i].Mob)} {QuestLog.KillCount(chara, id, i)}/{q.Kills[i].Count}");
+                while (i < q.Kills.Count && st.KillCount(chara, i) >= q.Kills[i].Count) i++;
+                lines.Add($"  {MobName(q.Kills[i].Mob)} {st.KillCount(chara, i)}/{q.Kills[i].Count}");
             }
             else
                 lines.Add($"  Talk to {NpcName(q.Npc1)}");

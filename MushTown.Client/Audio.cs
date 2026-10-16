@@ -83,7 +83,11 @@ public partial class MushTownGame
         _bgm.Play();
     }
 
-    private void PlaySfx(string key) => _sfx[key].Play(_sfxVol / 100f, 0f, 0f);
+    private void PlaySfx(string key)
+    {
+        if (_shotPath != null) return; // shots pose silent: no sfx blast (bgm already guarded in PlayBgm)
+        _sfx[key].Play(_sfxVol / 100f, 0f, 0f);
+    }
 
     // +/- buttons in the settings window (step 10). The Kind click
     // confirms the press; the SFX row also previews its new volume.

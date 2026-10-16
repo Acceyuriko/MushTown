@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -218,6 +219,31 @@ public partial class MushTownGame : Game
         _graphics.PreferredBackBufferHeight = mode.Height;
 
         Exiting += (_, _) => { SaveChara(); _net?.Dispose(); _server?.Dispose(); };
+        if (_shotPath != null && OperatingSystem.IsWindows())
+            HideWindowEarly(); // headless shots: hide before first paint (load takes seconds)
+    }
+
+    // Hides every window of this process, every 25ms, until exit. One
+    // mechanism: MainWindowHandle lags creation by ~1s, and hiding once
+    // (Initialize/Update) still leaves the black window up through load.
+    private static void HideWindowEarly()
+    {
+        uint pid = (uint)Environment.ProcessId;
+        var t = new Thread(() =>
+        {
+            for (int i = 0; i < 1600; i++) // 40s cap; shot mode exits in seconds
+            {
+                EnumWindows((h, _) =>
+                {
+                    GetWindowThreadProcessId(h, out uint wpid);
+                    if (wpid == pid && IsWindowVisible(h)) ShowWindow(h, 0);
+                    return true;
+                }, IntPtr.Zero);
+                Thread.Sleep(25);
+            }
+        });
+        t.IsBackground = true;
+        t.Start();
     }
 
     protected override void Initialize()
@@ -283,6 +309,16 @@ public partial class MushTownGame : Game
 
     // Screen size changed (resolution switch, moving to another monitor):
     // follow the new size so the upscaling stays correct.
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
     private void OnClientSizeChanged(object? sender, EventArgs e)
     {
         var mode = GraphicsDevice.Adapter.CurrentDisplayMode;
@@ -1450,18 +1486,8 @@ public partial class MushTownGame : Game
 
     // One cast's client-side checks: learned, level, MP, cooldown. CLI
     // sessions carry no character (no pools), so they cannot cast, like potions.
-    private bool TryPaySkill(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        if (chara == null) return false;
-        var skill = _skills[id];
-        chara.SkillLv.TryGetValue(id, out int lv);
-        _skillCdMs.TryGetValue(id, out float left);
-        if (!Progression.CanCast(chara, skill, lv, left)) return false;
-        chara.Mp -= skill.Mp;
-        _skillCdMs[id] = skill.CooldownMs;
-        return true;
-    }
+    private bool TryPaySkill(int id) =>
+        _skillCost.Pay(_save?.Slots[_slot], id, SkillLv(id), _skillCdMs);
 
     private int SkillLv(int id)
     {
@@ -1514,14 +1540,8 @@ public partial class MushTownGame : Game
 
     // Cast-time damage pct: the skill's level curve plus combo orbs (each orb
     // pays Combo Attack's rate plus Combo Synergy's, both at their levels).
-    private int CastPct(int id)
-    {
-        int pct = Progression.SkillDamage(_skills[id], SkillLv(id));
-        if (_orbs > 0)
-            pct += _orbs * (_skills[SkillData.ComboAttack].OrbDmg * SkillLv(SkillData.ComboAttack)
-                + _skills[SkillData.ComboSynergy].SynDmg * SkillLv(SkillData.ComboSynergy));
-        return pct;
-    }
+    private int CastPct(int id) =>
+        _skillDmg.Pct(id, SkillLv(id), _orbs, SkillLv(SkillData.ComboAttack), SkillLv(SkillData.ComboSynergy));
 
     // A paid buff cast: start the timer (recast refreshes), loop its art,
     // relay the effect, push the new build (buff stats feed damage).
