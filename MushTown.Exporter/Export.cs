@@ -273,6 +273,11 @@ public static class Export
             Equips = EquipGearPaths.Select(g => int.Parse(ImgId(g))).OrderBy(x => x).ToList(),
             Skills = Skills.Keys.OrderBy(x => x).ToList(),
         });
+        // Tracked art/fonts (official free Nexon fonts, see art/fonts/README.md)
+        // ride into every export: the game reads only assets/fonts/.
+        Directory.CreateDirectory(Path.Combine(outDir, "fonts"));
+        foreach (string f in Directory.GetFiles(Path.Combine("art", "fonts"), "*.ttf"))
+            File.Copy(f, Path.Combine(outDir, "fonts", Path.GetFileName(f)), true);
         Console.WriteLine("export done -> " + Path.GetFullPath(outDir));
     }
 
