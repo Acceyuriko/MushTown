@@ -1,5 +1,27 @@
 namespace MushTown.Shared;
 
+// OS cursor hotspot (assets/ui/cursor.json): the WZ origin of Cursor state 0.
+public sealed class CursorData
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+}
+
+// One animated cursor set (assets/ui/cursor_{hover,click,item}.json): WZ
+// Cursor state frames with per-frame hotspots (origins) and delays.
+public sealed class CursorAnimData
+{
+    public List<CursorAnimFrame> Frames { get; set; } = new();
+}
+
+public sealed class CursorAnimFrame
+{
+    public string Image { get; set; } = "";
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Delay { get; set; }
+}
+
 // Exported map file: assets/maps/{id}.json
 public sealed class MapData
 {

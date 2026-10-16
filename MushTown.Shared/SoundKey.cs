@@ -8,7 +8,7 @@ public static class SoundKey
     public static readonly string[] Sfx = new[]
     {
         "swing_sword", "swing_pole", "hit", "die_snail", "die_orange",
-        "die_boss", "pickup", "levelup", "portal", "jump", "click",
+        "die_boss", "pickup", "levelup", "portal", "jump", "click", "over",
         "shopbuy", "questclear", "buff",
     };
 

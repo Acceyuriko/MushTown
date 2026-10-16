@@ -267,6 +267,11 @@ public static class Export
             Environment.ExitCode = 1;
             return;
         }
+        if (!ExportCursor(ui, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         WriteJson(Path.Combine(outDir, "manifest.json"), new ManifestData
         {
             Potions = PotionIds.OrderBy(x => x).ToList(),
@@ -1128,6 +1133,64 @@ public static class Export
     // Basic damage skin digits: BasicEff.img NoRed0 0-9 (yellow; the set that
     // also carries Miss/guard words). Miss and the words stay for the week
     // that adds dodge and guard.
+    // The OS cursor (Basic Cursor state 0, the gloved hand): the png plus
+    // its WZ origin as the click hotspot (cursor.json). States 1/12/5 ride
+    // along: button hover, pressed, inventory grab.
+    private static bool ExportCursor(WzRoot ui, string outDir)
+    {
+        if (!UiPng.TryRead(ui, "UI", @"Basic.img\Cursor\0\0", out var png, out var origin) || origin == null)
+        {
+            Console.WriteLine("cursor 0 has no image or origin");
+            return false;
+        }
+        WzNodeUtil.SavePng(png, Path.Combine(outDir, "ui", "cursor.png"));
+        WriteJson(Path.Combine(outDir, "ui", "cursor.json"), new CursorData { X = origin.X, Y = origin.Y });
+        Console.WriteLine($"cursor: {png.Width}x{png.Height} origin={origin.X},{origin.Y}");
+        return ExportCursorSet(ui, outDir, 1, "hover")
+            && ExportCursorSet(ui, outDir, 12, "click")
+            && ExportCursorSet(ui, outDir, 5, "item");
+    }
+
+    // One animated cursor set (Basic Cursor <state>): frames plus per-frame
+    // hotspots and delays. Single-frame sets (click) carry no delay.
+    private static bool ExportCursorSet(WzRoot ui, string outDir, int state, string stem)
+    {
+        var set = WzNodeUtil.ResolveUol(ui.Find($@"Basic.img\Cursor\{state}"));
+        if (set == null)
+        {
+            Console.WriteLine($"cursor {state} not found");
+            return false;
+        }
+        var data = new CursorAnimData();
+        for (int f = 0; ; f++)
+        {
+            var frame = WzNodeUtil.ResolveUol(set.Nodes[f.ToString()]);
+            if (frame == null) break;
+            var o = frame.Nodes["origin"]?.Value as Wz_Vector;
+            if (o == null)
+            {
+                Console.WriteLine($"cursor {state}/{f}: no origin");
+                return false;
+            }
+            string path = $"ui/cursor_{stem}_{f}.png";
+            if (!UiPng.Save(ui, "UI", $@"Basic.img\Cursor\{state}\{f}", Path.Combine(outDir, path))) return false;
+            data.Frames.Add(new CursorAnimFrame { Image = path, X = o.X, Y = o.Y, Delay = Int(frame, "delay", 0) });
+        }
+        if (data.Frames.Count == 0)
+        {
+            Console.WriteLine($"cursor {state}: no frames");
+            return false;
+        }
+        if (data.Frames.Count > 1 && data.Frames.Any(f => f.Delay <= 0))
+        {
+            Console.WriteLine($"cursor {state}: a frame has no delay");
+            return false;
+        }
+        WriteJson(Path.Combine(outDir, "ui", $"cursor_{stem}.json"), data);
+        Console.WriteLine($"cursor {stem}: {data.Frames.Count} frames");
+        return true;
+    }
+
     // W9 HUD art: bottom bar (StatusBar3), inventory frame + tab pieces,
     // stat body. Buttons take normal/mouseOver/pressed; disabled never shows.
     // Must match Hud.cs: every file there must be listed here.

@@ -494,6 +494,7 @@ public partial class MushTownGame : Game
             base.Update(gameTime);
             return; // shots never update: no clicks, no saves, player prefs untouched
         }
+        SyncCursor(); // a window resize rebuilds the OS cursor at the new scene zoom
 #if DEBUG
         if (_layoutDirty)
         {
@@ -504,6 +505,7 @@ public partial class MushTownGame : Game
         if (_screen != Screen.Game)
         {
             UpdateMenu((float)gameTime.ElapsedGameTime.TotalMilliseconds);
+            SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
             base.Update(gameTime);
             return;
         }
@@ -511,9 +513,16 @@ public partial class MushTownGame : Game
         var kb = Keyboard.GetState();
         if (kb.IsKeyDown(Keys.Escape))
         {
-            if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before exiting
-            if (_save != null) { ToChars(); base.Update(gameTime); return; } // menu session: Esc saves and steps out
-            else Exit(); // CLI session has no menu to return to
+            if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
+            if (_showSubmenu || _showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop || _panelOpen)
+            {
+                _showSubmenu = false; _showInv = false; _showStat = false; _showSkill = false;
+                _showQuest = false; _showSettings = false; _showShop = false; _panelOpen = false;
+                _dragInv = _dragStat = _dragSkill = _dragQuest = _dragSettings = _dragShop = null; // hiding mid-drag drops the grab
+                PlaySfx("click");
+                base.Update(gameTime); return;
+            }
+            base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
         // Talk needs presence: walking out of reach closes the modal.
         if (_talkNpc != 0 && !_map.Npcs.Any(n => n.NpcId == _talkNpc
@@ -521,11 +530,12 @@ public partial class MushTownGame : Game
         {
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         }
-        var ms = Mouse.GetState(); // one click edge for the log button and the HUD
+        var ms = Mouse.GetState(); // one click edge for the log panel and the HUD
         bool click = ClickEdge(ms);
         var (mx, my) = MouseGamePos(ms);
-        if (!UpdateLogButton(click, mx, my))
+        if (!UpdateLogPanel(click, mx, my))
             UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
+        SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;
         if (_portalCooldown > 0) _portalCooldown--;
         if (_grabCooldown > 0) _grabCooldown--;

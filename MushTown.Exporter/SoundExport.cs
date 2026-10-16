@@ -25,6 +25,7 @@ public static class SoundExport
         ("portal", @"Game.img\Portal"),
         ("jump", @"Game.img\Jump"),
         ("click", @"UI.img\BtMouseClick"),
+        ("over", @"UI.img\BtMouseOver"),
         ("shopbuy", @"UI.img\BuyShopItem"),
         ("questclear", @"Game.img\QuestClear"),
         ("buff", @"Game.img\Buff"),
@@ -33,7 +34,7 @@ public static class SoundExport
     {
         Directory.CreateDirectory(Path.Combine(outDir, "sound"));
         foreach ((string key, string path) in Sfx)
-            if (!Save(root, path, Path.Combine(outDir, "sound", key + ".wav"))) return false;
+            if (!Save(root, path, Path.Combine(outDir, "sound", key + ".wav"), true)) return false;
         foreach (string bgm in maps.Values.Select(m => m.Info.Bgm).Distinct().OrderBy(b => b))
         {
             var parts = bgm.Split('/');
@@ -43,12 +44,12 @@ public static class SoundExport
                 Console.WriteLine($"map bgm '{bgm}' is malformed");
                 return false;
             }
-            if (!Save(root, $@"{parts[0]}.img\{parts[1]}", Path.Combine(outDir, "sound", key + ".wav"))) return false;
+            if (!Save(root, $@"{parts[0]}.img\{parts[1]}", Path.Combine(outDir, "sound", key + ".wav"), false)) return false;
         }
         return true;
     }
 
-    private static bool Save(WzRoot root, string path, string file)
+    private static bool Save(WzRoot root, string path, string file, bool trim)
     {
         var node = WzNodeUtil.ResolveUol(root.Find(@"Sound\" + path));
         var sound = node?.Value as Wz_Sound;
@@ -68,7 +69,7 @@ public static class SoundExport
             Console.WriteLine($"sound {path} has no data");
             return false;
         }
-        byte[] wav = ToWav(mp3);
+        byte[] wav = ToWav(mp3, trim);
         File.WriteAllBytes(file, wav);
         Console.WriteLine($"sound {Path.GetFileName(file)} {wav.Length / 1024}KB");
         return true;
@@ -76,7 +77,7 @@ public static class SoundExport
 
     // NLayer hands back signed 16-bit PCM at the MP3's own rate/channels;
     // the 44-byte header makes it a WAV the client plays as-is.
-    private static byte[] ToWav(byte[] mp3)
+    private static byte[] ToWav(byte[] mp3, bool trim)
     {
         using var input = new MemoryStream(mp3);
         using var mpeg = new MpegFile(input);
@@ -85,6 +86,7 @@ public static class SoundExport
         int n;
         while ((n = mpeg.ReadSamplesInt16(buf, 0, buf.Length)) > 0) pcm.Write(buf, 0, n);
         byte[] data = pcm.ToArray();
+        if (trim) data = TrimLeadingSilence(data, mpeg.Channels);
         using var wav = new MemoryStream();
         using (var w = new BinaryWriter(wav, System.Text.Encoding.UTF8, leaveOpen: true))
         {
@@ -104,5 +106,22 @@ public static class SoundExport
             w.Write(data);
         }
         return wav.ToArray();
+    }
+
+    // MP3 encoder padding decodes to ~60ms of near-silence up front. One-shot
+    // effects feel late with it (hover especially), so trim leading frames
+    // under -44dB. Music keeps its bytes (loop timing stays untouched).
+    private static byte[] TrimLeadingSilence(byte[] data, int channels)
+    {
+        int frame = channels * 2, at = 0;
+        while (at + frame <= data.Length)
+        {
+            bool quiet = true;
+            for (int c = 0; c < channels; c++)
+                if (Math.Abs(BitConverter.ToInt16(data, at + c * 2)) >= 200) { quiet = false; break; }
+            if (!quiet) break;
+            at += frame;
+        }
+        return at == 0 ? data : data[at..];
     }
 }

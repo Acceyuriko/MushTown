@@ -128,6 +128,7 @@ public partial class MushTownGame
 
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
     {
+        UpdateHudHover(gx, gy); // every frame (clicks return early below)
         bool i = kb.IsKeyDown(Keys.I);
         if (i && !_iWasDown && _talkNpc == 0) { _showInv = !_showInv; _dragInv = null; if (_showInv) _topPanel = 0; PlaySfx("click"); } // hiding mid-drag drops the grab
         _iWasDown = i;
@@ -180,6 +181,70 @@ public partial class MushTownGame
         if (sub != _showSubmenu || inv != _showInv || stat != _showStat
             || skill != _showSkill || quest != _showQuest || set != _showSettings || shop != _showShop)
             PlaySfx("click");
+    }
+
+    // Item slots (USE potions, EQUIP worn + bag): the grab cursor hovers here.
+    private bool OnInvSlot(int gx, int gy)
+    {
+        if (_invTab == 1)
+            for (int s = 0; s < _potions.Count; s++)
+                if (HitRect(UseSlotRect(s), gx, gy)) return true;
+        if (_invTab == 0)
+            for (int s = 0; s < _equips.Count; s++)
+                if (HitRect(WornRect(s), gx, gy) || HitRect(EquipBagRect(s), gx, gy)) return true;
+        return false;
+    }
+
+    // One "over" per HUD button entry (clicks live in UpdateHudClick below).
+    // No z-order: the hover highlights in the draw code ignore overlap too,
+    // so the sound follows the highlight. Order mirrors click priority.
+    private void UpdateHudHover(int gx, int gy)
+    {
+        _hoverItem = _talkNpc == 0 && _showInv && OnInvSlot(gx, gy);
+        if (_talkNpc != 0) { TalkHover(gx, gy); return; }
+        if (_showInv && HitRect(InvXRect(), gx, gy)) { SfxOnHover("x0"); return; }
+        if (_showStat && HitRect(StatXRect(), gx, gy)) { SfxOnHover("x1"); return; }
+        if (_showSkill && HitRect(SkillXRect(), gx, gy)) { SfxOnHover("x2"); return; }
+        if (_showQuest && HitRect(QuestXRect(), gx, gy)) { SfxOnHover("x3"); return; }
+        if (_showSettings && HitRect(SettingsXRect(), gx, gy)) { SfxOnHover("x4"); return; }
+        if (_showShop && HitRect(ShopXRect(), gx, gy)) { SfxOnHover("x5"); return; }
+        if (_showInv)
+            for (int t = 0; t < TabCount; t++)
+                if (HitRect(TabRect(t), gx, gy)) { SfxOnHover($"invtab{t}"); return; }
+        if (_showSkill)
+        {
+            for (int t = 0; t < SkillTabs.Length; t++)
+                if (HitRect(SkillTabRect(t), gx, gy)) { SfxOnHover($"skilltab{t}"); return; }
+            var tab = SkillTabs[_skillTab];
+            for (int row = 0; row < tab.Length; row++)
+                if (HitRect(SkillPlusRect(row), gx, gy)) { SfxOnHover($"skillplus{row}"); return; }
+        }
+        if (_showQuest)
+        {
+            var accepted = QuestRows();
+            for (int row = 0; row < accepted.Count && row < 5; row++) // draw shows 5: hover matches clicks
+                if (HitRect(QuestRowRect(row), gx, gy)) { SfxOnHover($"questrow{row}"); return; }
+        }
+        if (_showSettings)
+            for (int r = 0; r < 2; r++)
+            {
+                if (HitRect(SettingsMinusRect(r), gx, gy)) { SfxOnHover($"setminus{r}"); return; }
+                if (HitRect(SettingsPlusRect(r), gx, gy)) { SfxOnHover($"setplus{r}"); return; }
+            }
+        if (_showShop)
+        {
+            for (int i = 0; i < _shopStock.Count; i++)
+                if (HitRect(ShopBuyRect(i), gx, gy)) { SfxOnHover($"buy{i}"); return; }
+            var sells = ShopSellRows();
+            for (int i = 0; i < sells.Count; i++)
+                if (HitRect(ShopSellRect(i), gx, gy)) { SfxOnHover($"sell{i}"); return; }
+        }
+        if (HitRect(MenuBtnRect(), gx, gy)) { SfxOnHover("menu"); return; }
+        if (HitRect(CharBtnRect(), gx, gy)) { SfxOnHover("char"); return; }
+        if (_showSubmenu)
+            for (int i = 0; i < SubRows; i++)
+                if (HitRect(SubRowRect(i), gx, gy)) { SfxOnHover($"sub{i}"); return; }
+        SfxOnHover("");
     }
 
     private void UpdateHudClick(int gx, int gy)
@@ -236,7 +301,7 @@ public partial class MushTownGame
             else if (onInv)
             {
                 for (int t = 0; t < TabCount; t++)
-                    if (HitRect(TabRect(t), gx, gy)) { _invTab = t; break; }
+                    if (HitRect(TabRect(t), gx, gy)) { PlaySfx("click"); _invTab = t; break; }
                 if (_invTab == 1) // USE tab: click a potion to drink it
                     for (int s = 0; s < _potions.Count; s++)
                         if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(_potions[s]);
@@ -250,16 +315,16 @@ public partial class MushTownGame
             else if (onSkill)
             {
                 for (int t = 0; t < SkillTabs.Length; t++)
-                    if (HitRect(SkillTabRect(t), gx, gy)) { _skillTab = t; break; }
+                    if (HitRect(SkillTabRect(t), gx, gy)) { PlaySfx("click"); _skillTab = t; break; }
                 var tab = SkillTabs[_skillTab]; // [+] spends one SP (LearnSkill re-checks everything)
                 for (int row = 0; row < tab.Length; row++)
-                    if (HitRect(SkillPlusRect(row), gx, gy) && LearnSkill(tab[row].id)) PushBuild();
+                    if (HitRect(SkillPlusRect(row), gx, gy)) { PlaySfx("click"); if (LearnSkill(tab[row].id)) PushBuild(); }
             }
             else if (onQuest)
             {
                 var accepted = QuestRows();
                 for (int row = 0; row < accepted.Count && row < 5; row++) // draw shows 5: clicks match
-                    if (HitRect(QuestRowRect(row), gx, gy)) { _questSel = accepted[row]; break; }
+                    if (HitRect(QuestRowRect(row), gx, gy)) { PlaySfx("click"); _questSel = accepted[row]; break; }
             }
             else if (onSettings) // volume rows: [-] and [+] step 10, saved at once
             {
@@ -284,6 +349,8 @@ public partial class MushTownGame
         else if (_showSubmenu && HitRect(SubRowRect(1), gx, gy)) { _showInv = true; _showSubmenu = false; _topPanel = 0; }
         else if (_showSubmenu && HitRect(SubRowRect(2), gx, gy)) { _showQuest = true; _showSubmenu = false; _topPanel = 3; }
         else if (_showSubmenu && HitRect(SubRowRect(3), gx, gy)) { _showSettings = true; _showSubmenu = false; _topPanel = 4; }
+        else if (_showSubmenu && HitRect(SubRowRect(4), gx, gy)) { _panelOpen = !_panelOpen; _showSubmenu = false; } // the game hides the log plaque: this row toggles it
+        else if (_showSubmenu && HitRect(SubRowRect(5), gx, gy)) { _showSubmenu = false; if (_save != null) ToChars(); else Exit(); } // the funnel clicks (submenu flips shut)
         else if (_showSubmenu && HitRect(SubPopupRect(), gx, gy)) { } // popup padding swallows the click
         else if (_showSubmenu) _showSubmenu = false; // outside click closes (no panel behind to fall through to)
         else if (HitRect(PlateRect(), gx, gy) || HitRect(HpRect(), gx, gy) || HitRect(QslotRect(), gx, gy) || HitRect(ExpRect(), gx, gy)) { } // HUD furniture swallows the click (pre-W14 the world took nothing)
@@ -294,9 +361,9 @@ public partial class MushTownGame
     private static Point ClampPanel(Point p, int w) =>
         new(Math.Clamp(p.X, -w + 80, 1366 - 80), Math.Clamp(p.Y, 0, 768 - 40));
 
-    // Submenu popup: 3-slice bg sized by its own caps, four 109x26 rows inside.
+    // Submenu popup: 3-slice bg sized by its own caps, six 109x26 rows inside.
     private const int SubPopupW = 121;
-    private const int SubRows = 4; // stat, inventory, quest, settings
+    private const int SubRows = 6; // stat, inventory, quest, settings, log, exit
     private Rectangle SubPopupRect()
     {
         int top = Tex("hud_sub_bg0.png").Height;
@@ -618,14 +685,14 @@ public partial class MushTownGame
         _spriteBatch.Draw(bg2, new Vector2(p.X, p.Y + p.Height - bg2.Height), Color.White);
         DrawHudButton(SubRowRect(0), "hud_sub_char", gx, gy, pressed);
         DrawHudButton(SubRowRect(1), "hud_sub_item", gx, gy, pressed);
-        var qr = SubRowRect(2); // quest: no official button art, a text row instead
-        if (HitRect(qr, gx, gy))
-            _spriteBatch.Draw(_pixel, qr, new Color(255, 255, 255, 30));
-        _spriteBatch.Draw(_ui.GetSmall("Quest"), new Vector2(qr.X + 8, qr.Y + 6), Color.White);
-        var sr = SubRowRect(3); // settings: same text-row treatment
-        if (HitRect(sr, gx, gy))
-            _spriteBatch.Draw(_pixel, sr, new Color(255, 255, 255, 30));
-        _spriteBatch.Draw(_ui.GetSmall("Settings"), new Vector2(sr.X + 8, sr.Y + 6), Color.White);
+        string[] textRows = { "Quest", "Settings", "Log", "Exit" }; // no official button art: text rows instead
+        for (int i = 0; i < textRows.Length; i++)
+        {
+            var r = SubRowRect(i + 2);
+            if (HitRect(r, gx, gy))
+                _spriteBatch.Draw(_pixel, r, new Color(255, 255, 255, 30));
+            _spriteBatch.Draw(_ui.GetSmall(textRows[i]), new Vector2(r.X + 8, r.Y + 6), Color.White);
+        }
     }
 
     private void DrawQslot()
@@ -1111,6 +1178,19 @@ public partial class MushTownGame
             var t = _ui.GetSmall(buttons[i]);
             _spriteBatch.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 5), Color.White);
         }
+    }
+
+    private void TalkHover(int gx, int gy)
+    {
+        var buttons = TalkButtons();
+        for (int i = 0; i < buttons.Count; i++)
+            if (HitRect(TalkBtnRect(i, buttons.Count), gx, gy)) { SfxOnHover($"talkbtn{i}"); return; }
+        if (_talkQuest != 0) { SfxOnHover(""); return; }
+        var entries = TalkEntries(_talkNpc);
+        for (int i = 0; i < entries.Count; i++)
+            if (HitRect(TalkEntryRect(i), gx, gy)) { SfxOnHover($"talkentry{i}"); return; }
+        if (NpcHasShop(_talkNpc) && HitRect(TalkEntryRect(entries.Count), gx, gy)) { SfxOnHover("talkshop"); return; }
+        SfxOnHover("");
     }
 
     private void TalkClick(int gx, int gy)

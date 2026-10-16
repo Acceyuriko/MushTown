@@ -45,6 +45,19 @@ public partial class MushTownGame
     private UiClip _ghost = null!;
     private UiClip _portal = null!;
     private UiClip _motes = null!;
+    private MouseCursor _cursorNormal = null!; // scaled state 0 (never overwritten: release restores it)
+    private MouseCursor _cursorAnim = null!; // latest anim frame (kept alive while shown)
+    private CursorData _cursorHot = null!; // unscaled hotspot (SyncCursor scales it with the pixels)
+    private readonly CursorSet _hoverSet = new(); // WZ state 1 (button hover blink)
+    private readonly CursorSet _clickSet = new(); // WZ state 12 (pressed hand)
+    private readonly CursorSet _itemSet = new(); // WZ state 5 (inventory grab)
+    private Texture2D? _cursorTex; // scaled cursor pixels (the _textures source stays 24x28)
+    private int _cursorH; // backbuffer height the OS cursor was last built for (0 = not built)
+    private int _cursorState; // 0 normal, 1 button-hover, 2 pressed, 3 item-hover, 4 item-pressed (frame 0)
+    private int _cursorFrame;
+    private float _cursorT; // ms spent on this cursor frame
+    private bool _hoverItem; // the mouse sits on an inventory slot (no sfx: the cursor alone answers)
+    private string _hoverId = ""; // last hovered button id (hover sfx plays on change)
 
     // One looping overlay clip: frames plus their player state.
     private sealed class UiClip
@@ -52,6 +65,14 @@ public partial class MushTownGame
         public UiFramesData Data = new();
         public int Frame;
         public float Timer;
+    }
+
+    // One animated cursor set: WZ frames plus their scaled textures.
+    private sealed class CursorSet
+    {
+        public CursorAnimData Data = new();
+        public readonly List<Texture2D> Tex = new();
+        public readonly List<Point> Hot = new();
     }
 
     private static readonly Color Ink = new(50, 50, 50); // dark text on white art
@@ -436,6 +457,108 @@ public partial class MushTownGame
             _motes.Frame = motesPose; // the mid-cycle flash frame would white out the shot
             _walkFrame = Math.Min(1, _delays["walk2"].Count - 1);
         }
+        LoadTexture("ui/cursor.png"); // outside UiFiles (that table is plain pngs; the cursor ships origin jsons too)
+        _cursorHot = LoadJson<CursorData>(Path.Combine(_assetsDir, "ui", "cursor.json"));
+        LoadCursorSet(_hoverSet, "hover"); // WZ Cursor states 1 (buttons), 12 (pressed), 5 (items)
+        LoadCursorSet(_clickSet, "click");
+        LoadCursorSet(_itemSet, "item");
+        SyncCursor(); // _cursorH starts 0, so this first call always builds
+    }
+
+    private void LoadCursorSet(CursorSet set, string stem)
+    {
+        set.Data = LoadJson<CursorAnimData>(Path.Combine(_assetsDir, "ui", $"cursor_{stem}.json"));
+        if (set.Data.Frames.Count == 0)
+            throw new InvalidDataException($"cursor_{stem}.json has no frames: re-export");
+        foreach (var f in set.Data.Frames) LoadTexture(f.Image);
+    }
+
+    // The OS cursor matches the scene zoom: same scale as the 1366x768 blit,
+    // rebuilt when the window size changes. Point sampling, like the blit.
+    private void SyncCursor()
+    {
+        int screenH = GraphicsDevice.PresentationParameters.BackBufferHeight;
+        if (screenH == _cursorH) return;
+        _cursorH = screenH;
+        int screenW = GraphicsDevice.PresentationParameters.BackBufferWidth;
+        var (_, _, _, h) = SceneMath.BlitRect(screenW, screenH, GameWidth, GameHeight);
+        float s = (float)h / GameHeight;
+        _cursorTex?.Dispose();
+        _cursorTex = ScaleCursor(_textures["ui/cursor.png"], s);
+        _cursorNormal = MouseCursor.FromTexture2D(_cursorTex, (int)Math.Round(_cursorHot.X * s), (int)Math.Round(_cursorHot.Y * s));
+        BuildCursorSet(_hoverSet, s);
+        BuildCursorSet(_clickSet, s);
+        BuildCursorSet(_itemSet, s);
+        ApplyCursor(); // a resize mid-press re-applies the current frame at the new zoom
+    }
+
+    private void BuildCursorSet(CursorSet set, float s)
+    {
+        foreach (var t in set.Tex) t.Dispose();
+        set.Tex.Clear();
+        set.Hot.Clear();
+        foreach (var f in set.Data.Frames)
+        {
+            set.Tex.Add(ScaleCursor(_textures[f.Image], s));
+            set.Hot.Add(new Point((int)Math.Round(f.X * s), (int)Math.Round(f.Y * s)));
+        }
+    }
+
+    // One cursor texture at scene zoom (nearest-neighbor, like the blit).
+    private Texture2D ScaleCursor(Texture2D src, float s)
+    {
+        var px = new Color[src.Width * src.Height];
+        src.GetData(px);
+        int w = (int)Math.Round(src.Width * s), h = (int)Math.Round(src.Height * s);
+        var scaled = new Color[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                scaled[y * w + x] = px[(int)(y / s) * src.Width + (int)(x / s)]; // y/s < src.Height: y tops at round(src.Height*s)-1
+        var tex = new Texture2D(GraphicsDevice, w, h);
+        tex.SetData(scaled);
+        return tex;
+    }
+
+    // Cursor states: pressed shows the click hand (state 12, static); a press
+    // on an item freezes the grab on frame 0. Hover shows the blink (state 1)
+    // over buttons, the grab (state 5) over inventory slots.
+    private void SyncCursorState(float dtMs)
+    {
+        bool pressed = Mouse.GetState().LeftButton == ButtonState.Pressed;
+        int want = 0; // normal
+        if (_hoverItem) want = pressed ? 4 : 3;
+        else if (pressed) want = 2;
+        else if (_hoverId != "") want = 1;
+        if (want != _cursorState)
+        {
+            _cursorState = want;
+            _cursorFrame = 0;
+            _cursorT = 0;
+            ApplyCursor();
+            return;
+        }
+        if (want == 0 || want == 4) return;
+        var frames = CurSet().Data.Frames;
+        if (frames.Count < 2) return; // single-frame sets (click) never advance
+        _cursorT += dtMs;
+        if (_cursorT >= frames[_cursorFrame].Delay)
+        {
+            _cursorT -= frames[_cursorFrame].Delay;
+            _cursorFrame = (_cursorFrame + 1) % frames.Count;
+            ApplyCursor();
+        }
+    }
+
+    private CursorSet CurSet() => _cursorState == 1 ? _hoverSet : _cursorState == 2 ? _clickSet : _itemSet;
+
+    private void ApplyCursor()
+    {
+        if (_cursorState == 0) { Mouse.SetCursor(_cursorNormal); return; }
+        var set = CurSet();
+        int frame = _cursorState == 4 ? 0 : _cursorFrame;
+        var hot = set.Hot[frame];
+        _cursorAnim = MouseCursor.FromTexture2D(set.Tex[frame], hot.X, hot.Y);
+        Mouse.SetCursor(_cursorAnim);
     }
 
     protected override void UnloadContent()
@@ -443,6 +566,10 @@ public partial class MushTownGame
         if (_ui != null) _ui.Dispose(); // Initialize may have thrown before LoadMenuContent ran
         if (_pixel != null) _pixel.Dispose();
         _panelTex?.Dispose();
+        _cursorTex?.Dispose();
+        foreach (var t in _hoverSet.Tex) t.Dispose();
+        foreach (var t in _clickSet.Tex) t.Dispose();
+        foreach (var t in _itemSet.Tex) t.Dispose();
         base.UnloadContent();
     }
 
@@ -522,6 +649,7 @@ public partial class MushTownGame
 
     private void UpdateMenu(float dtMs)
     {
+        _hoverItem = false; // menus have no inventory slots
         var ms = Mouse.GetState();
         var (gx, gy) = MouseGamePos(ms);
         bool click = ClickEdge(ms);
@@ -546,7 +674,7 @@ public partial class MushTownGame
         }
         _backWasDown = back;
 
-        if (click && hit(LogButtonRect())) { _panelOpen = !_panelOpen; return; }
+        if (click && hit(LogButtonRect())) { PlaySfx("click"); _panelOpen = !_panelOpen; return; }
         if (click && _panelOpen && hit(LogPanelRect())) return; // the open log panel swallows its own clicks (Start sits under it)
         switch (_screen)
         {
@@ -558,14 +686,26 @@ public partial class MushTownGame
         }
     }
 
+    // Hover sfx plays once per row entry (leaving plays nothing).
+    private void SfxOnHover(string id)
+    {
+        if (id == _hoverId) return;
+        _hoverId = id;
+        if (id != "") PlaySfx("over");
+    }
+
     // Three save rows, then Exit. Enter opens the first save with heroes
     // (or the first save when none have any yet).
     private void UpdateSaves(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
     {
         int rows = SaveRows();
         if (enter) { ActivateFirstSave(); return; }
-        for (int i = 0; i < rows; i++)
-            if (click && hit(SaveRowRect(i))) { ActivateSaveRow(i); return; }
+        int hover = -1;
+        for (int i = 0; i < rows && hover < 0; i++)
+            if (hit(SaveRowRect(i))) hover = i;
+        if (hit(LogButtonRect())) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
+        else SfxOnHover(hover < 0 ? "" : $"save{hover}");
+        if (click && hover >= 0) { PlaySfx("click"); ActivateSaveRow(hover); }
     }
 
     private int SaveRows() => SaveStore.MaxSaves + 1; // saves, then Exit
@@ -596,12 +736,17 @@ public partial class MushTownGame
             return;
         }
         if (enter) { EnterChars(null); return; }
-        for (int i = 0; i < rows; i++)
-            if (click && hit(ServerRowRect(i, rows)))
-            {
-                if (i == rows - 1) { _screen = Screen.Saves; _focus = ""; return; }
-                EnterChars(i == 0 ? null : _hosts[i - 1].Ip); return;
-            }
+        int hover = -1;
+        for (int i = 0; i < rows && hover < 0; i++)
+            if (hit(ServerRowRect(i, rows))) hover = i;
+        if (hit(LogButtonRect())) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
+        else SfxOnHover(hover < 0 ? "" : $"server{hover}");
+        if (click && hover >= 0)
+        {
+            PlaySfx("click");
+            if (hover == rows - 1) { _screen = Screen.Saves; _focus = ""; return; }
+            EnterChars(hover == 0 ? null : _hosts[hover - 1].Ip); return;
+        }
         if (r && _scanTask == null) _scanTask = Discovery.ScanAsync();
     }
 
@@ -616,6 +761,28 @@ public partial class MushTownGame
 
     private void UpdateChars(bool click, bool enter, bool esc, Func<Rectangle, bool> hit, float dtMs)
     {
+        string ch = "";
+        if (hit(LogButtonRect())) ch = "log";
+        else if (_deleteOpen)
+        {
+            if (hit(DeleteYesRect())) ch = "chars:delyes";
+            else if (hit(DeleteNoRect())) ch = "chars:delno";
+        }
+        else if (hit(BackBtnRect())) ch = "chars:back";
+        else if (hit(SelectBtnRect())) ch = "chars:select";
+        else if (hit(NewBtnRect())) ch = "chars:new";
+        else if (hit(DeleteBtnRect())) ch = "chars:delete";
+        else
+        {
+            for (int c = 0; c < 7 && ch == ""; c++) // pager before slots (same order as clicks)
+                if (hit(PageCellRect(c))) ch = $"chars:page{c}";
+            for (int cell = 0; cell < PageSlots && ch == ""; cell++)
+            {
+                int i = _page * PageSlots + cell;
+                if (hit(SlotRect(cell)) && _save!.Slots[i] != null) ch = $"chars:slot{cell}"; // ghosts (empty slots) stay silent
+            }
+        }
+        SfxOnHover(ch);
         AdvanceClip(_ghost, dtMs);
         AdvanceClip(_portal, dtMs);
         AdvanceClip(_motes, dtMs);
@@ -625,24 +792,28 @@ public partial class MushTownGame
         if (_walkT >= delays[_walkFrame]) { _walkT -= delays[_walkFrame]; _walkFrame = (_walkFrame + 1) % delays.Count; }
         if (_deleteOpen)
         {
-            if (esc || (click && hit(DeleteNoRect()))) { _deleteOpen = false; return; }
-            if (click && hit(DeleteYesRect())) DoDelete(); // Enter never confirms: wiping a char must be a deliberate click
+            if (esc || (click && hit(DeleteNoRect()))) { if (click && hit(DeleteNoRect())) PlaySfx("click"); _deleteOpen = false; return; }
+            if (click && hit(DeleteYesRect())) { PlaySfx("click"); DoDelete(); } // Enter never confirms: wiping a char must be a deliberate click
             else if (click && !hit(DeletePanelRect())) _deleteOpen = false;
             return;
         }
-        if (esc || (click && hit(BackBtnRect()))) { EnterServer(); return; }
+        if (esc || (click && hit(BackBtnRect()))) { if (click && hit(BackBtnRect())) PlaySfx("click"); EnterServer(); return; }
         for (int c = 0; c < 7; c++) // pager before slots (the bar overlaps the bottom row's click rects)
         {
             if (!click || !hit(PageCellRect(c))) continue;
+            PlaySfx("click");
             _page = c == 0 ? Math.Max(0, _page - 1) : c == 6 ? Math.Min(Pages - 1, _page + 1) : c - 1;
             return;
         }
         try
         {
             if (((click && hit(SelectBtnRect())) || enter) && _save!.Slots[_slot] != null)
+            {
+                if (click && hit(SelectBtnRect())) PlaySfx("click");
                 StartGame(ServerMode());
-            else if (click && hit(NewBtnRect())) EnterJob(FirstEmptyHeroSlot());
-            else if (click && hit(DeleteBtnRect()) && _save!.Slots[_slot] != null) _deleteOpen = true;
+            }
+            else if (click && hit(NewBtnRect())) { PlaySfx("click"); EnterJob(FirstEmptyHeroSlot()); }
+            else if (click && hit(DeleteBtnRect()) && _save!.Slots[_slot] != null) { PlaySfx("click"); _deleteOpen = true; }
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException
             && ex is not FileNotFoundException and not DirectoryNotFoundException)
@@ -656,17 +827,24 @@ public partial class MushTownGame
             if (click && hit(SlotRect(cell)))
             {
                 int i = _page * PageSlots + cell;
-                if (_save!.Slots[i] != null) _slot = i; // empty slots ignore clicks: only Create starts a hero
+                if (_save!.Slots[i] != null) { PlaySfx("click"); _slot = i; } // empty slots stay silent: only Create starts a hero
                 return;
             }
     }
 
     private void UpdateJob(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
     {
-        if (esc || (click && hit(JobCancelRect()))) { _screen = Screen.Chars; return; }
-        if (click && hit(CellRect())) _jobPicked = true;
+        string jb = "";
+        if (hit(LogButtonRect())) jb = "log";
+        else if (hit(JobCancelRect())) jb = "job:cancel";
+        else if (hit(CellRect())) jb = "job:cell";
+        else if (hit(MakeBtnRect())) jb = "job:make";
+        SfxOnHover(jb);
+        if (esc || (click && hit(JobCancelRect()))) { if (click && hit(JobCancelRect())) PlaySfx("click"); _screen = Screen.Chars; return; }
+        if (click && hit(CellRect())) { PlaySfx("click"); _jobPicked = true; }
         else if ((click && hit(MakeBtnRect())) || enter)
         {
+            if (click && hit(MakeBtnRect())) PlaySfx("click");
             if (!_jobPicked) { _error = "pick the Hero first"; return; }
             _name = "";
             _focus = "name";
@@ -676,9 +854,14 @@ public partial class MushTownGame
 
     private void UpdateSetup(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
     {
-        if (esc || (click && hit(SetupCancelRect()))) { _screen = Screen.Job; _focus = ""; return; }
+        string sp = ""; // the name field is input, not a button: it stays silent
+        if (hit(LogButtonRect())) sp = "log";
+        else if (hit(SetupCancelRect())) sp = "setup:cancel";
+        else if (hit(ConfirmBtnRect())) sp = "setup:confirm";
+        SfxOnHover(sp);
+        if (esc || (click && hit(SetupCancelRect()))) { if (click && hit(SetupCancelRect())) PlaySfx("click"); _screen = Screen.Job; _focus = ""; return; }
         if (click && hit(NameFieldRect())) _focus = "name";
-        else if ((click && hit(ConfirmBtnRect())) || enter) DoCreate();
+        else if ((click && hit(ConfirmBtnRect())) || enter) { if (click && hit(ConfirmBtnRect())) PlaySfx("click"); DoCreate(); }
     }
 
     private void MenuBackspace()
@@ -872,11 +1055,11 @@ public partial class MushTownGame
         GameLog($"saved {chara.Name} at map {chara.Map} ({chara.X},{chara.Y})");
     }
 
-    // True when the click lands on the log button or the open panel: the caller must skip the HUD (both panels overlap the panel).
-    private bool UpdateLogButton(bool click, int gx, int gy)
+    // The game hides the log plaque (log lives in the menu now): only the
+    // open panel swallows its own clicks.
+    private bool UpdateLogPanel(bool click, int gx, int gy)
     {
         if (!click) return false;
-        if (HitRect(LogButtonRect(), gx, gy)) { _panelOpen = !_panelOpen; return true; }
         return _panelOpen && HitRect(LogPanelRect(), gx, gy);
     }
 
@@ -1146,7 +1329,8 @@ public partial class MushTownGame
     private void DrawLogOverlay(int gx, int gy, bool down)
     {
         var log = LogButtonRect();
-        _spriteBatch.Draw(MenuTex("btn_log.png"), log, Color.White * BtnAlpha(log, gx, gy, down));
+        if (_screen != Screen.Game)
+            _spriteBatch.Draw(MenuTex("btn_log.png"), log, Color.White * BtnAlpha(log, gx, gy, down));
         if (!_panelOpen) return;
         List<string>? snap = null;
         lock (_logLock)
