@@ -347,7 +347,7 @@ public partial class MushTownGame
         }
         if (HitRect(MenuBtnRect(), gx, gy)) _submenu.Enabled = !_submenu.Enabled;
         else if (HitRect(CharBtnRect(), gx, gy)) { _showStat = !_showStat; _submenu.Enabled = false; if (_showStat) _topPanel = 1; }
-        else if (_scenes.Current?.Click(gx, gy) == true) { } // the submenu tree takes its rows (padding swallows too)
+        else if (_scenes.Current?.Click(gx, gy) != null) { } // the submenu tree takes its rows (padding swallows too)
         else if (_submenu.Enabled) _submenu.Enabled = false; // outside click closes (no panel behind to fall through to)
         else if (HitRect(PlateRect(), gx, gy) || HitRect(HpRect(), gx, gy) || HitRect(QslotRect(), gx, gy) || HitRect(ExpRect(), gx, gy)) { } // HUD furniture swallows the click (pre-W14 the world took nothing)
         else NpcClick(gx, gy); // no UI took it: the world gets the click

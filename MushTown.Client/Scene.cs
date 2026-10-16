@@ -48,20 +48,23 @@ public sealed class Scene
     public Button? HoverButton { get; private set; }
     public void Add(GameObject root) => _roots.Add(root);
 
-    // Topmost-first (last child wins); the first hit takes it. True when
-    // something took the click (a bare container swallows too).
-    public bool Click(int gx, int gy)
+    // Topmost-first (last child wins); the first hit takes it. Presses the
+    // hit Button and returns the hit object (null = miss). An open modal
+    // blanks hits outside its subtree (a bare container swallows too).
+    public GameObject? Click(int gx, int gy)
     {
         var hit = Hit(_roots, gx, gy);
-        if (hit == null) return AnyModal(_roots);
+        if (hit != null && AnyModal(_roots) && !InsideModal(hit)) hit = null;
+        if (hit == null) return null;
         FindButton(hit)?.Press();
-        return true;
+        return hit;
     }
 
     // Refreshes Hovered/HoverButton; returns the legacy hover id ("", none).
     public string Hover(int gx, int gy)
     {
         var hit = Hit(_roots, gx, gy);
+        if (hit != null && AnyModal(_roots) && !InsideModal(hit)) hit = null;
         Hovered = hit;
         HoverButton = hit == null ? null : FindButton(hit);
         return HoverButton?.LegacyId ?? "";
@@ -93,6 +96,13 @@ public sealed class Scene
             if (r != null && r.Contains(gx, gy)) return o;
         }
         return null;
+    }
+
+    private static bool InsideModal(GameObject o)
+    {
+        for (var p = o; p != null; p = p.Parent)
+            if (p.Modal) return true;
+        return false;
     }
 
     // A click lands on the visual child; the Button lives on the row.

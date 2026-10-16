@@ -24,7 +24,9 @@ public partial class MushTownGame
     private List<FoundHost> _hosts = new();
     private bool _scanWasDown;
     private bool _jobPicked;
-    private bool _deleteOpen;
+    private Scene _menuScene = null!; // rebuilt on every menu entry (rows/slots follow live data)
+    private GameObject _csDeleteModal = null!; // delete root; Enabled is the open flag
+    private GameObject _pager = null!; // pager container (enter-select yields to it)
     private string _focus = "";
     private string _name = "";
     private string _error = "";
@@ -254,7 +256,6 @@ public partial class MushTownGame
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
             if (shotScreen == "quest") { _showQuest = true; _topPanel = 3; }
             if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
-            if (shotScreen == "delete") _deleteOpen = true; // the modal state gets its own shot
             if (shotScreen == "chars2") _page = 1; // empty page: the demo fills page 1 only
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
             if (shotScreen == "server") _hosts = new List<FoundHost> { new("192.168.1.4", Net.Port, "ACCEYURIKO") };
@@ -463,9 +464,9 @@ public partial class MushTownGame
         LoadCursorSet(_itemSet, "item");
         SyncCursor(); // _cursorH starts 0, so this first call always builds
         _gfx = new UiGfx { Sb = _spriteBatch, Ui = _ui, Tex = TexByKey, Pixel = _pixel };
-        BuildGameScene();
-        _scenes.Show(_gameScene);
+        BuildScreenScene();
         if (_shotScreen == "hud") _submenu.Enabled = true; // shot setup needs the built tree
+        if (_shotScreen == "delete") _csDeleteModal.Enabled = true;
         _contentLoaded = true;
     }
 
@@ -682,9 +683,9 @@ public partial class MushTownGame
         if (click && _panelOpen && hit(LogPanelRect())) return; // the open log panel swallows its own clicks (Start sits under it)
         switch (_screen)
         {
-            case Screen.Saves: UpdateSaves(click, enter, esc, hit); break;
-            case Screen.Server: UpdateServer(click, enter, esc, hit, r); break;
-            case Screen.Chars: UpdateChars(click, enter, esc, hit, dtMs); break;
+            case Screen.Saves: UpdateSaves(click, enter, gx, gy); break;
+            case Screen.Server: UpdateServer(click, enter, esc, gx, gy, r); break;
+            case Screen.Chars: UpdateChars(click, enter, esc, gx, gy, dtMs); break;
             case Screen.Job: UpdateJob(click, enter, esc, hit); break;
             case Screen.Setup: UpdateSetup(click, enter, esc, hit); break;
         }
@@ -698,18 +699,101 @@ public partial class MushTownGame
         if (id != "") PlaySfx("over");
     }
 
+    // Menu scenes hold invisible Buttons (input only): row art, alpha
+    // states, glass underlays and conditional buttons stay legacy-drawn.
+    // Callbacks play their own click (or stay silent), mirroring legacy.
+    private static GameObject MenuButton(Rectangle r, string id, Action onClick)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(r));
+        o.Add(new Button { LegacyId = id, OnClick = onClick });
+        return o;
+    }
+
+    private void BuildSavesScene()
+    {
+        _menuScene = new Scene();
+        for (int i = 0; i < SaveRows(); i++)
+        {
+            int r = i; // for-loop variables capture shared: copy per row
+            _menuScene.Add(MenuButton(SaveRowRect(i), "save" + i, () => { PlaySfx("click"); ActivateSaveRow(r); }));
+        }
+    }
+
+    private void BuildServerScene()
+    {
+        _menuScene = new Scene();
+        int rows = 2 + _hosts.Count; // This PC + LAN hosts + Cancel at the end
+        for (int i = 0; i < rows; i++)
+        {
+            int r = i; // for-loop variables capture shared: copy per row
+            if (i == rows - 1)
+                _menuScene.Add(MenuButton(ServerRowRect(i, rows), "server" + i, () => { PlaySfx("click"); ToSaves(); }));
+            else
+                _menuScene.Add(MenuButton(ServerRowRect(i, rows), "server" + i, () => { PlaySfx("click"); EnterChars(r == 0 ? null : _hosts[r - 1].Ip); }));
+        }
+    }
+
+    private void BuildCharsScene()
+    {
+        _menuScene = new Scene();
+        for (int cell = 0; cell < PageSlots; cell++) // slots first (bottom): pager, buttons, modal cover them
+        {
+            int i = _page * PageSlots + cell;
+            string id = _save!.Slots[i] != null ? "chars:slot" + cell : ""; // ghosts (empty slots) stay silent
+            _menuScene.Add(MenuButton(SlotRect(cell), id, () => { if (_save!.Slots[i] != null) { PlaySfx("click"); _slot = i; } }));
+        }
+        _pager = new GameObject(); // container: no Rect (unhittable), cells tested through it
+        for (int c = 0; c < 7; c++)
+        {
+            int p = c; // for-loop variables capture shared: copy per cell
+            _pager.AddChild(MenuButton(PageCellRect(c), "chars:page" + c,
+                () => { PlaySfx("click"); _page = p == 0 ? Math.Max(0, _page - 1) : p == 6 ? Math.Min(Pages - 1, _page + 1) : p - 1; BuildCharsScene(); _scenes.Show(_menuScene); }));
+        }
+        _menuScene.Add(_pager);
+        _menuScene.Add(MenuButton(DeleteBtnRect(), "chars:delete", () => { if (_save!.Slots[_slot] != null) { PlaySfx("click"); _csDeleteModal.Enabled = true; } }));
+        _menuScene.Add(MenuButton(NewBtnRect(), "chars:new", () => { PlaySfx("click"); EnterJob(FirstEmptyHeroSlot()); }));
+        _menuScene.Add(MenuButton(SelectBtnRect(), "chars:select", () => { if (_save!.Slots[_slot] != null) { PlaySfx("click"); StartGame(ServerMode()); } }));
+        _menuScene.Add(MenuButton(BackBtnRect(), "chars:back", () => { PlaySfx("click"); EnterServer(); }));
+        _csDeleteModal = new GameObject { Modal = true };
+        _csDeleteModal.Add(new Rect(DeletePanelRect())); // panel hits (not buttons): the box stays open, like legacy
+        _csDeleteModal.AddChild(MenuButton(DeleteYesRect(), "chars:delyes", () => { PlaySfx("click"); DoDelete(); }));
+        _csDeleteModal.AddChild(MenuButton(DeleteNoRect(), "chars:delno", () => { PlaySfx("click"); _csDeleteModal.Enabled = false; }));
+        _csDeleteModal.Enabled = false;
+        _menuScene.Add(_csDeleteModal);
+    }
+
+    // Menu screens rebuild on every entry (rows/slots follow live data);
+    // layout reload reuses the same switch. A rebuild resets open-state
+    // (submenu, modal), same as the panel positions.
+    private void BuildScreenScene()
+    {
+        switch (_screen)
+        {
+            case Screen.Saves: BuildSavesScene(); _scenes.Show(_menuScene); break;
+            case Screen.Server: BuildServerScene(); _scenes.Show(_menuScene); break;
+            case Screen.Chars: BuildCharsScene(); _scenes.Show(_menuScene); break;
+            case Screen.Game: BuildGameScene(); _scenes.Show(_gameScene); break;
+            default: break; // job/setup stay legacy (W3)
+        }
+    }
+
+    private void ToSaves()
+    {
+        _screen = Screen.Saves;
+        _focus = "";
+        BuildSavesScene();
+        _scenes.Show(_menuScene);
+    }
+
     // Three save rows, then Exit. Enter opens the first save with heroes
     // (or the first save when none have any yet).
-    private void UpdateSaves(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
+    private void UpdateSaves(bool click, bool enter, int gx, int gy)
     {
-        int rows = SaveRows();
         if (enter) { ActivateFirstSave(); return; }
-        int hover = -1;
-        for (int i = 0; i < rows && hover < 0; i++)
-            if (hit(SaveRowRect(i))) hover = i;
-        if (hit(LogButtonRect())) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
-        else SfxOnHover(hover < 0 ? "" : $"save{hover}");
-        if (click && hover >= 0) { PlaySfx("click"); ActivateSaveRow(hover); }
+        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
+        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        if (click) _scenes.Current?.Click(gx, gy);
     }
 
     private int SaveRows() => SaveStore.MaxSaves + 1; // saves, then Exit
@@ -729,29 +813,15 @@ public partial class MushTownGame
 
     // This PC first, then every host the LAN scan found. Enter picks this
     // PC (the default row); R re-scans while waiting for a host to appear.
-    private void UpdateServer(bool click, bool enter, bool esc, Func<Rectangle, bool> hit, bool r)
+    private void UpdateServer(bool click, bool enter, bool esc, int gx, int gy, bool r)
     {
-        if (_scanTask != null && _scanTask.IsCompleted) { _hosts = _scanTask.Result; _scanTask = null; }
-        int rows = 2 + _hosts.Count; // This PC + LAN hosts + Cancel at the end
-        if (esc)
-        {
-            _screen = Screen.Saves;
-            _focus = "";
-            return;
-        }
+        if (_scanTask != null && _scanTask.IsCompleted) { _hosts = _scanTask.Result; _scanTask = null; BuildServerScene(); _scenes.Show(_menuScene); }
+        if (esc) { ToSaves(); return; }
         if (enter) { EnterChars(null); return; }
-        int hover = -1;
-        for (int i = 0; i < rows && hover < 0; i++)
-            if (hit(ServerRowRect(i, rows))) hover = i;
-        if (hit(LogButtonRect())) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
-        else SfxOnHover(hover < 0 ? "" : $"server{hover}");
-        if (click && hover >= 0)
-        {
-            PlaySfx("click");
-            if (hover == rows - 1) { _screen = Screen.Saves; _focus = ""; return; }
-            EnterChars(hover == 0 ? null : _hosts[hover - 1].Ip); return;
-        }
-        if (r && _scanTask == null) _scanTask = Discovery.ScanAsync();
+        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
+        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        if (click) _scenes.Current?.Click(gx, gy);
+        if (_screen == Screen.Server && r && _scanTask == null) _scanTask = Discovery.ScanAsync(); // row clicks may have left this screen
     }
 
     // Reaching the server list always re-scans: the LAN may have changed.
@@ -761,32 +831,14 @@ public partial class MushTownGame
         _focus = "";
         _hosts = new();
         _scanTask = Discovery.ScanAsync();
+        BuildServerScene();
+        _scenes.Show(_menuScene);
     }
 
-    private void UpdateChars(bool click, bool enter, bool esc, Func<Rectangle, bool> hit, float dtMs)
+    private void UpdateChars(bool click, bool enter, bool esc, int gx, int gy, float dtMs)
     {
-        string ch = "";
-        if (hit(LogButtonRect())) ch = "log";
-        else if (_deleteOpen)
-        {
-            if (hit(DeleteYesRect())) ch = "chars:delyes";
-            else if (hit(DeleteNoRect())) ch = "chars:delno";
-        }
-        else if (hit(BackBtnRect())) ch = "chars:back";
-        else if (hit(SelectBtnRect())) ch = "chars:select";
-        else if (hit(NewBtnRect())) ch = "chars:new";
-        else if (hit(DeleteBtnRect())) ch = "chars:delete";
-        else
-        {
-            for (int c = 0; c < 7 && ch == ""; c++) // pager before slots (same order as clicks)
-                if (hit(PageCellRect(c))) ch = $"chars:page{c}";
-            for (int cell = 0; cell < PageSlots && ch == ""; cell++)
-            {
-                int i = _page * PageSlots + cell;
-                if (hit(SlotRect(cell)) && _save!.Slots[i] != null) ch = $"chars:slot{cell}"; // ghosts (empty slots) stay silent
-            }
-        }
-        SfxOnHover(ch);
+        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log");
+        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         AdvanceClip(_ghost, dtMs);
         AdvanceClip(_portal, dtMs);
         AdvanceClip(_motes, dtMs);
@@ -794,30 +846,24 @@ public partial class MushTownGame
         _walkT += dtMs;
         var delays = _delays["walk2"];
         if (_walkT >= delays[_walkFrame]) { _walkT -= delays[_walkFrame]; _walkFrame = (_walkFrame + 1) % delays.Count; }
-        if (_deleteOpen)
+        if (_csDeleteModal.Enabled)
         {
-            if (esc || (click && hit(DeleteNoRect()))) { if (click && hit(DeleteNoRect())) PlaySfx("click"); _deleteOpen = false; return; }
-            if (click && hit(DeleteYesRect())) { PlaySfx("click"); DoDelete(); } // Enter never confirms: wiping a char must be a deliberate click
-            else if (click && !hit(DeletePanelRect())) _deleteOpen = false;
+            if (esc) { _csDeleteModal.Enabled = false; return; }
+            if (click && _scenes.Current?.Click(gx, gy) == null) _csDeleteModal.Enabled = false; // outside click closes, silent
             return;
         }
-        if (esc || (click && hit(BackBtnRect()))) { if (click && hit(BackBtnRect())) PlaySfx("click"); EnterServer(); return; }
-        for (int c = 0; c < 7; c++) // pager before slots (the bar overlaps the bottom row's click rects)
-        {
-            if (!click || !hit(PageCellRect(c))) continue;
-            PlaySfx("click");
-            _page = c == 0 ? Math.Max(0, _page - 1) : c == 6 ? Math.Min(Pages - 1, _page + 1) : c - 1;
-            return;
-        }
+        if (esc) { EnterServer(); return; }
         try
         {
-            if (((click && hit(SelectBtnRect())) || enter) && _save!.Slots[_slot] != null)
-            {
-                if (click && hit(SelectBtnRect())) PlaySfx("click");
+            var pagerBefore = _pager; // snapshot: pager clicks rebuild the tree (and _pager) mid-dispatch
+            GameObject? took = click ? _scenes.Current?.Click(gx, gy) : null;
+            // Enter selects unless the pager took the click (legacy order:
+            // pager, then select) or the click left this screen. Enter plays
+            // nothing. Same-frame enter + new/delete/slot clicks resolve
+            // mouse-first: legacy interleaved enter between the pager and the
+            // buttons, and a unified dispatch cannot split them.
+            if (_screen == Screen.Chars && enter && took?.Parent != pagerBefore && _save!.Slots[_slot] != null)
                 StartGame(ServerMode());
-            }
-            else if (click && hit(NewBtnRect())) { PlaySfx("click"); EnterJob(FirstEmptyHeroSlot()); }
-            else if (click && hit(DeleteBtnRect()) && _save!.Slots[_slot] != null) { PlaySfx("click"); _deleteOpen = true; }
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException
             && ex is not FileNotFoundException and not DirectoryNotFoundException)
@@ -825,15 +871,7 @@ public partial class MushTownGame
             _error = ex.Message; // save/net/data failures become menu errors (missing art crashes loud above)
             ToChars(); // a failed Start may have moved the map/camera: step back out
         }
-        // buttons win over slots; Start may have entered the game above
         if (_screen != Screen.Chars) return;
-        for (int cell = 0; cell < PageSlots; cell++)
-            if (click && hit(SlotRect(cell)))
-            {
-                int i = _page * PageSlots + cell;
-                if (_save!.Slots[i] != null) { PlaySfx("click"); _slot = i; } // empty slots stay silent: only Create starts a hero
-                return;
-            }
     }
 
     private void UpdateJob(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
@@ -844,7 +882,7 @@ public partial class MushTownGame
         else if (hit(CellRect())) jb = "job:cell";
         else if (hit(MakeBtnRect())) jb = "job:make";
         SfxOnHover(jb);
-        if (esc || (click && hit(JobCancelRect()))) { if (click && hit(JobCancelRect())) PlaySfx("click"); _screen = Screen.Chars; return; }
+        if (esc || (click && hit(JobCancelRect()))) { if (click && hit(JobCancelRect())) PlaySfx("click"); _screen = Screen.Chars; BuildCharsScene(); _scenes.Show(_menuScene); return; }
         if (click && hit(CellRect())) { PlaySfx("click"); _jobPicked = true; }
         else if ((click && hit(MakeBtnRect())) || enter)
         {
@@ -896,6 +934,8 @@ public partial class MushTownGame
         SelectFirstHero();
         GameLog($"server: {ServerLabel()}");
         _screen = Screen.Chars;
+        BuildCharsScene();
+        _scenes.Show(_menuScene);
     }
 
     // First filled slot (or 0 when all are empty); the page follows it.
@@ -934,6 +974,8 @@ public partial class MushTownGame
             _focus = "";
             _page = _slot / PageSlots; // the new char stays on screen
             _screen = Screen.Chars;
+            BuildCharsScene();
+            _scenes.Show(_menuScene);
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
@@ -952,13 +994,15 @@ public partial class MushTownGame
             _store.Save(_savesPath);
             GameLog($"deleted {name}");
             SelectFirstHero(); // the deleted slot is empty now: show a filled one (or nothing when all are empty)
-            _deleteOpen = false;
+            _csDeleteModal.Enabled = false;
+            BuildCharsScene(); // the fill-set changed: silent slots move
+            _scenes.Show(_menuScene);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _save.Slots.Clear();
             _save.Slots.AddRange(backup); // a failed Save must roll the row back out
-            _deleteOpen = false;
+            _csDeleteModal.Enabled = false;
             _error = ex.Message;
         }
     }
@@ -1009,6 +1053,8 @@ public partial class MushTownGame
         _vWasDown = kb.IsKeyDown(Keys.V);
         _wasInPortal = SceneMath.FindPortal(_map.Portals, _px, _py) != null;
         _screen = Screen.Game;
+        BuildGameScene();
+        _scenes.Show(_gameScene);
     }
 
     private void ToChars()
@@ -1042,6 +1088,8 @@ public partial class MushTownGame
         _focus = "";
         _escWasDown = true; // the held Esc must not fall through into menu nav
         _screen = Screen.Chars;
+        BuildCharsScene();
+        _scenes.Show(_menuScene);
     }
 
     private void SaveChara()
@@ -1240,7 +1288,7 @@ public partial class MushTownGame
         DrawGlass(back);
         DrawCsButton("back", back, gx, gy, down);
         if (_error != "") DrawTextCentered(_error, 683, CharLayout.ErrorY, ErrRed);
-        if (!_deleteOpen) return;
+        if (!_csDeleteModal.Enabled) return;
         DrawDim(120);
         DrawWhitePanel(DeletePanelRect());
         DrawTextCentered($"Delete {sel!.Name}?", 683, CharLayout.DelTextY, Ink);

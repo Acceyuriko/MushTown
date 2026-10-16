@@ -1827,7 +1827,7 @@ public partial class MushTownGame : Game
         _settingsPos = new Point(Layout.Settings.X, Layout.Settings.Y);
         _shopPos = new Point(Layout.Shop.X, Layout.Shop.Y);
         _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
-        if (_contentLoaded) { BuildGameScene(); _scenes.Show(_gameScene); } // ctor reload skips: no textures yet
+        if (_contentLoaded) BuildScreenScene(); // ctor reload skips: no textures yet
     }
 
     private static string FindAssetsDir()

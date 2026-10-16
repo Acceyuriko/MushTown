@@ -72,10 +72,18 @@ Date: 2026-10-16. Status: W1 done, waiting for user acceptance. One commit per s
 
 - W1: core (Scene/SceneManager/GameObject/Component/Rect/Button/Label/
   Panel/Image) + submenu migration. Delete old submenu code.
-- W2: saves/server + chars (delete modal, pager, ghost silence).
-  Debt from W1 review: Hover needs the modal guard Click has (an open
-  modal must swallow hover-highlights + over sfx below it, not just
-  clicks); land it with the first modal (delete).
+- W2: saves/server + chars (delete modal, pager, ghost silence). DONE,
+  waiting for user acceptance. Menu scenes hold invisible Buttons
+  (input only); row art, alpha states, glass underlays and conditional
+  buttons stay legacy-drawn (zero z-order risk). Callbacks play their
+  own click, mirroring legacy (Button autoplay waits for the W5 funnel
+  cutover). Scene.Click returns the hit object now; Hover got the modal
+  guard (W1 debt paid). _deleteOpen is dead (modal Enabled owns it).
+  Known 16ms divergence: same-frame enter + new/delete/slot clicks
+  resolve mouse-first (legacy interleaved enter between pager and the
+  buttons; unified dispatch cannot split them). Pager-before-enter is
+  exact (hit parent check). Gates 0/0 + 182/182; saves/server/chars/
+  chars2/delete/hud shots pixel-identical vs HEAD.
 - W3: job/setup + in-game menu bar.
 - W4: inv/stat/skill (`Slot`/`CarrySlot`/`Draggable` land here: first
   users, not earlier).
