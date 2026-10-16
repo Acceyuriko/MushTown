@@ -1,3 +1,4 @@
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace MushTown.Client;
@@ -46,6 +47,8 @@ public sealed class Scene
     private readonly List<GameObject> _roots = new();
     public GameObject? Hovered { get; private set; }
     public Button? HoverButton { get; private set; }
+    public Point LastClick { get; private set; } // title drags anchor their offset here (first user: W4)
+    public CarrySlot Carry = new();
     public void Add(GameObject root) => _roots.Add(root);
 
     // Topmost-first (last child wins); the first hit takes it. Presses the
@@ -53,6 +56,7 @@ public sealed class Scene
     // blanks hits outside its subtree (a bare container swallows too).
     public GameObject? Click(int gx, int gy)
     {
+        LastClick = new Point(gx, gy);
         var hit = Hit(_roots, gx, gy);
         if (hit != null && AnyModal(_roots) && !InsideModal(hit)) hit = null;
         if (hit == null) return null;

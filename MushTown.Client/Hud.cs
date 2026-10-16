@@ -99,6 +99,9 @@ public partial class MushTownGame
     private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
     private readonly SceneManager _scenes = new();
     private Scene _gameScene = null!; // W1: the submenu only; later weeks add the rest
+    private Scene _invScene = new(), _statScene = new(), _skillScene = new(); // click-only until W5 (hover stays legacy)
+    private Point _invBuiltPos = new(-1, -1), _statBuiltPos = new(-1, -1), _skillBuiltPos = new(-1, -1);
+    private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow drags + tab flips (bag counts are static)
     private GameObject _submenu = null!; // root; Enabled is the open flag
     private UiGfx _gfx = null!;
     private bool _contentLoaded; // the scene build needs textures (popup height reads them)
@@ -177,6 +180,7 @@ public partial class MushTownGame
             if (!held) _dragShop = null;
             else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW);
         }
+        SyncPanelScenes(); // drags + tab flips move the baked Rects (hover stays legacy, so order is free)
         if (!click) return;
         // Any window open/close clicks once (menu, char, submenu, X buttons
         // all funnel here): snapshot the flags around the click body.
@@ -286,40 +290,15 @@ public partial class MushTownGame
         if (onInv || onStat || onSkill || onQuest || onSettings || onShop)
         {
             _submenu.Enabled = false;
-            if (onInv && HitRect(InvXRect(), gx, gy)) _showInv = false;
-            else if (onStat && HitRect(StatXRect(), gx, gy)) _showStat = false;
-            else if (onSkill && HitRect(SkillXRect(), gx, gy)) _showSkill = false;
+            if (onInv) _invScene.Click(gx, gy); // X > title > tabs > slots, same order as the legacy chain
+            else if (onStat) _statScene.Click(gx, gy);
+            else if (onSkill) _skillScene.Click(gx, gy);
             else if (onQuest && HitRect(QuestXRect(), gx, gy)) _showQuest = false;
             else if (onSettings && HitRect(SettingsXRect(), gx, gy)) _showSettings = false;
             else if (onShop && HitRect(ShopXRect(), gx, gy)) _showShop = false;
-            else if (onInv && HitRect(InvTitleRect(), gx, gy)) _dragInv = new Point(gx - _invPos.X, gy - _invPos.Y);
-            else if (onStat && HitRect(StatTitleRect(), gx, gy)) _dragStat = new Point(gx - _statPos.X, gy - _statPos.Y);
-            else if (onSkill && HitRect(SkillTitleRect(), gx, gy)) _dragSkill = new Point(gx - _skillPos.X, gy - _skillPos.Y);
             else if (onQuest && HitRect(QuestTitleRect(), gx, gy)) _dragQuest = new Point(gx - _questPos.X, gy - _questPos.Y);
             else if (onSettings && HitRect(SettingsTitleRect(), gx, gy)) _dragSettings = new Point(gx - _settingsPos.X, gy - _settingsPos.Y);
             else if (onShop && HitRect(ShopTitleRect(), gx, gy)) _dragShop = new Point(gx - _shopPos.X, gy - _shopPos.Y);
-            else if (onInv)
-            {
-                for (int t = 0; t < TabCount; t++)
-                    if (HitRect(TabRect(t), gx, gy)) { PlaySfx("click"); _invTab = t; break; }
-                if (_invTab == 1) // USE tab: click a potion to drink it
-                    for (int s = 0; s < _potions.Count; s++)
-                        if (HitRect(UseSlotRect(s), gx, gy)) DrinkPotion(_potions[s]);
-                if (_invTab == 0) // EQUIP tab: worn row takes off, bag rows wear
-                    for (int s = 0; s < _equips.Count; s++)
-                    {
-                        if (HitRect(WornRect(s), gx, gy) && TakeOff(_equips[s])) { PushBuild(); PushName(); }
-                        if (HitRect(EquipBagRect(s), gx, gy) && Wear(_equips[s])) { PushBuild(); PushName(); }
-                    }
-            }
-            else if (onSkill)
-            {
-                for (int t = 0; t < SkillTabs.Length; t++)
-                    if (HitRect(SkillTabRect(t), gx, gy)) { PlaySfx("click"); _skillTab = t; break; }
-                var tab = SkillTabs[_skillTab]; // [+] spends one SP (LearnSkill re-checks everything)
-                for (int row = 0; row < tab.Length; row++)
-                    if (HitRect(SkillPlusRect(row), gx, gy)) { PlaySfx("click"); if (LearnSkill(tab[row].id)) PushBuild(); }
-            }
             else if (onQuest)
             {
                 var accepted = QuestRows();
@@ -386,6 +365,92 @@ public partial class MushTownGame
         menuBtn.Add(new Rect(MenuBtnRect()));
         menuBtn.Add(new Button { LegacyId = "menu", OnClick = () => _submenu.Enabled = !_submenu.Enabled });
         _gameScene.Add(menuBtn); // last (topmost): legacy checks menu/char before the submenu and furniture
+    }
+
+    // Panel trees are pure functions of (pos, tab): rebuild when either
+    // moves. Bag counts are static catalogs, so slots never reshape.
+    private void SyncPanelScenes()
+    {
+        if (_invPos != _invBuiltPos || _invTab != _invBuiltTab) { BuildInvScene(); _invBuiltPos = _invPos; _invBuiltTab = _invTab; }
+        if (_statPos != _statBuiltPos) { BuildStatScene(); _statBuiltPos = _statPos; }
+        if (_skillPos != _skillBuiltPos || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuiltPos = _skillPos; _skillBuiltTab = _skillTab; }
+    }
+
+    private static GameObject PanelButton(Rectangle r, string id, Action onClick)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(r));
+        o.Add(new Button { LegacyId = id, OnClick = onClick });
+        return o;
+    }
+
+    private static GameObject PanelSlot(Rectangle r, string kind, int index, Func<Scene> scene, Action legacy)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(r));
+        var s = new Slot { Kind = kind, Index = index };
+        s.OnClick = () => scene().Carry.Resolve(s, legacy); // the scene is read live: rebuilds swap it
+        o.Add(s);
+        return o;
+    }
+
+    private void BuildInvScene()
+    {
+        _invScene = new Scene();
+        var body = new GameObject();
+        body.Add(new Rect(InvRect())); // no Button: the body swallows, like the legacy fallthrough
+        if (_invTab == 1)
+            for (int s = 0; s < _potions.Count; s++)
+            {
+                int i = s; // for-loop variables capture shared: copy per slot
+                body.AddChild(PanelSlot(UseSlotRect(i), "use", i, () => _invScene, () => DrinkPotion(_potions[i])));
+            }
+        if (_invTab == 0)
+            for (int s = 0; s < _equips.Count; s++)
+            {
+                int i = s; // for-loop variables capture shared: copy per slot
+                body.AddChild(PanelSlot(WornRect(i), "worn", i, () => _invScene, () => { if (TakeOff(_equips[i])) { PushBuild(); PushName(); } }));
+                body.AddChild(PanelSlot(EquipBagRect(i), "bag", i, () => _invScene, () => { if (Wear(_equips[i])) { PushBuild(); PushName(); } }));
+            }
+        for (int t = 0; t < TabCount; t++)
+        {
+            int i = t; // for-loop variables capture shared: copy per tab
+            body.AddChild(PanelButton(TabRect(i), "invtab" + i, () => { PlaySfx("click"); _invTab = i; }));
+        }
+        body.AddChild(PanelButton(InvTitleRect(), "", () => _dragInv = _invScene.LastClick - _invPos)); // silent, like legacy
+        body.AddChild(PanelButton(InvXRect(), "x0", () => _showInv = false)); // silent: the funnel in UpdateHud plays it
+        _invScene.Add(body);
+    }
+
+    private void BuildStatScene()
+    {
+        _statScene = new Scene();
+        var body = new GameObject();
+        body.Add(new Rect(StatRect())); // stat shows numbers only: title + X, no content buttons
+        body.AddChild(PanelButton(StatTitleRect(), "", () => _dragStat = _statScene.LastClick - _statPos));
+        body.AddChild(PanelButton(StatXRect(), "x1", () => _showStat = false));
+        _statScene.Add(body);
+    }
+
+    private void BuildSkillScene()
+    {
+        _skillScene = new Scene();
+        var body = new GameObject();
+        body.Add(new Rect(SkillRect())); // no Button: the body swallows, like the legacy fallthrough
+        var tab = SkillTabs[_skillTab];
+        for (int row = 0; row < tab.Length; row++)
+        {
+            int i = row; // for-loop variables capture shared: copy per row
+            body.AddChild(PanelButton(SkillPlusRect(i), "skillplus" + i, () => { PlaySfx("click"); if (LearnSkill(tab[i].id)) PushBuild(); }));
+        }
+        for (int t = 0; t < SkillTabs.Length; t++)
+        {
+            int i = t; // for-loop variables capture shared: copy per tab
+            body.AddChild(PanelButton(SkillTabRect(i), "skilltab" + i, () => { PlaySfx("click"); _skillTab = i; }));
+        }
+        body.AddChild(PanelButton(SkillTitleRect(), "", () => _dragSkill = _skillScene.LastClick - _skillPos)); // silent, like legacy
+        body.AddChild(PanelButton(SkillXRect(), "x2", () => _showSkill = false)); // silent: the funnel in UpdateHud plays it
+        _skillScene.Add(body);
     }
 
     private void AddSubArtRow(int i, string stem, Action onClick)

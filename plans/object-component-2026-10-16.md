@@ -1,6 +1,6 @@
 # Unified Object-Component — plan (UI first, sim later)
 
-Date: 2026-10-16. Status: W2 committed (3ef7a99), W3 in progress. One commit per slice, only with approval.
+Date: 2026-10-16. Status: W3 committed (7ad54b1), reviewed clean, W4 next. One commit per slice, only with approval. Standing rule relearned: review-loop BEFORE commit, not after.
 
 ## W1 done (core + submenu)
 
@@ -100,8 +100,18 @@ Date: 2026-10-16. Status: W2 committed (3ef7a99), W3 in progress. One commit per
   ignores panel overlap by legacy design (sound follows the
   highlight); a panel covering the bar still hovers menu/char. Fix
   when panels migrate (W4/W5), not in W3.
-- W4: inv/stat/skill (`Slot`/`CarrySlot`/`Draggable` land here: first
-  users, not earlier).
+- W4: inv/stat/skill. DONE, waiting for user acceptance. Three
+  click-only panel scenes (hover stays legacy: the cross-panel
+  interleave order is preserved exactly until W5). `Slot : Button`
+  (kind + index) reports through Scene-level `CarrySlot.Resolve`;
+  hands stay empty (legacy drink/wear/take-off run at once), so
+  behavior is identical; the carry slice adds hold/drop/swap later
+  (user ruled 2026-10-16: land carry now, behavior unchanged).
+  `Draggable` NOT landed: title drags need no threshold (titles are
+  Buttons + the legacy held-tracking). Panel z-arbitration stays
+  legacy; Scene gains LastClick (title grab offsets). Trees are pure
+  (pos, tab), synced per frame. Gates 0/0 + 182/182; inv/use/stat/
+  skill/panel/hud/saves/chars shots pixel-identical vs HEAD.
 - W5: quest/settings/shop/talk + cleanup (SfxOnHover, old hover/click
   chains, dead rect helpers; grep must find no stragglers).
 

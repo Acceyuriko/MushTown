@@ -30,7 +30,7 @@ public sealed class Panel : Component
 // Clickable rect: hit via Rect, action via OnClick. The Scene resolves
 // the hovered Button and plays the hover sfx (LegacyId bridges the old
 // _hoverId world; gone at the W5 cleanup).
-public sealed class Button : Component
+public class Button : Component
 {
     public string LegacyId = "";
     public bool HoverFill; // white-30 overlay when hovered (text rows)
@@ -53,6 +53,25 @@ public sealed class Image : Component
         string key = _stem + (gfx.Hovered == Owner ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png");
         gfx.Sb.Draw(gfx.Tex(key), Owner.Get<Rect>()!.Box, Color.White);
     }
+}
+
+// An item cell: a Button that reports kind + index through the scene
+// CarrySlot instead of acting directly. Silent: the grab cursor
+// alone answers hovers (LegacyId stays "").
+public sealed class Slot : Button
+{
+    public string Kind = "";
+    public int Index;
+}
+
+// Scene-level carry funnel (W4): every Slot click reports here. Hands
+// stay empty for now (the legacy action runs at once), so behavior is
+// identical; the carry slice adds hold/drop/swap inside Resolve and
+// call sites do not change.
+public sealed class CarrySlot
+{
+    public (string Kind, int Index)? Held; // null = empty hands (always, until the carry slice)
+    public void Resolve(Slot slot, Action legacy) => legacy();
 }
 
 // Baked small text at a rect offset (matches the submenu text rows).
