@@ -96,7 +96,12 @@ public partial class MushTownGame
     };
     private readonly Dictionary<int, SkillData> _skills = new();
     private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
-    private bool _showInv, _showStat, _showSubmenu, _showSkill, _showQuest, _showSettings, _showShop;
+    private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
+    private readonly SceneManager _scenes = new();
+    private Scene _gameScene = null!; // W1: the submenu only; later weeks add the rest
+    private GameObject _submenu = null!; // root; Enabled is the open flag
+    private UiGfx _gfx = null!;
+    private bool _contentLoaded; // the scene build needs textures (popup height reads them)
     private readonly Dictionary<int, ShopData> _shops = new(); // keeper stocks (LoadShops)
     private List<int> _shopStock = null!; // the open shop's stock (OpenShop snapshots it: talk state clears)
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
@@ -175,10 +180,10 @@ public partial class MushTownGame
         if (!click) return;
         // Any window open/close clicks once (menu, char, submenu, X buttons
         // all funnel here): snapshot the flags around the click body.
-        bool sub = _showSubmenu, inv = _showInv, stat = _showStat;
+        bool sub = _submenu.Enabled, inv = _showInv, stat = _showStat;
         bool skill = _showSkill, quest = _showQuest, set = _showSettings, shop = _showShop;
         UpdateHudClick(gx, gy);
-        if (sub != _showSubmenu || inv != _showInv || stat != _showStat
+        if (sub != _submenu.Enabled || inv != _showInv || stat != _showStat
             || skill != _showSkill || quest != _showQuest || set != _showSettings || shop != _showShop)
             PlaySfx("click");
     }
@@ -241,10 +246,7 @@ public partial class MushTownGame
         }
         if (HitRect(MenuBtnRect(), gx, gy)) { SfxOnHover("menu"); return; }
         if (HitRect(CharBtnRect(), gx, gy)) { SfxOnHover("char"); return; }
-        if (_showSubmenu)
-            for (int i = 0; i < SubRows; i++)
-                if (HitRect(SubRowRect(i), gx, gy)) { SfxOnHover($"sub{i}"); return; }
-        SfxOnHover("");
+        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
     }
 
     private void UpdateHudClick(int gx, int gy)
@@ -285,7 +287,7 @@ public partial class MushTownGame
         // Panels draw on top, so a panel click never reaches the bottom bar behind it.
         if (onInv || onStat || onSkill || onQuest || onSettings || onShop)
         {
-            _showSubmenu = false;
+            _submenu.Enabled = false;
             if (onInv && HitRect(InvXRect(), gx, gy)) _showInv = false;
             else if (onStat && HitRect(StatXRect(), gx, gy)) _showStat = false;
             else if (onSkill && HitRect(SkillXRect(), gx, gy)) _showSkill = false;
@@ -343,16 +345,10 @@ public partial class MushTownGame
             }
             return;
         }
-        if (HitRect(MenuBtnRect(), gx, gy)) _showSubmenu = !_showSubmenu;
-        else if (HitRect(CharBtnRect(), gx, gy)) { _showStat = !_showStat; _showSubmenu = false; if (_showStat) _topPanel = 1; }
-        else if (_showSubmenu && HitRect(SubRowRect(0), gx, gy)) { _showStat = true; _showSubmenu = false; _topPanel = 1; }
-        else if (_showSubmenu && HitRect(SubRowRect(1), gx, gy)) { _showInv = true; _showSubmenu = false; _topPanel = 0; }
-        else if (_showSubmenu && HitRect(SubRowRect(2), gx, gy)) { _showQuest = true; _showSubmenu = false; _topPanel = 3; }
-        else if (_showSubmenu && HitRect(SubRowRect(3), gx, gy)) { _showSettings = true; _showSubmenu = false; _topPanel = 4; }
-        else if (_showSubmenu && HitRect(SubRowRect(4), gx, gy)) { _panelOpen = !_panelOpen; _showSubmenu = false; } // the game hides the log plaque: this row toggles it
-        else if (_showSubmenu && HitRect(SubRowRect(5), gx, gy)) { _showSubmenu = false; if (_save != null) ToChars(); else Exit(); } // the funnel clicks (submenu flips shut)
-        else if (_showSubmenu && HitRect(SubPopupRect(), gx, gy)) { } // popup padding swallows the click
-        else if (_showSubmenu) _showSubmenu = false; // outside click closes (no panel behind to fall through to)
+        if (HitRect(MenuBtnRect(), gx, gy)) _submenu.Enabled = !_submenu.Enabled;
+        else if (HitRect(CharBtnRect(), gx, gy)) { _showStat = !_showStat; _submenu.Enabled = false; if (_showStat) _topPanel = 1; }
+        else if (_scenes.Current?.Click(gx, gy) == true) { } // the submenu tree takes its rows (padding swallows too)
+        else if (_submenu.Enabled) _submenu.Enabled = false; // outside click closes (no panel behind to fall through to)
         else if (HitRect(PlateRect(), gx, gy) || HitRect(HpRect(), gx, gy) || HitRect(QslotRect(), gx, gy) || HitRect(ExpRect(), gx, gy)) { } // HUD furniture swallows the click (pre-W14 the world took nothing)
         else NpcClick(gx, gy); // no UI took it: the world gets the click
     }
@@ -360,6 +356,50 @@ public partial class MushTownGame
     // Panels stay reachable: 80px on screen sideways, title never above the top.
     private static Point ClampPanel(Point p, int w) =>
         new(Math.Clamp(p.X, -w + 80, 1366 - 80), Math.Clamp(p.Y, 0, 768 - 40));
+
+    private Texture2D TexByKey(string key) => _textures[key]; // full keys ("ui/..."): all screens share one lookup
+
+    // W1: the game scene holds the submenu only; later weeks add the rest.
+    // Built after textures load, rebuilt on layout reload (a rebuild
+    // resets the submenu to closed, same as the panel positions above).
+    private void BuildGameScene()
+    {
+        _gameScene = new Scene();
+        _submenu = new GameObject();
+        _submenu.Add(new Rect(SubPopupRect()));
+        _submenu.Add(new Panel("ui/hud_sub_bg0.png", "ui/hud_sub_bg1.png", "ui/hud_sub_bg2.png"));
+        AddSubArtRow(0, "ui/hud_sub_char", () => { _showStat = true; _submenu.Enabled = false; _topPanel = 1; });
+        AddSubArtRow(1, "ui/hud_sub_item", () => { _showInv = true; _submenu.Enabled = false; _topPanel = 0; });
+        AddSubTextRow(2, "Quest", () => { _showQuest = true; _submenu.Enabled = false; _topPanel = 3; });
+        AddSubTextRow(3, "Settings", () => { _showSettings = true; _submenu.Enabled = false; _topPanel = 4; });
+        AddSubTextRow(4, "Log", () => { _panelOpen = !_panelOpen; _submenu.Enabled = false; });
+        AddSubTextRow(5, "Exit", () => { _submenu.Enabled = false; if (_save != null) ToChars(); else Exit(); });
+        _gameScene.Add(_submenu);
+    }
+
+    private void AddSubArtRow(int i, string stem, Action onClick)
+    {
+        var row = new GameObject();
+        row.Add(new Rect(SubRowRect(i)));
+        row.Add(new Button { LegacyId = "sub" + i, OnClick = onClick });
+        var art = new GameObject();
+        art.Add(new Rect(SubRowRect(i)));
+        art.Add(new Image(stem));
+        row.AddChild(art);
+        _submenu.AddChild(row);
+    }
+
+    private void AddSubTextRow(int i, string text, Action onClick)
+    {
+        var row = new GameObject();
+        row.Add(new Rect(SubRowRect(i)));
+        row.Add(new Button { LegacyId = "sub" + i, HoverFill = true, OnClick = onClick });
+        var label = new GameObject();
+        label.Add(new Rect(SubRowRect(i)));
+        label.Add(new Label(text, 8, 6));
+        row.AddChild(label);
+        _submenu.AddChild(row);
+    }
 
     // Submenu popup: 3-slice bg sized by its own caps, six 109x26 rows inside.
     private const int SubPopupW = 121;
@@ -579,7 +619,8 @@ public partial class MushTownGame
         DrawHpMp();
         DrawHudButton(MenuBtnRect(), "hud_btn_menu", gx, gy, pressed);
         DrawHudButton(CharBtnRect(), "hud_btn_char", gx, gy, pressed);
-        if (_showSubmenu) DrawSubmenu(gx, gy, pressed);
+        _gfx.Pressed = pressed;
+        _scenes.Current?.Draw(_gfx); // the submenu only, for now (disabled subtrees skip themselves)
         DrawQslot();
         DrawTracker();
         DrawBossBar();
@@ -671,27 +712,6 @@ public partial class MushTownGame
                 _spriteBatch.Draw(d, new Vector2(x, topY), Color.White);
                 x += d.Width;
             }
-        }
-    }
-
-    private void DrawSubmenu(int gx, int gy, bool pressed)
-    {
-        var p = SubPopupRect();
-        var bg0 = Tex("hud_sub_bg0.png");
-        var bg1 = Tex("hud_sub_bg1.png");
-        var bg2 = Tex("hud_sub_bg2.png");
-        _spriteBatch.Draw(bg0, new Vector2(p.X, p.Y), Color.White);
-        _spriteBatch.Draw(bg1, new Rectangle(p.X, p.Y + bg0.Height, p.Width, p.Height - bg0.Height - bg2.Height), Color.White);
-        _spriteBatch.Draw(bg2, new Vector2(p.X, p.Y + p.Height - bg2.Height), Color.White);
-        DrawHudButton(SubRowRect(0), "hud_sub_char", gx, gy, pressed);
-        DrawHudButton(SubRowRect(1), "hud_sub_item", gx, gy, pressed);
-        string[] textRows = { "Quest", "Settings", "Log", "Exit" }; // no official button art: text rows instead
-        for (int i = 0; i < textRows.Length; i++)
-        {
-            var r = SubRowRect(i + 2);
-            if (HitRect(r, gx, gy))
-                _spriteBatch.Draw(_pixel, r, new Color(255, 255, 255, 30));
-            _spriteBatch.Draw(_ui.GetSmall(textRows[i]), new Vector2(r.X + 8, r.Y + 6), Color.White);
         }
     }
 

@@ -254,7 +254,6 @@ public partial class MushTownGame
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
             if (shotScreen == "quest") { _showQuest = true; _topPanel = 3; }
             if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
-            if (shotScreen == "hud") _showSubmenu = true;
             if (shotScreen == "delete") _deleteOpen = true; // the modal state gets its own shot
             if (shotScreen == "chars2") _page = 1; // empty page: the demo fills page 1 only
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
@@ -463,6 +462,11 @@ public partial class MushTownGame
         LoadCursorSet(_clickSet, "click");
         LoadCursorSet(_itemSet, "item");
         SyncCursor(); // _cursorH starts 0, so this first call always builds
+        _gfx = new UiGfx { Sb = _spriteBatch, Ui = _ui, Tex = TexByKey, Pixel = _pixel };
+        BuildGameScene();
+        _scenes.Show(_gameScene);
+        if (_shotScreen == "hud") _submenu.Enabled = true; // shot setup needs the built tree
+        _contentLoaded = true;
     }
 
     private void LoadCursorSet(CursorSet set, string stem)

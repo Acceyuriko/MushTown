@@ -514,9 +514,9 @@ public partial class MushTownGame : Game
         if (kb.IsKeyDown(Keys.Escape))
         {
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
-            if (_showSubmenu || _showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop || _panelOpen)
+            if (_submenu.Enabled || _showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop || _panelOpen)
             {
-                _showSubmenu = false; _showInv = false; _showStat = false; _showSkill = false;
+                _submenu.Enabled = false; _showInv = false; _showStat = false; _showSkill = false;
                 _showQuest = false; _showSettings = false; _showShop = false; _panelOpen = false;
                 _dragInv = _dragStat = _dragSkill = _dragQuest = _dragSettings = _dragShop = null; // hiding mid-drag drops the grab
                 PlaySfx("click");
@@ -1196,7 +1196,7 @@ public partial class MushTownGame : Game
             _talkNpc = n.NpcId;
             _talkQuest = 0;
             _talkPage = 0;
-            _showSubmenu = false;
+            _submenu.Enabled = false;
             PlaySfx("click");
             return;
         }
@@ -1827,6 +1827,7 @@ public partial class MushTownGame : Game
         _settingsPos = new Point(Layout.Settings.X, Layout.Settings.Y);
         _shopPos = new Point(Layout.Shop.X, Layout.Shop.Y);
         _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
+        if (_contentLoaded) { BuildGameScene(); _scenes.Show(_gameScene); } // ctor reload skips: no textures yet
     }
 
     private static string FindAssetsDir()
