@@ -1,6 +1,8 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: U6 committed, S1 in progress (overnight autonomous run:
+Status: U-phase complete (U6 committed). S1 PAUSED for an
+architecture ruling (brief below; overnight run stops here per the
+"pause only for true architecture changes" rule). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
 - U6 panel art 2 (done): quest/settings/shop/talk panels in-tree.
@@ -235,6 +237,21 @@ Probe, carry, art, sim.
   spawn/despawn, player mover (walk, jump, ladder, portal). 2 sprints.
   Moves the headless core (GameObject/Component/Scene) to Shared;
   QuestLog/QuestState/SkillCost/SkillDamage gain the base for free.
+  RULING NEEDED (analysis 2026-10-16, overnight run): Scene.cs is
+  coupled to Client-only types (Scene touches Button/Rect/Point,
+  Component.Draw takes UiGfx with SpriteBatch/Texture2D), and
+  Shared must stay MonoGame-free, so "move Scene to Shared" has
+  no direct shape. Three options: (A) move Component{Owner} +
+  GameObject{structure} only, Client gains IDrawable + a draw
+  walker, Scene stays Client (~45 mechanical component edits;
+  breaks the plan letter); (B) Shared references MonoGame and
+  takes Scene+UiGfx+Button+Rect+Slot (smallest move; breaks the
+  headless rule, server links SDL); (C) dependency inversion:
+  Shared defines IRect/IButton roles, Scene moves against them,
+  Client Button/Rect implement the roles, Draw stays Client via
+  IDrawable (truest to the plan letter, most design). No safe
+  sub-slice exists without this call (every S1 step needs
+  Component in Shared).
 - S3-S4 fight: swing, skills, buffs, cooldowns, regen, pooled
   numbers and fx. 2 sprints. Builds the flying circle hitbox here
   (first flying skills land here; building it in P1 would mean code
