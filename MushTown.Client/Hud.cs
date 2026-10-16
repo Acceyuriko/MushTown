@@ -298,6 +298,10 @@ public partial class MushTownGame
             furniture.AddChild(f);
         }
         _gameScene.Add(furniture); // first (bottom): menu/char cover its Exp strip
+        var exp = new GameObject();
+        exp.Add(new Rect(ExpRect()));
+        exp.Add(new Bar("ui/hud_expback.png", "ui/hud_expgauge.png", "ui/hud_expcover.png", ExpFill));
+        _gameScene.Add(exp); // legacy draws exp first: same pixels, owned by the tree now
         _submenu = new GameObject();
         _submenu.Add(new Rect(SubPopupRect()));
         _submenu.Add(new Panel("ui/hud_sub_bg0.png", "ui/hud_sub_bg1.png", "ui/hud_sub_bg2.png"));
@@ -310,12 +314,21 @@ public partial class MushTownGame
         _gameScene.Add(_submenu);
         var charBtn = new GameObject();
         charBtn.Add(new Rect(CharBtnRect()));
+        charBtn.Add(new Image("ui/hud_btn_char")); // art rides the button now (was DrawHudButton); keep art a Component, never a child (Image matches Hovered == Owner)
         charBtn.Add(new Button { LegacyId = "char", Kind = ButtonKind.Click, OnClick = () => { _showStat = !_showStat; _submenu.Enabled = false; if (_showStat) _topPanel = 1; } });
         _gameScene.Add(charBtn);
         var menuBtn = new GameObject();
         menuBtn.Add(new Rect(MenuBtnRect()));
+        menuBtn.Add(new Image("ui/hud_btn_menu")); // art rides the button now (was DrawHudButton)
         menuBtn.Add(new Button { LegacyId = "menu", Kind = ButtonKind.Click, OnClick = () => _submenu.Enabled = !_submenu.Enabled });
         _gameScene.Add(menuBtn); // last (topmost): legacy checks menu/char before the submenu and furniture
+    }
+
+    // Live EXP for the bar (CLI sessions have none: the fill stays empty).
+    private (int Value, int Max) ExpFill()
+    {
+        var chara = _save?.Slots[_slot];
+        return chara == null ? (0, 1) : (chara.Exp, Progression.ExpNext(chara.Level));
     }
 
     // Panel trees are pure functions of (pos, tab): rebuild when either
@@ -735,13 +748,10 @@ public partial class MushTownGame
 
     private void DrawHud(int gx, int gy, bool pressed)
     {
-        DrawExpBar();
+        _gfx.Pressed = pressed;
+        _scenes.Current?.Draw(_gfx); // first: the HP background's bottom rows hang 3px over the exp strip (disabled subtrees skip themselves)
         DrawPlate();
         DrawHpMp();
-        DrawHudButton(MenuBtnRect(), "hud_btn_menu", "menu", pressed);
-        DrawHudButton(CharBtnRect(), "hud_btn_char", "char", pressed);
-        _gfx.Pressed = pressed;
-        _scenes.Current?.Draw(_gfx); // the submenu only, for now (disabled subtrees skip themselves)
         DrawQslot();
         DrawTracker();
         DrawBossBar();
@@ -759,28 +769,6 @@ public partial class MushTownGame
             var icon = _textures[_items[_hand.Id].Image];
             _spriteBatch.Draw(icon, new Vector2(gx - icon.Width / 2, gy - icon.Height / 2), Color.White);
         }
-    }
-
-    private void DrawHudButton(Rectangle r, string stem, string id, bool pressed)
-    {
-        bool hover = _hoverId == id; // the z-winner, not live HitRect: covered buttons stay dark
-        string file = hover ? pressed ? $"{stem}_p.png" : $"{stem}_h.png" : $"{stem}_n.png";
-        _spriteBatch.Draw(Tex(file), r, Color.White);
-    }
-
-    private void DrawExpBar()
-    {
-        var r = ExpRect();
-        _spriteBatch.Draw(Tex("hud_expback.png"), r, Color.White);
-        var chara = _save?.Slots[_slot];
-        if (chara != null && chara.Exp > 0) // CLI sessions have no EXP: the bar stays empty
-        {
-            var gauge = Tex("hud_expgauge.png");
-            int w = gauge.Width * chara.Exp / Progression.ExpNext(chara.Level);
-            if (w > 0)
-                _spriteBatch.Draw(gauge, new Vector2(r.X, r.Y), new Rectangle(0, 0, w, gauge.Height), Color.White);
-        }
-        _spriteBatch.Draw(Tex("hud_expcover.png"), new Vector2(r.X, r.Y), Color.White);
     }
 
     private void DrawPlate()

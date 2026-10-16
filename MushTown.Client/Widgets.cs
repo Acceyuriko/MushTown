@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using MushTown.Shared;
 
 namespace MushTown.Client;
 
@@ -46,7 +47,7 @@ public class Button : Component
     }
 }
 
-// State art: stem + _n/_h/_p by hover/pressed (matches DrawHudButton).
+// State art: stem + _n/_h/_p by hover/pressed (the HUD buttons moved here from DrawHudButton).
 public sealed class Image : Component
 {
     private readonly string _stem;
@@ -55,6 +56,29 @@ public sealed class Image : Component
     {
         string key = _stem + (gfx.Hovered == Owner ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png");
         gfx.Sb.Draw(gfx.Tex(key), Owner.Get<Rect>()!.Box, Color.White);
+    }
+}
+
+// Bar visual: full backing, partial fill by live value/max, full cover
+// on top. The fill starts at the rect's top-left (matches DrawExpBar).
+public sealed class Bar : Component
+{
+    private readonly string _back, _fill, _cover;
+    private readonly Func<(int Value, int Max)> _amount;
+    public Bar(string back, string fill, string cover, Func<(int Value, int Max)> amount)
+    {
+        _back = back; _fill = fill; _cover = cover; _amount = amount;
+    }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Tex(_back), r, Color.White);
+        var f = gfx.Tex(_fill);
+        var (v, m) = _amount();
+        int w = SceneMath.BarWidth(f.Width, v, m);
+        if (w > 0)
+            gfx.Sb.Draw(f, new Vector2(r.X, r.Y), new Rectangle(0, 0, w, f.Height), Color.White);
+        gfx.Sb.Draw(gfx.Tex(_cover), new Vector2(r.X, r.Y), Color.White);
     }
 }
 

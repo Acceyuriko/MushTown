@@ -1,8 +1,16 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: C1 committed, U1 in progress (overnight autonomous run:
+Status: U1 committed, U2 in progress (overnight autonomous run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- U1 art core (done): Bar visual (back + partial fill + cover,
+  SceneMath.BarWidth int math, no clamp/guards: corrupt saves break
+  like legacy) + EXP bar and menu/char buttons in-tree (Image art
+  children; DrawExpBar/DrawHudButton deleted). Scene draws first
+  (HP background hangs 3px over the EXP strip; all overlaps
+  measured safe). Review R1 clean (0 P0/P1; 2 P2 comments fixed;
+  reviewer mis-measured cover vs background, shots ruled). Gates
+  0/0 + 203/203. 10/10 shots match HEAD. Playtest pending.
 - C1 carry (done): take-1 CarryHand in Shared, double-click drink,
   wear/swap through hands, Esc-first, cursor icon + grab, save
   returns the hand. Per-scene funnel deleted (rebuilds would eat
@@ -146,8 +154,10 @@ Probe, carry, art, sim.
 - C1 carry acts: pick, drop, swap, wear through hands, Esc cancels.
   Behavior change: new shots plus live check. 1 sprint.
 - U1 art core: slice-image and bar visuals, buttons get art
-  children, one pilot screen. 1 sprint.
-- U2 HUD art: exp, plate, HP/MP, quickslot, tracker, boss bar,
+  children, one pilot screen. 1 sprint. Pilot = EXP bar + menu/char
+  buttons (the only bar + the only in-tree buttons; plate/HP go to
+  U2 with their live digits).
+- U2 HUD art: plate, HP/MP, quickslot, tracker, boss bar,
   minimap. 1 sprint.
 - U3 menu art 1: saves, server, chars. 1 sprint.
 - U4 menu art 2: job, setup, log plaque and panel, cursor. 1 sprint.

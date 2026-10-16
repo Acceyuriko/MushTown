@@ -511,6 +511,15 @@ public class SceneMathTests
     }
 
     [TestMethod]
+    public void BarWidth_Exact()
+    {
+        Assert.AreEqual(0, SceneMath.BarWidth(100, 0, 55)); // empty: no fill drawn
+        Assert.AreEqual(100, SceneMath.BarWidth(100, 55, 55)); // full
+        Assert.AreEqual(25, SceneMath.BarWidth(100, 1, 4)); // quarter
+        Assert.AreEqual(3, SceneMath.BarWidth(10, 1, 3)); // integer cut, not float round
+    }
+
+    [TestMethod]
     public void SpringStep_ManySteps_SettlesNearTarget()
     {
         float x = 0, v = 0, prev = 0;

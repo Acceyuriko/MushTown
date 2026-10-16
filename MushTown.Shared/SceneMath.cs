@@ -201,6 +201,11 @@ public static class SceneMath
     // Left edge of a part mirrored around feetX (DrawTexture flips inside the rect).
     public static int FlipDrawX(int feetX, int partX, int texWidth) => feetX - partX - texWidth;
 
+    // Bar fill width, integer math (a float ratio can round a boundary
+    // pixel the other way). Same expression the legacy draws used, so
+    // corrupt saves break exactly like before (loud, not clamped).
+    public static int BarWidth(int fillW, int value, int max) => fillW * value / max;
+
     // Camera viscosity: critically damped spring (Damp = 2*sqrt(Stiff)), so the
     // camera lags about 70 px while walking and settles without overshoot.
     // Hand-tuned feel.
