@@ -389,7 +389,12 @@ public partial class MushTownGame
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
         foreach (string f in UiFiles) LoadTexture("ui/" + f); // missing file fails loud here
-        LoadTexture("back/charselect.png"); // select backdrop: the user's fig2 crop
+        string selectDir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "art", "back");
+        string selectBg = Path.Combine(selectDir, "charselect.png");
+        if (!File.Exists(selectBg)) // select backdrop: the user's fig2 crop, tracked in art/ (not exporter output)
+            throw new FileNotFoundException($"missing select art: {Path.GetFullPath(selectBg)}", selectBg);
+        using (var stream = File.OpenRead(selectBg))
+            _textures["back/charselect.png"] = Texture2D.FromStream(GraphicsDevice, stream);
         _ghost = LoadUiClip("cs_ghost");
         _portal = LoadUiClip("cs_portal");
         _motes = LoadUiClip("cs_motes");
