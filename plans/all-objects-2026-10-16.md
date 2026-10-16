@@ -1,8 +1,14 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: P1 committed, C1 in progress (overnight autonomous run:
+Status: C1 committed, U1 in progress (overnight autonomous run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- C1 carry (done): take-1 CarryHand in Shared, double-click drink,
+  wear/swap through hands, Esc-first, cursor icon + grab, save
+  returns the hand. Per-scene funnel deleted (rebuilds would eat
+  the item). Review R1 0 P0/P1 + 5 P2 fixed + 1 kept by choice
+  (TakeOffEquip stays: tested shared rule), R2 clean. Gates 0/0 +
+  202/202. 10/10 shots match HEAD (empty hands). Playtest pending.
 
 ## Goal
 

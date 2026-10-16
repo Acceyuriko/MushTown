@@ -533,7 +533,7 @@ public partial class MushTownGame
     {
         bool pressed = Mouse.GetState().LeftButton == ButtonState.Pressed;
         int want = 0; // normal
-        if (_hoverItem) want = pressed ? 4 : 3;
+        if (_hoverItem || !_hand.Empty) want = pressed ? 4 : 3; // full hands keep the grab anywhere
         else if (pressed) want = 2;
         else if (_hoverId != "") want = 1;
         if (want != _cursorState)
@@ -1141,6 +1141,7 @@ public partial class MushTownGame
         // would wipe the player's real saves file.
         if (_shotPath != null || _save == null || _screen != Screen.Game) return;
         var chara = _save.Slots[_slot]!;
+        _hand.Return(chara); // a held piece rejoins the bags before the write (the hand itself is never saved)
         chara.Map = _mapId;
         chara.X = (int)Math.Floor(_px);
         chara.Y = (int)Math.Floor(_py);

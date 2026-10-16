@@ -49,7 +49,6 @@ public sealed class Scene
     public Button? HoverButton { get; private set; }
     public Point LastClick { get; private set; } // title drags anchor their offset here (first user: W4)
     public Button? ClickButton { get; private set; } // the pressed Button (ClickTree plays its Kind)
-    public CarrySlot Carry = new();
     public void Add(GameObject root) => _roots.Add(root);
 
     // Topmost-first (last child wins); the first hit takes it. Presses the

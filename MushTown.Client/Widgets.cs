@@ -58,23 +58,13 @@ public sealed class Image : Component
     }
 }
 
-// An item cell: a Button that reports kind + index through the scene
-// CarrySlot instead of acting directly. Silent: the grab cursor
-// alone answers hovers (LegacyId stays "").
+// An item cell: a Button that reports kind + index to ClickSlot
+// instead of acting directly. Silent: the grab cursor alone
+// answers hovers (LegacyId stays "").
 public sealed class Slot : Button
 {
     public string ItemKind = ""; // carry-match kind (use/worn/bag); sfx Kind stays Silent
     public int Index;
-}
-
-// Scene-level carry funnel (W4): every Slot click reports here. Hands
-// stay empty for now (the legacy action runs at once), so behavior is
-// identical; the carry slice adds hold/drop/swap inside Resolve and
-// call sites do not change.
-public sealed class CarrySlot
-{
-    public (string ItemKind, int Index)? Held; // null = empty hands (always, until the carry slice)
-    public void Resolve(Slot slot, Action legacy) => legacy();
 }
 
 // Baked small text at a rect offset (matches the submenu text rows).

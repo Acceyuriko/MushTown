@@ -549,6 +549,8 @@ public partial class MushTownGame : Game
         var kb = Keyboard.GetState();
         if (kb.IsKeyDown(Keys.Escape))
         {
+            var escChara = _save?.Slots[_slot];
+            if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
             if (_submenu.Enabled || _showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop || _panelOpen)
             {

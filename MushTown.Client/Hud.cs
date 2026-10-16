@@ -102,6 +102,7 @@ public partial class MushTownGame
     private readonly SceneManager _scenes = new();
     private Scene _gameScene = null!; // W1: the submenu only; later weeks add the rest
     private Scene _invScene = new(), _statScene = new(), _skillScene = new();
+    private readonly CarryHand _hand = new(); // game-level: panel rebuilds swap scenes, the held piece survives
     private Scene _questScene = new(), _settingsScene = new(), _shopScene = new(), _talkScene = new();
     private Point _invBuiltPos = new(-1, -1), _statBuiltPos = new(-1, -1), _skillBuiltPos = new(-1, -1);
     private Point _questBuiltPos = new(-1, -1), _settingsBuiltPos = new(-1, -1), _shopBuiltPos = new(-1, -1);
@@ -357,12 +358,12 @@ public partial class MushTownGame
         return hit;
     }
 
-    private static GameObject PanelSlot(Rectangle r, string itemKind, int index, Func<Scene> scene, Action legacy)
+    private GameObject PanelSlot(Rectangle r, string itemKind, int index)
     {
         var o = new GameObject();
         o.Add(new Rect(r));
         var s = new Slot { ItemKind = itemKind, Index = index };
-        s.OnClick = () => scene().Carry.Resolve(s, legacy); // the scene is read live: rebuilds swap it
+        s.OnClick = () => ClickSlot(itemKind, index);
         o.Add(s);
         return o;
     }
@@ -376,14 +377,14 @@ public partial class MushTownGame
             for (int s = 0; s < _potions.Count; s++)
             {
                 int i = s; // for-loop variables capture shared: copy per slot
-                body.AddChild(PanelSlot(UseSlotRect(i), "use", i, () => _invScene, () => DrinkPotion(_potions[i])));
+                body.AddChild(PanelSlot(UseSlotRect(i), "use", i));
             }
         if (_invTab == 0)
             for (int s = 0; s < _equips.Count; s++)
             {
                 int i = s; // for-loop variables capture shared: copy per slot
-                body.AddChild(PanelSlot(WornRect(i), "worn", i, () => _invScene, () => { if (TakeOff(_equips[i])) { PushBuild(); PushName(); } }));
-                body.AddChild(PanelSlot(EquipBagRect(i), "bag", i, () => _invScene, () => { if (Wear(_equips[i])) { PushBuild(); PushName(); } }));
+                body.AddChild(PanelSlot(WornRect(i), "worn", i));
+                body.AddChild(PanelSlot(EquipBagRect(i), "bag", i));
             }
         for (int t = 0; t < TabCount; t++)
         {
@@ -571,29 +572,24 @@ public partial class MushTownGame
         return new Rectangle(s.X, s.Y + 56 * ((_equips.Count + 3) / 4 + i / 4), 48, 48);
     }
 
-    // Click a USE slot: drink one. Empty slots and full pools do nothing.
-    private void DrinkPotion(int id)
+    // One inventory slot click, through the hand (pick, drop, wear,
+    // swap, double-click drink). Conditional sounds stay explicit here.
+    private void ClickSlot(string kind, int index)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions carry no bag
-        var item = _items[id];
-        Progression.UsePotion(chara, id, item.Hp, item.Mp, OwnHpPct());
+        int id = kind == "use" ? _potions[index] : _equips[index];
+        var act = _hand.Click(chara, kind, id, _items, OwnHpPct(), _timeMs);
+        if (act == HandAct.Wore) { PushBuild(); PushName(); PlaySfx("click"); }
+        else if (act == HandAct.Moved) PlaySfx("click");
     }
 
-    // Click an EQUIP bag slot: wear one through the shared rule. True when worn.
+    // --wear poses the demo doll: wear one through the shared rule. True when worn.
     private bool Wear(int id)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return false; // CLI sessions carry no bag
         return Progression.WearEquip(chara, id, _items);
-    }
-
-    // Click a worn slot: back to the bag. Unworn slots do nothing.
-    private bool TakeOff(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        if (chara == null) return false; // CLI sessions carry no bag
-        return Progression.TakeOffEquip(chara, id);
     }
 
     // Click a stock row: buy one at WZ price (a broke wallet logs and skips).
@@ -758,6 +754,11 @@ public partial class MushTownGame
         else if (_topPanel == 4) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSettings) DrawSettingsPanel(); }
         else { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); }
         if (_talkNpc != 0) DrawTalkPanel(); // modal: above everything
+        if (!_hand.Empty) // the held piece rides the cursor (take-1: no count to show)
+        {
+            var icon = _textures[_items[_hand.Id].Image];
+            _spriteBatch.Draw(icon, new Vector2(gx - icon.Width / 2, gy - icon.Height / 2), Color.White);
+        }
     }
 
     private void DrawHudButton(Rectangle r, string stem, string id, bool pressed)
@@ -870,7 +871,7 @@ public partial class MushTownGame
         for (int t = 0; t < TabCount; t++) DrawTab(t);
         _spriteBatch.Draw(Tex("hud_statx.png"), InvXRect(), Color.White);
         var chara = _save?.Slots[_slot];
-        if (_invTab == 0 && chara != null) // EQUIP tab: gold worn row (click takes off) over bag rows (click wears)
+        if (_invTab == 0 && chara != null) // EQUIP tab: gold worn row over bag rows (clicks pick up; worn cell + held equip wears)
         {
             var cap = _ui.GetSmall("worn");
             _spriteBatch.Draw(cap, new Vector2(r.X + 14, r.Y + 78), new Color(255, 220, 0));
