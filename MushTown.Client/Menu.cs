@@ -686,8 +686,8 @@ public partial class MushTownGame
             case Screen.Saves: UpdateSaves(click, enter, gx, gy); break;
             case Screen.Server: UpdateServer(click, enter, esc, gx, gy, r); break;
             case Screen.Chars: UpdateChars(click, enter, esc, gx, gy, dtMs); break;
-            case Screen.Job: UpdateJob(click, enter, esc, hit); break;
-            case Screen.Setup: UpdateSetup(click, enter, esc, hit); break;
+            case Screen.Job: UpdateJob(click, enter, esc, gx, gy); break;
+            case Screen.Setup: UpdateSetup(click, enter, esc, gx, gy); break;
         }
     }
 
@@ -763,6 +763,50 @@ public partial class MushTownGame
         _menuScene.Add(_csDeleteModal);
     }
 
+    private void BuildJobScene()
+    {
+        _menuScene = new Scene();
+        _menuScene.Add(MenuButton(MakeBtnRect(), "job:make", () => { PlaySfx("click"); JobMake(); }));
+        _menuScene.Add(MenuButton(CellRect(), "job:cell", () => { PlaySfx("click"); _jobPicked = true; }));
+        _menuScene.Add(MenuButton(JobCancelRect(), "job:cancel", () => { PlaySfx("click"); JobToChars(); }));
+    }
+
+    private void BuildSetupScene()
+    {
+        _menuScene = new Scene();
+        var name = new GameObject();
+        name.Add(new Rect(NameFieldRect()));
+        name.Add(new Button { OnClick = () => _focus = "name" }); // the name field is input, not a button: silent
+        _menuScene.Add(name);
+        _menuScene.Add(MenuButton(ConfirmBtnRect(), "setup:confirm", () => { PlaySfx("click"); DoCreate(); }));
+        _menuScene.Add(MenuButton(SetupCancelRect(), "setup:cancel", () => { PlaySfx("click"); SetupToJob(); }));
+    }
+
+    private void JobMake()
+    {
+        if (!_jobPicked) { _error = "pick the Hero first"; return; }
+        _name = "";
+        _focus = "name";
+        _screen = Screen.Setup;
+        BuildSetupScene();
+        _scenes.Show(_menuScene);
+    }
+
+    private void JobToChars()
+    {
+        _screen = Screen.Chars;
+        BuildCharsScene();
+        _scenes.Show(_menuScene);
+    }
+
+    private void SetupToJob()
+    {
+        _screen = Screen.Job;
+        _focus = "";
+        BuildJobScene();
+        _scenes.Show(_menuScene);
+    }
+
     // Menu screens rebuild on every entry (rows/slots follow live data);
     // layout reload reuses the same switch. A rebuild resets open-state
     // (submenu, modal), same as the panel positions.
@@ -773,8 +817,10 @@ public partial class MushTownGame
             case Screen.Saves: BuildSavesScene(); _scenes.Show(_menuScene); break;
             case Screen.Server: BuildServerScene(); _scenes.Show(_menuScene); break;
             case Screen.Chars: BuildCharsScene(); _scenes.Show(_menuScene); break;
+            case Screen.Job: BuildJobScene(); _scenes.Show(_menuScene); break;
+            case Screen.Setup: BuildSetupScene(); _scenes.Show(_menuScene); break;
             case Screen.Game: BuildGameScene(); _scenes.Show(_gameScene); break;
-            default: break; // job/setup stay legacy (W3)
+            default: break;
         }
     }
 
@@ -874,36 +920,26 @@ public partial class MushTownGame
         if (_screen != Screen.Chars) return;
     }
 
-    private void UpdateJob(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
+    private void UpdateJob(bool click, bool enter, bool esc, int gx, int gy)
     {
-        string jb = "";
-        if (hit(LogButtonRect())) jb = "log";
-        else if (hit(JobCancelRect())) jb = "job:cancel";
-        else if (hit(CellRect())) jb = "job:cell";
-        else if (hit(MakeBtnRect())) jb = "job:make";
-        SfxOnHover(jb);
-        if (esc || (click && hit(JobCancelRect()))) { if (click && hit(JobCancelRect())) PlaySfx("click"); _screen = Screen.Chars; BuildCharsScene(); _scenes.Show(_menuScene); return; }
-        if (click && hit(CellRect())) { PlaySfx("click"); _jobPicked = true; }
-        else if ((click && hit(MakeBtnRect())) || enter)
-        {
-            if (click && hit(MakeBtnRect())) PlaySfx("click");
-            if (!_jobPicked) { _error = "pick the Hero first"; return; }
-            _name = "";
-            _focus = "name";
-            _screen = Screen.Setup;
-        }
+        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log");
+        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        if (esc) { JobToChars(); return; }
+        GameObject? took = click ? _scenes.Current?.Click(gx, gy) : null;
+        // Enter confirms unless the click took something: legacy chained
+        // cell, then make-or-enter, so any tree click swallows enter.
+        if (enter && took == null && _screen == Screen.Job) JobMake();
     }
 
-    private void UpdateSetup(bool click, bool enter, bool esc, Func<Rectangle, bool> hit)
+    private void UpdateSetup(bool click, bool enter, bool esc, int gx, int gy)
     {
-        string sp = ""; // the name field is input, not a button: it stays silent
-        if (hit(LogButtonRect())) sp = "log";
-        else if (hit(SetupCancelRect())) sp = "setup:cancel";
-        else if (hit(ConfirmBtnRect())) sp = "setup:confirm";
-        SfxOnHover(sp);
-        if (esc || (click && hit(SetupCancelRect()))) { if (click && hit(SetupCancelRect())) PlaySfx("click"); _screen = Screen.Job; _focus = ""; return; }
-        if (click && hit(NameFieldRect())) _focus = "name";
-        else if ((click && hit(ConfirmBtnRect())) || enter) { if (click && hit(ConfirmBtnRect())) PlaySfx("click"); DoCreate(); }
+        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log");
+        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        if (esc) { SetupToJob(); return; }
+        GameObject? took = click ? _scenes.Current?.Click(gx, gy) : null;
+        // Enter confirms unless the click took something: legacy chained
+        // name, then confirm-or-enter, so any tree click swallows enter.
+        if (enter && took == null && _screen == Screen.Setup) DoCreate();
     }
 
     private void MenuBackspace()
@@ -959,6 +995,8 @@ public partial class MushTownGame
         _slot = slot;
         _jobPicked = false;
         _screen = Screen.Job;
+        BuildJobScene();
+        _scenes.Show(_menuScene);
     }
 
     private void DoCreate()

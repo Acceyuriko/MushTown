@@ -244,9 +244,7 @@ public partial class MushTownGame
             for (int i = 0; i < sells.Count; i++)
                 if (HitRect(ShopSellRect(i), gx, gy)) { SfxOnHover($"sell{i}"); return; }
         }
-        if (HitRect(MenuBtnRect(), gx, gy)) { SfxOnHover("menu"); return; }
-        if (HitRect(CharBtnRect(), gx, gy)) { SfxOnHover("char"); return; }
-        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // menu/char/submenu/furniture all live in the tree now
     }
 
     private void UpdateHudClick(int gx, int gy)
@@ -345,11 +343,8 @@ public partial class MushTownGame
             }
             return;
         }
-        if (HitRect(MenuBtnRect(), gx, gy)) _submenu.Enabled = !_submenu.Enabled;
-        else if (HitRect(CharBtnRect(), gx, gy)) { _showStat = !_showStat; _submenu.Enabled = false; if (_showStat) _topPanel = 1; }
-        else if (_scenes.Current?.Click(gx, gy) != null) { } // the submenu tree takes its rows (padding swallows too)
+        if (_scenes.Current?.Click(gx, gy) != null) { } // menu/char/submenu/furniture all live in the tree now
         else if (_submenu.Enabled) _submenu.Enabled = false; // outside click closes (no panel behind to fall through to)
-        else if (HitRect(PlateRect(), gx, gy) || HitRect(HpRect(), gx, gy) || HitRect(QslotRect(), gx, gy) || HitRect(ExpRect(), gx, gy)) { } // HUD furniture swallows the click (pre-W14 the world took nothing)
         else NpcClick(gx, gy); // no UI took it: the world gets the click
     }
 
@@ -365,6 +360,14 @@ public partial class MushTownGame
     private void BuildGameScene()
     {
         _gameScene = new Scene();
+        var furniture = new GameObject(); // HUD furniture: hit-rects with no Buttons (clicks stop here, silent)
+        foreach (var r in new[] { PlateRect(), HpRect(), QslotRect(), ExpRect() })
+        {
+            var f = new GameObject();
+            f.Add(new Rect(r));
+            furniture.AddChild(f);
+        }
+        _gameScene.Add(furniture); // first (bottom): menu/char cover its Exp strip
         _submenu = new GameObject();
         _submenu.Add(new Rect(SubPopupRect()));
         _submenu.Add(new Panel("ui/hud_sub_bg0.png", "ui/hud_sub_bg1.png", "ui/hud_sub_bg2.png"));
@@ -375,6 +378,14 @@ public partial class MushTownGame
         AddSubTextRow(4, "Log", () => { _panelOpen = !_panelOpen; _submenu.Enabled = false; });
         AddSubTextRow(5, "Exit", () => { _submenu.Enabled = false; if (_save != null) ToChars(); else Exit(); });
         _gameScene.Add(_submenu);
+        var charBtn = new GameObject(); // silent: the open/close funnel in UpdateHud plays the click
+        charBtn.Add(new Rect(CharBtnRect()));
+        charBtn.Add(new Button { LegacyId = "char", OnClick = () => { _showStat = !_showStat; _submenu.Enabled = false; if (_showStat) _topPanel = 1; } });
+        _gameScene.Add(charBtn);
+        var menuBtn = new GameObject();
+        menuBtn.Add(new Rect(MenuBtnRect()));
+        menuBtn.Add(new Button { LegacyId = "menu", OnClick = () => _submenu.Enabled = !_submenu.Enabled });
+        _gameScene.Add(menuBtn); // last (topmost): legacy checks menu/char before the submenu and furniture
     }
 
     private void AddSubArtRow(int i, string stem, Action onClick)

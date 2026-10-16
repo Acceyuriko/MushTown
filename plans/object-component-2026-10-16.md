@@ -1,6 +1,6 @@
 # Unified Object-Component — plan (UI first, sim later)
 
-Date: 2026-10-16. Status: W1 done, waiting for user acceptance. One commit per slice, only with approval.
+Date: 2026-10-16. Status: W2 committed (3ef7a99), W3 in progress. One commit per slice, only with approval.
 
 ## W1 done (core + submenu)
 
@@ -84,7 +84,22 @@ Date: 2026-10-16. Status: W1 done, waiting for user acceptance. One commit per s
   buttons; unified dispatch cannot split them). Pager-before-enter is
   exact (hit parent check). Gates 0/0 + 182/182; saves/server/chars/
   chars2/delete/hud shots pixel-identical vs HEAD.
-- W3: job/setup + in-game menu bar.
+- W3: job/setup + in-game menu bar. DONE, waiting for user
+  acceptance. Job/setup join the invisible-Button pattern (name field
+  is a silent Button; cell/make/cancel/confirm callbacks mirror
+  legacy; enter confirms unless any tree click swallowed it, matching
+  the legacy chains). Menu bar joins the game scene: menu/char are
+  silent Buttons (the open/close funnel still plays the click),
+  furniture is hit-rects with no Buttons; tree order menu > char >
+  submenu > furniture matches the legacy chains (only overlap: the
+  3px Exp strip under the buttons). Gates 0/0 + 182/182; job/hud/
+  server/chars/chars2/delete shots pixel-identical vs HEAD. Known
+  shot jitter (pre-existing, not W3): text antialiasing shimmers a
+  few hundred px run-to-run (same binary differs from itself on
+  saves/setup text). Debt (user picked A 2026-10-16): HUD hover
+  ignores panel overlap by legacy design (sound follows the
+  highlight); a panel covering the bar still hovers menu/char. Fix
+  when panels migrate (W4/W5), not in W3.
 - W4: inv/stat/skill (`Slot`/`CarrySlot`/`Draggable` land here: first
   users, not earlier).
 - W5: quest/settings/shop/talk + cleanup (SfxOnHover, old hover/click
