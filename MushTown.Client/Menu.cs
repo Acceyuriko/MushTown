@@ -39,6 +39,7 @@ public partial class MushTownGame
     private readonly object _logLock = new();
     private bool _panelOpen;
     private Texture2D? _panelTex;
+    private GameObject _logRoot = null!; // bare root (built in InitializeMenu): DrawLogOverlay draws it in menu and game
     private bool _panelDirty = true;
     private int _page; // char-select page 0-4 (12 slots each)
     private int _walkFrame;
@@ -55,9 +56,7 @@ public partial class MushTownGame
     private readonly CursorSet _itemSet = new(); // WZ state 5 (inventory grab)
     private Texture2D? _cursorTex; // scaled cursor pixels (the _textures source stays 24x28)
     private int _cursorH; // backbuffer height the OS cursor was last built for (0 = not built)
-    private int _cursorState; // 0 normal, 1 button-hover, 2 pressed, 3 item-hover, 4 item-pressed (frame 0)
-    private int _cursorFrame;
-    private float _cursorT; // ms spent on this cursor frame
+    private readonly CursorAnim _cursor = new(); // the brain: state + frame (the OS hands stay below)
     private bool _hoverItem; // the mouse sits on an inventory slot (no sfx: the cursor alone answers)
     private string _hoverId = ""; // last hovered button id (hover sfx plays on change)
 
@@ -226,6 +225,9 @@ public partial class MushTownGame
             throw new InvalidDataException("save names/buttons drifted from MaxSaves");
         if (PageSlots * Pages != SaveStore.MaxHeroes)
             throw new InvalidDataException("char pages drifted from MaxHeroes");
+        _logRoot = new GameObject();
+        _logRoot.Add(new Rect(LogPanelRect()));
+        _logRoot.Add(new LogPanel(() => _panelTex));
         string dataDir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "data");
         _savesPath = Path.Combine(dataDir, "saves.json");
         Window.TextInput += (_, e) => MenuTextInput(e.Character);
@@ -532,37 +534,18 @@ public partial class MushTownGame
     private void SyncCursorState(float dtMs)
     {
         bool pressed = Mouse.GetState().LeftButton == ButtonState.Pressed;
-        int want = 0; // normal
-        if (_hoverItem || !_hand.Empty) want = pressed ? 4 : 3; // full hands keep the grab anywhere
-        else if (pressed) want = 2;
-        else if (_hoverId != "") want = 1;
-        if (want != _cursorState)
-        {
-            _cursorState = want;
-            _cursorFrame = 0;
-            _cursorT = 0;
-            ApplyCursor();
-            return;
-        }
-        if (want == 0 || want == 4) return;
-        var frames = CurSet().Data.Frames;
-        if (frames.Count < 2) return; // single-frame sets (click) never advance
-        _cursorT += dtMs;
-        if (_cursorT >= frames[_cursorFrame].Delay)
-        {
-            _cursorT -= frames[_cursorFrame].Delay;
-            _cursorFrame = (_cursorFrame + 1) % frames.Count;
-            ApplyCursor();
-        }
+        int want = CursorAnim.Select(_hoverId, _hoverItem, _hand.Empty, pressed); // full hands keep the grab anywhere
+        CursorAnimData? data = want == 1 ? _hoverSet.Data : want == 2 ? _clickSet.Data : want == 3 ? _itemSet.Data : null;
+        if (_cursor.Tick(want, data, dtMs)) ApplyCursor();
     }
 
-    private CursorSet CurSet() => _cursorState == 1 ? _hoverSet : _cursorState == 2 ? _clickSet : _itemSet;
+    private CursorSet CurSet() => _cursor.State == 1 ? _hoverSet : _cursor.State == 2 ? _clickSet : _itemSet;
 
     private void ApplyCursor()
     {
-        if (_cursorState == 0) { Mouse.SetCursor(_cursorNormal); return; }
+        if (_cursor.State == 0) { Mouse.SetCursor(_cursorNormal); return; }
         var set = CurSet();
-        int frame = _cursorState == 4 ? 0 : _cursorFrame;
+        int frame = _cursor.State == 4 ? 0 : _cursor.Frame;
         var hot = set.Hot[frame];
         _cursorAnim = MouseCursor.FromTexture2D(set.Tex[frame], hot.X, hot.Y);
         Mouse.SetCursor(_cursorAnim);
@@ -875,20 +858,62 @@ public partial class MushTownGame
     private void BuildJobScene()
     {
         _menuScene = new Scene();
-        _menuScene.Add(MenuButton(MakeBtnRect(), "job:make", () => JobMake(), ButtonKind.Click));
-        _menuScene.Add(MenuButton(CellRect(), "job:cell", () => _jobPicked = true, ButtonKind.Click));
-        _menuScene.Add(MenuButton(JobCancelRect(), "job:cancel", () => JobToChars(), ButtonKind.Click));
+        var l = ListBgRect();
+        var bg = new GameObject { NoHit = true };
+        bg.Add(new Rect(l));
+        bg.Add(new Picture("ui/listbg.png", 0, 0));
+        _menuScene.Add(bg);
+        var cell = MenuButton(CellRect(), "job:cell",
+            () => { _jobPicked = true; BuildJobScene(); _scenes.Show(_menuScene); }, ButtonKind.Click);
+        if (_jobPicked)
+        {
+            cell.Add(new Picture("ui/cell_hero.png", 0, 0));
+            cell.Add(new Border(Color.Gold));
+        }
+        else cell.Add(new ImgButton("ui/cell_hero.png"));
+        _menuScene.Add(cell);
+        var blurb = new GameObject { NoHit = true };
+        blurb.Add(new CenterText(() => "A dummy warrior. Real jobs come later.", 683, 640, Color.White));
+        _menuScene.Add(blurb);
+        var make = MenuButton(MakeBtnRect(), "job:make", () => JobMake(), ButtonKind.Click);
+        make.Add(new ImgButton("ui/btn_make.png"));
+        _menuScene.Add(make);
+        var cancel = MenuButton(JobCancelRect(), "job:cancel", () => JobToChars(), ButtonKind.Click);
+        cancel.Add(new ImgButton("ui/btn_cancel.png"));
+        _menuScene.Add(cancel);
+        var err = new GameObject { NoHit = true };
+        err.Add(new CenterText(() => _error, 683, 55, ErrRed));
+        _menuScene.Add(err);
     }
 
     private void BuildSetupScene()
     {
         _menuScene = new Scene();
+        var bg = new GameObject { NoHit = true };
+        bg.Add(new Rect(new Rectangle(0, 0, GameWidth, GameHeight)));
+        bg.Add(new Picture("ui/setupbg.png", 0, 0));
+        _menuScene.Add(bg);
+        var preview = new GameObject { NoHit = true };
+        preview.Add(new Invoke(_ => DrawSetupAvatar()));
+        _menuScene.Add(preview);
+        var labels = new GameObject { NoHit = true };
+        labels.Add(new Text("Hero", 660, 200, Ink));
+        labels.Add(new Text("Name", 660, 232, Ink));
+        _menuScene.Add(labels);
         var name = new GameObject();
         name.Add(new Rect(NameFieldRect()));
         name.Add(new Button { OnClick = () => _focus = "name" }); // the name field is input, not a button: silent
+        name.Add(new UiBox(() => _name, "1-12: A-Z a-z 0-9 _ -", () => _focus == "name", Ink, Hint));
         _menuScene.Add(name);
-        _menuScene.Add(MenuButton(ConfirmBtnRect(), "setup:confirm", () => DoCreate(), ButtonKind.Click));
-        _menuScene.Add(MenuButton(SetupCancelRect(), "setup:cancel", () => SetupToJob(), ButtonKind.Click));
+        var confirm = MenuButton(ConfirmBtnRect(), "setup:confirm", () => DoCreate(), ButtonKind.Click);
+        confirm.Add(new ImgButton("ui/btn_confirm.png"));
+        _menuScene.Add(confirm);
+        var cancel = MenuButton(SetupCancelRect(), "setup:cancel", () => SetupToJob(), ButtonKind.Click);
+        cancel.Add(new ImgButton("ui/btn_cancel.png"));
+        _menuScene.Add(cancel);
+        var err = new GameObject { NoHit = true };
+        err.Add(new CenterText(() => _error, 817, 375, ErrRed));
+        _menuScene.Add(err);
     }
 
     private void JobMake()
@@ -1272,16 +1297,8 @@ public partial class MushTownGame
         var (gx, gy) = MouseGamePos(ms0);
         bool down = ms0.LeftButton == ButtonState.Pressed;
 
-        if (_screen is Screen.Saves or Screen.Server or Screen.Chars)
-        {
-            _gfx.Pressed = down;
-            _scenes.Current?.Draw(_gfx); // saves/server/chars render from the tree now (job/setup/log follow)
-        }
-        else switch (_screen)
-            {
-                case Screen.Job: DrawJob(gx, gy); break;
-                case Screen.Setup: DrawSetup(gx, gy); break;
-            }
+        _gfx.Pressed = down;
+        _scenes.Current?.Draw(_gfx); // menus render from the tree now
         DrawLogOverlay(gx, gy, down);
         _spriteBatch.End();
     }
@@ -1351,23 +1368,10 @@ public partial class MushTownGame
             flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
     }
 
-    private void DrawJob(int gx, int gy)
+    // The setup preview stays code-drawn (doll pixels, like the chars
+    // strip): the tree only orders it above the backdrop.
+    private void DrawSetupAvatar()
     {
-        var l = ListBgRect();
-        DrawUi("listbg.png", l.X, l.Y);
-        var c = CellRect();
-        DrawUi("cell_hero.png", c.X, c.Y);
-        if (_jobPicked) DrawBoxBorder(c, Color.Gold);
-        else DrawHover(c, gx, gy, 40);
-        DrawTextCentered("A dummy warrior. Real jobs come later.", 683, 640, Color.White);
-        DrawImgButton("btn_make.png", MakeBtnRect(), gx, gy);
-        DrawImgButton("btn_cancel.png", JobCancelRect(), gx, gy);
-        if (_error != "") DrawTextCentered(_error, 683, 55, ErrRed);
-    }
-
-    private void DrawSetup(int gx, int gy)
-    {
-        DrawUi("setupbg.png", 0, 0);
         // DrawAvatar speaks world pixels: park the camera while previewing on art
         int camX = _cameraX, camY = _cameraY;
         _cameraX = 0;
@@ -1375,12 +1379,6 @@ public partial class MushTownGame
         DrawAvatar(450, 735, "stand2", 0, false);
         _cameraX = camX;
         _cameraY = camY;
-        DrawText("Hero", 660, 200, Ink);
-        DrawText("Name", 660, 232, Ink);
-        DrawUiBox(NameFieldRect(), _name, "1-12: A-Z a-z 0-9 _ -", _focus == "name");
-        DrawImgButton("btn_confirm.png", ConfirmBtnRect(), gx, gy);
-        DrawImgButton("btn_cancel.png", SetupCancelRect(), gx, gy);
-        if (_error != "") DrawTextCentered(_error, 817, 375, ErrRed);
     }
 
     // Wooden buttons answer with transparency (the log plaque still draws raw).
@@ -1411,10 +1409,7 @@ public partial class MushTownGame
             _panelTex?.Dispose();
             _panelTex = tex;
         }
-        var r = LogPanelRect();
-        _spriteBatch.Draw(_pixel, r, new Color(10, 12, 28, 230));
-        if (_panelTex != null)
-            _spriteBatch.Draw(_panelTex, new Vector2(r.X + 10, r.Y + 10), Color.White);
+        _logRoot.DrawSelf(_gfx); // bare root, never in a scene: hits stay code
     }
 
     private void DrawUi(string file, int x, int y, bool flip = false)
@@ -1423,45 +1418,4 @@ public partial class MushTownGame
             Vector2.Zero, 1f, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
     }
 
-    private void DrawText(string text, int x, int y, Color color)
-    {
-        _spriteBatch.Draw(_ui.Get(text), new Vector2(x, y), color);
-    }
-
-    private void DrawTextCentered(string text, int cx, int y, Color color)
-    {
-        var tex = _ui.Get(text);
-        _spriteBatch.Draw(tex, new Vector2(cx - tex.Width / 2, y), color);
-    }
-
-    // Art button: the png carries its own label, hover is a white overlay.
-    private void DrawImgButton(string file, Rectangle r, int gx, int gy)
-    {
-        DrawUi(file, r.X, r.Y);
-        DrawHover(r, gx, gy, 40);
-    }
-
-    // White hover overlay (art buttons take 40, white boxes and rows take 60).
-    private void DrawHover(Rectangle r, int gx, int gy, int alpha)
-    {
-        if (HitRect(r, gx, gy)) _spriteBatch.Draw(_pixel, r, new Color(255, 255, 255, alpha));
-    }
-
-    private void DrawUiBox(Rectangle r, string text, string hint, bool focused)
-    {
-        _spriteBatch.Draw(_pixel, r, Color.White);
-        DrawBoxBorder(r, focused ? Color.Gold : new Color(160, 160, 160));
-        string show = text == "" ? hint : text;
-        if (show == "") return;
-        var tex = _ui.Get(show);
-        _spriteBatch.Draw(tex, new Vector2(r.X + 10, r.Y + (r.Height - tex.Height) / 2), text == "" ? Hint : Ink);
-    }
-
-    private void DrawBoxBorder(Rectangle r, Color color)
-    {
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2), color);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + r.Height - 2, r.Width, 2), color);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y, 2, r.Height), color);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X + r.Width - 2, r.Y, 2, r.Height), color);
-    }
 }

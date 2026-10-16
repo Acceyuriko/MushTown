@@ -398,19 +398,14 @@ public sealed class Dim : Component
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(0, 0, MushTownGame.GameWidth, MushTownGame.GameHeight), new Color(0, 0, 0, _alpha));
 }
 
-// White box plus gray border (matches DrawWhitePanel; the border
-// twins DrawBoxBorder until the job/setup screens migrate).
+// White box plus gray border (matches DrawWhitePanel).
 public sealed class WhitePanel : Component
 {
     public override void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
-        var border = new Color(150, 150, 150);
         gfx.Sb.Draw(gfx.Pixel, r, Color.White);
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, r.Width, 2), border);
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y + r.Height - 2, r.Width, 2), border);
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, 2, r.Height), border);
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X + r.Width - 2, r.Y, 2, r.Height), border);
+        Border.Draw(gfx, r, new Color(150, 150, 150));
     }
 }
 
@@ -422,4 +417,84 @@ public sealed class Invoke : Component
     private readonly Action<UiGfx> _draw;
     public Invoke(Action<UiGfx> draw) { _draw = draw; }
     public override void Draw(UiGfx gfx) => _draw(gfx);
+}
+
+// Art button: the png carries its own label, hover is a white overlay
+// (matches DrawImgButton). Sits on the button (hover lights it).
+public sealed class ImgButton : Component
+{
+    private readonly string _key;
+    public ImgButton(string key) { _key = key; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Tex(_key), new Vector2(r.X, r.Y), Color.White);
+        if (gfx.Hovered == Owner) gfx.Sb.Draw(gfx.Pixel, r, new Color(255, 255, 255, 40));
+    }
+}
+
+// 2px box border (was DrawBoxBorder; WhitePanel and UiBox reuse the static).
+public sealed class Border : Component
+{
+    private readonly Color _color;
+    public Border(Color color) { _color = color; }
+    public override void Draw(UiGfx gfx) => Draw(gfx, Owner.Get<Rect>()!.Box, _color);
+    public static void Draw(UiGfx gfx, Rectangle r, Color color)
+    {
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, r.Width, 2), color);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y + r.Height - 2, r.Width, 2), color);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, 2, r.Height), color);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X + r.Width - 2, r.Y, 2, r.Height), color);
+    }
+}
+
+// Name box: white fill, gold when focused, live text or hint (matches
+// DrawUiBox). Sits on the name field (focus and text read live).
+public sealed class UiBox : Component
+{
+    private readonly Func<string> _text;
+    private readonly string _hint;
+    private readonly Func<bool> _focused;
+    private readonly Color _ink, _hintInk;
+    public UiBox(Func<string> text, string hint, Func<bool> focused, Color ink, Color hintInk)
+    {
+        _text = text; _hint = hint; _focused = focused; _ink = ink; _hintInk = hintInk;
+    }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Pixel, r, Color.White);
+        Border.Draw(gfx, r, _focused() ? Color.Gold : new Color(160, 160, 160));
+        string text = _text(), show = text == "" ? _hint : text;
+        if (show == "") return;
+        var tex = gfx.Ui.Get(show);
+        gfx.Sb.Draw(tex, new Vector2(r.X + 10, r.Y + (r.Height - tex.Height) / 2), text == "" ? _hintInk : _ink);
+    }
+}
+
+// Static big text at a fixed spot (setup labels).
+public sealed class Text : Component
+{
+    private readonly string _text;
+    private readonly int _x, _y;
+    private readonly Color _color;
+    public Text(string text, int x, int y, Color color) { _text = text; _x = x; _y = y; _color = color; }
+    public override void Draw(UiGfx gfx) =>
+        gfx.Sb.Draw(gfx.Ui.Get(_text), new Vector2(_x, _y), _color);
+}
+
+// Log panel: dark fill plus the baked block (the bake stays in Menu:
+// it needs the lock + UiText wrapper). Lives on a bare root drawn by
+// DrawLogOverlay in menu and game (never in a scene: hits stay code).
+public sealed class LogPanel : Component
+{
+    private readonly Func<Texture2D?> _block;
+    public LogPanel(Func<Texture2D?> block) { _block = block; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Pixel, r, new Color(10, 12, 28, 230));
+        var t = _block();
+        if (t != null) gfx.Sb.Draw(t, new Vector2(r.X + 10, r.Y + 10), Color.White);
+    }
 }

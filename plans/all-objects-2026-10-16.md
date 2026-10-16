@@ -1,8 +1,19 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: U3 committed, U4 in progress (overnight autonomous run:
+Status: U4 committed, U5 in progress (overnight autonomous run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- U4 menu art 2 (done): job, setup, log panel, cursor. New
+  visuals: ImgButton, Border (2px; static reused by WhitePanel +
+  UiBox — the U3 twin is dead, DrawBoxBorder deleted), UiBox,
+  Text, LogPanel (bare root drawn by DrawLogOverlay in menu +
+  game; plaque clicks + panel swallow stay code). Cursor brain
+  extracted to Shared/CursorAnim (Select + Tick; OS hands stay;
+  no fake object — the tree has no Update pass). 8 code draws
+  deleted; DrawMenu is tree-only now. 9 new CursorTests (212
+  total). Review R1 clean (0 P0/P1; 3 P2, 2 fixed + 1 keep).
+  Gates 0/0 + 212/212. 17/17 shots match HEAD. Playtest pending
+  (job pick border, setup typing, log panel in menu + game).
 - U3 menu art 1 (done): saves, server, chars in-tree. New visuals:
   Sign, ServerRow, CancelRow, CenterText, PagerCell, Round, Dim,
   WhitePanel, Invoke (doll bridge); Picture gains Tint +
