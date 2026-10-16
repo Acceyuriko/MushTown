@@ -366,6 +366,7 @@ public partial class MushTownGame
         var minimap = new GameObject { NoHit = true };
         minimap.Add(new Minimap(() => _map, () => _px, () => _py));
         _gameScene.Add(minimap);
+        SyncPanelScenes(); // shots skip Update: without this the panels draw empty there (first Update no-ops, positions match)
     }
 
     // The living boss on this map, if any (v1 has one: Mushmom).
@@ -453,26 +454,47 @@ public partial class MushTownGame
         _invScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(InvRect())); // no Button: the body swallows, like the legacy fallthrough
+        body.Add(new Picture("ui/hud_inv.png"));
+        if (_invTab == 0)
+            body.Add(new LiveLabel(() => _save?.Slots[_slot] != null ? "worn" : "", 14, 78, new Color(255, 220, 0)));
         if (_invTab == 1)
             for (int s = 0; s < _potions.Count; s++)
             {
                 int i = s; // for-loop variables capture shared: copy per slot
-                body.AddChild(PanelSlot(UseSlotRect(i), "use", i));
+                int id = _potions[i];
+                var slot = PanelSlot(UseSlotRect(i), "use", i);
+                slot.Add(new InvSlot(_items[id].Image, () => _save?.Slots[_slot]?.Use?.GetValueOrDefault(id) ?? 0, false));
+                body.AddChild(slot);
             }
         if (_invTab == 0)
             for (int s = 0; s < _equips.Count; s++)
             {
                 int i = s; // for-loop variables capture shared: copy per slot
-                body.AddChild(PanelSlot(WornRect(i), "worn", i));
-                body.AddChild(PanelSlot(EquipBagRect(i), "bag", i));
+                int id = _equips[i];
+                var worn = PanelSlot(WornRect(i), "worn", i);
+                worn.Add(new InvSlot(_items[id].Image, () => _save?.Slots[_slot]?.Equips?.Count(w => w == id) ?? 0, true));
+                body.AddChild(worn);
+                var bag = PanelSlot(EquipBagRect(i), "bag", i);
+                bag.Add(new InvSlot(_items[id].Image, () => _save?.Slots[_slot]?.EquipBag?.GetValueOrDefault(id) ?? 0, false));
+                body.AddChild(bag);
             }
         for (int t = 0; t < TabCount; t++)
         {
             int i = t; // for-loop variables capture shared: copy per tab
-            body.AddChild(PanelButton(TabRect(i), "invtab" + i, () => _invTab = i, ButtonKind.Click));
+            var tab = PanelButton(TabRect(i), "invtab" + i, () => _invTab = i, ButtonKind.Click);
+            tab.Add(new Picture($"ui/hud_itab_{(i == _invTab ? "s" : "n")}{i}.png", 0, 0));
+            body.AddChild(tab);
         }
         body.AddChild(PanelButton(InvTitleRect(), "", () => _dragInv = _invScene.LastClick - _invPos)); // silent, like legacy
-        body.AddChild(PanelButton(InvXRect(), "x0", () => _showInv = false, ButtonKind.Click));
+        var x = PanelButton(InvXRect(), "x0", () => _showInv = false, ButtonKind.Click);
+        x.Add(new Picture("ui/hud_statx.png"));
+        body.AddChild(x);
+        var coin = new GameObject { NoHit = true }; // purse draws last (bag rows can reach it when the roster grows)
+        coin.Add(new Rect(InvRect()));
+        coin.Add(new Picture("ui/hud_coin.png", Layout.Coin.X, Layout.Coin.Y));
+        coin.Add(new RightLabel((ui, s) => ui.GetMeso(s),
+            () => (_save?.Slots[_slot]?.Mesos ?? 0).ToString("#,##0"), Layout.Meso.X, Layout.Meso.Y, new Color(96, 104, 113)));
+        body.AddChild(coin);
         _invScene.Add(body);
     }
 
@@ -481,8 +503,28 @@ public partial class MushTownGame
         _statScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(StatRect())); // stat shows numbers only: title + X, no content buttons
+        body.Add(new TitleBar("STAT"));
+        body.Add(new Picture(_statBack, 0, 16));
+        body.Add(new Picture("ui/hud_stat.png", 0, 16));
+        body.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => "0", 432, 24, Color.White)); // value only; "Combat Power" is baked in the art
+        int by = 16; // body-relative (legacy by = r.Y + 16)
+        int y = by + 132; // panel 1: vitals + 4 stats (name/level live on the plate)
+        body.Add(new StatRow("HP", () => { var c = _save?.Slots[_slot]; int max = Progression.BuffedMaxHp(c?.Level ?? 1, OwnHpPct()); return $"{c?.Hp ?? max} / {max}"; }, y)); y += 22;
+        body.Add(new StatRow("MP", () => { var c = _save?.Slots[_slot]; int max = Progression.MaxMp(c?.Level ?? 1); return $"{c?.Mp ?? max} / {max}"; }, y)); y += 22;
+        body.Add(new StatRow("STR", () => $"{OwnBuild().Str}", y)); y += 22;
+        body.Add(new StatRow("DEX", () => $"{OwnBuild().Dex}", y)); y += 22;
+        body.Add(new StatRow("INT", () => $"{_save?.Slots[_slot]?.Int ?? 4}", y)); y += 22;
+        body.Add(new StatRow("LUK", () => $"{_save?.Slots[_slot]?.Luk ?? 4}", y));
+        y = by + 320; // panel 2 is only ~80px: 5 tight rows (official rows are tight too)
+        body.Add(new StatRow("Attack Power", () => { var b = OwnBuild(); var (lo, hi) = Progression.PanelRange(b.Str, b.Dex, b.WeaponAtk); return $"{lo}~{hi}"; }, y)); y += 16;
+        body.Add(new StatRow("Magic ATT", () => "0", y)); y += 16;
+        body.Add(new StatRow("Defense", () => $"{OwnDef()}", y)); y += 16;
+        body.Add(new StatRow("Speed", () => "100", y)); y += 16;
+        body.Add(new StatRow("Jump", () => "100", y));
         body.AddChild(PanelButton(StatTitleRect(), "", () => _dragStat = _statScene.LastClick - _statPos));
-        body.AddChild(PanelButton(StatXRect(), "x1", () => _showStat = false, ButtonKind.Click));
+        var x = PanelButton(StatXRect(), "x1", () => _showStat = false, ButtonKind.Click);
+        x.Add(new Picture("ui/hud_statx.png"));
+        body.AddChild(x);
         _statScene.Add(body);
     }
 
@@ -491,6 +533,9 @@ public partial class MushTownGame
         _skillScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(SkillRect())); // no Button: the body swallows, like the legacy fallthrough
+        body.Add(new TitleBar("SKILL"));
+        body.Add(new Picture(_skillBack, 0, 16));
+        body.Add(new LiveLabel(() => { int sp = _save?.Slots[_slot]?.Sp ?? 0; return sp > 0 ? $"SP: {sp} (click + to learn)" : $"SP: {sp}"; }, 16, 42, Color.White));
         var tab = SkillTabs[_skillTab];
         for (int row = 0; row < tab.Length; row++)
         {
@@ -500,10 +545,32 @@ public partial class MushTownGame
         for (int t = 0; t < SkillTabs.Length; t++)
         {
             int i = t; // for-loop variables capture shared: copy per tab
-            body.AddChild(PanelButton(SkillTabRect(i), "skilltab" + i, () => _skillTab = i, ButtonKind.Click));
+            var tb = PanelButton(SkillTabRect(i), "skilltab" + i, () => _skillTab = i, ButtonKind.Click);
+            tb.Add(new Label(SkillTabNames[i], 8, 2) { Tint = i == _skillTab ? new Color(255, 220, 0) : new Color(130, 140, 150) });
+            body.AddChild(tb);
         }
         body.AddChild(PanelButton(SkillTitleRect(), "", () => _dragSkill = _skillScene.LastClick - _skillPos)); // silent, like legacy
-        body.AddChild(PanelButton(SkillXRect(), "x2", () => _showSkill = false, ButtonKind.Click));
+        var x = PanelButton(SkillXRect(), "x2", () => _showSkill = false, ButtonKind.Click);
+        x.Add(new Picture("ui/hud_statx.png"));
+        body.AddChild(x);
+        var r = SkillRect();
+        for (int row = 0; row < tab.Length; row++)
+        {
+            int i = row; // for-loop variables capture shared: copy per row
+            int id = tab[i].id;
+            var holder = new GameObject { NoHit = true };
+            holder.Add(new Rect(new Rectangle(r.X, r.Y + 16 + SkillRowsY + i * SkillRowH, SkillW, SkillRowH)));
+            holder.Add(new SkillRow(_skills[id], tab[i].key, PassiveBlurb.TryGetValue(id, out string? b) ? b : "", () =>
+            {
+                var chara = _save?.Slots[_slot];
+                int lv = 0;
+                chara?.SkillLv.TryGetValue(id, out lv);
+                _skillCdMs.TryGetValue(id, out float cd);
+                _buffMs.TryGetValue(id, out float buff);
+                return new SkillLive(lv, chara?.Sp ?? 0, chara?.Level ?? 1, cd, buff, _orbs);
+            }));
+            body.AddChild(holder);
+        }
         _skillScene.Add(body);
     }
 
@@ -818,12 +885,12 @@ public partial class MushTownGame
         _gfx.Pressed = pressed;
         _scenes.Current?.Draw(_gfx); // HUD art lives in the tree now (exp, buttons, submenu, plate, HP/MP, quickslot, tracker, boss bar, minimap); panels and talk draw above it
         // The front panel draws last (on top); the back five keep inv < stat < skill < quest < settings < shop.
-        if (_topPanel == 0) { if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showInv) DrawInvPanel(); }
-        else if (_topPanel == 1) { if (_showInv) DrawInvPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showStat) DrawStatPanel(); }
-        else if (_topPanel == 2) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSkill) DrawSkillPanel(); }
-        else if (_topPanel == 3) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showQuest) DrawQuestPanel(); }
-        else if (_topPanel == 4) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSettings) DrawSettingsPanel(); }
-        else { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); }
+        if (_topPanel == 0) { if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showInv) _invScene.Draw(_gfx); }
+        else if (_topPanel == 1) { if (_showInv) _invScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showStat) _statScene.Draw(_gfx); }
+        else if (_topPanel == 2) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSkill) _skillScene.Draw(_gfx); }
+        else if (_topPanel == 3) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showQuest) DrawQuestPanel(); }
+        else if (_topPanel == 4) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSettings) DrawSettingsPanel(); }
+        else { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); }
         if (_talkNpc != 0) DrawTalkPanel(); // modal: above everything
         if (!_hand.Empty) // the held piece rides the cursor (take-1: no count to show)
         {
@@ -836,60 +903,6 @@ public partial class MushTownGame
     {
         var r = QslotRect();
         return new Rectangle(r.X + 6 + i * 34, r.Y + 2, 34, 31);
-    }
-
-    private void DrawInvPanel()
-    {
-        var r = InvRect();
-        _spriteBatch.Draw(Tex("hud_inv.png"), r, Color.White);
-        for (int t = 0; t < TabCount; t++) DrawTab(t);
-        _spriteBatch.Draw(Tex("hud_statx.png"), InvXRect(), Color.White);
-        var chara = _save?.Slots[_slot];
-        if (_invTab == 0 && chara != null) // EQUIP tab: gold worn row over bag rows (clicks pick up; worn cell + held equip wears)
-        {
-            var cap = _ui.GetSmall("worn");
-            _spriteBatch.Draw(cap, new Vector2(r.X + 14, r.Y + 78), new Color(255, 220, 0));
-            for (int i = 0; i < _equips.Count; i++)
-            {
-                int id = _equips[i];
-                int n = chara.Equips?.Count(w => w == id) ?? 0;
-                if (n > 0) DrawWornSlot(i, id, n);
-                int have = chara.EquipBag?.GetValueOrDefault(id) ?? 0;
-                if (have > 0) DrawInvSlot(EquipBagRect(i), id, have);
-            }
-        }
-        if (_invTab == 1 && chara?.Use != null) // USE tab: owned potions only (Etc/Setup/Cash/Dec stay empty in v1)
-            for (int i = 0; i < _potions.Count; i++)
-                if (chara.Use.TryGetValue(_potions[i], out int count) && count > 0)
-                    DrawInvSlot(UseSlotRect(i), _potions[i], count);
-        // Official numbers: Arial Bold 12 #606871, right end x+213 top y+484 (font:Meso, vector:Meso).
-        _spriteBatch.Draw(Tex("hud_coin.png"), new Vector2(r.X + Layout.Coin.X, r.Y + Layout.Coin.Y), Color.White);
-        var meso = _ui.GetMeso((chara?.Mesos ?? 0).ToString("#,##0"));
-        _spriteBatch.Draw(meso, new Vector2(r.X + Layout.Meso.X - meso.Width, r.Y + Layout.Meso.Y), new Color(96, 104, 113));
-    }
-
-    private void DrawTab(int t)
-    {
-        var tr = TabRect(t);
-        string file = t == _invTab ? $"hud_itab_s{t}.png" : $"hud_itab_n{t}.png";
-        _spriteBatch.Draw(Tex(file), new Vector2(tr.X, tr.Y), Color.White);
-    }
-
-    // One worn slot: gold-tinted cell (it reads as equipped, not bagged).
-    private void DrawWornSlot(int i, int id, int count)
-    {
-        var s = WornRect(i);
-        _spriteBatch.Draw(_pixel, s, new Color(255, 220, 0, 60));
-        DrawInvSlot(s, id, count);
-    }
-
-    // One inventory slot: icon centered in the cell, count bottom-right.
-    private void DrawInvSlot(Rectangle s, int id, int count)
-    {
-        var icon = _textures[_items[id].Image];
-        _spriteBatch.Draw(icon, new Vector2(s.X + (s.Width - icon.Width) / 2, s.Y + (s.Height - icon.Height) / 2), Color.White);
-        var n = _ui.GetSmall(count.ToString());
-        _spriteBatch.Draw(n, new Vector2(s.X + s.Width - n.Width - 2, s.Y + s.Height - n.Height - 2), Color.Black);
     }
 
     // Solid backing with rounded corners (the art's own radius is ~3px, measured).
@@ -922,102 +935,6 @@ public partial class MushTownGame
                     px[y * tex.Width + x] = Color.Transparent;
             }
         tex.SetData(px);
-    }
-
-    private void DrawStatPanel()
-    {
-        var r = StatRect();
-        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
-        _spriteBatch.Draw(_ui.GetSmall("STAT"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
-        _spriteBatch.Draw(Tex("hud_statx.png"), StatXRect(), Color.White);
-        int by = r.Y + 16;
-        _spriteBatch.Draw(_statBack, new Vector2(r.X, by), Color.White);
-        _spriteBatch.Draw(Tex("hud_stat.png"), new Vector2(r.X, by), Color.White);
-        var chara = _save?.Slots[_slot];
-        var build = OwnBuild(); // STR/DEX/range show skilled values (passives and buffs feed combat)
-        int maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct()), maxMp = Progression.MaxMp(chara?.Level ?? 1);
-        var cp = _ui.GetSmall("0"); // value only; "Combat Power" is baked in the art (no formula yet)
-        _spriteBatch.Draw(cp, new Vector2(r.X + 432 - cp.Width, by + 8), Color.White);
-        int y = by + 132; // panel 1: vitals + 4 stats (name/level live on the plate)
-        DrawStatRow("HP", $"{chara?.Hp ?? maxHp} / {maxHp}", r.X, y); y += 22;
-        DrawStatRow("MP", $"{chara?.Mp ?? maxMp} / {maxMp}", r.X, y); y += 22;
-        DrawStatRow("STR", $"{build.Str}", r.X, y); y += 22;
-        DrawStatRow("DEX", $"{build.Dex}", r.X, y); y += 22;
-        DrawStatRow("INT", $"{chara?.Int ?? 4}", r.X, y); y += 22;
-        DrawStatRow("LUK", $"{chara?.Luk ?? 4}", r.X, y);
-        y = by + 320; // panel 2 is only ~80px: 5 tight rows (official rows are tight too)
-        (int lo, int hi) = Progression.PanelRange(build.Str, build.Dex, build.WeaponAtk);
-        DrawStatRow("Attack Power", $"{lo}~{hi}", r.X, y); y += 16;
-        DrawStatRow("Magic ATT", "0", r.X, y); y += 16;
-        DrawStatRow("Defense", $"{OwnDef()}", r.X, y); y += 16;
-        DrawStatRow("Speed", "100", r.X, y); y += 16;
-        DrawStatRow("Jump", "100", r.X, y);
-    }
-
-    private void DrawStatRow(string label, string value, int x, int y)
-    {
-        _spriteBatch.Draw(_ui.GetSmall(label), new Vector2(x + 16, y), new Color(50, 50, 60));
-        var v = _ui.GetSmall(value);
-        _spriteBatch.Draw(v, new Vector2(x + 432 - v.Width, y), Color.Black);
-    }
-
-    // Skill window: one tab per job (icon, name, level, costs, key).
-    // Locked skills show the required level in red; cooling skills and live
-    // buffs count seconds; learnable rows grow a green [+] (one SP a click).
-    private void DrawSkillPanel()
-    {
-        var r = SkillRect();
-        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
-        _spriteBatch.Draw(_ui.GetSmall("SKILL"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
-        _spriteBatch.Draw(Tex("hud_statx.png"), SkillXRect(), Color.White);
-        int by = r.Y + 16;
-        _spriteBatch.Draw(_skillBack, new Vector2(r.X, by), Color.White);
-        for (int t = 0; t < SkillTabs.Length; t++)
-        {
-            var tab = SkillTabRect(t);
-            var ink = t == _skillTab ? new Color(255, 220, 0) : new Color(130, 140, 150);
-            _spriteBatch.Draw(_ui.GetSmall(SkillTabNames[t]), new Vector2(tab.X + 8, tab.Y + 2), ink);
-        }
-        int sp = _save?.Slots[_slot]?.Sp ?? 0;
-        _spriteBatch.Draw(_ui.GetSmall(sp > 0 ? $"SP: {sp} (click + to learn)" : $"SP: {sp}"),
-            new Vector2(r.X + 16, by + 26), Color.White);
-        var rows = SkillTabs[_skillTab];
-        for (int i = 0; i < rows.Length; i++)
-            DrawSkillRow(rows[i].id, rows[i].key, r.X, by + SkillRowsY + i * SkillRowH);
-    }
-
-    private void DrawSkillRow(int id, string? key, int x, int y)
-    {
-        var skill = _skills[id];
-        var chara = _save?.Slots[_slot];
-        int level = chara?.Level ?? 1;
-        int lv = 0;
-        chara?.SkillLv.TryGetValue(id, out lv);
-        bool locked = level < skill.ReqLevel;
-        bool maxed = lv >= skill.MaxLevel;
-        bool learnable = !locked && !maxed && (chara?.Sp ?? 0) > 0;
-        float left = 0;
-        bool cooling = !locked && _skillCdMs.TryGetValue(id, out left) && left > 0;
-        float buffLeft = 0;
-        bool live = _buffMs.TryGetValue(id, out buffLeft) && buffLeft > 0;
-        _spriteBatch.Draw(_textures[locked || cooling ? skill.Disabled : skill.Icon], new Vector2(x + 10, y + 8), Color.White);
-        var ink = locked ? new Color(130, 140, 150) : Color.White;
-        _spriteBatch.Draw(_ui.GetSmall(skill.Name), new Vector2(x + 50, y + 4), ink);
-        string sub = skill.Kind == SkillData.KindPassive
-            ? $"Lv.{lv}/{skill.MaxLevel}  {PassiveBlurb[id]}"
-            : skill.Kind == SkillData.KindBuff
-            ? $"Lv.{lv}/{skill.MaxLevel}  MP {skill.Mp}  {skill.BuffMs / 1000}s{(id == SkillData.ComboAttack && live ? $"  {_orbs} orbs" : "")}"
-            : $"Lv.{lv}/{skill.MaxLevel}  MP {skill.Mp}  CD {skill.CooldownMs / 1000}s";
-        _spriteBatch.Draw(_ui.GetSmall(sub), new Vector2(x + 50, y + 24), ink);
-        string right = locked ? $"Lv.{skill.ReqLevel}"
-            : live ? $"{(int)Math.Ceiling(buffLeft / 1000)}s"
-            : cooling ? $"{(int)Math.Ceiling(left / 1000)}s"
-            : key ?? $"{lv}/{skill.MaxLevel}";
-        var rc = locked ? new Color(255, 120, 120)
-            : live || cooling ? new Color(255, 220, 0) : Color.White;
-        if (learnable) { right += " [+]"; rc = new Color(120, 255, 120); }
-        var rt = _ui.GetSmall(right);
-        _spriteBatch.Draw(rt, new Vector2(x + SkillW - 8 - rt.Width, y + 4), rc);
     }
 
     // Quest window: accepted quests on top (click to select), the selected

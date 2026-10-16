@@ -92,20 +92,22 @@ public sealed class Bar : Component
 // Fixed art: stretched to the Owner rect, or raw at an offset.
 public sealed class Picture : Component
 {
-    private readonly string _key;
+    private readonly string? _key;
+    private readonly Texture2D? _tex; // prebuilt backing (stat/skill/quest/settings bodies): no art key
     private readonly int _dx, _dy;
     private readonly bool _stretch;
     public Color Tint = Color.White;
     public float HoverAlpha = 1f, PressAlpha = 1f; // wooden buttons answer with transparency (0.9/0.6)
     public Picture(string key) { _key = key; _stretch = true; }
     public Picture(string key, int dx, int dy) { _key = key; _dx = dx; _dy = dy; }
+    public Picture(Texture2D tex, int dx, int dy) { _tex = tex; _dx = dx; _dy = dy; }
     public override void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         float a = gfx.Hovered == Owner ? gfx.Pressed ? PressAlpha : HoverAlpha : 1f;
         var c = Tint * a;
-        if (_stretch) gfx.Sb.Draw(gfx.Tex(_key), r, c);
-        else gfx.Sb.Draw(gfx.Tex(_key), new Vector2(r.X + _dx, r.Y + _dy), c);
+        if (_stretch) gfx.Sb.Draw(gfx.Tex(_key!), r, c);
+        else gfx.Sb.Draw(_tex ?? gfx.Tex(_key!), new Vector2(r.X + _dx, r.Y + _dy), c);
     }
 }
 
@@ -496,5 +498,125 @@ public sealed class LogPanel : Component
         gfx.Sb.Draw(gfx.Pixel, r, new Color(10, 12, 28, 230));
         var t = _block();
         if (t != null) gfx.Sb.Draw(t, new Vector2(r.X + 10, r.Y + 10), Color.White);
+    }
+}
+
+// Panel title strip: stretched hilong plus the lime caption (stat,
+// skill, quest, settings, shop share it). Reads the Owner body rect.
+public sealed class TitleBar : Component
+{
+    private readonly string _title;
+    public TitleBar(string title) { _title = title; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Tex("ui/hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
+        gfx.Sb.Draw(gfx.Ui.GetSmall(_title), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
+    }
+}
+
+// One stat row: gray label left, live value right-aligned at +432
+// (matches DrawStatRow). Sits on the body with a row dy.
+public sealed class StatRow : Component
+{
+    private readonly string _label;
+    private readonly Func<string> _value;
+    private readonly int _dy;
+    public StatRow(string label, Func<string> value, int dy) { _label = label; _value = value; _dy = dy; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Ui.GetSmall(_label), new Vector2(r.X + 16, r.Y + _dy), new Color(50, 50, 60));
+        var v = gfx.Ui.GetSmall(_value());
+        gfx.Sb.Draw(v, new Vector2(r.X + 432 - v.Width, r.Y + _dy), Color.Black);
+    }
+}
+
+// Right-aligned live text at a body offset (meso coin total, stat
+// combat power). The bake picks the font (Meso vs Small).
+public sealed class RightLabel : Component
+{
+    private readonly Func<UiText, string, Texture2D> _bake;
+    private readonly Func<string> _text;
+    private readonly int _dx, _dy;
+    private readonly Color _color;
+    public RightLabel(Func<UiText, string, Texture2D> bake, Func<string> text, int dx, int dy, Color color)
+    {
+        _bake = bake; _text = text; _dx = dx; _dy = dy; _color = color;
+    }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        var t = _bake(gfx.Ui, _text());
+        gfx.Sb.Draw(t, new Vector2(r.X + _dx - t.Width, r.Y + _dy), _color);
+    }
+}
+
+// Live skill numbers per draw (level/SP/cooldown/buff/orbs change
+// without a scene rebuild, so the row reads them every frame).
+public readonly record struct SkillLive(int Lv, int Sp, int Level, float CdMs, float BuffMs, int Orbs);
+
+// One skill row: icon (gray when locked/cooling), name, sub line,
+// right side (req level / live seconds / key / [+]). Matches
+// DrawSkillRow; reads the Owner row rect.
+public sealed class SkillRow : Component
+{
+    private readonly SkillData _skill;
+    private readonly string? _key;
+    private readonly string _blurb;
+    private readonly Func<SkillLive> _live;
+    public SkillRow(SkillData skill, string? key, string blurb, Func<SkillLive> live)
+    {
+        _skill = skill; _key = key; _blurb = blurb; _live = live;
+    }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        var s = _live();
+        bool locked = s.Level < _skill.ReqLevel;
+        bool maxed = s.Lv >= _skill.MaxLevel;
+        bool learnable = !locked && !maxed && s.Sp > 0;
+        bool cooling = !locked && s.CdMs > 0;
+        bool live = s.BuffMs > 0;
+        gfx.Sb.Draw(gfx.Tex(locked || cooling ? _skill.Disabled : _skill.Icon), new Vector2(r.X + 10, r.Y + 8), Color.White);
+        var ink = locked ? new Color(130, 140, 150) : Color.White;
+        gfx.Sb.Draw(gfx.Ui.GetSmall(_skill.Name), new Vector2(r.X + 50, r.Y + 4), ink);
+        string sub = _skill.Kind == SkillData.KindPassive
+            ? $"Lv.{s.Lv}/{_skill.MaxLevel}  {_blurb}"
+            : _skill.Kind == SkillData.KindBuff
+            ? $"Lv.{s.Lv}/{_skill.MaxLevel}  MP {_skill.Mp}  {_skill.BuffMs / 1000}s{(_skill.SkillId == SkillData.ComboAttack && live ? $"  {s.Orbs} orbs" : "")}"
+            : $"Lv.{s.Lv}/{_skill.MaxLevel}  MP {_skill.Mp}  CD {_skill.CooldownMs / 1000}s";
+        gfx.Sb.Draw(gfx.Ui.GetSmall(sub), new Vector2(r.X + 50, r.Y + 24), ink);
+        string right = locked ? $"Lv.{_skill.ReqLevel}"
+            : live ? $"{(int)Math.Ceiling(s.BuffMs / 1000)}s"
+            : cooling ? $"{(int)Math.Ceiling(s.CdMs / 1000)}s"
+            : _key ?? $"{s.Lv}/{_skill.MaxLevel}";
+        var rc = locked ? new Color(255, 120, 120)
+            : live || cooling ? new Color(255, 220, 0) : Color.White;
+        if (learnable) { right += " [+]"; rc = new Color(120, 255, 120); }
+        var rt = gfx.Ui.GetSmall(right);
+        gfx.Sb.Draw(rt, new Vector2(r.X + r.Width - 8 - rt.Width, r.Y + 4), rc);
+    }
+}
+
+// One inventory cell: gold tint when worn, icon centered, count
+// bottom-right (matches DrawWornSlot/DrawInvSlot). Empty cells draw
+// nothing (counts read live: drops and drinks skip scene rebuilds).
+public sealed class InvSlot : Component
+{
+    private readonly string _image;
+    private readonly Func<int> _count;
+    private readonly bool _worn;
+    public InvSlot(string image, Func<int> count, bool worn) { _image = image; _count = count; _worn = worn; }
+    public override void Draw(UiGfx gfx)
+    {
+        int n = _count();
+        if (n <= 0) return;
+        var r = Owner.Get<Rect>()!.Box;
+        if (_worn) gfx.Sb.Draw(gfx.Pixel, r, new Color(255, 220, 0, 60));
+        var icon = gfx.Tex(_image);
+        gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
+        var t = gfx.Ui.GetSmall(n.ToString());
+        gfx.Sb.Draw(t, new Vector2(r.X + r.Width - t.Width - 2, r.Y + r.Height - t.Height - 2), Color.Black);
     }
 }

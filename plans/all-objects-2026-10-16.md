@@ -1,8 +1,21 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: U4 committed, U5 in progress (overnight autonomous run:
+Status: U5 committed, U6 in progress (overnight autonomous run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- U5 panel art 1 (done): inv/stat/skill panels in-tree. New
+  visuals: TitleBar (shared with U6), StatRow, RightLabel, SkillRow
+  (+ SkillLive snapshot struct), InvSlot; Picture gains a Texture2D
+  overload for the prebuilt navy backings. Panel scenes now build
+  at load too (SyncPanelScenes at the end of BuildGameScene:
+  shots skip Update, so the panels drew empty there; first Update
+  no-ops). 8 code draws deleted. No new unit tests (all new code
+  needs textures; shots are the proof). Gates 0/0 + 212/212.
+  19/19 shots match HEAD (stat screen added to the batch).
+  Review R1 (subagent; first reviewer stalled and was replaced,
+  retry answered after a status ping): 0 P0/P1, 2 P2 (dead alias
+  in SkillRow fixed; OwnBuild 3x accepted as trivial). No logic
+  change from the fix, so no R2. Playtest pending.
 - U4 menu art 2 (done): job, setup, log panel, cursor. New
   visuals: ImgButton, Border (2px; static reused by WhitePanel +
   UiBox — the U3 twin is dead, DrawBoxBorder deleted), UiBox,
