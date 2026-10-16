@@ -1,8 +1,20 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: U2 committed, U3 in progress (overnight autonomous run:
+Status: U3 committed, U4 in progress (overnight autonomous run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- U3 menu art 1 (done): saves, server, chars in-tree. New visuals:
+  Sign, ServerRow, CancelRow, CenterText, PagerCell, Round, Dim,
+  WhitePanel, Invoke (doll bridge); Picture gains Tint +
+  HoverAlpha/PressAlpha; MenuAlpha holds the one 0.9/0.6 spelling;
+  GameWidth/Height go internal for components. 12 code draws
+  deleted (BtnAlpha stays: the log plaque still draws raw). No new
+  unit tests (all new code needs textures; shots are the proof).
+  Review R1: 0 P0, 3 P1 + 3 P2 fixed (shared alpha, internal
+  consts, orphan comments, stretch note), 1 P2 rejected (empty
+  bake = U2 precedent), 1 P2 to playtest (covered buttons no
+  longer light under the delete modal: matches input). Gates 0/0
+  + 203/203. 17/17 shots match HEAD. Playtest pending.
 - U2 HUD art (done): plate, HP/MP, quickslot, tracker, boss bar,
   minimap in-tree. New visuals: Picture, LiveLabel, PlateLevel,
   BarNumber, Tracker, BossBar, Minimap; Label gains Tint (quickslot
@@ -169,6 +181,16 @@ Probe, carry, art, sim.
   minimap. 1 sprint.
 - U3 menu art 1: saves, server, chars. 1 sprint.
 - U4 menu art 2: job, setup, log plaque and panel, cursor. 1 sprint.
+  Must kill the WhitePanel/DrawBoxBorder twin (U3 review P1-3):
+  delete DrawBoxBorder or make WhitePanel reuse it. Components:
+  ImgButton (art + white-40 hover), Border (static color, job
+  cell gold), UiBox (live border + text + hint), Text (big static),
+  LogPanel (dark fill + baked block on a bare root drawn by
+  DrawLogOverlay in menu + game); setup preview rides the Invoke
+  bridge (2nd user); job:cell rebuilds the scene on pick (pager
+  precedent) so the gold border is build-time. Plaque click order
+  ("runs before the switch") and panel swallow stay code.
+  Playtest: modal-covered buttons no longer light (U3 P2-5).
 - U5 panel art 1: bag, stats, skill. 1 sprint.
 - U6 panel art 2: quest, settings, shop, talk. 1 sprint.
 - S1-S2 sim core: logic components in Shared, world object,

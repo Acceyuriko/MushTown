@@ -12,8 +12,8 @@ namespace MushTown.Client;
 public partial class MushTownGame : Game
 {
     // The game is always drawn at this size, then scaled up to fill the screen.
-    private const int GameWidth = 1366;
-    private const int GameHeight = 768;
+    internal const int GameWidth = 1366; // UI components center on these (Sign, Dim, BossBar, Minimap)
+    internal const int GameHeight = 768;
 
     // Walk/jump feel, tuned by hand (approximate MapleStory values).
     private const float WalkSpeed = 140f; // px per second

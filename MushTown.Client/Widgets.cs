@@ -47,7 +47,14 @@ public class Button : Component
     }
 }
 
+// Wooden-button answer: hover 0.9, pressed 0.6 (one spelling for all menu art).
+internal static class MenuAlpha
+{
+    public const float Hover = 0.9f, Pressed = 0.6f;
+}
+
 // State art: stem + _n/_h/_p by hover/pressed (the HUD buttons moved here from DrawHudButton).
+// Stretches to the rect: callers size rects from the _n art, so a future art resize would stretch, not overflow.
 public sealed class Image : Component
 {
     private readonly string _stem;
@@ -88,13 +95,17 @@ public sealed class Picture : Component
     private readonly string _key;
     private readonly int _dx, _dy;
     private readonly bool _stretch;
+    public Color Tint = Color.White;
+    public float HoverAlpha = 1f, PressAlpha = 1f; // wooden buttons answer with transparency (0.9/0.6)
     public Picture(string key) { _key = key; _stretch = true; }
     public Picture(string key, int dx, int dy) { _key = key; _dx = dx; _dy = dy; }
     public override void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
-        if (_stretch) gfx.Sb.Draw(gfx.Tex(_key), r, Color.White);
-        else gfx.Sb.Draw(gfx.Tex(_key), new Vector2(r.X + _dx, r.Y + _dy), Color.White);
+        float a = gfx.Hovered == Owner ? gfx.Pressed ? PressAlpha : HoverAlpha : 1f;
+        var c = Tint * a;
+        if (_stretch) gfx.Sb.Draw(gfx.Tex(_key), r, c);
+        else gfx.Sb.Draw(gfx.Tex(_key), new Vector2(r.X + _dx, r.Y + _dy), c);
     }
 }
 
@@ -192,7 +203,7 @@ public sealed class BossBar : Component
     {
         var b = _boss();
         if (b == null) return;
-        int x = (1366 - _w) / 2;
+        int x = (MushTownGame.GameWidth - _w) / 2;
         var head = gfx.Ui.GetSmall($"{b.Value.Name}  {b.Value.Hp} / {b.Value.MaxHp}");
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 4, 8, _w + 8, 32), new Color(0, 0, 0, 120));
         gfx.Sb.Draw(head, new Vector2(x + (_w - head.Width) / 2, 10), new Color(255, 220, 0));
@@ -213,7 +224,7 @@ public sealed class Minimap : Component
         var tex = gfx.Tex(map.MiniMap.Image);
         float s = Math.Min(220f / tex.Width, 160f / tex.Height);
         int w = (int)(tex.Width * s), h = (int)(tex.Height * s);
-        int x = 1366 - 8 - w, y = 8;
+        int x = MushTownGame.GameWidth - 8 - w, y = 8;
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 2, y - 2, w + 4, h + 4), new Color(0, 0, 0, 160));
         gfx.Sb.Draw(tex, new Rectangle(x, y, w, h), Color.White);
         foreach (var p in map.Portals)
@@ -247,4 +258,168 @@ public sealed class Label : Component
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Ui.GetSmall(_text), new Vector2(r.X + _dx, r.Y + _dy), Tint);
     }
+}
+
+// The menu sign board: header, 3-slice body (the cream center
+// stretches), base (matches DrawSign). Needs no rect.
+public sealed class Sign : Component
+{
+    private readonly int _bodyH;
+    public Sign(int bodyH) { _bodyH = bodyH; }
+    public override void Draw(UiGfx gfx)
+    {
+        var mid = gfx.Tex("menu/sign_mid.png");
+        var head = gfx.Tex("menu/sign_top.png");
+        var foot = gfx.Tex("menu/sign_bot.png");
+        float ms = MenuLayout.Scale;
+        int top = (MushTownGame.GameHeight - (head.Height + _bodyH + foot.Height - MenuLayout.OverlapTop - MenuLayout.BotUp)) / 2;
+        int body = top + head.Height - MenuLayout.OverlapTop;
+        int topS = (MushTownGame.GameHeight - (int)((head.Height + _bodyH + foot.Height - MenuLayout.OverlapTop - MenuLayout.BotUp) * ms)) / 2;
+        int msy(int y) => topS + (int)((y - top) * ms);
+        int x = (MushTownGame.GameWidth - mid.Width) / 2;
+        int y0 = msy(body), y1 = y0 + (int)(MenuLayout.Slice * ms);
+        int y3 = msy(body + _bodyH), y2 = y3 - (int)(MenuLayout.Slice * ms);
+        int dx = MushTownGame.GameWidth / 2 + (int)((x - MushTownGame.GameWidth / 2) * ms), dw = (int)(mid.Width * ms);
+        gfx.Sb.Draw(mid, new Rectangle(dx, y0, dw, y1 - y0),
+            new Rectangle(0, 0, mid.Width, MenuLayout.Slice), Color.White);
+        gfx.Sb.Draw(mid, new Rectangle(dx, y1, dw, y2 - y1),
+            new Rectangle(0, MenuLayout.Slice, mid.Width, mid.Height - MenuLayout.Slice * 2), Color.White);
+        gfx.Sb.Draw(mid, new Rectangle(dx, y2, dw, y3 - y2),
+            new Rectangle(0, mid.Height - MenuLayout.Slice, mid.Width, MenuLayout.Slice), Color.White);
+        gfx.Sb.Draw(head, new Rectangle(MushTownGame.GameWidth / 2 + (int)(((MushTownGame.GameWidth - head.Width) / 2 - MushTownGame.GameWidth / 2) * ms), msy(top),
+            (int)(head.Width * ms), (int)(head.Height * ms)), Color.White);
+        gfx.Sb.Draw(foot, new Rectangle(MushTownGame.GameWidth / 2 + (int)(((MushTownGame.GameWidth - foot.Width) / 2 - MushTownGame.GameWidth / 2) * ms), msy(body + _bodyH - MenuLayout.BotUp),
+            (int)(foot.Width * ms), (int)(foot.Height * ms)), Color.White);
+    }
+}
+
+// One server row: blank pill plus name left + IP right (matches
+// DrawServerRow). Sits on the row button (hover dims the pill).
+public sealed class ServerRow : Component
+{
+    private readonly string _name, _ip;
+    private readonly Color _ink, _gray;
+    public ServerRow(string name, string ip, Color ink, Color gray) { _name = name; _ip = ip; _ink = ink; _gray = gray; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        float a = gfx.Hovered == Owner ? gfx.Pressed ? MenuAlpha.Pressed : MenuAlpha.Hover : 1f;
+        gfx.Sb.Draw(gfx.Tex("menu/btn_blank.png"), r, Color.White * a);
+        var tr = gfx.Ui.GetList(_ip);
+        int m = (int)(MenuLayout.TextMargin * MenuLayout.Scale);
+        var tl = gfx.Ui.GetList(Truncate(gfx, _name, r.Width - m - tr.Width - m - (int)(MenuLayout.TextGap * MenuLayout.Scale)));
+        int cy = r.Y + (r.Height - tl.Height) / 2 + (int)(MenuLayout.TextDown * MenuLayout.Scale);
+        gfx.Sb.Draw(tl, new Vector2(r.X + m, cy), _ink);
+        gfx.Sb.Draw(tr, new Vector2(r.Right - m - tr.Width, cy), _gray);
+    }
+    private static string Truncate(UiGfx gfx, string text, int maxWidth)
+    {
+        if (gfx.Ui.GetList(text).Width <= maxWidth) return text;
+        while (text.Length > 0 && gfx.Ui.GetList(text + "…").Width > maxWidth) text = text[..^1];
+        return text + "…";
+    }
+}
+
+// Cancel plaque: blank pill plus centered label (matches DrawCancelRow).
+public sealed class CancelRow : Component
+{
+    private readonly Color _ink;
+    public CancelRow(Color ink) { _ink = ink; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        float a = gfx.Hovered == Owner ? gfx.Pressed ? MenuAlpha.Pressed : MenuAlpha.Hover : 1f;
+        gfx.Sb.Draw(gfx.Tex("menu/btn_blank.png"), r, Color.White * a);
+        var t = gfx.Ui.GetListCancel("Cancel");
+        int cy = r.Y + (r.Height - t.Height) / 2 + (int)(MenuLayout.CancelDown * MenuLayout.Scale);
+        gfx.Sb.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, cy), _ink);
+    }
+}
+
+// Live text centered on cx (matches DrawTextCentered/DrawSmallCentered).
+public sealed class CenterText : Component
+{
+    private readonly Func<string> _text;
+    private readonly int _cx, _y;
+    private readonly Color _color;
+    private readonly bool _small;
+    public CenterText(Func<string> text, int cx, int y, Color color, bool small = false) { _text = text; _cx = cx; _y = y; _color = color; _small = small; }
+    public override void Draw(UiGfx gfx)
+    {
+        var t = _small ? gfx.Ui.GetSmall(_text()) : gfx.Ui.Get(_text());
+        gfx.Sb.Draw(t, new Vector2(_cx - t.Width / 2, _y), _color);
+    }
+}
+
+// One pager cell: thumb under the art on the current page, then the
+// 3-state digit (matches the pager loop). Edge cells pin to the rect,
+// digits center (the art overflows the bar, like the official look).
+public sealed class PagerCell : Component
+{
+    private readonly string _stem;
+    private readonly bool _current, _centered;
+    public PagerCell(string stem, bool current, bool centered) { _stem = stem; _current = current; _centered = centered; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        string st = _current ? "p" : gfx.Hovered == Owner ? gfx.Pressed ? "p" : "h" : "n";
+        if (_current) Round.Fill(gfx, new Rectangle(r.X + (r.Width - 30) / 2, r.Y + (r.Height - 30) / 2, 30, 30), 7, new Color(63, 195, 220));
+        var t = gfx.Tex($"ui/cs_{_stem}_{st}.png");
+        int dx = _centered ? r.X + (r.Width - t.Width) / 2 : r.X;
+        int dy = _centered ? r.Y + (r.Height - t.Height) / 2 : r.Y;
+        gfx.Sb.Draw(t, new Vector2(dx, dy), Color.White);
+    }
+}
+
+// Rounded fill over the Owner rect (matches DrawRound).
+public sealed class Round : Component
+{
+    private readonly int _radius;
+    private readonly Color _color;
+    public Round(int radius, Color color) { _radius = radius; _color = color; }
+    public override void Draw(UiGfx gfx) => Fill(gfx, Owner.Get<Rect>()!.Box, _radius, _color);
+    public static void Fill(UiGfx gfx, Rectangle r, int radius, Color color)
+    {
+        for (int y = 0; y < r.Height; y++)
+        {
+            int d = y < radius ? radius - y : y >= r.Height - radius ? y - (r.Height - radius - 1) : 0;
+            int inset = d == 0 ? 0 : radius - (int)Math.Sqrt(radius * radius - d * d);
+            gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X + inset, r.Y + y, r.Width - inset * 2, 1), color);
+        }
+    }
+}
+
+// Fullscreen dim (matches DrawDim). Needs no rect.
+public sealed class Dim : Component
+{
+    private readonly int _alpha;
+    public Dim(int alpha) { _alpha = alpha; }
+    public override void Draw(UiGfx gfx) =>
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(0, 0, MushTownGame.GameWidth, MushTownGame.GameHeight), new Color(0, 0, 0, _alpha));
+}
+
+// White box plus gray border (matches DrawWhitePanel; the border
+// twins DrawBoxBorder until the job/setup screens migrate).
+public sealed class WhitePanel : Component
+{
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        var border = new Color(150, 150, 150);
+        gfx.Sb.Draw(gfx.Pixel, r, Color.White);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, r.Width, 2), border);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y + r.Height - 2, r.Width, 2), border);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, 2, r.Height), border);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X + r.Width - 2, r.Y, 2, r.Height), border);
+    }
+}
+
+// Bridge: runs Menu draws inside the tree (game art the tree does not
+// own yet — the chars dolls now, job/setup previews next; gone when
+// the sim phase owns the doll).
+public sealed class Invoke : Component
+{
+    private readonly Action<UiGfx> _draw;
+    public Invoke(Action<UiGfx> draw) { _draw = draw; }
+    public override void Draw(UiGfx gfx) => _draw(gfx);
 }
