@@ -85,15 +85,14 @@ public partial class MushTownGame
 
     private void PlaySfx(string key) => _sfx[key].Play(_sfxVol / 100f, 0f, 0f);
 
-    // +/- buttons in the settings window (step 10). The click confirms the
-    // press; the SFX row also previews its new volume.
+    // +/- buttons in the settings window (step 10). The Kind click
+    // confirms the press; the SFX row also previews its new volume.
     private void BumpVolume(bool bgm, int d)
     {
         if (bgm) _bgmVol = Math.Clamp(_bgmVol + d, 0, 100);
         else _sfxVol = Math.Clamp(_sfxVol + d, 0, 100);
         _bgm!.Volume = _bgmVol / 100f; // the settings window needs a map: its track plays
         SaveSettings();
-        PlaySfx("click");
     }
 
     // The mop whooshes like a polearm; bare beginner hands swing a sword.

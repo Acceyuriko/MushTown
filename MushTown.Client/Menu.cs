@@ -701,12 +701,12 @@ public partial class MushTownGame
 
     // Menu scenes hold invisible Buttons (input only): row art, alpha
     // states, glass underlays and conditional buttons stay legacy-drawn.
-    // Callbacks play their own click (or stay silent), mirroring legacy.
-    private static GameObject MenuButton(Rectangle r, string id, Action onClick)
+    // Click sounds play by Button Kind; conditional clicks play their own.
+    private static GameObject MenuButton(Rectangle r, string id, Action onClick, ButtonKind kind = ButtonKind.Silent)
     {
         var o = new GameObject();
         o.Add(new Rect(r));
-        o.Add(new Button { LegacyId = id, OnClick = onClick });
+        o.Add(new Button { LegacyId = id, Kind = kind, OnClick = onClick });
         return o;
     }
 
@@ -716,7 +716,7 @@ public partial class MushTownGame
         for (int i = 0; i < SaveRows(); i++)
         {
             int r = i; // for-loop variables capture shared: copy per row
-            _menuScene.Add(MenuButton(SaveRowRect(i), "save" + i, () => { PlaySfx("click"); ActivateSaveRow(r); }));
+            _menuScene.Add(MenuButton(SaveRowRect(i), "save" + i, () => ActivateSaveRow(r), ButtonKind.Click));
         }
     }
 
@@ -728,9 +728,9 @@ public partial class MushTownGame
         {
             int r = i; // for-loop variables capture shared: copy per row
             if (i == rows - 1)
-                _menuScene.Add(MenuButton(ServerRowRect(i, rows), "server" + i, () => { PlaySfx("click"); ToSaves(); }));
+                _menuScene.Add(MenuButton(ServerRowRect(i, rows), "server" + i, () => ToSaves(), ButtonKind.Click));
             else
-                _menuScene.Add(MenuButton(ServerRowRect(i, rows), "server" + i, () => { PlaySfx("click"); EnterChars(r == 0 ? null : _hosts[r - 1].Ip); }));
+                _menuScene.Add(MenuButton(ServerRowRect(i, rows), "server" + i, () => EnterChars(r == 0 ? null : _hosts[r - 1].Ip), ButtonKind.Click));
         }
     }
 
@@ -748,17 +748,17 @@ public partial class MushTownGame
         {
             int p = c; // for-loop variables capture shared: copy per cell
             _pager.AddChild(MenuButton(PageCellRect(c), "chars:page" + c,
-                () => { PlaySfx("click"); _page = p == 0 ? Math.Max(0, _page - 1) : p == 6 ? Math.Min(Pages - 1, _page + 1) : p - 1; BuildCharsScene(); _scenes.Show(_menuScene); }));
+                () => { _page = p == 0 ? Math.Max(0, _page - 1) : p == 6 ? Math.Min(Pages - 1, _page + 1) : p - 1; BuildCharsScene(); _scenes.Show(_menuScene); }, ButtonKind.Click));
         }
         _menuScene.Add(_pager);
         _menuScene.Add(MenuButton(DeleteBtnRect(), "chars:delete", () => { if (_save!.Slots[_slot] != null) { PlaySfx("click"); _csDeleteModal.Enabled = true; } }));
         _menuScene.Add(MenuButton(NewBtnRect(), "chars:new", () => { PlaySfx("click"); EnterJob(FirstEmptyHeroSlot()); }));
         _menuScene.Add(MenuButton(SelectBtnRect(), "chars:select", () => { if (_save!.Slots[_slot] != null) { PlaySfx("click"); StartGame(ServerMode()); } }));
-        _menuScene.Add(MenuButton(BackBtnRect(), "chars:back", () => { PlaySfx("click"); EnterServer(); }));
+        _menuScene.Add(MenuButton(BackBtnRect(), "chars:back", () => EnterServer(), ButtonKind.Click));
         _csDeleteModal = new GameObject { Modal = true };
         _csDeleteModal.Add(new Rect(DeletePanelRect())); // panel hits (not buttons): the box stays open, like legacy
-        _csDeleteModal.AddChild(MenuButton(DeleteYesRect(), "chars:delyes", () => { PlaySfx("click"); DoDelete(); }));
-        _csDeleteModal.AddChild(MenuButton(DeleteNoRect(), "chars:delno", () => { PlaySfx("click"); _csDeleteModal.Enabled = false; }));
+        _csDeleteModal.AddChild(MenuButton(DeleteYesRect(), "chars:delyes", () => DoDelete(), ButtonKind.Click));
+        _csDeleteModal.AddChild(MenuButton(DeleteNoRect(), "chars:delno", () => _csDeleteModal.Enabled = false, ButtonKind.Click));
         _csDeleteModal.Enabled = false;
         _menuScene.Add(_csDeleteModal);
     }
@@ -766,9 +766,9 @@ public partial class MushTownGame
     private void BuildJobScene()
     {
         _menuScene = new Scene();
-        _menuScene.Add(MenuButton(MakeBtnRect(), "job:make", () => { PlaySfx("click"); JobMake(); }));
-        _menuScene.Add(MenuButton(CellRect(), "job:cell", () => { PlaySfx("click"); _jobPicked = true; }));
-        _menuScene.Add(MenuButton(JobCancelRect(), "job:cancel", () => { PlaySfx("click"); JobToChars(); }));
+        _menuScene.Add(MenuButton(MakeBtnRect(), "job:make", () => JobMake(), ButtonKind.Click));
+        _menuScene.Add(MenuButton(CellRect(), "job:cell", () => _jobPicked = true, ButtonKind.Click));
+        _menuScene.Add(MenuButton(JobCancelRect(), "job:cancel", () => JobToChars(), ButtonKind.Click));
     }
 
     private void BuildSetupScene()
@@ -778,8 +778,8 @@ public partial class MushTownGame
         name.Add(new Rect(NameFieldRect()));
         name.Add(new Button { OnClick = () => _focus = "name" }); // the name field is input, not a button: silent
         _menuScene.Add(name);
-        _menuScene.Add(MenuButton(ConfirmBtnRect(), "setup:confirm", () => { PlaySfx("click"); DoCreate(); }));
-        _menuScene.Add(MenuButton(SetupCancelRect(), "setup:cancel", () => { PlaySfx("click"); SetupToJob(); }));
+        _menuScene.Add(MenuButton(ConfirmBtnRect(), "setup:confirm", () => DoCreate(), ButtonKind.Click));
+        _menuScene.Add(MenuButton(SetupCancelRect(), "setup:cancel", () => SetupToJob(), ButtonKind.Click));
     }
 
     private void JobMake()
@@ -839,7 +839,7 @@ public partial class MushTownGame
         if (enter) { ActivateFirstSave(); return; }
         if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
         else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
-        if (click) _scenes.Current?.Click(gx, gy);
+        if (click) ClickTree(_scenes.Current, gx, gy);
     }
 
     private int SaveRows() => SaveStore.MaxSaves + 1; // saves, then Exit
@@ -866,7 +866,7 @@ public partial class MushTownGame
         if (enter) { EnterChars(null); return; }
         if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
         else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
-        if (click) _scenes.Current?.Click(gx, gy);
+        if (click) ClickTree(_scenes.Current, gx, gy);
         if (_screen == Screen.Server && r && _scanTask == null) _scanTask = Discovery.ScanAsync(); // row clicks may have left this screen
     }
 
@@ -895,14 +895,14 @@ public partial class MushTownGame
         if (_csDeleteModal.Enabled)
         {
             if (esc) { _csDeleteModal.Enabled = false; return; }
-            if (click && _scenes.Current?.Click(gx, gy) == null) _csDeleteModal.Enabled = false; // outside click closes, silent
+            if (click && ClickTree(_scenes.Current, gx, gy) == null) _csDeleteModal.Enabled = false; // outside click closes, silent
             return;
         }
         if (esc) { EnterServer(); return; }
         try
         {
             var pagerBefore = _pager; // snapshot: pager clicks rebuild the tree (and _pager) mid-dispatch
-            GameObject? took = click ? _scenes.Current?.Click(gx, gy) : null;
+            GameObject? took = click ? ClickTree(_scenes.Current, gx, gy) : null;
             // Enter selects unless the pager took the click (legacy order:
             // pager, then select) or the click left this screen. Enter plays
             // nothing. Same-frame enter + new/delete/slot clicks resolve
@@ -925,7 +925,7 @@ public partial class MushTownGame
         if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log");
         else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (esc) { JobToChars(); return; }
-        GameObject? took = click ? _scenes.Current?.Click(gx, gy) : null;
+        GameObject? took = click ? ClickTree(_scenes.Current, gx, gy) : null;
         // Enter confirms unless the click took something: legacy chained
         // cell, then make-or-enter, so any tree click swallows enter.
         if (enter && took == null && _screen == Screen.Job) JobMake();
@@ -936,7 +936,7 @@ public partial class MushTownGame
         if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log");
         else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (esc) { SetupToJob(); return; }
-        GameObject? took = click ? _scenes.Current?.Click(gx, gy) : null;
+        GameObject? took = click ? ClickTree(_scenes.Current, gx, gy) : null;
         // Enter confirms unless the click took something: legacy chained
         // name, then confirm-or-enter, so any tree click swallows enter.
         if (enter && took == null && _screen == Screen.Setup) DoCreate();

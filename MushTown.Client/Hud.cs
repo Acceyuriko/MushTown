@@ -99,9 +99,16 @@ public partial class MushTownGame
     private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
     private readonly SceneManager _scenes = new();
     private Scene _gameScene = null!; // W1: the submenu only; later weeks add the rest
-    private Scene _invScene = new(), _statScene = new(), _skillScene = new(); // click-only until W5 (hover stays legacy)
+    private Scene _invScene = new(), _statScene = new(), _skillScene = new();
+    private Scene _questScene = new(), _settingsScene = new(), _shopScene = new(), _talkScene = new();
     private Point _invBuiltPos = new(-1, -1), _statBuiltPos = new(-1, -1), _skillBuiltPos = new(-1, -1);
+    private Point _questBuiltPos = new(-1, -1), _settingsBuiltPos = new(-1, -1), _shopBuiltPos = new(-1, -1);
     private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow drags + tab flips (bag counts are static)
+    private List<int> _questBuiltRows = new();
+    private List<int> _shopBuiltStock = new();
+    private List<(int id, int count)> _shopBuiltSells = new();
+    private int _talkBuiltNpc, _talkBuiltQuest, _talkBuiltPage;
+    private string _talkBuiltButtons = "", _talkBuiltEntries = "";
     private GameObject _submenu = null!; // root; Enabled is the open flag
     private UiGfx _gfx = null!;
     private bool _contentLoaded; // the scene build needs textures (popup height reads them)
@@ -180,80 +187,45 @@ public partial class MushTownGame
             if (!held) _dragShop = null;
             else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW);
         }
-        SyncPanelScenes(); // drags + tab flips move the baked Rects (hover stays legacy, so order is free)
+        SyncPanelScenes(); // drags + tab flips move the baked Rects (hover ran first, so it lags one frame, like legacy)
         if (!click) return;
-        // Any window open/close clicks once (menu, char, submenu, X buttons
-        // all funnel here): snapshot the flags around the click body.
-        bool sub = _submenu.Enabled, inv = _showInv, stat = _showStat;
-        bool skill = _showSkill, quest = _showQuest, set = _showSettings, shop = _showShop;
-        UpdateHudClick(gx, gy);
-        if (sub != _submenu.Enabled || inv != _showInv || stat != _showStat
-            || skill != _showSkill || quest != _showQuest || set != _showSettings || shop != _showShop)
-            PlaySfx("click");
+        UpdateHudClick(gx, gy); // click sounds play by Button Kind inside ClickTree (the flag funnel is gone)
     }
 
-    // Item slots (USE potions, EQUIP worn + bag): the grab cursor hovers here.
-    private bool OnInvSlot(int gx, int gy)
+    // Panels front-to-back (the click z: front first, the rest in place).
+    private IEnumerable<(bool show, Scene scene)> PanelsFrontToBack()
     {
-        if (_invTab == 1)
-            for (int s = 0; s < _potions.Count; s++)
-                if (HitRect(UseSlotRect(s), gx, gy)) return true;
-        if (_invTab == 0)
-            for (int s = 0; s < _equips.Count; s++)
-                if (HitRect(WornRect(s), gx, gy) || HitRect(EquipBagRect(s), gx, gy)) return true;
-        return false;
+        var all = new (bool, Scene)[] { (_showInv, _invScene), (_showStat, _statScene), (_showSkill, _skillScene), (_showQuest, _questScene), (_showSettings, _settingsScene), (_showShop, _shopScene) };
+        yield return all[_topPanel];
+        for (int i = 0; i < 6; i++) if (i != _topPanel) yield return all[i];
     }
 
     // One "over" per HUD button entry (clicks live in UpdateHudClick below).
-    // No z-order: the hover highlights in the draw code ignore overlap too,
-    // so the sound follows the highlight. Order mirrors click priority.
+    // Hover respects overlap now (the W5 z-fix): the frontmost panel at the
+    // point swallows below, so covered buttons stay silent and dark. Where
+    // nothing overlaps, the ids match the legacy chain exactly.
     private void UpdateHudHover(int gx, int gy)
     {
-        _hoverItem = _talkNpc == 0 && _showInv && OnInvSlot(gx, gy);
-        if (_talkNpc != 0) { TalkHover(gx, gy); return; }
-        if (_showInv && HitRect(InvXRect(), gx, gy)) { SfxOnHover("x0"); return; }
-        if (_showStat && HitRect(StatXRect(), gx, gy)) { SfxOnHover("x1"); return; }
-        if (_showSkill && HitRect(SkillXRect(), gx, gy)) { SfxOnHover("x2"); return; }
-        if (_showQuest && HitRect(QuestXRect(), gx, gy)) { SfxOnHover("x3"); return; }
-        if (_showSettings && HitRect(SettingsXRect(), gx, gy)) { SfxOnHover("x4"); return; }
-        if (_showShop && HitRect(ShopXRect(), gx, gy)) { SfxOnHover("x5"); return; }
-        if (_showInv)
-            for (int t = 0; t < TabCount; t++)
-                if (HitRect(TabRect(t), gx, gy)) { SfxOnHover($"invtab{t}"); return; }
-        if (_showSkill)
+        _hoverItem = false;
+        if (_talkNpc != 0) { _gameScene.ClearHover(); SfxOnHover(_talkScene.Hover(gx, gy)); return; }
+        foreach (var (show, scene) in PanelsFrontToBack())
         {
-            for (int t = 0; t < SkillTabs.Length; t++)
-                if (HitRect(SkillTabRect(t), gx, gy)) { SfxOnHover($"skilltab{t}"); return; }
-            var tab = SkillTabs[_skillTab];
-            for (int row = 0; row < tab.Length; row++)
-                if (HitRect(SkillPlusRect(row), gx, gy)) { SfxOnHover($"skillplus{row}"); return; }
-        }
-        if (_showQuest)
-        {
-            var accepted = QuestRows();
-            for (int row = 0; row < accepted.Count && row < 5; row++) // draw shows 5: hover matches clicks
-                if (HitRect(QuestRowRect(row), gx, gy)) { SfxOnHover($"questrow{row}"); return; }
-        }
-        if (_showSettings)
-            for (int r = 0; r < 2; r++)
+            if (!show) continue;
+            string id = scene.Hover(gx, gy);
+            if (scene.Hovered != null)
             {
-                if (HitRect(SettingsMinusRect(r), gx, gy)) { SfxOnHover($"setminus{r}"); return; }
-                if (HitRect(SettingsPlusRect(r), gx, gy)) { SfxOnHover($"setplus{r}"); return; }
+                _gameScene.ClearHover();
+                _hoverItem = scene == _invScene && scene.HoverButton is Slot;
+                SfxOnHover(id);
+                return;
             }
-        if (_showShop)
-        {
-            for (int i = 0; i < _shopStock.Count; i++)
-                if (HitRect(ShopBuyRect(i), gx, gy)) { SfxOnHover($"buy{i}"); return; }
-            var sells = ShopSellRows();
-            for (int i = 0; i < sells.Count; i++)
-                if (HitRect(ShopSellRect(i), gx, gy)) { SfxOnHover($"sell{i}"); return; }
         }
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // menu/char/submenu/furniture all live in the tree now
     }
 
     private void UpdateHudClick(int gx, int gy)
     {
-        if (_talkNpc != 0) { TalkClick(gx, gy); return; } // modal: talk swallows every click
+        if (_talkNpc != 0) { ClickTree(_talkScene, gx, gy); return; } // modal: talk swallows every click
         bool onInv = _showInv && HitRect(InvRect(), gx, gy);
         bool onStat = _showStat && HitRect(StatRect(), gx, gy);
         bool onSkill = _showSkill && HitRect(SkillRect(), gx, gy);
@@ -290,39 +262,15 @@ public partial class MushTownGame
         if (onInv || onStat || onSkill || onQuest || onSettings || onShop)
         {
             _submenu.Enabled = false;
-            if (onInv) _invScene.Click(gx, gy); // X > title > tabs > slots, same order as the legacy chain
-            else if (onStat) _statScene.Click(gx, gy);
-            else if (onSkill) _skillScene.Click(gx, gy);
-            else if (onQuest && HitRect(QuestXRect(), gx, gy)) _showQuest = false;
-            else if (onSettings && HitRect(SettingsXRect(), gx, gy)) _showSettings = false;
-            else if (onShop && HitRect(ShopXRect(), gx, gy)) _showShop = false;
-            else if (onQuest && HitRect(QuestTitleRect(), gx, gy)) _dragQuest = new Point(gx - _questPos.X, gy - _questPos.Y);
-            else if (onSettings && HitRect(SettingsTitleRect(), gx, gy)) _dragSettings = new Point(gx - _settingsPos.X, gy - _settingsPos.Y);
-            else if (onShop && HitRect(ShopTitleRect(), gx, gy)) _dragShop = new Point(gx - _shopPos.X, gy - _shopPos.Y);
-            else if (onQuest)
-            {
-                var accepted = QuestRows();
-                for (int row = 0; row < accepted.Count && row < 5; row++) // draw shows 5: clicks match
-                    if (HitRect(QuestRowRect(row), gx, gy)) { PlaySfx("click"); _questSel = accepted[row]; break; }
-            }
-            else if (onSettings) // volume rows: [-] and [+] step 10, saved at once
-            {
-                if (HitRect(SettingsMinusRect(0), gx, gy)) BumpVolume(true, -10);
-                else if (HitRect(SettingsPlusRect(0), gx, gy)) BumpVolume(true, 10);
-                else if (HitRect(SettingsMinusRect(1), gx, gy)) BumpVolume(false, -10);
-                else if (HitRect(SettingsPlusRect(1), gx, gy)) BumpVolume(false, 10);
-            }
-            else if (onShop) // stock rows buy at WZ price, bag rows sell at half
-            {
-                for (int i = 0; i < _shopStock.Count; i++)
-                    if (HitRect(ShopBuyRect(i), gx, gy)) { BuyFromShop(_shopStock[i]); break; }
-                var sells = ShopSellRows();
-                for (int i = 0; i < sells.Count; i++)
-                    if (HitRect(ShopSellRect(i), gx, gy)) { SellToShop(sells[i].id); break; }
-            }
+            if (onInv) ClickTree(_invScene, gx, gy); // X > title > content, same order as the legacy chain
+            else if (onStat) ClickTree(_statScene, gx, gy);
+            else if (onSkill) ClickTree(_skillScene, gx, gy);
+            else if (onQuest) ClickTree(_questScene, gx, gy);
+            else if (onSettings) ClickTree(_settingsScene, gx, gy);
+            else if (onShop) ClickTree(_shopScene, gx, gy);
             return;
         }
-        if (_scenes.Current?.Click(gx, gy) != null) { } // menu/char/submenu/furniture all live in the tree now
+        if (ClickTree(_scenes.Current, gx, gy) != null) { } // menu/char/submenu/furniture all live in the tree now
         else if (_submenu.Enabled) _submenu.Enabled = false; // outside click closes (no panel behind to fall through to)
         else NpcClick(gx, gy); // no UI took it: the world gets the click
     }
@@ -357,13 +305,13 @@ public partial class MushTownGame
         AddSubTextRow(4, "Log", () => { _panelOpen = !_panelOpen; _submenu.Enabled = false; });
         AddSubTextRow(5, "Exit", () => { _submenu.Enabled = false; if (_save != null) ToChars(); else Exit(); });
         _gameScene.Add(_submenu);
-        var charBtn = new GameObject(); // silent: the open/close funnel in UpdateHud plays the click
+        var charBtn = new GameObject();
         charBtn.Add(new Rect(CharBtnRect()));
-        charBtn.Add(new Button { LegacyId = "char", OnClick = () => { _showStat = !_showStat; _submenu.Enabled = false; if (_showStat) _topPanel = 1; } });
+        charBtn.Add(new Button { LegacyId = "char", Kind = ButtonKind.Click, OnClick = () => { _showStat = !_showStat; _submenu.Enabled = false; if (_showStat) _topPanel = 1; } });
         _gameScene.Add(charBtn);
         var menuBtn = new GameObject();
         menuBtn.Add(new Rect(MenuBtnRect()));
-        menuBtn.Add(new Button { LegacyId = "menu", OnClick = () => _submenu.Enabled = !_submenu.Enabled });
+        menuBtn.Add(new Button { LegacyId = "menu", Kind = ButtonKind.Click, OnClick = () => _submenu.Enabled = !_submenu.Enabled });
         _gameScene.Add(menuBtn); // last (topmost): legacy checks menu/char before the submenu and furniture
     }
 
@@ -374,21 +322,44 @@ public partial class MushTownGame
         if (_invPos != _invBuiltPos || _invTab != _invBuiltTab) { BuildInvScene(); _invBuiltPos = _invPos; _invBuiltTab = _invTab; }
         if (_statPos != _statBuiltPos) { BuildStatScene(); _statBuiltPos = _statPos; }
         if (_skillPos != _skillBuiltPos || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuiltPos = _skillPos; _skillBuiltTab = _skillTab; }
+        var quests = QuestRows();
+        if (_questPos != _questBuiltPos || !quests.SequenceEqual(_questBuiltRows)) { BuildQuestScene(quests); _questBuiltPos = _questPos; _questBuiltRows = quests; }
+        if (_settingsPos != _settingsBuiltPos) { BuildSettingsScene(); _settingsBuiltPos = _settingsPos; }
+        var sells = ShopSellRows();
+        if (_shopStock != null && (_shopPos != _shopBuiltPos || !ReferenceEquals(_shopStock, _shopBuiltStock) || !sells.SequenceEqual(_shopBuiltSells)))
+        { BuildShopScene(sells); _shopBuiltPos = _shopPos; _shopBuiltStock = _shopStock; _shopBuiltSells = sells; }
+        if (_talkNpc != 0) // gated: TalkButtons needs an open talk (same exposure as the legacy chain)
+        {
+            string buttons = string.Join(",", TalkButtons());
+            string entriesKey = _talkQuest == 0 ? string.Join(",", TalkEntries(_talkNpc).Select(e => e.quest)) : ""; // offers are level-gated: ids, not count (LvMax can swap at the same count)
+            if (_talkNpc != _talkBuiltNpc || _talkQuest != _talkBuiltQuest || _talkPage != _talkBuiltPage || buttons != _talkBuiltButtons || entriesKey != _talkBuiltEntries)
+            { BuildTalkScene(); _talkBuiltNpc = _talkNpc; _talkBuiltQuest = _talkQuest; _talkBuiltPage = _talkPage; _talkBuiltButtons = buttons; _talkBuiltEntries = entriesKey; }
+        }
     }
 
-    private static GameObject PanelButton(Rectangle r, string id, Action onClick)
+    private static GameObject PanelButton(Rectangle r, string id, Action onClick, ButtonKind kind = ButtonKind.Silent)
     {
         var o = new GameObject();
         o.Add(new Rect(r));
-        o.Add(new Button { LegacyId = id, OnClick = onClick });
+        o.Add(new Button { LegacyId = id, Kind = kind, OnClick = onClick });
         return o;
     }
 
-    private static GameObject PanelSlot(Rectangle r, string kind, int index, Func<Scene> scene, Action legacy)
+    // Dispatches a click and plays the hit Button's Kind. Conditional
+    // sounds (shopbuy, gated clicks) stay explicit in their callbacks;
+    // the old flag-snapshot funnel is gone.
+    private GameObject? ClickTree(Scene? scene, int gx, int gy)
+    {
+        var hit = scene?.Click(gx, gy);
+        if (scene?.ClickButton?.Kind == ButtonKind.Click) PlaySfx("click");
+        return hit;
+    }
+
+    private static GameObject PanelSlot(Rectangle r, string itemKind, int index, Func<Scene> scene, Action legacy)
     {
         var o = new GameObject();
         o.Add(new Rect(r));
-        var s = new Slot { Kind = kind, Index = index };
+        var s = new Slot { ItemKind = itemKind, Index = index };
         s.OnClick = () => scene().Carry.Resolve(s, legacy); // the scene is read live: rebuilds swap it
         o.Add(s);
         return o;
@@ -415,10 +386,10 @@ public partial class MushTownGame
         for (int t = 0; t < TabCount; t++)
         {
             int i = t; // for-loop variables capture shared: copy per tab
-            body.AddChild(PanelButton(TabRect(i), "invtab" + i, () => { PlaySfx("click"); _invTab = i; }));
+            body.AddChild(PanelButton(TabRect(i), "invtab" + i, () => _invTab = i, ButtonKind.Click));
         }
         body.AddChild(PanelButton(InvTitleRect(), "", () => _dragInv = _invScene.LastClick - _invPos)); // silent, like legacy
-        body.AddChild(PanelButton(InvXRect(), "x0", () => _showInv = false)); // silent: the funnel in UpdateHud plays it
+        body.AddChild(PanelButton(InvXRect(), "x0", () => _showInv = false, ButtonKind.Click));
         _invScene.Add(body);
     }
 
@@ -428,7 +399,7 @@ public partial class MushTownGame
         var body = new GameObject();
         body.Add(new Rect(StatRect())); // stat shows numbers only: title + X, no content buttons
         body.AddChild(PanelButton(StatTitleRect(), "", () => _dragStat = _statScene.LastClick - _statPos));
-        body.AddChild(PanelButton(StatXRect(), "x1", () => _showStat = false));
+        body.AddChild(PanelButton(StatXRect(), "x1", () => _showStat = false, ButtonKind.Click));
         _statScene.Add(body);
     }
 
@@ -441,23 +412,99 @@ public partial class MushTownGame
         for (int row = 0; row < tab.Length; row++)
         {
             int i = row; // for-loop variables capture shared: copy per row
-            body.AddChild(PanelButton(SkillPlusRect(i), "skillplus" + i, () => { PlaySfx("click"); if (LearnSkill(tab[i].id)) PushBuild(); }));
+            body.AddChild(PanelButton(SkillPlusRect(i), "skillplus" + i, () => { if (LearnSkill(tab[i].id)) PushBuild(); }, ButtonKind.Click));
         }
         for (int t = 0; t < SkillTabs.Length; t++)
         {
             int i = t; // for-loop variables capture shared: copy per tab
-            body.AddChild(PanelButton(SkillTabRect(i), "skilltab" + i, () => { PlaySfx("click"); _skillTab = i; }));
+            body.AddChild(PanelButton(SkillTabRect(i), "skilltab" + i, () => _skillTab = i, ButtonKind.Click));
         }
         body.AddChild(PanelButton(SkillTitleRect(), "", () => _dragSkill = _skillScene.LastClick - _skillPos)); // silent, like legacy
-        body.AddChild(PanelButton(SkillXRect(), "x2", () => _showSkill = false)); // silent: the funnel in UpdateHud plays it
+        body.AddChild(PanelButton(SkillXRect(), "x2", () => _showSkill = false, ButtonKind.Click));
         _skillScene.Add(body);
+    }
+
+    private void BuildQuestScene(List<int> accepted)
+    {
+        _questScene = new Scene();
+        var body = new GameObject();
+        body.Add(new Rect(QuestRect())); // no Button: the body swallows, like the legacy fallthrough
+        for (int row = 0; row < accepted.Count && row < 5; row++) // draw shows 5: clicks match
+        {
+            int i = row; // for-loop variables capture shared: copy per row
+            body.AddChild(PanelButton(QuestRowRect(i), "questrow" + i, () => _questSel = accepted[i], ButtonKind.Click));
+        }
+        body.AddChild(PanelButton(QuestTitleRect(), "", () => _dragQuest = _questScene.LastClick - _questPos)); // silent, like legacy
+        body.AddChild(PanelButton(QuestXRect(), "x3", () => _showQuest = false, ButtonKind.Click));
+        _questScene.Add(body);
+    }
+
+    private void BuildSettingsScene()
+    {
+        _settingsScene = new Scene();
+        var body = new GameObject();
+        body.Add(new Rect(SettingsRect())); // no Button: the body swallows, like the legacy fallthrough
+        for (int r = 0; r < 2; r++)
+        {
+            int i = r; // for-loop variables capture shared: copy per row
+            body.AddChild(PanelButton(SettingsMinusRect(i), "setminus" + i, () => BumpVolume(i == 0, -10), ButtonKind.Click));
+            body.AddChild(PanelButton(SettingsPlusRect(i), "setplus" + i, () => BumpVolume(i == 0, 10), ButtonKind.Click));
+        }
+        body.AddChild(PanelButton(SettingsTitleRect(), "", () => _dragSettings = _settingsScene.LastClick - _settingsPos)); // silent, like legacy
+        body.AddChild(PanelButton(SettingsXRect(), "x4", () => _showSettings = false, ButtonKind.Click));
+        _settingsScene.Add(body);
+    }
+
+    private void BuildShopScene(List<(int id, int count)> sells)
+    {
+        _shopScene = new Scene();
+        var body = new GameObject();
+        body.Add(new Rect(ShopRect())); // no Button: the body swallows, like the legacy fallthrough
+        for (int i = 0; i < sells.Count; i++)
+        {
+            int r = i; // for-loop variables capture shared: copy per row
+            body.AddChild(PanelButton(ShopSellRect(r), "sell" + r, () => SellToShop(sells[r].id)));
+        }
+        for (int i = 0; i < _shopStock.Count; i++)
+        {
+            int r = i; // for-loop variables capture shared: copy per row
+            body.AddChild(PanelButton(ShopBuyRect(r), "buy" + r, () => BuyFromShop(_shopStock[r])));
+        }
+        body.AddChild(PanelButton(ShopTitleRect(), "", () => _dragShop = _shopScene.LastClick - _shopPos)); // silent, like legacy
+        body.AddChild(PanelButton(ShopXRect(), "x5", () => _showShop = false, ButtonKind.Click));
+        _shopScene.Add(body);
+    }
+
+    private void BuildTalkScene()
+    {
+        _talkScene = new Scene();
+        var body = new GameObject();
+        body.Add(new Rect(TalkRect())); // no Button: talk swallows every click, like the legacy guard
+        if (_talkQuest == 0)
+        {
+            var entries = TalkEntries(_talkNpc);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                int r = i; // for-loop variables capture shared: copy per row
+                body.AddChild(PanelButton(TalkEntryRect(r), "talkentry" + r, () => { _talkQuest = entries[r].quest; _talkPage = 0; }, ButtonKind.Click));
+            }
+            if (NpcHasShop(_talkNpc))
+                body.AddChild(PanelButton(TalkEntryRect(entries.Count), "talkshop", () => OpenShop(_talkNpc), ButtonKind.Click));
+        }
+        var buttons = TalkButtons();
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            int r = i; // for-loop variables capture shared: copy per row
+            body.AddChild(PanelButton(TalkBtnRect(r, buttons.Count), "talkbtn" + r, () => TalkAction(buttons[r]), ButtonKind.Click));
+        }
+        _talkScene.Add(body);
     }
 
     private void AddSubArtRow(int i, string stem, Action onClick)
     {
         var row = new GameObject();
         row.Add(new Rect(SubRowRect(i)));
-        row.Add(new Button { LegacyId = "sub" + i, OnClick = onClick });
+        row.Add(new Button { LegacyId = "sub" + i, Kind = ButtonKind.Click, OnClick = onClick });
         var art = new GameObject();
         art.Add(new Rect(SubRowRect(i)));
         art.Add(new Image(stem));
@@ -469,7 +516,7 @@ public partial class MushTownGame
     {
         var row = new GameObject();
         row.Add(new Rect(SubRowRect(i)));
-        row.Add(new Button { LegacyId = "sub" + i, HoverFill = true, OnClick = onClick });
+        row.Add(new Button { LegacyId = "sub" + i, Kind = ButtonKind.Click, HoverFill = true, OnClick = onClick });
         var label = new GameObject();
         label.Add(new Rect(SubRowRect(i)));
         label.Add(new Label(text, 8, 6));
@@ -693,8 +740,8 @@ public partial class MushTownGame
         DrawExpBar();
         DrawPlate();
         DrawHpMp();
-        DrawHudButton(MenuBtnRect(), "hud_btn_menu", gx, gy, pressed);
-        DrawHudButton(CharBtnRect(), "hud_btn_char", gx, gy, pressed);
+        DrawHudButton(MenuBtnRect(), "hud_btn_menu", "menu", pressed);
+        DrawHudButton(CharBtnRect(), "hud_btn_char", "char", pressed);
         _gfx.Pressed = pressed;
         _scenes.Current?.Draw(_gfx); // the submenu only, for now (disabled subtrees skip themselves)
         DrawQslot();
@@ -708,12 +755,12 @@ public partial class MushTownGame
         else if (_topPanel == 3) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showQuest) DrawQuestPanel(); }
         else if (_topPanel == 4) { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSettings) DrawSettingsPanel(); }
         else { if (_showInv) DrawInvPanel(); if (_showStat) DrawStatPanel(); if (_showSkill) DrawSkillPanel(); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); }
-        if (_talkNpc != 0) DrawTalkPanel(gx, gy); // modal: above everything
+        if (_talkNpc != 0) DrawTalkPanel(); // modal: above everything
     }
 
-    private void DrawHudButton(Rectangle r, string stem, int gx, int gy, bool pressed)
+    private void DrawHudButton(Rectangle r, string stem, string id, bool pressed)
     {
-        bool hover = HitRect(r, gx, gy);
+        bool hover = _hoverId == id; // the z-winner, not live HitRect: covered buttons stay dark
         string file = hover ? pressed ? $"{stem}_p.png" : $"{stem}_h.png" : $"{stem}_n.png";
         _spriteBatch.Draw(Tex(file), r, Color.White);
     }
@@ -1108,7 +1155,7 @@ public partial class MushTownGame
             DrawShopIcon(id, r.X + 12, y);
             _spriteBatch.Draw(_ui.GetSmall(def.Name), new Vector2(r.X + 52, y + 4), Color.White);
             _spriteBatch.Draw(_ui.GetSmall($"{def.Price:#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
-            DrawShopButton(ShopBuyRect(i), "Buy", gx, gy);
+            DrawShopButton(ShopBuyRect(i), "Buy", "buy" + i);
         }
         _spriteBatch.Draw(_ui.GetSmall("Sell"), new Vector2(r.X + 12, ShopSellTop() - 16), Color.White);
         var sells = ShopSellRows();
@@ -1120,7 +1167,7 @@ public partial class MushTownGame
             DrawShopIcon(sells[i].id, r.X + 12, y);
             _spriteBatch.Draw(_ui.GetSmall($"{_items[sells[i].id].Name} x{sells[i].count}"), new Vector2(r.X + 52, y + 4), Color.White);
             _spriteBatch.Draw(_ui.GetSmall($"{Shop.SellPrice(_items[sells[i].id].Price):#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
-            DrawShopButton(ShopSellRect(i), "Sell", gx, gy);
+            DrawShopButton(ShopSellRect(i), "Sell", "sell" + i);
         }
     }
 
@@ -1130,9 +1177,9 @@ public partial class MushTownGame
         _spriteBatch.Draw(icon, new Vector2(x + (32 - icon.Width) / 2, y + (ShopRowH - icon.Height) / 2), Color.White);
     }
 
-    private void DrawShopButton(Rectangle b, string label, int gx, int gy)
+    private void DrawShopButton(Rectangle b, string label, string id)
     {
-        _spriteBatch.Draw(_pixel, b, HitRect(b, gx, gy) ? new Color(52, 88, 110) : new Color(30, 50, 66));
+        _spriteBatch.Draw(_pixel, b, _hoverId == id ? new Color(52, 88, 110) : new Color(30, 50, 66));
         var t = _ui.GetSmall(label);
         _spriteBatch.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 5), Color.White);
     }
@@ -1238,7 +1285,7 @@ public partial class MushTownGame
         return new Rectangle(r.X + 16, r.Y + 16 + 8 + TalkLines().Count * 16 + i * 16, TalkW - 32, 16);
     }
 
-    private void DrawTalkPanel(int gx, int gy)
+    private void DrawTalkPanel()
     {
         var chara = _save?.Slots[_slot];
         var r = TalkRect();
@@ -1270,35 +1317,10 @@ public partial class MushTownGame
         for (int i = 0; i < buttons.Count; i++)
         {
             var b = TalkBtnRect(i, buttons.Count);
-            _spriteBatch.Draw(_pixel, b, HitRect(b, gx, gy) ? new Color(52, 88, 110) : new Color(30, 50, 66));
+            _spriteBatch.Draw(_pixel, b, _hoverId == "talkbtn" + i ? new Color(52, 88, 110) : new Color(30, 50, 66));
             var t = _ui.GetSmall(buttons[i]);
             _spriteBatch.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 5), Color.White);
         }
     }
 
-    private void TalkHover(int gx, int gy)
-    {
-        var buttons = TalkButtons();
-        for (int i = 0; i < buttons.Count; i++)
-            if (HitRect(TalkBtnRect(i, buttons.Count), gx, gy)) { SfxOnHover($"talkbtn{i}"); return; }
-        if (_talkQuest != 0) { SfxOnHover(""); return; }
-        var entries = TalkEntries(_talkNpc);
-        for (int i = 0; i < entries.Count; i++)
-            if (HitRect(TalkEntryRect(i), gx, gy)) { SfxOnHover($"talkentry{i}"); return; }
-        if (NpcHasShop(_talkNpc) && HitRect(TalkEntryRect(entries.Count), gx, gy)) { SfxOnHover("talkshop"); return; }
-        SfxOnHover("");
-    }
-
-    private void TalkClick(int gx, int gy)
-    {
-        var buttons = TalkButtons();
-        for (int i = 0; i < buttons.Count; i++)
-            if (HitRect(TalkBtnRect(i, buttons.Count), gx, gy)) { PlaySfx("click"); TalkAction(buttons[i]); return; }
-        if (_talkQuest != 0) return;
-        var entries = TalkEntries(_talkNpc);
-        for (int i = 0; i < entries.Count; i++)
-            if (HitRect(TalkEntryRect(i), gx, gy)) { PlaySfx("click"); _talkQuest = entries[i].quest; _talkPage = 0; return; }
-        // A fresh open already clicks via the wrapper (flag flip); a re-open flips nothing, so click by hand.
-        if (NpcHasShop(_talkNpc) && HitRect(TalkEntryRect(entries.Count), gx, gy)) { bool was = _showShop; OpenShop(_talkNpc); if (was) PlaySfx("click"); return; }
-    }
 }

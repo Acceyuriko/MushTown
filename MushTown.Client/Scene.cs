@@ -48,6 +48,7 @@ public sealed class Scene
     public GameObject? Hovered { get; private set; }
     public Button? HoverButton { get; private set; }
     public Point LastClick { get; private set; } // title drags anchor their offset here (first user: W4)
+    public Button? ClickButton { get; private set; } // the pressed Button (ClickTree plays its Kind)
     public CarrySlot Carry = new();
     public void Add(GameObject root) => _roots.Add(root);
 
@@ -59,10 +60,14 @@ public sealed class Scene
         LastClick = new Point(gx, gy);
         var hit = Hit(_roots, gx, gy);
         if (hit != null && AnyModal(_roots) && !InsideModal(hit)) hit = null;
+        ClickButton = hit == null ? null : FindButton(hit);
         if (hit == null) return null;
-        FindButton(hit)?.Press();
+        ClickButton?.Press();
         return hit;
     }
+
+    // Clears a stale hover (a swallowed scene shows no highlight).
+    public void ClearHover() { Hovered = null; HoverButton = null; }
 
     // Refreshes Hovered/HoverButton; returns the legacy hover id ("", none).
     public string Hover(int gx, int gy)

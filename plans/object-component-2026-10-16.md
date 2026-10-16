@@ -1,6 +1,6 @@
 # Unified Object-Component — plan (UI first, sim later)
 
-Date: 2026-10-16. Status: W3 committed (7ad54b1), reviewed clean, W4 next. One commit per slice, only with approval. Standing rule relearned: review-loop BEFORE commit, not after.
+Date: 2026-10-16. Status: W4 committed (7e89334), reviewed clean, W5 in progress. One commit per slice, only with approval. Standing rule: review-loop BEFORE commit, not after.
 
 ## W1 done (core + submenu)
 
@@ -112,8 +112,26 @@ Date: 2026-10-16. Status: W3 committed (7ad54b1), reviewed clean, W4 next. One c
   legacy; Scene gains LastClick (title grab offsets). Trees are pure
   (pos, tab), synced per frame. Gates 0/0 + 182/182; inv/use/stat/
   skill/panel/hud/saves/chars shots pixel-identical vs HEAD.
-- W5: quest/settings/shop/talk + cleanup (SfxOnHover, old hover/click
-  chains, dead rect helpers; grep must find no stragglers).
+- W5: quest/settings/shop/talk + cleanup. DONE, waiting for user
+  acceptance. User ruled ABC: migrate + fix hover-z + autoplay, all
+  in W5. Quest/settings/shop/talk scenes land (clicks); hover
+  migrates to the trees front-to-back with swallow (the z-fix:
+  covered buttons stay silent and dark; non-overlap ids match
+  legacy exactly); autoplay by Button Kind via ClickTree (the flag
+  funnel is gone; conditional sounds stay explicit: shopbuy, sell,
+  talkshop, filled-gated chars buttons, slots-full new, keys, log).
+  Slot.Kind renamed ItemKind (was colliding with sfx Kind).
+  TalkHover/TalkClick/OnInvSlot deleted; remaining HitRect uses are
+  principled (z-arbitration, log plaque, draws). Gates 0/0 + 182/182;
+  17 shots pixel-identical vs HEAD (saves/server/delete text jitter
+  is the known pre-existing shimmer). Review-loop R1 caught 5, all
+  fixed: talkshop fresh-open lost click (now Kind.Click, no wrapper),
+  draws followed live HitRect (now follow _hoverId so covered buttons
+  stay dark), talk snapshot missed level-gated offers (entriesKey of
+  quest ids), 2 stale comments. User ruled Kind must be an enum
+  (ButtonKind Silent/Click, default Silent), not string literals.
+  R2 clean (1 comment word fixed, 1 perf note rejected as
+  negligible). Gates 0/0 + 182/182.
 
 ## Sim phase (later, separate plan)
 

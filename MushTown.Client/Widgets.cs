@@ -30,9 +30,12 @@ public sealed class Panel : Component
 // Clickable rect: hit via Rect, action via OnClick. The Scene resolves
 // the hovered Button and plays the hover sfx (LegacyId bridges the old
 // _hoverId world; gone at the W5 cleanup).
+public enum ButtonKind { Silent, Click } // click sfx via ClickTree (conditional sounds stay explicit in callbacks)
+
 public class Button : Component
 {
     public string LegacyId = "";
+    public ButtonKind Kind; // Silent by default (slots, titles, furniture, gated clicks)
     public bool HoverFill; // white-30 overlay when hovered (text rows)
     public Action? OnClick;
     public void Press() => OnClick?.Invoke();
@@ -60,7 +63,7 @@ public sealed class Image : Component
 // alone answers hovers (LegacyId stays "").
 public sealed class Slot : Button
 {
-    public string Kind = "";
+    public string ItemKind = ""; // carry-match kind (use/worn/bag); sfx Kind stays Silent
     public int Index;
 }
 
@@ -70,7 +73,7 @@ public sealed class Slot : Button
 // call sites do not change.
 public sealed class CarrySlot
 {
-    public (string Kind, int Index)? Held; // null = empty hands (always, until the carry slice)
+    public (string ItemKind, int Index)? Held; // null = empty hands (always, until the carry slice)
     public void Resolve(Slot slot, Action legacy) => legacy();
 }
 
