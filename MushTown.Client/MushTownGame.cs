@@ -400,7 +400,10 @@ public partial class MushTownGame : Game
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
+        {
             SetupShotMobs();
+            SyncPanelScenes(); // staging (accept/open) runs after the scene build and shots skip Update
+        }
     }
 
     // Shot mode: a frozen local world. --hit plants the player mid-swing next

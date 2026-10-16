@@ -620,3 +620,130 @@ public sealed class InvSlot : Component
         gfx.Sb.Draw(t, new Vector2(r.X + r.Width - t.Width - 2, r.Y + r.Height - t.Height - 2), Color.Black);
     }
 }
+
+// Plain body fill under the title strip (shop + talk bodies follow
+// the content height, so they take no fixed rounded backing).
+public sealed class Fill : Component
+{
+    private readonly Color _color;
+    private readonly int _top;
+    public Fill(Color color, int top) { _color = color; _top = top; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y + _top, r.Width, r.Height - _top), _color);
+    }
+}
+
+// Hover-aware flat button (was DrawShopButton + the talk buttons).
+// Reads the legacy hover id, not gfx.HoverButton: a front panel wins
+// the hover loop and the scenes behind keep stale hover state, so
+// the per-scene value would light covered buttons (legacy-exact).
+public sealed class FlatButton : Component
+{
+    private readonly string _label, _id;
+    private readonly Func<string> _hover;
+    public FlatButton(string label, string id, Func<string> hover) { _label = label; _id = id; _hover = hover; }
+    public override void Draw(UiGfx gfx)
+    {
+        var b = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Pixel, b, _hover() == _id ? new Color(52, 88, 110) : new Color(30, 50, 66));
+        var t = gfx.Ui.GetSmall(_label);
+        gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 5), Color.White);
+    }
+}
+
+// Settings [-]/[+] box: dark fill, glyph centered at +4 (matches DrawSettingsPanel).
+public sealed class StepBox : Component
+{
+    private readonly string _glyph;
+    public StepBox(string glyph) => _glyph = glyph;
+    public override void Draw(UiGfx gfx)
+    {
+        var b = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Pixel, b, new Color(0, 0, 0, 120));
+        var t = gfx.Ui.GetSmall(_glyph);
+        gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 4), Color.White);
+    }
+}
+
+// One shop row: icon centered in a 32px cell, name + price at +52
+// (matches DrawShopIcon + the row text). Strings bake at build: the
+// sync gate rebuilds when stock or sell rows change.
+public sealed class ShopRow : Component
+{
+    private readonly string _image, _line1, _line2;
+    public ShopRow(string image, string line1, string line2) { _image = image; _line1 = line1; _line2 = line2; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        var icon = gfx.Tex(_image);
+        gfx.Sb.Draw(icon, new Vector2(r.X + 12 + (32 - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
+        gfx.Sb.Draw(gfx.Ui.GetSmall(_line1), new Vector2(r.X + 52, r.Y + 4), Color.White);
+        gfx.Sb.Draw(gfx.Ui.GetSmall(_line2), new Vector2(r.X + 52, r.Y + 20), new Color(130, 140, 150));
+    }
+}
+
+// Live text in a live color (quest rows answer to select/done, talk
+// entries to offer/ready; both change without a scene rebuild).
+public sealed class LiveTint : Component
+{
+    private readonly Func<(string Text, Color Ink)> _row;
+    private readonly int _dx, _dy;
+    public LiveTint(Func<(string Text, Color Ink)> row, int dx, int dy) { _row = row; _dx = dx; _dy = dy; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        var (text, ink) = _row();
+        gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(r.X + _dx, r.Y + _dy), ink);
+    }
+}
+
+// Selected-quest block per draw (null when the block hides: no chara,
+// unknown sel, or sel not accepted). Lines ride the Hud wrap cache.
+public readonly record struct QuestLive(List<string> Lines, List<(string Text, bool Done)> Kills, string TurnIn);
+
+// Selected-quest detail: wrapped lines yield to kill rows (the block
+// holds 10), then the turn-in line (matches DrawQuestPanel).
+public sealed class QuestDetail : Component
+{
+    private readonly Func<QuestLive?> _data;
+    private readonly int _dy;
+    public QuestDetail(Func<QuestLive?> data, int dy) { _data = data; _dy = dy; }
+    public override void Draw(UiGfx gfx)
+    {
+        var d = _data();
+        if (d == null) return;
+        var r = Owner.Get<Rect>()!.Box;
+        int y = r.Y + _dy;
+        foreach (string line in d.Value.Lines.Take(10 - d.Value.Kills.Count))
+        {
+            gfx.Sb.Draw(gfx.Ui.GetSmall(line), new Vector2(r.X + 12, y), Color.White);
+            y += 16;
+        }
+        foreach (var k in d.Value.Kills)
+        {
+            gfx.Sb.Draw(gfx.Ui.GetSmall(k.Text), new Vector2(r.X + 12, y), k.Done ? new Color(120, 255, 120) : Color.White);
+            y += 16;
+        }
+        gfx.Sb.Draw(gfx.Ui.GetSmall(d.Value.TurnIn), new Vector2(r.X + 12, y), new Color(255, 220, 0));
+    }
+}
+
+// Talk body lines at +16, step 16 (reads the Hud wrap cache).
+public sealed class TalkBody : Component
+{
+    private readonly Func<List<string>> _lines;
+    private readonly int _dy;
+    public TalkBody(Func<List<string>> lines, int dy) { _lines = lines; _dy = dy; }
+    public override void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        int y = r.Y + _dy;
+        foreach (string line in _lines())
+        {
+            gfx.Sb.Draw(gfx.Ui.GetSmall(line), new Vector2(r.X + 16, y), Color.White);
+            y += 16;
+        }
+    }
+}

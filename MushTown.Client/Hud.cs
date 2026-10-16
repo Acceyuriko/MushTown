@@ -579,14 +579,56 @@ public partial class MushTownGame
         _questScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(QuestRect())); // no Button: the body swallows, like the legacy fallthrough
+        body.Add(new TitleBar("QUEST"));
+        body.Add(new Picture(_questBack, 0, 16));
         for (int row = 0; row < accepted.Count && row < 5; row++) // draw shows 5: clicks match
         {
             int i = row; // for-loop variables capture shared: copy per row
-            body.AddChild(PanelButton(QuestRowRect(i), "questrow" + i, () => _questSel = accepted[i], ButtonKind.Click));
+            int qid = accepted[i];
+            string name = _quests[qid].Name;
+            var rb = PanelButton(QuestRowRect(i), "questrow" + i, () => _questSel = accepted[i], ButtonKind.Click);
+            rb.Add(new LiveTint(() =>
+            {
+                var c = _save?.Slots[_slot];
+                bool done = _questLog.State(qid).IsComplete(c!); // rows exist only with a chara
+                var ink = qid == _questSel ? new Color(255, 220, 0)
+                    : done ? new Color(120, 255, 120) : Color.White;
+                return ((done ? "? " : "") + name, ink);
+            }, 4, 3));
+            body.AddChild(rb);
         }
         body.AddChild(PanelButton(QuestTitleRect(), "", () => _dragQuest = _questScene.LastClick - _questPos)); // silent, like legacy
-        body.AddChild(PanelButton(QuestXRect(), "x3", () => _showQuest = false, ButtonKind.Click));
+        var x = PanelButton(QuestXRect(), "x3", () => _showQuest = false, ButtonKind.Click);
+        x.Add(new Picture("ui/hud_statx.png"));
+        body.AddChild(x);
+        var detail = new GameObject { NoHit = true };
+        detail.Add(new Rect(QuestRect()));
+        detail.Add(new QuestDetail(() =>
+        {
+            var c = _save?.Slots[_slot];
+            if (c == null || !_quests.TryGetValue(_questSel, out var sel) || !c.Quests.Contains(_questSel)) return null;
+            return new QuestLive(QuestDetailLines(c, sel), sel.Kills.Select((k, i) =>
+            {
+                int n = _questLog.KillCount(c, _questSel, i);
+                return ($"{MobName(k.Mob)} {n}/{k.Count}", n >= k.Count);
+            }).ToList(), sel.NeedItemsToComplete ? "Need items" : $"Turn in: {NpcName(sel.Npc1)}");
+        }, 16 + QuestListH + 10));
+        body.AddChild(detail);
         _questScene.Add(body);
+    }
+
+    // Selected-quest wrapped lines, re-wrapped when the sel or its kill
+    // counts change (counters ride the key: a kill under the open panel
+    // re-renders #a, same as the talk cache).
+    private List<string> QuestDetailLines(CharaSlot chara, QuestData sel)
+    {
+        string key = _questSel + ":" + string.Join(",", sel.Kills.Select((_, i) => _questLog.KillCount(chara, _questSel, i)));
+        if (key != _questKey)
+        {
+            _questKey = key;
+            _questLines = _ui.Wrap(QText(sel.Progress), QuestW - 24);
+        }
+        return _questLines;
     }
 
     private void BuildSettingsScene()
@@ -594,14 +636,25 @@ public partial class MushTownGame
         _settingsScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(SettingsRect())); // no Button: the body swallows, like the legacy fallthrough
+        body.Add(new TitleBar("SETTINGS"));
+        body.Add(new Picture(_settingsBack, 0, 16));
+        string[] labels = { "Music", "Sound" };
         for (int r = 0; r < 2; r++)
         {
             int i = r; // for-loop variables capture shared: copy per row
-            body.AddChild(PanelButton(SettingsMinusRect(i), "setminus" + i, () => BumpVolume(i == 0, -10), ButtonKind.Click));
-            body.AddChild(PanelButton(SettingsPlusRect(i), "setplus" + i, () => BumpVolume(i == 0, 10), ButtonKind.Click));
+            body.Add(new Label(labels[i], 12, 16 + 10 + i * SettingsRowH + 4));
+            var minus = PanelButton(SettingsMinusRect(i), "setminus" + i, () => BumpVolume(i == 0, -10), ButtonKind.Click);
+            minus.Add(new StepBox("-"));
+            body.AddChild(minus);
+            var plus = PanelButton(SettingsPlusRect(i), "setplus" + i, () => BumpVolume(i == 0, 10), ButtonKind.Click);
+            plus.Add(new StepBox("+"));
+            plus.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => (i == 0 ? _bgmVol : _sfxVol).ToString(), 0, 4, Color.White));
+            body.AddChild(plus);
         }
         body.AddChild(PanelButton(SettingsTitleRect(), "", () => _dragSettings = _settingsScene.LastClick - _settingsPos)); // silent, like legacy
-        body.AddChild(PanelButton(SettingsXRect(), "x4", () => _showSettings = false, ButtonKind.Click));
+        var x = PanelButton(SettingsXRect(), "x4", () => _showSettings = false, ButtonKind.Click);
+        x.Add(new Picture("ui/hud_statx.png"));
+        body.AddChild(x);
         _settingsScene.Add(body);
     }
 
@@ -610,18 +663,43 @@ public partial class MushTownGame
         _shopScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(ShopRect())); // no Button: the body swallows, like the legacy fallthrough
-        for (int i = 0; i < sells.Count; i++)
-        {
-            int r = i; // for-loop variables capture shared: copy per row
-            body.AddChild(PanelButton(ShopSellRect(r), "sell" + r, () => SellToShop(sells[r].id)));
-        }
+        body.Add(new TitleBar("SHOP"));
+        body.Add(new Fill(new Color(62, 96, 118), 16));
+        body.Add(new LiveLabel(() => $"Mesos: {(_save?.Slots[_slot]?.Mesos ?? 0):#,##0}", 12, 16 + 4, new Color(255, 220, 0)));
+        body.Add(new Label("Buy", 12, 16 + 22));
+        var r = ShopRect();
         for (int i = 0; i < _shopStock.Count; i++)
         {
-            int r = i; // for-loop variables capture shared: copy per row
-            body.AddChild(PanelButton(ShopBuyRect(r), "buy" + r, () => BuyFromShop(_shopStock[r])));
+            int s = i; // for-loop variables capture shared: copy per row
+            int id = _shopStock[s];
+            var def = _items[id];
+            var holder = new GameObject { NoHit = true };
+            holder.Add(new Rect(new Rectangle(r.X, ShopBuyTop() + s * ShopRowH, ShopW, ShopRowH)));
+            holder.Add(new ShopRow(def.Image, def.Name, $"{def.Price:#,##0}"));
+            body.AddChild(holder);
+            var buy = PanelButton(ShopBuyRect(s), "buy" + s, () => BuyFromShop(_shopStock[s]));
+            buy.Add(new FlatButton("Buy", "buy" + s, () => _hoverId));
+            body.AddChild(buy);
+        }
+        body.Add(new Label("Sell", 12, ShopSellTop() - r.Y - 16));
+        if (sells.Count == 0)
+            body.Add(new Label("Your bag is empty.", 12, ShopSellTop() - r.Y + 12) { Tint = new Color(130, 140, 150) });
+        for (int i = 0; i < sells.Count; i++)
+        {
+            int s = i; // for-loop variables capture shared: copy per row
+            int id = sells[s].id;
+            var holder = new GameObject { NoHit = true };
+            holder.Add(new Rect(new Rectangle(r.X, ShopSellTop() + s * ShopRowH, ShopW, ShopRowH)));
+            holder.Add(new ShopRow(_items[id].Image, $"{_items[id].Name} x{sells[s].count}", $"{Shop.SellPrice(_items[id].Price):#,##0}"));
+            body.AddChild(holder);
+            var sell = PanelButton(ShopSellRect(s), "sell" + s, () => SellToShop(sells[s].id));
+            sell.Add(new FlatButton("Sell", "sell" + s, () => _hoverId));
+            body.AddChild(sell);
         }
         body.AddChild(PanelButton(ShopTitleRect(), "", () => _dragShop = _shopScene.LastClick - _shopPos)); // silent, like legacy
-        body.AddChild(PanelButton(ShopXRect(), "x5", () => _showShop = false, ButtonKind.Click));
+        var x = PanelButton(ShopXRect(), "x5", () => _showShop = false, ButtonKind.Click);
+        x.Add(new Picture("ui/hud_statx.png"));
+        body.AddChild(x);
         _shopScene.Add(body);
     }
 
@@ -630,22 +708,42 @@ public partial class MushTownGame
         _talkScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(TalkRect())); // no Button: talk swallows every click, like the legacy guard
+        body.Add(new TitleBar(_npcs[_talkNpc].Name));
+        body.Add(new Fill(new Color(62, 96, 118), 16));
+        body.Add(new TalkBody(() => TalkLines(), 16 + 8));
         if (_talkQuest == 0)
         {
             var entries = TalkEntries(_talkNpc);
             for (int i = 0; i < entries.Count; i++)
             {
                 int r = i; // for-loop variables capture shared: copy per row
-                body.AddChild(PanelButton(TalkEntryRect(r), "talkentry" + r, () => { _talkQuest = entries[r].quest; _talkPage = 0; }, ButtonKind.Click));
+                int q = entries[r].quest;
+                bool offer = entries[r].offer;
+                var eb = PanelButton(TalkEntryRect(r), "talkentry" + r, () => { _talkQuest = entries[r].quest; _talkPage = 0; }, ButtonKind.Click);
+                eb.Add(new LiveTint(() =>
+                {
+                    var c = _save?.Slots[_slot];
+                    bool ready = !offer && c != null && _questLog.State(q).IsComplete(c);
+                    var ink = offer || ready ? new Color(255, 220, 0) : new Color(130, 140, 150);
+                    string mark = offer ? "! " : ready ? "? " : "";
+                    return (mark + _quests[q].Name, ink);
+                }, 0, 0));
+                body.AddChild(eb);
             }
             if (NpcHasShop(_talkNpc))
-                body.AddChild(PanelButton(TalkEntryRect(entries.Count), "talkshop", () => OpenShop(_talkNpc), ButtonKind.Click));
+            {
+                var sb = PanelButton(TalkEntryRect(entries.Count), "talkshop", () => OpenShop(_talkNpc), ButtonKind.Click);
+                sb.Add(new Label("Shop", 0, 0) { Tint = new Color(255, 220, 0) });
+                body.AddChild(sb);
+            }
         }
         var buttons = TalkButtons();
         for (int i = 0; i < buttons.Count; i++)
         {
             int r = i; // for-loop variables capture shared: copy per row
-            body.AddChild(PanelButton(TalkBtnRect(r, buttons.Count), "talkbtn" + r, () => TalkAction(buttons[r]), ButtonKind.Click));
+            var bb = PanelButton(TalkBtnRect(r, buttons.Count), "talkbtn" + r, () => TalkAction(buttons[r]), ButtonKind.Click);
+            bb.Add(new FlatButton(buttons[r], "talkbtn" + r, () => _hoverId));
+            body.AddChild(bb);
         }
         _talkScene.Add(body);
     }
@@ -885,13 +983,13 @@ public partial class MushTownGame
         _gfx.Pressed = pressed;
         _scenes.Current?.Draw(_gfx); // HUD art lives in the tree now (exp, buttons, submenu, plate, HP/MP, quickslot, tracker, boss bar, minimap); panels and talk draw above it
         // The front panel draws last (on top); the back five keep inv < stat < skill < quest < settings < shop.
-        if (_topPanel == 0) { if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showInv) _invScene.Draw(_gfx); }
-        else if (_topPanel == 1) { if (_showInv) _invScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showStat) _statScene.Draw(_gfx); }
-        else if (_topPanel == 2) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSkill) _skillScene.Draw(_gfx); }
-        else if (_topPanel == 3) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showQuest) DrawQuestPanel(); }
-        else if (_topPanel == 4) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showShop) DrawShopPanel(gx, gy); if (_showSettings) DrawSettingsPanel(); }
-        else { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) DrawQuestPanel(); if (_showSettings) DrawSettingsPanel(); if (_showShop) DrawShopPanel(gx, gy); }
-        if (_talkNpc != 0) DrawTalkPanel(); // modal: above everything
+        if (_topPanel == 0) { if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showInv) _invScene.Draw(_gfx); }
+        else if (_topPanel == 1) { if (_showInv) _invScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); }
+        else if (_topPanel == 2) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); }
+        else if (_topPanel == 3) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); }
+        else if (_topPanel == 4) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); }
+        else { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); }
+        if (_talkNpc != 0) _talkScene.Draw(_gfx); // modal: above everything
         if (!_hand.Empty) // the held piece rides the cursor (take-1: no count to show)
         {
             var icon = _textures[_items[_hand.Id].Image];
@@ -954,130 +1052,6 @@ public partial class MushTownGame
         return new Rectangle(r.X + 8, r.Y + 16 + 6 + i * QuestRowH, QuestW - 16, QuestRowH);
     }
 
-    private void DrawQuestPanel()
-    {
-        var chara = _save?.Slots[_slot];
-        var r = QuestRect();
-        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
-        _spriteBatch.Draw(_ui.GetSmall("QUEST"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
-        _spriteBatch.Draw(Tex("hud_statx.png"), QuestXRect(), Color.White);
-        _spriteBatch.Draw(_questBack, new Vector2(r.X, r.Y + 16), Color.White);
-        var rows = QuestRows();
-        for (int i = 0; i < rows.Count && i < 5; i++)
-        {
-            var q = _quests[rows[i]];
-            bool done = _questLog.State(rows[i]).IsComplete(chara!); // rows exist only with a chara
-            var ink = rows[i] == _questSel ? new Color(255, 220, 0)
-                : done ? new Color(120, 255, 120) : Color.White;
-            _spriteBatch.Draw(_ui.GetSmall((done ? "? " : "") + q.Name),
-                new Vector2(r.X + 12, r.Y + 16 + 6 + i * QuestRowH + 3), ink);
-        }
-        if (chara != null && _quests.TryGetValue(_questSel, out var sel) && chara.Quests.Contains(_questSel))
-        {
-            string key = _questSel + ":" + string.Join(",", sel.Kills.Select((_, i) => _questLog.KillCount(chara, _questSel, i)));
-            if (key != _questKey)
-            {
-                _questKey = key;
-                _questLines = _ui.Wrap(QText(sel.Progress), QuestW - 24);
-            }
-            int y = r.Y + 16 + QuestListH + 10;
-            // The block holds 180px: text yields to kills (kills cap at 9, so this stays >= 1).
-            foreach (string line in _questLines.Take(10 - sel.Kills.Count))
-            {
-                _spriteBatch.Draw(_ui.GetSmall(line), new Vector2(r.X + 12, y), Color.White);
-                y += 16;
-            }
-            for (int i = 0; i < sel.Kills.Count; i++)
-            {
-                var k = sel.Kills[i];
-                int n = _questLog.KillCount(chara, _questSel, i);
-                var ink = n >= k.Count ? new Color(120, 255, 120) : Color.White;
-                _spriteBatch.Draw(_ui.GetSmall($"{MobName(k.Mob)} {n}/{k.Count}"), new Vector2(r.X + 12, y), ink);
-                y += 16;
-            }
-            string turnIn = sel.NeedItemsToComplete ? "Need items" : $"Turn in: {NpcName(sel.Npc1)}";
-            _spriteBatch.Draw(_ui.GetSmall(turnIn), new Vector2(r.X + 12, y), new Color(255, 220, 0));
-        }
-    }
-
-    // Settings window: two volume rows (music, effects). [-]/[+] step 10
-    // and save at once; the value sits right-aligned between the buttons.
-    private void DrawSettingsPanel()
-    {
-        var r = SettingsRect();
-        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
-        _spriteBatch.Draw(_ui.GetSmall("SETTINGS"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
-        _spriteBatch.Draw(Tex("hud_statx.png"), SettingsXRect(), Color.White);
-        _spriteBatch.Draw(_settingsBack, new Vector2(r.X, r.Y + 16), Color.White);
-        string[] labels = { "Music", "Sound" };
-        int[] vols = { _bgmVol, _sfxVol };
-        for (int i = 0; i < 2; i++)
-        {
-            int y = r.Y + 16 + 10 + i * SettingsRowH;
-            _spriteBatch.Draw(_ui.GetSmall(labels[i]), new Vector2(r.X + 12, y + 4), Color.White);
-            var minus = SettingsMinusRect(i);
-            var plus = SettingsPlusRect(i);
-            _spriteBatch.Draw(_pixel, minus, new Color(0, 0, 0, 120));
-            _spriteBatch.Draw(_pixel, plus, new Color(0, 0, 0, 120));
-            var dash = _ui.GetSmall("-");
-            _spriteBatch.Draw(dash, new Vector2(minus.X + (minus.Width - dash.Width) / 2, y + 4), Color.White);
-            var cross = _ui.GetSmall("+");
-            _spriteBatch.Draw(cross, new Vector2(plus.X + (plus.Width - cross.Width) / 2, y + 4), Color.White);
-            var val = _ui.GetSmall(vols[i].ToString());
-            _spriteBatch.Draw(val, new Vector2(plus.X - val.Width, y + 4), Color.White); // right-aligned to the [+] box
-        }
-    }
-
-    // Pio's shop: wallet line, stock rows (icon + name + price + [Buy]),
-    // bag rows (icon + name xN + sell price + [Sell]). Height follows the
-    // bag, so the body is a plain fill, not a fixed rounded backing.
-    private void DrawShopPanel(int gx, int gy)
-    {
-        var chara = _save?.Slots[_slot];
-        var r = ShopRect();
-        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
-        _spriteBatch.Draw(_ui.GetSmall("SHOP"), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
-        _spriteBatch.Draw(Tex("hud_statx.png"), ShopXRect(), Color.White);
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + 16, r.Width, r.Height - 16), new Color(62, 96, 118));
-        _spriteBatch.Draw(_ui.GetSmall($"Mesos: {(chara?.Mesos ?? 0):#,##0}"), new Vector2(r.X + 12, r.Y + 16 + 4), new Color(255, 220, 0));
-        _spriteBatch.Draw(_ui.GetSmall("Buy"), new Vector2(r.X + 12, r.Y + 16 + 22), Color.White);
-        for (int i = 0; i < _shopStock.Count; i++)
-        {
-            int id = _shopStock[i];
-            var def = _items[id];
-            int y = ShopBuyTop() + i * ShopRowH;
-            DrawShopIcon(id, r.X + 12, y);
-            _spriteBatch.Draw(_ui.GetSmall(def.Name), new Vector2(r.X + 52, y + 4), Color.White);
-            _spriteBatch.Draw(_ui.GetSmall($"{def.Price:#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
-            DrawShopButton(ShopBuyRect(i), "Buy", "buy" + i);
-        }
-        _spriteBatch.Draw(_ui.GetSmall("Sell"), new Vector2(r.X + 12, ShopSellTop() - 16), Color.White);
-        var sells = ShopSellRows();
-        if (sells.Count == 0)
-            _spriteBatch.Draw(_ui.GetSmall("Your bag is empty."), new Vector2(r.X + 12, ShopSellTop() + 12), new Color(130, 140, 150));
-        for (int i = 0; i < sells.Count; i++)
-        {
-            int y = ShopSellTop() + i * ShopRowH;
-            DrawShopIcon(sells[i].id, r.X + 12, y);
-            _spriteBatch.Draw(_ui.GetSmall($"{_items[sells[i].id].Name} x{sells[i].count}"), new Vector2(r.X + 52, y + 4), Color.White);
-            _spriteBatch.Draw(_ui.GetSmall($"{Shop.SellPrice(_items[sells[i].id].Price):#,##0}"), new Vector2(r.X + 52, y + 20), new Color(130, 140, 150));
-            DrawShopButton(ShopSellRect(i), "Sell", "sell" + i);
-        }
-    }
-
-    private void DrawShopIcon(int id, int x, int y)
-    {
-        var icon = _textures[_items[id].Image];
-        _spriteBatch.Draw(icon, new Vector2(x + (32 - icon.Width) / 2, y + (ShopRowH - icon.Height) / 2), Color.White);
-    }
-
-    private void DrawShopButton(Rectangle b, string label, string id)
-    {
-        _spriteBatch.Draw(_pixel, b, _hoverId == id ? new Color(52, 88, 110) : new Color(30, 50, 66));
-        var t = _ui.GetSmall(label);
-        _spriteBatch.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 5), Color.White);
-    }
-
     // Minimap: the WZ canvas scaled into a 220x160 corner box, portals as
     // blue dots, the player as a yellow dot. Always on, top-right.
     // Talk panel (modal): NPC name on top, one page of body, quest entries in
@@ -1129,44 +1103,6 @@ public partial class MushTownGame
     {
         var r = TalkRect();
         return new Rectangle(r.X + 16, r.Y + 16 + 8 + TalkLines().Count * 16 + i * 16, TalkW - 32, 16);
-    }
-
-    private void DrawTalkPanel()
-    {
-        var chara = _save?.Slots[_slot];
-        var r = TalkRect();
-        _spriteBatch.Draw(Tex("hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
-        _spriteBatch.Draw(_ui.GetSmall(_npcs[_talkNpc].Name), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
-        _spriteBatch.Draw(_pixel, new Rectangle(r.X, r.Y + 16, r.Width, r.Height - 16), new Color(62, 96, 118));
-        int y = r.Y + 16 + 8;
-        foreach (string line in TalkLines())
-        {
-            _spriteBatch.Draw(_ui.GetSmall(line), new Vector2(r.X + 16, y), Color.White);
-            y += 16;
-        }
-        if (_talkQuest == 0)
-        {
-            var entries = TalkEntries(_talkNpc);
-            for (int i = 0; i < entries.Count; i++)
-            {
-                var q = _quests[entries[i].quest];
-                bool ready = !entries[i].offer && chara != null && _questLog.State(entries[i].quest).IsComplete(chara);
-                var ink = entries[i].offer || ready ? new Color(255, 220, 0) : new Color(130, 140, 150);
-                string mark = entries[i].offer ? "! " : ready ? "? " : "";
-                _spriteBatch.Draw(_ui.GetSmall(mark + q.Name), new Vector2(r.X + 16, y), ink);
-                y += 16;
-            }
-            if (NpcHasShop(_talkNpc))
-                _spriteBatch.Draw(_ui.GetSmall("Shop"), new Vector2(r.X + 16, y), new Color(255, 220, 0));
-        }
-        var buttons = TalkButtons();
-        for (int i = 0; i < buttons.Count; i++)
-        {
-            var b = TalkBtnRect(i, buttons.Count);
-            _spriteBatch.Draw(_pixel, b, _hoverId == "talkbtn" + i ? new Color(52, 88, 110) : new Color(30, 50, 66));
-            var t = _ui.GetSmall(buttons[i]);
-            _spriteBatch.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 5), Color.White);
-        }
     }
 
 }

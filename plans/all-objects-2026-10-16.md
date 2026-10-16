@@ -1,8 +1,22 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: U5 committed, U6 in progress (overnight autonomous run:
+Status: U6 committed, S1 in progress (overnight autonomous run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- U6 panel art 2 (done): quest/settings/shop/talk panels in-tree.
+  New visuals: Fill (plain body), FlatButton (hover-aware, reads
+  the legacy _hoverId: sibling scenes keep stale hover when a
+  front panel wins, so gfx.HoverButton would lie), StepBox,
+  ShopRow, LiveTint (live text + live ink), QuestDetail (+
+  QuestLive snapshot; wrap cache extracted to QuestDetailLines),
+  TalkBody. Shot staging runs after the scene build, so
+  LoadContent re-syncs panel scenes after SetupShotMobs (shots
+  skip Update; quest rows/shop/talk baked pre-staging state).
+  6 code draws deleted. No new unit tests (shots are the proof).
+  Gates 0/0 + 212/212. 20/20 shots match HEAD (settings screen
+  added to the batch). Review R1: 0 P0/P1, 2 P2 fixed (quest-row
+  guard back to legacy-exact `c!`, shop dys as `16 + n`). No R2
+  (literal-level). Playtest pending.
 - U5 panel art 1 (done): inv/stat/skill panels in-tree. New
   visuals: TitleBar (shared with U6), StatRow, RightLabel, SkillRow
   (+ SkillLive snapshot struct), InvSlot; Picture gains a Texture2D
