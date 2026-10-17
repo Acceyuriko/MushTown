@@ -24,7 +24,6 @@ public static class MenuLayout
     public static int CancelSize = 16; // Cancel row text size in display px
     public static int CancelDown = 3; // Cancel text sits this far below row center
     public static float Scale = 0.7f; // whole board shrinks toward the panel center
-    public static (int X, int Y) Log = (1199, 699); // log button top-left (157x59, follows the art)
 
     public static void Load(string path)
     {
@@ -47,12 +46,11 @@ public static class MenuLayout
         var cancelSize = GetInt(root, "cancelSize", CancelSize);
         var cancelDown = GetInt(root, "cancelDown", CancelDown);
         var scale = GetFloat(root, "scale", Scale);
-        var log = GetPoint(root, "log", Log);
         if (listSize <= 0) throw new JsonException("bad listSize"); // GDI+ throws for 0/negative sizes
         if (cancelSize <= 0) throw new JsonException("bad cancelSize");
         Slice = slice; OverlapTop = overlapTop; BotUp = botUp; RowGap = rowGap; BodyPadTop = bodyPadTop;
         BodyPadBottom = bodyPadBottom; MiddleExtraH = middleExtraH; ServerRowW = serverRowW;
         ServerRowH = serverRowH; TextMargin = textMargin; TextDown = textDown; ListSize = listSize;
-        TextGap = textGap; CancelSize = cancelSize; CancelDown = cancelDown; Scale = scale; Log = log;
+        TextGap = textGap; CancelSize = cancelSize; CancelDown = cancelDown; Scale = scale;
     }
 }

@@ -59,8 +59,7 @@ public partial class MushTownGame
     private void UpdateSaves(bool click, bool enter, int gx, int gy)
     {
         if (enter) { ActivateFirstSave(); return; }
-        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
-        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (click) ClickTree(_scenes.Current, gx, gy);
     }
 

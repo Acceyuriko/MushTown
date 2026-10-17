@@ -114,6 +114,11 @@ public static partial class Export
                 return;
             }
         }
+        if (!ExportJobs(ui, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         if (!ExportUiFrames(ui, outDir))
         {
             Environment.ExitCode = 1;

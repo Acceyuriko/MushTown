@@ -18,11 +18,13 @@ public sealed class UiText : IDisposable
     private readonly FontFamily? _maple; // null without assets/fonts (falls back to system fonts)
     private readonly Font _font;
     private readonly Font _small;
+    private readonly Font _mid;
     private readonly Font _meso;
     private Font _list;
     private Font _cancel;
     private readonly Dictionary<string, Texture2D> _cache = new();
     private readonly Dictionary<string, Texture2D> _cacheSmall = new();
+    private readonly Dictionary<string, Texture2D> _cacheMid = new();
     private readonly Dictionary<string, Texture2D> _cacheMeso = new();
     private readonly Dictionary<string, Texture2D> _cacheList = new();
     private readonly Dictionary<string, Texture2D> _cacheCancel = new();
@@ -40,6 +42,7 @@ public sealed class UiText : IDisposable
         }
         _font = Maple(22);
         _small = Maple(12);
+        _mid = Maple(16);
         // Meso keeps Arial as its missing-TTF fallback (Maple() falls back to YaHei).
         _meso = _maple != null
             ? new Font(_maple, 12, FontStyle.Bold, GraphicsUnit.Pixel)
@@ -68,6 +71,9 @@ public sealed class UiText : IDisposable
 
     public Texture2D Get(string text) => GetFrom(_cache, _font, text);
 
+    // Middle size for the class-select stat rows: 12px reads too small in the big panel.
+    public Texture2D GetMid(string text) => GetFrom(_cacheMid, _mid, text);
+
     // Small sibling for HUD labels (names, tabs, rows, slots).
     public Texture2D GetSmall(string text) => GetFrom(_cacheSmall, _small, text);
 
@@ -93,9 +99,6 @@ public sealed class UiText : IDisposable
     // Word-wrap for dialog/quest bodies (small font; explicit \n splits
     // first, then greedy words; a word wider than the box splits by char).
     public List<string> Wrap(string text, float maxWidth) => WrapWith(text, maxWidth, _small);
-
-    // Same wrap for the log panel, which bakes with the big font.
-    public List<string> WrapBig(string text, float maxWidth) => WrapWith(text, maxWidth, _font);
 
     private List<string> WrapWith(string text, float maxWidth, Font font)
     {
@@ -124,19 +127,6 @@ public sealed class UiText : IDisposable
         return lines;
     }
 
-    // One texture for a stack of lines (the log panel rebuilds this on change).
-    public Texture2D BakeBlock(List<string> lines, int width)
-    {
-        int height = Math.Max(1, lines.Count) * _font.Height;
-        using var bmp = new Bitmap(Math.Max(1, width), height, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bmp);
-        g.TextRenderingHint = TextRenderingHint.AntiAlias;
-        using var brush = new SolidBrush(System.Drawing.Color.White);
-        for (int i = 0; i < lines.Count; i++)
-            g.DrawString(lines[i], _font, brush, 0, i * _font.Height);
-        return ToTexture(bmp);
-    }
-
     private Texture2D Bake(string text, Font font)
     {
         using var bmp = new Bitmap(1, 1, PixelFormat.Format32bppArgb);
@@ -144,7 +134,7 @@ public sealed class UiText : IDisposable
         var size = meas.MeasureString(text, font);
         using var img = new Bitmap(Math.Max(1, (int)Math.Ceiling(size.Width)), font.Height, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(img);
-        g.TextRenderingHint = TextRenderingHint.AntiAlias;
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
         using var brush = new SolidBrush(System.Drawing.Color.White);
         g.DrawString(text, font, brush, 0, 0);
         return ToTexture(img);
@@ -176,11 +166,13 @@ public sealed class UiText : IDisposable
         _privateFonts?.Dispose();
         _font.Dispose();
         _small.Dispose();
+        _mid.Dispose();
         _meso.Dispose();
         _list.Dispose();
         _cancel.Dispose();
         foreach (var tex in _cache.Values) tex.Dispose();
         foreach (var tex in _cacheSmall.Values) tex.Dispose();
+        foreach (var tex in _cacheMid.Values) tex.Dispose();
         foreach (var tex in _cacheMeso.Values) tex.Dispose();
         foreach (var tex in _cacheList.Values) tex.Dispose();
         foreach (var tex in _cacheCancel.Values) tex.Dispose();

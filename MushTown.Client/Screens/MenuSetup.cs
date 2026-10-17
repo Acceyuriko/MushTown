@@ -59,8 +59,7 @@ public partial class MushTownGame
 
     private void UpdateSetup(bool click, bool enter, bool esc, int gx, int gy)
     {
-        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log");
-        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (esc) { SetupToJob(); return; }
         GameObject? took = click ? ClickTree(_scenes.Current, gx, gy) : null;
         // Enter confirms unless the click took something: legacy chained

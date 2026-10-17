@@ -23,7 +23,6 @@ public partial class MushTownGame
     private Task<List<FoundHost>>? _scanTask; // a running LAN scan (UpdateServer collects it; shots never start one)
     private List<FoundHost> _hosts = new();
     private bool _scanWasDown;
-    private bool _jobPicked;
     private Scene _menuScene = null!; // rebuilt on every menu entry (rows/slots follow live data)
     private GameObject _csDeleteModal = null!; // delete root; Enabled is the open flag
     private GameObject _pager = null!; // pager container (enter-select yields to it)
@@ -35,13 +34,10 @@ public partial class MushTownGame
     private UiText _ui = null!;
     private Texture2D _pixel = null!;
     private RollLog? _rollLog;
-    private readonly List<string> _logLines = new();
-    private readonly object _logLock = new();
-    private bool _panelOpen;
-    private Texture2D? _panelTex;
-    private GameObject _logRoot = null!; // bare root (built in InitializeMenu): DrawLogOverlay draws it in menu and game
-    private bool _panelDirty = true;
     private int _page; // char-select page 0-4 (12 slots each)
+    private List<JobData> _jobs = new(); // class roster (assets/ui/jobs.json)
+    private int _jobPick; // picked class: index into _jobs
+    private int _jobPage; // class card page (14 cards each)
     private int _walkFrame;
     private float _walkT;
     private int _walkSlot = -1; // walk restarts when the selection moves
@@ -83,7 +79,7 @@ public partial class MushTownGame
     private static readonly Color MenuInk = new(43, 8, 5); // baked button text median, sampled off btn_astra
 
     // Must match Export.cs UiFiles: every name here must be exported, or LoadTexture throws.
-    // Char-select buttons carry real 3-state art (_n/_h/_p); frame sets
+    // Char-select and job buttons carry real 3-state art (_n/_h/_p); frame sets
     // (cs_ghost/cs_portal/cs_motes) load through LoadUiClip instead.
     private static readonly string[] UiFiles = new[]
     {
@@ -103,7 +99,9 @@ public partial class MushTownGame
         "cs_page_3_n.png", "cs_page_3_h.png", "cs_page_3_p.png",
         "cs_page_4_n.png", "cs_page_4_h.png", "cs_page_4_p.png",
         "cs_page_5_n.png", "cs_page_5_h.png", "cs_page_5_p.png",
-        "listbg.png", "cell_hero.png", "btn_make.png",
+        "listbg.png", "btn_make_n.png", "btn_make_h.png", "btn_make_p.png",
+        "job_bg.png", "job_cover.png",
+        "job_page_l.png", "job_page_r.png",
         "setupbg.png", "btn_confirm.png", "btn_cancel.png",
     };
 
@@ -112,7 +110,7 @@ public partial class MushTownGame
     private static readonly string[] MenuFiles = new[]
     {
         "sign_top.png", "sign_mid.png", "sign_bot.png",
-        "btn_blank.png", "btn_exit.png", "btn_log.png",
+        "btn_blank.png", "btn_exit.png",
         "btn_astra.png", "btn_blackveil.png", "btn_crimson.png",
     };
 
@@ -135,18 +133,12 @@ public partial class MushTownGame
     private Rectangle MSR(Rectangle r, int bodyH) => new(MSX(r.X), MSY(r.Y, bodyH), MSS(r.Width), MSS(r.Height));
     private int PanelBottomS(int bodyH) => MSY(PanelBottom(bodyH), bodyH);
 
-    private static Rectangle LogButtonRect() => new(MenuLayout.Log.X, MenuLayout.Log.Y, 157, 59); // btn_log 373x140 at 0.42
-    private static Rectangle LogPanelRect() => new(900, 228, 446, 470);
-
     private void InitializeMenu(string? shotScreen)
     {
         if (SaveNames.Length != SaveStore.MaxSaves || SaveBtnFiles.Length != SaveStore.MaxSaves)
             throw new InvalidDataException("save names/buttons drifted from MaxSaves");
         if (PageSlots * Pages != SaveStore.MaxHeroes)
             throw new InvalidDataException("char pages drifted from MaxHeroes");
-        _logRoot = new GameObject();
-        _logRoot.Add(new Rect(LogPanelRect()));
-        _logRoot.Add(new LogPanel(() => _panelTex));
         string dataDir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "data");
         _savesPath = Path.Combine(dataDir, "saves.json");
         Window.TextInput += (_, e) => MenuTextInput(e.Character);
@@ -165,8 +157,8 @@ public partial class MushTownGame
             {
                 "saves" => Screen.Saves,
                 "server" => Screen.Server,
-                "chars" or "chars2" or "delete" or "panel" => Screen.Chars,
-                "job" => Screen.Job,
+                "chars" or "chars2" or "delete" => Screen.Chars,
+                "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
                 "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" => Screen.Game,
                 _ => Screen.Saves,
@@ -178,12 +170,12 @@ public partial class MushTownGame
             if (shotScreen == "quest") { _showQuest = true; _topPanel = 3; }
             if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
             if (shotScreen == "chars2") _page = 1; // empty page: the demo fills page 1 only
+            if (shotScreen == "job2") { _jobPage = 1; _jobPick = 14; } // second card page: proves paging draws other classes
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
             if (shotScreen == "server") _hosts = new List<FoundHost> { new("192.168.1.4", Net.Port, "ACCEYURIKO") };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
             if (shotScreen == "chars2") _slot = PageSlots; // empty slot: no start/delete on the empty-page shot
             if (_screen == Screen.Setup) { _name = "newhero"; _focus = "name"; }
-            _panelOpen = shotScreen == "panel"; // art shots stay clean; the panel shot pairs with chars (Start sits under it)
             GameLog("MushTown saves menu shot");
         }
     }
@@ -352,6 +344,9 @@ public partial class MushTownGame
             _textures["menu/" + f] = Texture2D.FromStream(GraphicsDevice, stream);
         }
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
+        _jobs = LoadJson<JobListData>(Path.Combine(_assetsDir, "ui", "jobs.json")).Jobs; // class roster
+        if (_jobs.Count == 0) throw new InvalidDataException("jobs.json has no classes: re-export");
+        foreach (var job in _jobs) { LoadTexture(job.Card); LoadTexture(job.Name); LoadTexture(job.Mark); } // big art loads on pick
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
         foreach (var item in _items.Values) LoadTexture(item.Image); // icons for the scanned defs
         LoadNameTags(); // ring plates ride the defs above
@@ -402,7 +397,7 @@ public partial class MushTownGame
     }
 
     // The OS cursor matches the scene zoom: same scale as the 1366x768 blit,
-    // rebuilt when the window size changes. Point sampling, like the blit.
+    // rebuilt when the window size changes. Bilinear sampling, like the blit.
     private void SyncCursor()
     {
         int screenH = GraphicsDevice.PresentationParameters.BackBufferHeight;
@@ -432,7 +427,7 @@ public partial class MushTownGame
         }
     }
 
-    // One cursor texture at scene zoom (nearest-neighbor, like the blit).
+    // One cursor texture at scene zoom (bilinear, like the blit).
     private Texture2D ScaleCursor(Texture2D src, float s)
     {
         var px = new Color[src.Width * src.Height];
@@ -441,10 +436,22 @@ public partial class MushTownGame
         var scaled = new Color[w * h];
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
-                scaled[y * w + x] = px[(int)(y / s) * src.Width + (int)(x / s)]; // y/s < src.Height: y tops at round(src.Height*s)-1
+                scaled[y * w + x] = Bilinear(px, src.Width, src.Height, x / s, y / s);
         var tex = new Texture2D(GraphicsDevice, w, h);
         tex.SetData(scaled);
         return tex;
+    }
+
+    // Bilinear sample of a pixel grid at (fx, fy); edges clamp to the border.
+    // x0/y0 stay in range: x tops at round(sw*s)-1, so fx = x/s < sw (same for y).
+    private static Color Bilinear(Color[] px, int sw, int sh, float fx, float fy)
+    {
+        int x0 = (int)fx, y0 = (int)fy;
+        int x1 = Math.Min(x0 + 1, sw - 1), y1 = Math.Min(y0 + 1, sh - 1);
+        float tx = fx - x0, ty = fy - y0;
+        Color a = px[y0 * sw + x0], b = px[y0 * sw + x1], c = px[y1 * sw + x0], d = px[y1 * sw + x1];
+        byte mix(byte v0, byte v1, byte v2, byte v3) => (byte)(v0 + (v1 - v0) * tx + (v2 - v0) * ty + (v0 - v1 - v2 + v3) * tx * ty);
+        return new Color(mix(a.R, b.R, c.R, d.R), mix(a.G, b.G, c.G, d.G), mix(a.B, b.B, c.B, d.B), mix(a.A, b.A, c.A, d.A));
     }
 
     // Cursor states: pressed shows the click hand (state 12, static); a press
@@ -474,7 +481,6 @@ public partial class MushTownGame
     {
         if (_ui != null) _ui.Dispose(); // Initialize may have thrown before LoadMenuContent ran
         if (_pixel != null) _pixel.Dispose();
-        _panelTex?.Dispose();
         _cursorTex?.Dispose();
         foreach (var t in _hoverSet.Tex) t.Dispose();
         foreach (var t in _clickSet.Tex) t.Dispose();
@@ -482,8 +488,8 @@ public partial class MushTownGame
         base.UnloadContent();
     }
 
-    // One sink for file + panel. Socket threads call it too, so a dead disk
-    // must never throw here: the file write is best-effort, the panel always updates.
+    // One sink for the log files. Socket threads call it too, so a dead disk
+    // must never throw here: the write is best-effort.
     private void GameLog(string line)
     {
         try
@@ -491,12 +497,6 @@ public partial class MushTownGame
             _rollLog?.Write(line);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-        lock (_logLock)
-        {
-            _logLines.Add(line);
-            if (_logLines.Count > 12) _logLines.RemoveRange(0, _logLines.Count - 12); // the panel shows 12
-            _panelDirty = true;
-        }
     }
 
     private string NetLogPath() =>
@@ -553,7 +553,6 @@ public partial class MushTownGame
         var ms = Mouse.GetState();
         var (gx, gy) = MouseGamePos(ms);
         bool click = ClickEdge(ms);
-        bool hit(Rectangle r) => HitRect(r, gx, gy);
 
         var kb = Keyboard.GetState();
         bool enter = kb.IsKeyDown(Keys.Enter) && !_enterWasDown;
@@ -574,8 +573,6 @@ public partial class MushTownGame
         }
         _backWasDown = back;
 
-        if (click && hit(LogButtonRect())) { PlaySfx("click"); _panelOpen = !_panelOpen; return; }
-        if (click && _panelOpen && hit(LogPanelRect())) return; // the open log panel swallows its own clicks (Start sits under it)
         switch (_screen)
         {
             case Screen.Saves: UpdateSaves(click, enter, gx, gy); break;
@@ -736,14 +733,6 @@ public partial class MushTownGame
         GameLog($"saved {chara.Name} at map {chara.Map} ({chara.X},{chara.Y})");
     }
 
-    // The game hides the log plaque (log lives in the menu now): only the
-    // open panel swallows its own clicks.
-    private bool UpdateLogPanel(bool click, int gx, int gy)
-    {
-        if (!click) return false;
-        return _panelOpen && HitRect(LogPanelRect(), gx, gy);
-    }
-
     private void DrawMenu()
     {
         GraphicsDevice.Clear(_screen == Screen.Chars ? new Color(120, 170, 210) : _screen == Screen.Job ? new Color(16, 24, 64) : new Color(20, 24, 48));
@@ -754,7 +743,6 @@ public partial class MushTownGame
 
         _gfx.Pressed = down;
         _scenes.Current?.Draw(_gfx); // menus render from the tree now
-        DrawLogOverlay(gx, gy, down);
         _spriteBatch.End();
     }
 
@@ -793,37 +781,6 @@ public partial class MushTownGame
         _spriteBatch.Draw(tex, new Vector2(fx + c.Data.OffX - ox, fy + c.Data.OffY - f.Oy), null,
             new Color(255, 255, 255, a), 0f, Vector2.Zero, 1f,
             flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
-    }
-
-    // Wooden buttons answer with transparency (the log plaque still draws raw).
-    private static float BtnAlpha(Rectangle r, int gx, int gy, bool down) =>
-        !HitRect(r, gx, gy) ? 1f : down ? MenuAlpha.Pressed : MenuAlpha.Hover;
-
-    private void DrawLogOverlay(int gx, int gy, bool down)
-    {
-        var log = LogButtonRect();
-        if (_screen != Screen.Game)
-            _spriteBatch.Draw(MenuTex("btn_log.png"), log, Color.White * BtnAlpha(log, gx, gy, down));
-        if (!_panelOpen) return;
-        List<string>? snap = null;
-        lock (_logLock)
-        {
-            if (_panelDirty)
-            {
-                snap = _logLines.ToList(); // copy under the lock, bake outside it
-                _panelDirty = false;
-            }
-        }
-        if (snap != null)
-        {
-            int w = LogPanelRect().Width - 20;
-            var wrapped = snap.SelectMany(l => _ui.WrapBig(l, w)).ToList();
-            if (wrapped.Count > 12) wrapped.RemoveRange(0, wrapped.Count - 12);
-            var tex = _ui.BakeBlock(wrapped, w); // bake first: a failed bake keeps the old panel
-            _panelTex?.Dispose();
-            _panelTex = tex;
-        }
-        TreeDraw.DrawSelf(_logRoot, _gfx); // bare root, never in a scene: hits stay code
     }
 
     private void DrawUi(string file, int x, int y, bool flip = false)

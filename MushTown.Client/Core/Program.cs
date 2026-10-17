@@ -1,6 +1,6 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|setup|delete|panel|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab <0|1|2>] [--talk <npc>] [--hit | --skill <id> | --drop] [--aiticks <n>]]
+// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab <0|1|2>] [--talk <npc>] [--hit | --skill <id> | --drop] [--aiticks <n>]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means menus.
 // --hit plants the player mid-swing next to the first mob (game shots only).
@@ -53,7 +53,7 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         else if (rest[i] == "--frame") { ok = int.TryParse(rest[i + 1], out shotFrame) && shotFrame >= 0; i += 2; }
         else if (rest[i] == "--facing" && rest[i + 1] == "left") { shotFacingRight = false; i += 2; }
         else if (rest[i] == "--facing" && rest[i + 1] == "right") { shotFacingRight = true; i += 2; }
-        else if (rest[i] == "--screen" && (rest[i + 1] is "saves" or "server" or "chars" or "chars2" or "job" or "setup" or "delete" or "panel" or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop")) { shotScreen = rest[i + 1]; i += 2; }
+        else if (rest[i] == "--screen" && (rest[i + 1] is "saves" or "server" or "chars" or "chars2" or "job" or "job2" or "setup" or "delete" or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop")) { shotScreen = rest[i + 1]; i += 2; }
         else if (rest[i] == "--skilltab") { ok = int.TryParse(rest[i + 1], out shotSkillTab) && shotSkillTab is >= 0 and <= 2; i += 2; }
         else ok = false;
     }
@@ -68,7 +68,7 @@ if (shotScreen == "talk" && shotTalk == 0) ok = false; // the talk screen needs 
 if (shotScreen == "shop" && shotTalk == 0) ok = false; // the shop screen needs its keeper
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|setup|delete|panel|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab <0|1|2>] [--talk <npc>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab <0|1|2>] [--talk <npc>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]]");
     Environment.ExitCode = 1;
     return;
 }

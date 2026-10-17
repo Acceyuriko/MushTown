@@ -111,6 +111,9 @@ public sealed class Picture : Component, IDrawable
     }
 }
 
+// Baked-text sizes a LiveLabel can ask for.
+public enum LabelFont { Small, Mid }
+
 // Live baked text at a rect offset (UiText caches by string, so steady
 // text costs one lookup; changing text adds entries like the old draws).
 public sealed class LiveLabel : Component, IDrawable
@@ -118,11 +121,17 @@ public sealed class LiveLabel : Component, IDrawable
     private readonly Func<string> _text;
     private readonly int _dx, _dy;
     private readonly Color _color;
-    public LiveLabel(Func<string> text, int dx, int dy, Color color) { _text = text; _dx = dx; _dy = dy; _color = color; }
+    private readonly LabelFont _font;
+    public LiveLabel(Func<string> text, int dx, int dy, Color color, LabelFont font = LabelFont.Small) { _text = text; _dx = dx; _dy = dy; _color = color; _font = font; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Ui.GetSmall(_text()), new Vector2(r.X + _dx, r.Y + _dy), _color);
+        var tex = _font switch
+        {
+            LabelFont.Mid => gfx.Ui.GetMid(_text()),
+            _ => gfx.Ui.GetSmall(_text()),
+        };
+        gfx.Sb.Draw(tex, new Vector2(r.X + _dx, r.Y + _dy), _color);
     }
 }
 
@@ -483,22 +492,6 @@ public sealed class Text : Component, IDrawable
     public Text(string text, int x, int y, Color color) { _text = text; _x = x; _y = y; _color = color; }
     public void Draw(UiGfx gfx) =>
         gfx.Sb.Draw(gfx.Ui.Get(_text), new Vector2(_x, _y), _color);
-}
-
-// Log panel: dark fill plus the baked block (the bake stays in Menu:
-// it needs the lock + UiText wrapper). Lives on a bare root drawn by
-// DrawLogOverlay in menu and game (never in a scene: hits stay code).
-public sealed class LogPanel : Component, IDrawable
-{
-    private readonly Func<Texture2D?> _block;
-    public LogPanel(Func<Texture2D?> block) { _block = block; }
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Pixel, r, new Color(10, 12, 28, 230));
-        var t = _block();
-        if (t != null) gfx.Sb.Draw(t, new Vector2(r.X + 10, r.Y + 10), Color.White);
-    }
 }
 
 // Panel title strip: stretched hilong plus the lime caption (stat,

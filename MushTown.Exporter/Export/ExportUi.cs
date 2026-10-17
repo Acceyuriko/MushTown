@@ -6,17 +6,22 @@ namespace MushTown.Exporter;
 // UI exports: lobby art, animated frame sets, name tags, cursor, HUD, digits.
 public static partial class Export
 {
-    // Saves lobby art: (node path, file name). Char-select buttons carry
-    // real 3-state art (_n/_h/_p); job/setup buttons keep one normal PNG
+    // Saves lobby art: (node path, file name). Char-select and job buttons
+    // carry real 3-state art (_n/_h/_p); setup buttons keep one normal PNG
     // with a client hover overlay.
     // Must match Menu.cs UiFiles: every file there must be listed here.
     private static readonly (string node, string file)[] UiFiles = new[]
     {
         ("LoginBack.img/WorldSelect/default/0/0", "worldbg.png"),
         ("Login.img/CharSelect/selectWorld", "selectworld.png"),
+        ("Login.img/ClassSelect/back/0/1/0", "job_bg.png"),
         ("Login.img/ClassSelect/list/backgrnd", "listbg.png"),
-        ("Login.img/ClassSelect/list/class/button:classEnabled/110/normal/0", "cell_hero.png"),
-        ("Login.img/ClassSelect/button:make/normal/0", "btn_make.png"),
+        ("Login.img/ClassSelect/list/class/layer:classCover", "job_cover.png"),
+        ("Login.img/ClassSelect/list/pagePrev/2", "job_page_l.png"),
+        ("Login.img/ClassSelect/list/pageNext/2", "job_page_r.png"),
+        ("Login.img/ClassSelect/button:make/normal/0", "btn_make_n.png"),
+        ("Login.img/ClassSelect/button:make/mouseOver/0", "btn_make_h.png"),
+        ("Login.img/ClassSelect/button:make/pressed/0", "btn_make_p.png"),
         ("LoginBack.img/CustomizeChar/000/0/0", "setupbg.png"),
         ("Login.img/CustomizeChar/000/BtYes/normal/0", "btn_confirm.png"),
         ("Login.img/CustomizeChar/000/BtNo/normal/0", "btn_cancel.png"),
@@ -255,6 +260,85 @@ public static partial class Export
         }
         return true;
     }
+
+    // Class roster (Login.img/ClassSelect): one illustration, card, name art,
+    // and branch mark per class, in WZ card order, plus ui/jobs.json with the
+    // one-line blurb and stats the page shows. The card container also holds
+    // pos/space grid hints; only the numeric names are classes.
+    private static bool ExportJobs(WzRoot ui, string outDir)
+    {
+        var cards = ui.Find("Login.img/ClassSelect/list/class/button:classEnabled");
+        if (cards == null)
+        {
+            Console.WriteLine("node not found: class cards");
+            return false;
+        }
+        var data = new JobListData();
+        foreach (Wz_Node child in cards.Nodes)
+        {
+            if (!int.TryParse(child.Text, out int id)) continue;
+            var info = ui.Find($"Login.img/ClassSelect/desc/info/{id}");
+            if (info == null)
+            {
+                Console.WriteLine($"no desc/info for job {id}");
+                return false;
+            }
+            JobData job;
+            try
+            {
+                job = new JobData
+                {
+                    Id = id,
+                    Art = $"ui/job_{id}_art.png",
+                    Card = $"ui/job_{id}_card.png",
+                    Name = $"ui/job_{id}_name.png",
+                    Mark = $"ui/job_{id}_mark.png",
+                    Sub = Text(info, "subName"),
+                    Lines = Text(info, "desc").Replace("\\n", "\n").Split('\n').ToList(),
+                    Race = Text(info, "race"),
+                    Move = Text(info, "move"),
+                    Stat = Text(info, "stat"),
+                };
+            }
+            catch (InvalidDataException ex) // missing text fails like missing art: one line, no stack
+            {
+                Console.WriteLine(ex.Message);
+                return false;
+            }
+            // Every class art has its own origin and size (713x679 to 1443x992):
+            // the page must draw each one where its origin says, or the small
+            // ones hug the left edge and the big ones show a corner.
+            if (!SaveArt(ui, outDir, $"Login.img/ClassSelect/back/1/{id}/0", job.Art, out var artOrigin)
+                || !SaveArt(ui, outDir, $"Login.img/ClassSelect/list/class/button:classEnabled/{id}/normal/0", job.Card)
+                || !SaveArt(ui, outDir, $"Login.img/ClassSelect/desc/info/{id}/className", job.Name)
+                || !SaveArt(ui, outDir, $"Login.img/ClassSelect/desc/info/{id}/jobMark", job.Mark))
+                return false;
+            job.ArtX = artOrigin?.X ?? 0;
+            job.ArtY = artOrigin?.Y ?? 0;
+            data.Jobs.Add(job);
+        }
+        if (data.Jobs.Count == 0)
+        {
+            Console.WriteLine("no class cards");
+            return false;
+        }
+        WriteJson(Path.Combine(outDir, "ui", "jobs.json"), data);
+        Console.WriteLine($"jobs: {data.Jobs.Count} classes, first {data.Jobs[0].Id}");
+        return true;
+    }
+
+    private static bool SaveArt(WzRoot ui, string outDir, string node, string file)
+        => SaveArt(ui, outDir, node, file, out _);
+
+    private static bool SaveArt(WzRoot ui, string outDir, string node, string file, out Wz_Vector? origin)
+    {
+        if (!UiPng.TryRead(ui, "UI", node, out var png, out origin)) return false;
+        WzNodeUtil.SavePng(png, Path.Combine(outDir, file));
+        return true;
+    }
+
+    private static string Text(Wz_Node node, string key) =>
+        node.Nodes[key]?.Value as string ?? throw new InvalidDataException($"{node.FullPath}/{key}: no text");
 
     // Name tag plates: 3 slices + origins + name color per node.
     private static bool ExportNameTag(WzRoot ui, string outDir)

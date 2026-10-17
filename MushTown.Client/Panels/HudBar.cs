@@ -250,8 +250,7 @@ public partial class MushTownGame
         AddSubArtRow(1, "ui/hud_sub_item", () => { _showInv = true; _submenu.Enabled = false; _topPanel = 0; });
         AddSubTextRow(2, "Quest", () => { _showQuest = true; _submenu.Enabled = false; _topPanel = 3; });
         AddSubTextRow(3, "Settings", () => { _showSettings = true; _submenu.Enabled = false; _topPanel = 4; });
-        AddSubTextRow(4, "Log", () => { _panelOpen = !_panelOpen; _submenu.Enabled = false; });
-        AddSubTextRow(5, "Exit", () => { _submenu.Enabled = false; if (_save != null) ToChars(); else Exit(); });
+        AddSubTextRow(4, "Exit", () => { _submenu.Enabled = false; if (_save != null) ToChars(); else Exit(); });
         _gameScene.Add(_submenu);
         var charBtn = new GameObject();
         charBtn.Add(new Rect(CharBtnRect()));
@@ -404,9 +403,9 @@ public partial class MushTownGame
         _submenu.AddChild(row);
     }
 
-    // Submenu popup: 3-slice bg sized by its own caps, six 109x26 rows inside.
+    // Submenu popup: 3-slice bg sized by its own caps, five 109x26 rows inside.
     private const int SubPopupW = 121;
-    private const int SubRows = 6; // stat, inventory, quest, settings, log, exit
+    private const int SubRows = 5; // stat, inventory, quest, settings, exit
     private Rectangle SubPopupRect()
     {
         int top = Tex("hud_sub_bg0.png").Height;

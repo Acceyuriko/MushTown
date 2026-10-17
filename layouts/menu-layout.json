@@ -15,11 +15,7 @@
   "textGap": 24,
   "cancelSize": 20,
   "cancelDown": 0,
-  "scale": 0.7,
-  "log": [
-    1199,
-    699
-  ]
+  "scale": 0.7
 }
 
 

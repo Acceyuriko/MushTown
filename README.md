@@ -66,7 +66,7 @@ dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录] # �
 dotnet run --project MushTown.Client                                # 打开游戏窗口（存档菜单）
 dotnet run --project MushTown.Client -- --host                       # 开房（本机当主机，无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>                   # 加入主机（本机双开用 127.0.0.1）
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|setup|delete|panel|inv|use|stat|hud|skill|quest|talk|settings|shop]  # 截图后退出（frame 从 0 数）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop]  # 截图后退出（frame 从 0 数）
 git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```
 

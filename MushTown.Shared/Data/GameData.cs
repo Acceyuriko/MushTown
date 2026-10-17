@@ -338,6 +338,30 @@ public sealed class NameTagData
     public int EOy { get; set; }
 }
 
+// Exported class roster: assets/ui/jobs.json (Login.img/ClassSelect). One
+// entry per class card in WZ order; the client pages the grid 14 at a time
+// and shows the picked class's own art, name, mark, blurb, and stats.
+public sealed class JobListData
+{
+    public List<JobData> Jobs { get; set; } = new();
+}
+
+public sealed class JobData
+{
+    public int Id { get; set; } // job id (110 = Hero)
+    public string Art { get; set; } = ""; // big class illustration, 713x679 (13100) to 1443x992 (17500); Saitama 1434x1421 weighs most
+    public int ArtX { get; set; } // art WZ origin: draw at (-ArtX, -ArtY)
+    public int ArtY { get; set; }
+    public string Card { get; set; } = ""; // 152x74 list card
+    public string Name { get; set; } = ""; // big class name art
+    public string Mark { get; set; } = ""; // branch mark art ("Warrior")
+    public string Sub { get; set; } = ""; // WZ subName, e.g. "Pinnacle of Combat"
+    public List<string> Lines { get; set; } = new(); // WZ desc, one line per entry
+    public string Race { get; set; } = ""; // WZ race, e.g. "Explorer"
+    public string Move { get; set; } = ""; // WZ move, e.g. "Jumping"
+    public string Stat { get; set; } = ""; // WZ stat, e.g. "STR"
+}
+
 // Exported character action: assets/chara/body/{action}.json (beginner full
 // merge) or assets/chara/gear/{imgId}/{action}.json (one gear's parts).
 public sealed class CharaData

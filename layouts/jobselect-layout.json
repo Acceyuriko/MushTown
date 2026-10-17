@@ -1,0 +1,19 @@
+{
+  "_help": "Job (class select) geometry in 1366x768 space. The big class illustration is not here: each class carries its own WZ origin and is drawn at (-artX,-artY). list is the narrow card panel (313x593, 2 columns x 7 rows, grid pitch is fixed in code); listGlass is the dark backing alpha 0-255 and listPad how far it hangs past the art (the WZ grid sits flush with its edges, so that overhang is the only padding); pageGap is the gap between the list backing and the pager bar; name/mark/sub/desc are the WZ desc positions (name is the big class name art); descLine is the description line advance; cardPad is the info card padding past the text; stat is the first stats row, statValueX the value column, statLine the row advance; make/back are art-sized buttons (art sets the size); errorY is centered text. Keys may be omitted (keeps current value). DEBUG builds reload this file live on save.",
+  "list": [1040, 57],
+  "listGlass": 110,
+  "listPad": 8,
+  "pageGap": 4,
+  "name": [48, 44],
+  "mark": [50, 169],
+  "sub": [48, 193],
+  "desc": [50, 233],
+  "descLine": 14,
+  "cardPad": 14,
+  "stat": [64, 356],
+  "statValueX": 174,
+  "statLine": 32,
+  "make": [1095, 701],
+  "back": [0, 720],
+  "errorY": 40
+}

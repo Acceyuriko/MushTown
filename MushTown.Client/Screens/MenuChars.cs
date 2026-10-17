@@ -18,11 +18,12 @@ public partial class MushTownGame
         var (fx, fy) = SlotFeet(cell);
         return new Rectangle(fx - CharLayout.SlotW / 2, fy - CharLayout.SlotH, CharLayout.SlotW, CharLayout.SlotH);
     }
-    private Rectangle UiRect(string file, int x, int y)
+    private Rectangle RectOf(string key, int x, int y)
     {
-        var t = _textures["ui/" + file];
+        var t = _textures[key];
         return new Rectangle(x, y, t.Width, t.Height);
     }
+    private Rectangle UiRect(string file, int x, int y) => RectOf("ui/" + file, x, y);
     private static Rectangle WorldPillRect() => new(CharLayout.Pill.X, CharLayout.Pill.Y, 200, 57);
     private Rectangle BoardRect() => UiRect("cs_board.png", CharLayout.Board.X, CharLayout.Board.Y);
     private Rectangle SelectBtnRect() => UiRect("cs_select_n.png", CharLayout.Select.X, CharLayout.Select.Y);
@@ -147,8 +148,7 @@ public partial class MushTownGame
 
     private void UpdateChars(bool click, bool enter, bool esc, int gx, int gy, float dtMs)
     {
-        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log");
-        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         AdvanceClip(_ghost, dtMs);
         AdvanceClip(_portal, dtMs);
         AdvanceClip(_motes, dtMs);

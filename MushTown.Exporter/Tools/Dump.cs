@@ -58,6 +58,15 @@ public static class Dump
         }
     }
 
+    // Raw blobs (Spine skeletons) start with plain text: show the head so the
+    // format and version are readable from dump output.
+    private static string Peek(Wz_RawData raw)
+    {
+        var buf = new byte[raw.Length]; // CopyTo fills the whole blob, no partial reads
+        raw.CopyTo(buf);
+        return new string(buf.Take(28).Select(b => b is >= 32 and < 127 ? (char)b : '.').ToArray());
+    }
+
     private static string Describe(object? value) => value switch
     {
         null => "-",
@@ -67,6 +76,8 @@ public static class Dump
         Wz_Uol u => $"uol {u.Uol}",
         Wz_Sound s => $"sound {s.SoundType} {s.Ms}ms {s.DataLength}b",
         Wz_Video => "video",
+        Wz_RawData r => $"raw {r.Length}b [{Peek(r)}]",
+        string s => $"[str {s.Length}] {s[..Math.Min(50, s.Length)].Replace('\n', ' ')}",
         _ => value.ToString() ?? "?"
     };
 }

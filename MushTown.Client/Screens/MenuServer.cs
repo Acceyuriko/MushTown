@@ -63,8 +63,7 @@ public partial class MushTownGame
         if (_scanTask != null && _scanTask.IsCompleted) { _hosts = _scanTask.Result; _scanTask = null; BuildServerScene(); _scenes.Show(_menuScene); }
         if (esc) { ToSaves(); return; }
         if (enter) { EnterChars(null); return; }
-        if (HitRect(LogButtonRect(), gx, gy)) SfxOnHover("log"); // the log plaque wins (its click runs before the switch too)
-        else SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
+        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (click) ClickTree(_scenes.Current, gx, gy);
         if (_screen == Screen.Server && r && _scanTask == null) _scanTask = Discovery.ScanAsync(); // row clicks may have left this screen
     }

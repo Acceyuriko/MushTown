@@ -6,16 +6,16 @@ namespace MushTown.Tests;
 [TestClass]
 public class MenuLayoutTests
 {
-    private const string Full = """{"slice":1,"overlapTop":2,"botUp":3,"rowGap":4,"bodyPadTop":5,"bodyPadBottom":6,"middleExtraH":7,"serverRowW":8,"serverRowH":9,"textMargin":10,"textDown":11,"listSize":12,"textGap":13,"cancelSize":14,"cancelDown":15,"scale":0.5,"log":[16,17]}""";
+    private const string Full = """{"slice":1,"overlapTop":2,"botUp":3,"rowGap":4,"bodyPadTop":5,"bodyPadBottom":6,"middleExtraH":7,"serverRowW":8,"serverRowH":9,"textMargin":10,"textDown":11,"listSize":12,"textGap":13,"cancelSize":14,"cancelDown":15,"scale":0.5}""";
 
     // MenuLayout fields are shared statics: leave them as found.
-    private (int slice, int overlapTop, int botUp, int rowGap, int bodyPadTop, int bodyPadBottom, int middleExtraH, int serverRowW, int serverRowH, int textMargin, int textDown, int listSize, int textGap, int cancelSize, int cancelDown, float scale, (int X, int Y) log) _saved;
+    private (int slice, int overlapTop, int botUp, int rowGap, int bodyPadTop, int bodyPadBottom, int middleExtraH, int serverRowW, int serverRowH, int textMargin, int textDown, int listSize, int textGap, int cancelSize, int cancelDown, float scale) _saved;
 
     [TestInitialize]
-    public void Save() => _saved = (MenuLayout.Slice, MenuLayout.OverlapTop, MenuLayout.BotUp, MenuLayout.RowGap, MenuLayout.BodyPadTop, MenuLayout.BodyPadBottom, MenuLayout.MiddleExtraH, MenuLayout.ServerRowW, MenuLayout.ServerRowH, MenuLayout.TextMargin, MenuLayout.TextDown, MenuLayout.ListSize, MenuLayout.TextGap, MenuLayout.CancelSize, MenuLayout.CancelDown, MenuLayout.Scale, MenuLayout.Log);
+    public void Save() => _saved = (MenuLayout.Slice, MenuLayout.OverlapTop, MenuLayout.BotUp, MenuLayout.RowGap, MenuLayout.BodyPadTop, MenuLayout.BodyPadBottom, MenuLayout.MiddleExtraH, MenuLayout.ServerRowW, MenuLayout.ServerRowH, MenuLayout.TextMargin, MenuLayout.TextDown, MenuLayout.ListSize, MenuLayout.TextGap, MenuLayout.CancelSize, MenuLayout.CancelDown, MenuLayout.Scale);
 
     [TestCleanup]
-    public void Restore() => (MenuLayout.Slice, MenuLayout.OverlapTop, MenuLayout.BotUp, MenuLayout.RowGap, MenuLayout.BodyPadTop, MenuLayout.BodyPadBottom, MenuLayout.MiddleExtraH, MenuLayout.ServerRowW, MenuLayout.ServerRowH, MenuLayout.TextMargin, MenuLayout.TextDown, MenuLayout.ListSize, MenuLayout.TextGap, MenuLayout.CancelSize, MenuLayout.CancelDown, MenuLayout.Scale, MenuLayout.Log) = _saved;
+    public void Restore() => (MenuLayout.Slice, MenuLayout.OverlapTop, MenuLayout.BotUp, MenuLayout.RowGap, MenuLayout.BodyPadTop, MenuLayout.BodyPadBottom, MenuLayout.MiddleExtraH, MenuLayout.ServerRowW, MenuLayout.ServerRowH, MenuLayout.TextMargin, MenuLayout.TextDown, MenuLayout.ListSize, MenuLayout.TextGap, MenuLayout.CancelSize, MenuLayout.CancelDown, MenuLayout.Scale) = _saved;
 
     [TestMethod]
     public void Load_FullFile_OverridesAll()
@@ -40,7 +40,6 @@ public class MenuLayoutTests
             Assert.AreEqual(14, MenuLayout.CancelSize);
             Assert.AreEqual(15, MenuLayout.CancelDown);
             Assert.AreEqual(0.5f, MenuLayout.Scale);
-            Assert.AreEqual((16, 17), MenuLayout.Log);
         }
         finally { File.Delete(path); }
     }
@@ -57,7 +56,6 @@ public class MenuLayoutTests
             Assert.AreEqual(100, MenuLayout.Slice);
             Assert.AreEqual(2, MenuLayout.OverlapTop);
             Assert.AreEqual(12, MenuLayout.ListSize);
-            Assert.AreEqual((16, 17), MenuLayout.Log);
         }
         finally { File.Delete(path); }
     }
@@ -68,7 +66,7 @@ public class MenuLayoutTests
         string path = WriteTemp(Full);
         try
         {
-            string[] bad = ["{\"slice\":100,\"listSize\":0}", "{\"slice\":100,\"cancelSize\":-2}", "{\"slice\":100,\"log\":[1]}", "{\"slice\":\"bad\"}", "{\"slice\":100,\"scale\":\"bad\"}", "{\"slice\":100,\"log\":[\"a\",1]}"];
+            string[] bad = ["{\"slice\":100,\"listSize\":0}", "{\"slice\":100,\"cancelSize\":-2}", "{\"slice\":\"bad\"}", "{\"slice\":100,\"scale\":\"bad\"}"];
             foreach (string json in bad)
             {
                 MenuLayout.Load(path);

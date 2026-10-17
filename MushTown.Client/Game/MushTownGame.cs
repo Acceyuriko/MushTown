@@ -90,10 +90,9 @@ public partial class MushTownGame : Game
     private readonly string _layoutPath;
     private readonly string _menuLayoutPath;
     private readonly string _charLayoutPath;
+    private readonly string _jobLayoutPath;
 #if DEBUG
     private FileSystemWatcher? _layoutWatcher;
-    private FileSystemWatcher? _menuLayoutWatcher;
-    private FileSystemWatcher? _charLayoutWatcher;
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
@@ -119,23 +118,15 @@ public partial class MushTownGame : Game
         _layoutPath = Path.Combine(dir, "hud-layout.json");
         _menuLayoutPath = Path.Combine(dir, "menu-layout.json");
         _charLayoutPath = Path.Combine(dir, "charselect-layout.json");
+        _jobLayoutPath = Path.Combine(dir, "jobselect-layout.json");
         TryReloadLayout();
 #if DEBUG
-        _layoutWatcher = new FileSystemWatcher(dir, Path.GetFileName(_layoutPath));
+        // One watcher for the folder: every layout file reloads on save.
+        _layoutWatcher = new FileSystemWatcher(dir, "*.json");
         _layoutWatcher.Changed += (_, _) => _layoutDirty = true;
         _layoutWatcher.Renamed += (_, _) => _layoutDirty = true; // some editors save by rename
         _layoutWatcher.Created += (_, _) => _layoutDirty = true; // ...or delete-then-create
         _layoutWatcher.EnableRaisingEvents = true;
-        _menuLayoutWatcher = new FileSystemWatcher(dir, Path.GetFileName(_menuLayoutPath));
-        _menuLayoutWatcher.Changed += (_, _) => _layoutDirty = true;
-        _menuLayoutWatcher.Renamed += (_, _) => _layoutDirty = true;
-        _menuLayoutWatcher.Created += (_, _) => _layoutDirty = true;
-        _menuLayoutWatcher.EnableRaisingEvents = true;
-        _charLayoutWatcher = new FileSystemWatcher(dir, Path.GetFileName(_charLayoutPath));
-        _charLayoutWatcher.Changed += (_, _) => _layoutDirty = true;
-        _charLayoutWatcher.Renamed += (_, _) => _layoutDirty = true;
-        _charLayoutWatcher.Created += (_, _) => _layoutDirty = true;
-        _charLayoutWatcher.EnableRaisingEvents = true;
 #endif
         _graphics = new GraphicsDeviceManager(this);
         IsMouseVisible = true;
@@ -394,10 +385,10 @@ public partial class MushTownGame : Game
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
-            if (_submenu.Enabled || _showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop || _panelOpen)
+            if (_submenu.Enabled || _showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop)
             {
                 _submenu.Enabled = false; _showInv = false; _showStat = false; _showSkill = false;
-                _showQuest = false; _showSettings = false; _showShop = false; _panelOpen = false;
+                _showQuest = false; _showSettings = false; _showShop = false;
                 _dragInv = _dragStat = _dragSkill = _dragQuest = _dragSettings = _dragShop = null; // hiding mid-drag drops the grab
                 PlaySfx("click");
                 base.Update(gameTime); return;
@@ -410,11 +401,10 @@ public partial class MushTownGame : Game
         {
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         }
-        var ms = Mouse.GetState(); // one click edge for the log panel and the HUD
+        var ms = Mouse.GetState(); // one click edge for the HUD
         bool click = ClickEdge(ms);
         var (mx, my) = MouseGamePos(ms);
-        if (!UpdateLogPanel(click, mx, my))
-            UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
+        UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
         SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;
 
@@ -788,9 +778,8 @@ public partial class MushTownGame : Game
                 var ms = Mouse.GetState();
                 var (gx, gy) = MouseGamePos(ms);
                 DrawHud(gx, gy, ms.LeftButton == ButtonState.Pressed);
-                DrawLogOverlay(gx, gy, ms.LeftButton == ButtonState.Pressed);
             }
-            else DrawHud(-10, -10, false); // shots: clean art, no hover, no log
+            else DrawHud(-10, -10, false); // shots: clean art, no hover
             _spriteBatch.End();
         }
         GraphicsDevice.SetRenderTarget(null);
@@ -824,8 +813,10 @@ public partial class MushTownGame : Game
         // the bars left over when the screen is not 1366x768-shaped
         GraphicsDevice.Clear(Color.Black);
 
-        // Point sampling on purpose: the magnified pixels stay sharp instead of blurring.
-        _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
+        // Linear on purpose: the art is hand-drawn and the window scale is not
+        // whole (2.8x on a 4K screen), so nearest leaves stair-step edges.
+        // Linear smooths the art and costs nothing. Baked UI text gets softer.
+        _spriteBatch.Begin(samplerState: SamplerState.LinearClamp);
         _spriteBatch.Draw(_scene, new Rectangle(bx, by, w, h), Color.White);
         _spriteBatch.End();
     }
@@ -881,6 +872,7 @@ public partial class MushTownGame : Game
         Layout.Load(_layoutPath);
         MenuLayout.Load(_menuLayoutPath);
         CharLayout.Load(_charLayoutPath);
+        JobLayout.Load(_jobLayoutPath);
         if (_ui != null) _ui.RefreshListFonts(); // null only on the ctor reload, before content loads
         _invPos = new Point(Layout.Inv.X, Layout.Inv.Y);
         _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);
