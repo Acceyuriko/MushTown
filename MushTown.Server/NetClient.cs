@@ -17,6 +17,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<HurtEvent> _hurtEvents = new();
     private readonly ConcurrentQueue<DropEvent> _dropEvents = new();
     private readonly ConcurrentQueue<NameEvent> _nameEvents = new();
+    private readonly ConcurrentQueue<QuestEvent> _questEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -145,6 +146,38 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.Name, w => { w.Write(name); w.Write(plate); }));
     }
 
+    // Our quest state, so the server judges from its own copy (sent on
+    // connect, re-sent on level-up: level is the only field the server
+    // cannot evolve itself). Small: a dozen quests fit the 1024 frame.
+    public void SendQuestSync(CharaSlot chara)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.QuestSync, w =>
+        {
+            w.Write(chara.Level);
+            w.Write(chara.Quests.Count);
+            foreach (int q in chara.Quests) w.Write(q);
+            w.Write(chara.QuestsDone.Count);
+            foreach (int q in chara.QuestsDone) w.Write(q);
+            w.Write(chara.QuestKills.Count);
+            foreach (var kv in chara.QuestKills) { w.Write(kv.Key); w.Write(kv.Value); }
+        }));
+    }
+
+    // Accept/turn-in intents: the server runs the act on its copy and
+    // answers QuestOk (silence means the act failed there).
+    public void SendQuestAccept(int quest)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.QuestAccept, w => w.Write(quest)));
+    }
+
+    public void SendQuestComplete(int quest)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.QuestComplete, w => w.Write(quest)));
+    }
+
     private void SendFrame(byte[] frame)
     {
         try
@@ -172,6 +205,8 @@ public sealed class NetClient : IDisposable
     public bool TryTakeDrop(out DropEvent e) => _dropEvents.TryDequeue(out e);
 
     public bool TryTakeName(out NameEvent e) => _nameEvents.TryDequeue(out e);
+
+    public bool TryTakeQuest(out QuestEvent e) => _questEvents.TryDequeue(out e);
 
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
@@ -237,6 +272,12 @@ public sealed class NetClient : IDisposable
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), 0, 0,
                 BitConverter.ToInt32(p, 13), BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21),
                 BitConverter.ToInt32(p, 9)));
+        else if (p[0] == Net.QuestOk && p.Length == 6)
+            _questEvents.Enqueue(new QuestEvent(false,
+                BitConverter.ToInt32(p, 1), 0, 0, p[5] != 0));
+        else if (p[0] == Net.QuestKill && p.Length == 13)
+            _questEvents.Enqueue(new QuestEvent(true,
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9), false));
         else if (p[0] == Net.Name && p.Length > 9)
         {
             try

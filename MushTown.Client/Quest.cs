@@ -2,8 +2,10 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Quest state and talk flow (client-side: LAN trusts the client, like
-// MP/CD, so quests need no protocol). Draw code lives in Hud.cs.
+// Quest state and talk flow (solo runs the acts on the save; in net play
+// the server runs the same acts on its copy and confirms intents, so a
+// client can only take what it may and turn in what it finished). Draw
+// code lives in Hud.cs.
 public partial class MushTownGame
 {
     private readonly Dictionary<int, NpcData> _npcs = new();
@@ -222,28 +224,65 @@ public partial class MushTownGame
 
     // Last-page buttons: Accept/Complete close with a log line, Next flips.
     // The buttons exist only with a quest + chara (TalkButtons), so both are
-    // set; a failed accept/complete keeps the dialog open (cannot happen:
-    // the modal freezes quest state, but closing on failure would strand it).
+    // set; a failed accept/complete keeps the dialog open (solo: cannot
+    // happen, the modal freezes quest state; net: the server confirms, and
+    // silence leaves the dialog for Bye). In net play the click only sends
+    // the intent: the drain applies it once the server confirms.
     private void TalkAction(string button)
     {
         if (button == "Bye") { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; return; }
         if (button == "Next") { _talkPage++; return; }
         var chara = _save?.Slots[_slot]!;
-        var q = _quests.GetValueOrDefault(_talkQuest)!;
-        if (button == "Accept" && _questLog.Accept(chara, _talkQuest))
+        if (button == "Accept" && _questLog.CanAccept(chara, _talkQuest))
         {
-            GameLog($"accepted: {q.Name}");
-            _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+            if (QuestServer()) _net!.SendQuestAccept(_talkQuest);
+            else if (_questLog.Accept(chara, _talkQuest)) ApplyQuestAccepted(_talkQuest);
         }
-        if (button == "Complete" && _questLog.Complete(chara, _talkQuest))
+        if (button == "Complete" && _questLog.IsComplete(chara, _talkQuest))
         {
-            var rewards = q.RewardLines(id => _items[id].Name);
-            GameLog(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
-            GainExp(_questLog.TurnIn(chara, _talkQuest)); // payout lands before the EXP, like before
-            PlaySfx("questclear");
-            _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
-            if (_questSel == q.QuestId) _questSel = 0; // turned in: drop the stale selection
+            if (QuestServer()) _net!.SendQuestComplete(_talkQuest);
+            else if (_questLog.Complete(chara, _talkQuest)) ApplyQuestCompleted(chara, _talkQuest);
         }
+    }
+
+    // A fresh accept lands: log line, dialog closes.
+    private void ApplyQuestAccepted(int quest)
+    {
+        GameLog($"accepted: {_quests[quest].Name}");
+        _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+    }
+
+    // A turn-in lands: receipt log, payout, EXP, sfx, dialog closes.
+    private void ApplyQuestCompleted(CharaSlot chara, int quest)
+    {
+        var q = _quests[quest];
+        var rewards = q.RewardLines(id => _items[id].Name);
+        GameLog(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
+        GainExp(_questLog.TurnIn(chara, quest)); // payout lands before the EXP, like before
+        PlaySfx("questclear");
+        _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+        if (_questSel == quest) _questSel = 0; // turned in: drop the stale selection
+    }
+
+    // A server-pushed kill counter: set, never bump (the server owns the count).
+    private void ApplyQuestKill(QuestEvent q)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return; // CLI sessions have no one to count for
+        chara.QuestKills[$"{q.Quest}:{q.Index}"] = q.Count;
+    }
+
+    // A confirmed intent: run the act the server already passed (a local
+    // failure means desync: the dialog stays open like a failed click).
+    private void ApplyQuestOk(QuestEvent q)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return;
+        if (q.Completed)
+        {
+            if (_questLog.Complete(chara, q.Quest)) ApplyQuestCompleted(chara, q.Quest);
+        }
+        else if (_questLog.Accept(chara, q.Quest)) ApplyQuestAccepted(q.Quest);
     }
 
     // Tracker lines (cached: quest state changes rarely, frames do not).

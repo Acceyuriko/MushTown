@@ -16,7 +16,7 @@ public sealed class MobWorld
     // One mob caught by a swing. HpLeft 0 means it died (no separate die message).
     // Exp is the mob's kill award (the killer's client claims it).
     // Skill is 0 for a basic swing, else the skill whose hit spark to play.
-    public sealed record Hit(int Uid, int Map, int Damage, int HpLeft, int Exp, int Skill);
+    public sealed record Hit(int Uid, int Map, int Damage, int HpLeft, int Exp, int Skill, int Mob);
 
     // One mob step (10Hz on the wire): Uid now stands at X/Y, facing along.
     public sealed record Move(int Uid, int Map, float X, float Y, bool FacingRight);
@@ -256,7 +256,7 @@ public sealed class MobWorld
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
             int damage = Damage.Calc(rng.NextDouble(), rng.NextDouble(), m.Def, build);
             m.Hp = Math.Max(0, m.Hp - damage);
-            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0));
+            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId));
             if (m.Hp != 0) continue;
             _lives.RemoveAt(i);
             Bury(m, rng);
@@ -331,7 +331,7 @@ public sealed class MobWorld
             _lives.Remove(m);
             Bury(m, rng);
         }
-        return new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, tag);
+        return new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, tag, m.MobId);
     }
 
     // One death's aftermath (swings and skills share it): a grave at home

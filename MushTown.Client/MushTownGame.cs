@@ -904,6 +904,14 @@ public partial class MushTownGame : Game
                     plate.Plate = n.Plate;
                 }
             }
+            // Quest events drain before mob hits: a level-up inside ApplyHit
+            // re-syncs, and the sync must carry the counters this frame's
+            // kills pushed (not wipe them on the server's copy).
+            while (_net.TryTakeQuest(out var q))
+            {
+                if (q.Kill) ApplyQuestKill(q);
+                else ApplyQuestOk(q);
+            }
             while (_net.TryTakeMob(out var m))
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
@@ -1314,7 +1322,7 @@ public partial class MushTownGame : Game
             if (Random.Shared.NextDouble() * 100 < chance) // visible count: rolled client-side, shown in the window
                 _fighter.Orbs = Math.Min(_fighter.Orbs + 1, _skills[SkillData.ComboAttack].OrbMax);
         }
-        if (hpLeft == 0 && mine) { GainExp(exp); BumpQuestKills(m.Mob); }
+        if (hpLeft == 0 && mine) { GainExp(exp); if (!QuestServer()) BumpQuestKills(m.Mob); } // net kills come back as QuestKill deltas
     }
 
     // One AI step: snap the pose, face along. hit1/die1 own the pose until
@@ -1432,6 +1440,10 @@ public partial class MushTownGame : Game
     // Swings and damaging casts need a judge: net play sends, the local
     // world strikes right here. The disconnect frame has neither yet.
     private bool HasJudge() => (_net != null && _net.Connected) || _localWorld != null;
+
+    // The server owns quests only on a live link (dropped links go solo and
+    // trust the save again, like movement and drops).
+    private bool QuestServer() => _net != null && _net.Connected && _localWorld == null;
 
     // One cast's client-side checks: learned, level, MP, cooldown. CLI
     // sessions carry no character (no pools), so they cannot cast, like potions.
@@ -1628,8 +1640,17 @@ public partial class MushTownGame : Game
         if (chara != null) _net?.SendName(chara.Name, PlateFor(chara.Equips));
     }
 
+    // Our quest state, so the server judges from its own copy (same skip).
+    private void PushQuestSync()
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara != null) _net?.SendQuestSync(chara);
+    }
+
     // A kill we landed (net or local): claim the EXP. A level-up pushes our
-    // new build to the server (the local judge reads it fresh every swing).
+    // new build and quest mirror to the server (the local judge reads the
+    // build fresh every swing; level is the one quest field the server
+    // cannot evolve itself).
     private void GainExp(int exp)
     {
         var chara = _save?.Slots[_slot];
@@ -1640,6 +1661,7 @@ public partial class MushTownGame : Game
             GameLog($"level up! now Lv.{chara.Level} (STR {chara.Str} DEX {chara.Dex})");
             PlaySfx("levelup");
             PushBuild();
+            PushQuestSync();
         }
     }
 

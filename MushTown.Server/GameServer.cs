@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 using MushTown.Shared;
 
 namespace MushTown.Server;
@@ -24,10 +25,12 @@ public sealed class GameServer : IDisposable
     private readonly Action<string> _log;
     private readonly int _port;
     private readonly MobWorld _mobs;
-    private readonly object _mobLock = new(); // guards _pos/_builds/_names and the MobWorld (read loops run per client)
+    private readonly object _mobLock = new(); // guards _pos/_builds/_names/_questLogs and the MobWorld (read loops run per client)
     private readonly Dictionary<int, (int map, float x, float y, bool facing)> _pos = new();
     private readonly Dictionary<int, Build> _builds = new(); // combat stats per client (missing = beginner default)
     private readonly Dictionary<int, (string name, int plate)> _names = new(); // name tags per client (missing = CLI session)
+    private readonly Dictionary<int, QuestData> _questDefs = new(); // quest defs (shared ref: one log per client over these)
+    private readonly Dictionary<int, (QuestLog log, CharaSlot chara)> _questLogs = new(); // quest copies per client (missing = CLI or pre-Sync)
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private DiscoverResponder? _responder; // answers LAN scans while we run (same lifetime as the listener)
@@ -39,6 +42,36 @@ public sealed class GameServer : IDisposable
         _log = log;
         _port = port;
         _mobs = new MobWorld(assetsDir);
+        LoadQuestDefs(assetsDir);
+    }
+
+    // Quest defs the server judges against: official plus customs (same
+    // files, same clash rule as the client). No validation here: the host's
+    // client already fails loud on bad customs at boot; a joiner's foreign
+    // customs simply match no def and its intents go unanswered.
+    private void LoadQuestDefs(string assetsDir)
+    {
+        string questDir = Path.Combine(assetsDir, "quest");
+        if (Directory.Exists(questDir))
+            foreach (string f in Directory.GetFiles(questDir, "*.json"))
+            {
+                var q = LoadJson<QuestData>(f);
+                _questDefs[q.QuestId] = q;
+            }
+        string custom = Path.Combine(Path.GetDirectoryName(assetsDir)!, "quests");
+        if (Directory.Exists(custom))
+            foreach (string f in Directory.GetFiles(custom, "*.json"))
+            {
+                var q = LoadJson<QuestData>(f);
+                _questDefs[q.QuestId] = q;
+            }
+    }
+
+    private static T LoadJson<T>(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return JsonSerializer.Deserialize<T>(stream)
+            ?? throw new InvalidDataException($"{path} is empty or broken");
     }
 
     public void Start()
@@ -161,19 +194,31 @@ public sealed class GameServer : IDisposable
             _pos.Remove(id);
             _builds.Remove(id);
             _names.Remove(id);
+            _questLogs.Remove(id);
         }
         client.Tcp.Close();
         Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
         _log($"client {id} left");
     }
 
-    // Clients send State, Attack, Build, SkillCast, Pickup, and Name; anything else means a foreign client.
+    // Clients send State, Attack, Build, SkillCast, Pickup, Name, and the
+    // quest trio (Sync/Accept/Complete); anything else means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
         if (payload[0] == Net.Name)
         {
             OnName(id, payload);
+            return;
+        }
+        if (payload[0] == Net.QuestSync)
+        {
+            OnQuestSync(id, payload);
+            return;
+        }
+        if ((payload[0] == Net.QuestAccept || payload[0] == Net.QuestComplete) && payload.Length == 5)
+        {
+            OnQuestIntent(id, payload[0] == Net.QuestComplete, BitConverter.ToInt32(payload, 1));
             return;
         }
         if (payload[0] == Net.Attack && payload.Length == 1)
@@ -246,6 +291,84 @@ public sealed class GameServer : IDisposable
             w.Write(name);
             w.Write(plate);
         });
+
+    // A client's quest state: level plus taken/done ids plus kill counters.
+    // Adopted as the authoritative copy (it is the player's save); from here
+    // the server evolves it through judged kills and confirmed intents, and
+    // the client re-syncs on level-up to carry the mirror. Malformed means a
+    // foreign client. One log per client over the shared defs: states are
+    // per-log, so a shared log would tangle clients.
+    private void OnQuestSync(int id, byte[] payload)
+    {
+        var chara = new CharaSlot();
+        try
+        {
+            using var ms = new MemoryStream(payload, 1, payload.Length - 1);
+            using var r = new BinaryReader(ms);
+            chara.Level = r.ReadInt32();
+            for (int n = r.ReadInt32(); n > 0; n--) chara.Quests.Add(r.ReadInt32());
+            for (int n = r.ReadInt32(); n > 0; n--) chara.QuestsDone.Add(r.ReadInt32());
+            for (int n = r.ReadInt32(); n > 0; n--) chara.QuestKills[r.ReadString()] = r.ReadInt32();
+        }
+        catch (Exception ex) when (ex is IOException or FormatException)
+        {
+            throw new InvalidDataException($"bad quest sync from {id} ({ex.Message})");
+        }
+        lock (_mobLock)
+        {
+            // Re-syncs merge, never clobber: a level-up Sync can trail an
+            // intent or a kill push still in flight, so membership unions
+            // and counters take the max (a Sync racing its QuestOk re-grows
+            // then re-shrinks: harmless, payouts stay client-guarded).
+            if (_questLogs.TryGetValue(id, out var old))
+            {
+                foreach (int q in old.chara.Quests) if (!chara.Quests.Contains(q)) chara.Quests.Add(q);
+                foreach (int q in old.chara.QuestsDone) if (!chara.QuestsDone.Contains(q)) chara.QuestsDone.Add(q);
+                foreach (var kv in old.chara.QuestKills)
+                    chara.QuestKills[kv.Key] = Math.Max(kv.Value, chara.QuestKills.TryGetValue(kv.Key, out int n) ? n : 0);
+            }
+            var log = new QuestLog(_questDefs);
+            log.Sync(chara);
+            _questLogs[id] = (log, chara);
+        }
+    }
+
+    // An accept/turn-in intent: the server runs the same act on its copy and
+    // confirms, so a client can only take what it may and turn in what it
+    // finished. A failed act answers nothing (the client pre-checks on the
+    // same state, so only a hacked client hears silence). Unknown quests
+    // (joiner customs the host lacks) and missing copies (CLI, pre-Sync)
+    // also answer nothing: logged, never fatal.
+    private void OnQuestIntent(int id, bool complete, int quest)
+    {
+        lock (_mobLock)
+        {
+            if (!_questLogs.TryGetValue(id, out var q) || !_questDefs.ContainsKey(quest))
+            {
+                _log($"client {id} asked about untracked quest {quest}");
+                return;
+            }
+            bool ok = complete ? q.log.Complete(q.chara, quest) : q.log.Accept(q.chara, quest);
+            if (!ok) return;
+            Send(_clients[id], Net.Encode(Net.QuestOk, w => { w.Write(quest); w.Write(complete); }));
+        }
+    }
+
+    // One of the attacker's kills: its quests tick on the server's copy and
+    // each bumped counter is pushed back (the client sets, never bumps, in
+    // net play). No copy means nothing hunts (CLI, pre-Sync): skip quietly.
+    private void PushQuestKills(int attacker, int mob)
+    {
+        if (!_questLogs.TryGetValue(attacker, out var q)) return;
+        var client = _clients[attacker]; // our own read loop: this id is always present
+        foreach (var b in q.log.BumpKills(q.chara, mob))
+            Send(client, Net.Encode(Net.QuestKill, w =>
+            {
+                w.Write(b.quest);
+                w.Write(b.index);
+                w.Write(b.count);
+            }));
+    }
 
     // The Attack carries no body: the swing is judged from the sender's last
     // State (its position and facing) and its Build (combat stats; CLI
@@ -331,7 +454,10 @@ public sealed class GameServer : IDisposable
         }));
 
     // One judged hit to every client (basic swings and skills share this wire shape).
-    private void BroadcastHit(MobWorld.Hit h, int attacker) =>
+    // A killing blow also ticks the attacker's quests (serverside copy) and
+    // pushes the bumped counters back to the killer only.
+    private void BroadcastHit(MobWorld.Hit h, int attacker)
+    {
         Broadcast(Net.Encode(Net.MobHit, w =>
         {
             w.Write(h.Uid);
@@ -342,6 +468,9 @@ public sealed class GameServer : IDisposable
             w.Write(h.Exp);
             w.Write(h.Skill);
         }));
+        if (h.HpLeft == 0)
+            PushQuestKills(attacker, h.Mob);
+    }
 
     // A client entering a map (first State or switch) gets its live mobs. The
     // snapshot and the sends stay under one lock: a kill slipping between

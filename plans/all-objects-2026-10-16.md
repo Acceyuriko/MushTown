@@ -1,6 +1,6 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S9 committed, S10 in progress (one-by-one, autonomous
+Status: S-phase done, S10 committed (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
@@ -317,10 +317,15 @@ Probe, carry, art, sim.
   Quest/skill verified already live (S1 probe: QuestState/
   SkillCost/SkillDamage, UI reads states, QuestKills never read
   direct) — no stragglers, no churn. 4 direct Roll tests.
-- S10 quest server protocol (new net messages plus server-side
-  quest state per player; LAN trusts the client until here).
-  1 sprint. Reward stays as def fields + TurnIn act unless a quest
-  needs custom payout logic a row cannot hold.
+- S10 quest server protocol (done): QuestSync/Accept/Complete/
+  Ok/Kill messages; server holds one QuestLog + chara copy per
+  client (Sync on connect + level-up), judges intents and kill
+  bumps, client applies confirms and sets pushed counters. Reward
+  stays def fields + TurnIn act (client pays on QuestOk). Joiner
+  customs the host lacks go unanswered (logged, dialog stays for
+  Bye). Quest drains before mob hits; re-syncs merge, never clobber
+  (R1 P0: level-up Sync wiped the just-pushed counter). 8 protocol
+  tests. LAN trusts the host's quest files now.
 
 Total: about 18 sprints.
 

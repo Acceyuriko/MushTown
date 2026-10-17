@@ -21,6 +21,11 @@ public static class Net
     public const byte DropTake = 14; // server -> client: int uid, int map, int taker, int kind, int id, int count (taker 0 = expired)
     public const byte Pickup = 15;   // client -> server: int uid (the drop to grab; server checks map + reach)
     public const byte Name = 16;     // client -> server: string name, int plate; relay adds int id first
+    public const byte QuestSync = 17; // client -> server: int level, int n + n quest ids, int n + n done ids, int n + n (string key, int count) kills
+    public const byte QuestAccept = 18; // client -> server: int quest (accept intent; server confirms with QuestOk)
+    public const byte QuestComplete = 19; // client -> server: int quest (turn-in intent; server confirms with QuestOk)
+    public const byte QuestOk = 20;  // server -> client: int quest, byte completed (the intent passed on the server's copy)
+    public const byte QuestKill = 21; // server -> client: int quest, int index, int count (authoritative counter)
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -115,6 +120,10 @@ public readonly record struct HurtEvent(int Uid, int Mob, int Map, int Damage);
 // false). The taker's client claims Kind/Id/Count; taker 0 means expired.
 public readonly record struct DropEvent(
     bool Spawn, int Uid, int Map, float X, float Y, int Kind, int Id, int Count, int Taker);
+
+// One quest event from the server: a confirmed intent (Kill false, Quest +
+// Completed set) or an authoritative kill counter (Kill true, Quest/Index/Count).
+public readonly record struct QuestEvent(bool Kill, int Quest, int Index, int Count, bool Completed);
 
 // Accumulates raw TCP bytes and yields whole payloads (header eaten).
 // TCP splits and merges at will, so one Feed can yield zero, one, or more.

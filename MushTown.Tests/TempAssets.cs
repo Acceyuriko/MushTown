@@ -43,6 +43,15 @@ public sealed class TempAssets : IDisposable
             $"{{\"MobId\":{mob},\"MesoMin\":{mesoMin},\"MesoMax\":{mesoMax},\"Items\":{itemsJson}}}");
     }
 
+    // The server only reads ids, level band, kills, and rewards, so text stays out.
+    public void AddQuest(int quest, int mob, int count, int lvMin = 1, int lvMax = 0, int rewardExp = 0)
+    {
+        Directory.CreateDirectory(Path.Combine(Dir, "quest"));
+        File.WriteAllText(Path.Combine(Dir, "quest", $"{quest}.json"),
+            $"{{\"QuestId\":{quest},\"Npc0\":1,\"Npc1\":1,\"LvMin\":{lvMin},\"LvMax\":{lvMax}," +
+            $"\"Kills\":[{{\"Mob\":{mob},\"Count\":{count}}}],\"RewardExp\":{rewardExp}}}");
+    }
+
     // The server only reads Kind/DmgLo/MobCount/Range, so names and art stay out.
     public void AddSkill(int skill, int range, int mobCount, int kind = 0, int dmgLo = 1)
     {

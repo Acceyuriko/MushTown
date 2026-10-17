@@ -4,9 +4,9 @@ namespace MushTown.Shared;
 // here. One QuestState per taken quest, spawned by QuestStateFactory.
 // Kill counters still live on the save (CharaSlot.QuestKills): states read
 // them live, so no save change and no stale copies.
-// Authority: LAN still trusts the client (no quest protocol yet); every act
-// takes the chara it mutates, so the server can later run the same acts on
-// its own copy.
+// Authority: solo runs the acts on the save; in net play the server runs the
+// same acts on its per-client copy (QuestSync uploads it on connect and
+// level-up) and confirms intents, so completion is judged, not trusted.
 
 // One taken quest: live view over its def row plus the save. Dumb ctor:
 // the factory wires (id, log), all reads go live.
@@ -89,9 +89,11 @@ public sealed class QuestLog : Component
 
     // One of our kills: every taken quest hunting this mob ticks up (capped).
     // Reads the save list, not the states: counting stays right even if a
-    // read path already failed loud on a desync.
-    public void BumpKills(CharaSlot chara, int mob)
+    // read path already failed loud on a desync. Reports each bumped counter
+    // (quest, index, new count) so the server can push the deltas.
+    public List<(int quest, int index, int count)> BumpKills(CharaSlot chara, int mob)
     {
+        var bumped = new List<(int quest, int index, int count)>();
         foreach (int qid in chara.Quests)
         {
             if (!Defs.TryGetValue(qid, out var q)) continue;
@@ -100,9 +102,12 @@ public sealed class QuestLog : Component
                 if (q.Kills[i].Mob != mob) continue;
                 string key = $"{qid}:{i}";
                 chara.QuestKills.TryGetValue(key, out int n);
-                chara.QuestKills[key] = Math.Min(q.Kills[i].Count, n + 1);
+                if (n >= q.Kills[i].Count) continue; // capped: no change, no delta
+                chara.QuestKills[key] = n + 1;
+                bumped.Add((qid, i, n + 1));
             }
         }
+        return bumped;
     }
 
     public int KillCount(CharaSlot chara, int quest, int index) =>
