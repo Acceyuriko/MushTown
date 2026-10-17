@@ -383,7 +383,7 @@ public sealed class GameServer : IDisposable
         {
             if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to judge from
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
-            foreach (var h in _mobs.Strike(p.map, p.x, p.y, p.facing, Random.Shared, build))
+            foreach (var h in _mobs.Strike(p.map, p.x, p.y, p.facing, Random.Shared, build, id))
                 BroadcastHit(h, id);
             BroadcastFreshDrops();
         }
@@ -413,7 +413,7 @@ public sealed class GameServer : IDisposable
             }), id);
             if (!damage) return; // utility/buff: the effect is the whole message
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
-            foreach (var h in _mobs.SkillStrike(p.map, p.x, p.y, p.facing, Random.Shared, build, skill, pct))
+            foreach (var h in _mobs.SkillStrike(p.map, p.x, p.y, p.facing, Random.Shared, build, skill, pct, id))
                 BroadcastHit(h, id);
             BroadcastFreshDrops();
         }

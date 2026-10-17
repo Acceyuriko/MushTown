@@ -1,6 +1,6 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S-phase done, S10 committed (one-by-one, autonomous
+Status: L1 committed, playtests pending (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
@@ -185,8 +185,11 @@ No stray systems. Defs stay data.
 - One `Loot` act for all mobs and bosses (Q10). Reads the table,
   rolls once, spawns drops. Boss tables are bigger rows.
   Quest scripted drops go through the same act with bonus lines.
-  VERDICT (S9): DROPPED — Roll + DropKill/DropOne split the job;
-  a Loot act would be a pass-through.
+  VERDICT (L1): BUILT NARROW — DropKill is the Loot act (table
+  rolls once, BonusDrops hook appends, world places all); killer
+  id threads Strike/SkillStrike->Bury->DropKill (0 = local).
+  Callback, not registry: no writers exist yet, and the test
+  pins the (mob, attacker) contract.
 
 ## Layout (Q3, agreed)
 
@@ -366,6 +369,15 @@ Probe, carry, art, sim.
   tests. Gates 0/0 + 238/238, 22/22 shots match HEAD. Review R1
   (1 P0 + 1 P1 + 1 P1-test fixed) + R2 clean. Playtest pending.
   LAN trusts the host's quest files now.
+- L1 loot act (done): killer id threads to the drop site
+  (Strike/SkillStrike gain attacker = 0; server passes the real
+  id; solo/shots default to local 0); BonusDrops hook appends
+  quest-scripted lines after the table roll (null in v1: no quest
+  items yet). 4 Loot tests (placement, swing wire, skill wire,
+  default). No registry: the hook's contract is test-pinned
+  instead. Gates 0/0 + 242/242, 22/22 shots match HEAD. Review
+  R1 (comment placement fixed + skill-path test added), no R2.
+  Playtest pending.
 
 Total: about 18 sprints.
 

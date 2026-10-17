@@ -241,10 +241,16 @@ public sealed class MobWorld
         return null;
     }
 
+    // Quest-scripted bonus lines per kill: (mob, attacker) -> extra payouts
+    // (kind/id/count/dx, placed like table rolls). Null in v1 (the bag
+    // holds no quest items yet); the hook stays so the first scripted
+    // drop needs no rewire. attacker 0 is the local player.
+    public Func<int, int, List<(int kind, int id, int count, float dx)>>? BonusDrops { get; set; }
+
     // One basic-attack swing at (x, y): every mob in reach takes one damage
     // roll, and the dead are removed. rng comes from the caller (tests pass a seed).
     // build is the attacker's combat stats (the server stores one per client).
-    public List<Hit> Strike(int map, float x, float y, bool facingRight, Random rng, Build build)
+    public List<Hit> Strike(int map, float x, float y, bool facingRight, Random rng, Build build, int attacker = 0)
     {
         var hits = new List<Hit>();
         for (int i = _lives.Count - 1; i >= 0; i--)
@@ -259,7 +265,7 @@ public sealed class MobWorld
             hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId));
             if (m.Hp != 0) continue;
             _lives.RemoveAt(i);
-            Bury(m, rng);
+            Bury(m, rng, attacker);
         }
         return hits;
     }
@@ -288,7 +294,7 @@ public sealed class MobWorld
     // shoves its victims along the dash (live moves sync them, gravity
     // lands them). Final Attack may land one bonus hit on the nearest
     // survivor (a number, no spark: passives have no art).
-    public List<Hit> SkillStrike(int map, float x, float y, bool facingRight, Random rng, Build build, int skill, int pct)
+    public List<Hit> SkillStrike(int map, float x, float y, bool facingRight, Random rng, Build build, int skill, int pct, int attacker = 0)
     {
         IsDamageSkill(skill); // loads and caches (a buff id here is a caller bug, caught below)
         var st = _skills[skill];
@@ -308,38 +314,38 @@ public sealed class MobWorld
         foreach ((float _, Mob m) in inRing)
         {
             if (hits.Count >= st.mobCount) break;
-            hits.Add(HitOne(m, skill, rng, build, pct));
+            hits.Add(HitOne(m, skill, rng, build, pct, attacker));
             if (skill == SkillData.Rush && m.Hp > 0) // the living slide along the dash
                 m.X = Math.Clamp(m.X + (facingRight ? PushPx : -PushPx),
                     _maps[map].Info.VrLeft, _maps[map].Info.VrRight);
             if (m.Hp > 0) firstAlive ??= m;
         }
         if (firstAlive != null && rng.NextDouble() * 100 < build.FinalPct)
-            hits.Add(HitOne(firstAlive, SkillData.FinalAttack, rng, build, pct));
+            hits.Add(HitOne(firstAlive, SkillData.FinalAttack, rng, build, pct, attacker));
         return hits;
     }
 
     // One damage roll applied to one live mob. The dead leave the world, a
     // grave (respawn), and their drops: mesos always, a potion sometimes
     // (the boss always pays its purse).
-    private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct)
+    private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker)
     {
         int damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct);
         m.Hp = Math.Max(0, m.Hp - damage);
         if (m.Hp == 0)
         {
             _lives.Remove(m);
-            Bury(m, rng);
+            Bury(m, rng, attacker);
         }
         return new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, tag, m.MobId);
     }
 
     // One death's aftermath (swings and skills share it): a grave at home
     // for the respawn timer, plus the kill's drops.
-    private void Bury(Mob m, Random rng)
+    private void Bury(Mob m, Random rng, int attacker)
     {
         _graves.Add(new Grave { Map = m.Map, Mob = m.MobId, X = m.HomeX, Y = m.HomeY, MsLeft = m.Boss ? BossRespawnMs : RespawnMs });
-        DropKill(m, rng);
+        DropKill(m, rng, attacker);
     }
 
     // One mob's drop table (drops/{mob}.json, repo data): a meso range plus
@@ -364,14 +370,18 @@ public sealed class MobWorld
         return table;
     }
 
-    // One kill's drops: the table rolls, the world places (EnterMap loads
-    // every spawned mob's table; lives only exist after EnterMap loaded it).
-    private void DropKill(Mob m, Random rng)
+    // One kill's loot (the Loot act): the table rolls once, bonus lines
+    // append, the world places every payout (EnterMap loads every spawned
+    // mob's table; lives only exist after EnterMap loaded it).
+    private void DropKill(Mob m, Random rng, int attacker)
     {
         var data = _maps[m.Map];
         var table = _dropTables[m.MobId];
         foreach (var p in table.Roll(rng))
             DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count);
+        if (BonusDrops != null)
+            foreach (var p in BonusDrops(m.MobId, attacker))
+                DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count);
     }
 
     // One loot drop: clamped inside the VR, lands on the ground below.
