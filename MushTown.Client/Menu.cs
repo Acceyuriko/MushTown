@@ -1188,9 +1188,9 @@ public partial class MushTownGame
         LoadMapTextures(); // always: a failed texture load must retry, not skip into missing art
         if (chara.X != null && chara.Y != null)
         {
-            _px = chara.X.Value;
-            _py = chara.Y.Value;
-            _ground = null; // falls onto whatever is below (or respawns from the void)
+            _mover.X = chara.X.Value;
+            _mover.Y = chara.Y.Value;
+            _mover.Ground = null; // falls onto whatever is below (or respawns from the void)
             ResetMotion();
         }
         else
@@ -1224,7 +1224,7 @@ public partial class MushTownGame
         _cWasDown = kb.IsKeyDown(Keys.C);
         _kWasDown = kb.IsKeyDown(Keys.K);
         _vWasDown = kb.IsKeyDown(Keys.V);
-        _wasInPortal = SceneMath.FindPortal(_map.Portals, _px, _py) != null;
+        _mover.WasInPortal = SceneMath.FindPortal(_map.Portals, _mover.X, _mover.Y) != null;
         _screen = Screen.Game;
         BuildGameScene();
         _scenes.Show(_gameScene);
@@ -1275,8 +1275,8 @@ public partial class MushTownGame
         var chara = _save.Slots[_slot]!;
         _hand.Return(chara); // a held piece rejoins the bags before the write (the hand itself is never saved)
         chara.Map = _mapId;
-        chara.X = (int)Math.Floor(_px);
-        chara.Y = (int)Math.Floor(_py);
+        chara.X = (int)Math.Floor(_mover.X);
+        chara.Y = (int)Math.Floor(_mover.Y);
         _store.Save(_savesPath);
         GameLog($"saved {chara.Name} at map {chara.Map} ({chara.X},{chara.Y})");
     }

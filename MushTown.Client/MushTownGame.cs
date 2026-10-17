@@ -15,17 +15,8 @@ public partial class MushTownGame : Game
     internal const int GameWidth = 1366; // UI components center on these (Sign, Dim, BossBar, Minimap)
     internal const int GameHeight = 768;
 
-    // Walk/jump feel, tuned by hand (approximate MapleStory values).
-    private const float WalkSpeed = 140f; // px per second
-    private const float JumpV0 = -520f;   // take-off velocity, px per second
-    private const float Gravity = 1800f;  // pull-down, px per second squared
-    private const float MaxFall = 700f;   // terminal velocity: long drops stop speeding up here
-    private const float AirAccel = 100f;  // weak air drift: a full jump shifts vx by ~60
-    private const float ClimbSpeed = 120f; // ladder/rope slide, px per second
-    private const int DropFrames = 3; // down+jump ignores landings for ~3 frames: just enough to clear the dropped line
+    // The feet live in Shared now (PlayerMover); only the map-switch beat stays here.
     private const int LoadBeat = 10;      // black frames shown on map switch (~170ms)
-    private const int PortalCooldown = 30; // frames after travel during which ↑ cannot travel again (~0.5s)
-    private const int GrabCooldown = 20; // frames after leaving a ladder during which Up/Down cannot re-grab (~0.33s)
     private const float NumberMs = 800; // damage numbers rise and fade over this long
     private const int NumberRise = 60; // px a damage number floats up
     private const int BarWidth = 40; // mob HP bar width, px
@@ -71,23 +62,17 @@ public partial class MushTownGame : Game
     private float _camX, _camY, _camVX, _camVY;
     private double _timeMs; // scrolling backs drift with this (0 in shot mode: still image)
     private int _loadBeat;
-    private int _portalCooldown; // travel cooldown, ticks down alongside the beat
-    private int _grabCooldown; // ladder re-grab block after jumping off or mounting the top
     private List<(int frame, float timer)> _portalAnims = new(); // one anim state per portal, aligned with _map.Portals
     private List<List<int>> _portalDelays = new();
 
-    // Player: feet position, horizontal/vertical speed, and the foothold stood on
-    // (null means airborne, so there is no separate on-ground flag).
-    private float _px, _py, _vx, _vy;
-    private FootholdItem? _ground;
-    private LadderItem? _climb; // set while on a ladder or rope
-    private bool _climbMoving;  // climb pose only animates while sliding
-    private int _dropFrames;    // down+jump: skip landings until this hits 0
+    // The sim world: one root object holding the player (mobs join in S5-S6).
+    private readonly GameObject _world = new();
+    private readonly PlayerMover _mover = new();
     private FootholdItem _spawnGround = null!;
-    private string _action = "stand2";
+    private string _shownAction = "stand2"; // last action the frames advanced on (resets the frame on change)
     private int _frame;
     private float _timerMs;
-    private bool _facingRight, _altWasDown, _upWasDown, _wasInPortal, _ctrlWasDown;
+    private bool _altWasDown, _upWasDown, _ctrlWasDown;
     private bool _qWasDown, _wWasDown, _eWasDown, _rWasDown, _tWasDown, _yWasDown, _uWasDown, _fWasDown, _gWasDown, _hWasDown, _jWasDown, _lWasDown, _zWasDown;
     private float _attackLock; // ms of swing left: movement frozen until it hits 0
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
@@ -218,6 +203,9 @@ public partial class MushTownGame : Game
         _graphics.PreferredBackBufferWidth = mode.Width;
         _graphics.PreferredBackBufferHeight = mode.Height;
 
+        var player = new GameObject();
+        player.Add(_mover);
+        _world.AddChild(player);
         Exiting += (_, _) => { SaveChara(); _net?.Dispose(); _server?.Dispose(); };
         if (_shotPath != null && OperatingSystem.IsWindows())
             HideWindowEarly(); // headless shots: hide before first paint (load takes seconds)
@@ -297,9 +285,9 @@ public partial class MushTownGame : Game
                 throw new InvalidDataException($"unknown action: {_shotAction}");
             if (_shotFrame >= _charas[_shotAction].Frames.Count)
                 throw new InvalidDataException($"action {_shotAction} has no frame {_shotFrame}");
-            _action = _shotAction;
+            _mover.Action = _shotAction;
             _frame = _shotFrame;
-            _facingRight = _shotFacingRight;
+            _mover.FacingRight = _shotFacingRight;
         }
 
         InitializeMenu(_shotScreen);
@@ -355,6 +343,7 @@ public partial class MushTownGame : Game
         // the old map untouched and the menu can retry cleanly
         _mapId = mapId;
         _map = map;
+        _mover.Map = map; // the feet read the same ground
         _layers = layers;
         _spawnGround = spawnGround;
         _portalAnims = portalAnims;
@@ -366,20 +355,16 @@ public partial class MushTownGame : Game
     // Stand on this map's spawn ground.
     private void Spawn()
     {
-        _px = _map.Info.SpawnX;
-        _ground = _spawnGround;
-        _py = SceneMath.FootholdY(_ground, _map.Info.SpawnX);
+        _mover.X = _map.Info.SpawnX;
+        _mover.Ground = _spawnGround;
+        _mover.Y = SceneMath.FootholdY(_mover.Ground, _map.Info.SpawnX);
         ResetMotion();
     }
 
     // Stop all motion: still speeds, no ladder, no drop-through, no swing.
     private void ResetMotion()
     {
-        _vx = 0;
-        _vy = 0;
-        _climb = null;
-        _climbMoving = false;
-        _dropFrames = 0;
+        _mover.Reset();
         _attackLock = 0;
     }
 
@@ -445,13 +430,13 @@ public partial class MushTownGame : Game
             var world = _localWorld!; // StartLocalWorld just built it
             var first = world.MobsOn(_mapId).FirstOrDefault()
                 ?? throw new InvalidDataException($"--hit/--skill/--drop needs mobs, map {_mapId} has none");
-            _px = first.X - 50;
-            _ground = SceneMath.ArrivalGround(_map.Footholds, (int)_px, (int)first.Y)
+            _mover.X = first.X - 50;
+            _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, (int)first.Y)
                 ?? throw new InvalidDataException($"--hit/--skill/--drop found no ground near mob {first.Mob}");
-            _py = SceneMath.FootholdY(_ground, (int)_px);
+            _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
             ResetMotion();
-            _facingRight = true;
-            _action = "swingP1";
+            _mover.FacingRight = true;
+            _mover.Action = "swingP1";
             _frame = 1;
             // fixed seed: the evidence shot shows the same number every run
             if (_shotSkill != 0)
@@ -464,14 +449,14 @@ public partial class MushTownGame : Game
                     if (!chara.SkillLv.ContainsKey(_shotSkill)) Progression.LearnSkill(chara, _skills[_shotSkill]);
                     TryPaySkill(_shotSkill);
                 }
-                SpawnCastFx(_shotSkill, _px, _py, true);
+                SpawnCastFx(_shotSkill, _mover.X, _mover.Y, true);
                 int n = _skills[_shotSkill].Effect.Count;
                 if (n <= 5) throw new InvalidDataException($"--skill {_shotSkill} needs 6+ effect frames, got {n}");
                 _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
                 if (world.IsDamageSkill(_shotSkill))
                 {
                     int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
-                    foreach (var h in world.SkillStrike(_mapId, _px, _py, true, new Random(0), OwnBuild(), _shotSkill, pct))
+                    foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, true, new Random(0), OwnBuild(), _shotSkill, pct))
                         ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                     DrainDrops(world);
                 }
@@ -482,7 +467,7 @@ public partial class MushTownGame : Game
                 var rng = new Random(0);
                 bool killed = false;
                 for (int i = 0; i < 20 && !killed; i++)
-                    foreach (var h in world.Strike(_mapId, _px, _py, true, rng, OwnBuild()))
+                    foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, rng, OwnBuild()))
                     {
                         ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                         killed |= h.HpLeft == 0;
@@ -492,7 +477,7 @@ public partial class MushTownGame : Game
             }
             else
             {
-                foreach (var h in world.Strike(_mapId, _px, _py, true, new Random(0), OwnBuild()))
+                foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, new Random(0), OwnBuild()))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                 DrainDrops(world);
             }
@@ -506,7 +491,7 @@ public partial class MushTownGame : Game
     private void RunShotAi()
     {
         var world = _localWorld!; // StartLocalWorld just built it
-        var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _px, _py) };
+        var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _mover.X, _mover.Y) };
         for (int i = 0; i < _shotAiticks; i++)
         {
             var ev = world.Tick(100, players);
@@ -567,7 +552,7 @@ public partial class MushTownGame : Game
         }
         // Talk needs presence: walking out of reach closes the modal.
         if (_talkNpc != 0 && !_map.Npcs.Any(n => n.NpcId == _talkNpc
-            && Math.Abs(n.X - _px) <= QuestLog.TalkDx && Math.Abs(n.Cy - _py) <= QuestLog.TalkDy))
+            && Math.Abs(n.X - _mover.X) <= QuestLog.TalkDx && Math.Abs(n.Cy - _mover.Y) <= QuestLog.TalkDy))
         {
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         }
@@ -578,19 +563,11 @@ public partial class MushTownGame : Game
             UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
         SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;
-        if (_portalCooldown > 0) _portalCooldown--;
-        if (_grabCooldown > 0) _grabCooldown--;
 
         _timeMs = gameTime.TotalGameTime.TotalMilliseconds;
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float dtMs = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
-        int dir = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
-        if (_attackLock > 0)
-        {
-            _attackLock = Math.Max(0, _attackLock - dtMs);
-            dir = 0; // mid-swing: feet planted, facing kept
-        }
-        else if (dir != 0 && _climb == null) _facingRight = dir > 0; // raw sprites face left; mirror when facing right
+        if (_attackLock > 0) _attackLock = Math.Max(0, _attackLock - dtMs);
         foreach (int id in _skillCdMs.Keys.ToList())
             _skillCdMs[id] = Math.Max(0, _skillCdMs[id] - dtMs);
         foreach (int id in _buffMs.Keys.ToList()) // buffs tick down, then leave (loops and stats go with them)
@@ -629,17 +606,22 @@ public partial class MushTownGame : Game
         bool freshL = FreshKey(kb, Keys.L, ref _lWasDown);
         bool freshZ = FreshKey(kb, Keys.Z, ref _zWasDown);
 
+        // Face the held direction before skills strike: same-frame turn+act
+        // uses the new facing (the in-step update then agrees).
+        int dirNow = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
+        if (_attackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
+
         // Ctrl swings the polearm (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (freshCtrl && _climb == null && _attackLock <= 0 && HasJudge())
+        if (freshCtrl && _mover.Climb == null && _attackLock <= 0 && HasJudge())
         {
             _attackLock = _delays["swingP1"].Sum();
             PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
             {
-                foreach (var h in _localWorld.Strike(_mapId, _px, _py, _facingRight, Random.Shared, OwnBuild()))
+                foreach (var h in _localWorld.Strike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, OwnBuild()))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                 DrainDrops(_localWorld);
             }
@@ -654,7 +636,7 @@ public partial class MushTownGame : Game
             float bestD2 = float.MaxValue;
             foreach (var kv in _drops)
             {
-                float dx = kv.Value.X - _px, dy = kv.Value.Y - _py;
+                float dx = kv.Value.X - _mover.X, dy = kv.Value.Y - _mover.Y;
                 if (Math.Abs(dx) > MobWorld.PickDx || Math.Abs(dy) > MobWorld.PickDy) continue;
                 float d2 = dx * dx + dy * dy;
                 if (d2 < bestD2) { bestD2 = d2; best = kv.Key; }
@@ -664,7 +646,7 @@ public partial class MushTownGame : Game
                 if (_net != null && _net.Connected) _net.SendPickup(best);
                 else if (_localWorld != null)
                 {
-                    var d = _localWorld.Pickup(best, _mapId, _px, _py);
+                    var d = _localWorld.Pickup(best, _mapId, _mover.X, _mover.Y);
                     if (d != null) ApplyDropTake(d.Uid, true, d.Kind, d.Id, d.Count);
                 }
             }
@@ -679,27 +661,27 @@ public partial class MushTownGame : Game
             (freshQ, SkillData.SlashBlast), (freshT, SkillData.Brandish), (freshG, SkillData.IntrepidSlash),
             (freshH, SkillData.BeamBlade), (freshL, SkillData.ScarringSword),
         })
-            if (fresh && _climb == null && _attackLock <= 0 && HasJudge() && TryPaySkill(skill))
+            if (fresh && _mover.Climb == null && _attackLock <= 0 && HasJudge() && TryPaySkill(skill))
                 CastActive(skill);
 
         // W leaps again mid-air (never on the ground or a ladder): once per
         // airtime plus the cooldown, full jump velocity, drift unchanged.
         // No attack-lock check on purpose: the leap stays available mid-swing.
-        if (freshW && _ground == null && _climb == null && _canLeap && TryPaySkill(SkillData.WarLeap))
+        if (freshW && _mover.Ground == null && _mover.Climb == null && _canLeap && TryPaySkill(SkillData.WarLeap))
         {
-            _vy = OwnJump();
+            _mover.Vy = OwnJump();
             _canLeap = false;
             PlaySfx("jump");
-            SpawnCastFx(SkillData.WarLeap, _px, _py, _facingRight);
+            SpawnCastFx(SkillData.WarLeap, _mover.X, _mover.Y, _mover.FacingRight);
             if (_net != null && _net.Connected) _net.SendSkillCast(SkillData.WarLeap, 0);
         }
 
         // E slams down from mid-air (never grounded): needs a platform in
         // range below, rings at once, then dives (drift steers the landing).
-        if (freshE && _ground == null && _climb == null && _attackLock <= 0 && HasJudge() &&
+        if (freshE && _mover.Ground == null && _mover.Climb == null && _attackLock <= 0 && HasJudge() &&
             DiveGround() && TryPaySkill(SkillData.LeapAttack))
         {
-            _vy = DiveV;
+            _mover.Vy = DiveV;
             CastActive(SkillData.LeapAttack);
         }
 
@@ -707,11 +689,11 @@ public partial class MushTownGame : Game
         // cast relays for peers. Recast refreshes. No judge needed: landing
         // the buff never touches a mob.
         foreach ((bool fresh, int skill) in new[] { (freshR, SkillData.IronBody), (freshU, SkillData.SpiritBlade) })
-            if (fresh && _climb == null && _attackLock <= 0 && TryPaySkill(skill))
+            if (fresh && _mover.Climb == null && _attackLock <= 0 && TryPaySkill(skill))
                 CastBuff(skill);
 
         // F toggles Combo Attack: recast cancels free (orbs drop with it).
-        if (freshF && _climb == null && _attackLock <= 0)
+        if (freshF && _mover.Climb == null && _attackLock <= 0)
         {
             if (_buffMs.ContainsKey(SkillData.ComboAttack)) EndBuff(SkillData.ComboAttack);
             else if (TryPaySkill(SkillData.ComboAttack)) CastBuff(SkillData.ComboAttack);
@@ -719,148 +701,51 @@ public partial class MushTownGame : Game
 
         // Y/J dash then ring at the landing (Flash Blade, Rush).
         foreach ((bool fresh, int skill) in new[] { (freshY, SkillData.FlashBlade), (freshJ, SkillData.Rush) })
-            if (fresh && _climb == null && _attackLock <= 0 && HasJudge() && TryPaySkill(skill))
+            if (fresh && _mover.Climb == null && _attackLock <= 0 && HasJudge() && TryPaySkill(skill))
             {
                 Dash();
                 CastActive(skill);
             }
 
-        // Up at a portal travels: tap anywhere in range, or hold Up and walk
-        // in (portal wins over ladder). Travel cools down for ~0.5s, and
-        // standing in range with Up held needs a fresh tap, so arrivals never
-        // ping-pong back.
-        var portal = SceneMath.FindPortal(_map.Portals, _px, _py);
-        bool wantPortal = freshUp || (up && !_wasInPortal);
-        bool switched = false;
-        if (_climb == null && portal != null && wantPortal && _portalCooldown == 0)
+        // The feet step in Shared: snapshot in, outputs drained after. Skills
+        // above already poked the state (leaps, dashes); travel and respawn
+        // land after the step, same frame.
+        _mover.Input = new PlayerInput
         {
-            SwitchMap(portal.Tm, portal.Tn);
-            switched = true;
-        }
-        if (_climb == null && !switched && _grabCooldown == 0 && (up || down) && _attackLock <= 0) GrabLadder(up, down);
-        _wasInPortal = switched
-            ? SceneMath.FindPortal(_map.Portals, _px, _py) != null // arrival spot, not the old one
-            : portal != null;
-
-        // Alt+side leaps off faster than a run-up with half a jump of up
-        // (rope and ladder feel the same); Alt alone holds on
-        if (_climb != null && freshAlt && dir != 0)
+            Dir = dirNow,
+            Up = up,
+            Down = down,
+            JumpHeld = alt,
+            JumpPressed = freshAlt,
+            UpPressed = freshUp,
+            Locked = _attackLock > 0,
+            Walk = OwnWalk(),
+            Jump = OwnJump(),
+        };
+        TreeUpdate.UpdateObject(_world, dt);
+        if (_mover.JumpSfx) PlaySfx("jump");
+        if (_mover.Travel != null)
         {
-            _climb = null;
-            _climbMoving = false;
-            _vy = OwnJump() / 2;
-            PlaySfx("jump");
-            _vx = dir * OwnWalk() * 1.5f;
-            _facingRight = dir > 0;
-            _ground = null;
-            _grabCooldown = GrabCooldown;
-        }
-        if (_climb != null) ClimbMove(up, down, dt);
-
-        // held Alt jumps (landings chain into the next jump); down+jump instead
-        // drops through the platform, one floor per tap, and only over a floor
-        bool wantJump = alt && !down && _ground != null && _climb == null && _attackLock <= 0;
-        bool wantDrop = freshAlt && down && _ground != null && _climb == null && _attackLock <= 0
-            && SceneMath.GroundBelow(_map.Footholds, (int)Math.Floor(_px), (int)Math.Ceiling(_py) + 1) != null;
-
-        // horizontal: full speed on ground, keep momentum plus weak drift in the air
-        bool moved = false; // false when still or already at the wall: feet stay, so stand, not walk
-        float sx = _px, nx = _px; // stride start and end (the ground follow walks between them)
-        if (_climb == null)
-        {
-            if (_ground != null)
-                _vx = down ? 0 : dir * OwnWalk(); // held Down pins the feet: prone
-            else
-                _vx = Math.Clamp(_vx + dir * AirAccel * dt, -OwnWalk(), OwnWalk());
-            float rawX = _px + _vx * dt;
-            nx = Math.Clamp(rawX, _map.Info.VrLeft, _map.Info.VrRight);
-            if (nx != rawX) _vx = 0; // hit a wall: momentum dies here
-            moved = nx != _px;
-            _px = nx;
-        }
-        if (_ground != null && _climb == null)
-        {
-            // follow the line pixel by pixel: one 2.3px stride would skip the
-            // joint pixel on slopes and read a 2px gap in a continuous line
-            int x0 = (int)Math.Floor(sx), x1 = (int)Math.Floor(nx);
-            int stepX = Math.Sign(x1 - x0);
-            int gx = x0;
-            while (_ground != null)
-            {
-                if (gx < Math.Min(_ground.X1, _ground.X2) || gx > Math.Max(_ground.X1, _ground.X2))
-                {
-                    var step = SceneMath.StepTo(_map.Footholds, gx, (int)Math.Floor(_py));
-                    if (step == null)
-                    {
-                        _ground = null; // walked off the edge: fall from here
-                        break;
-                    }
-                    _ground = step;
-                }
-                _py = SceneMath.FootholdY(_ground, gx);
-                if (gx == x1) break;
-                gx += stepX;
-            }
+            SwitchMap(_mover.Travel.Tm, _mover.Travel.Tn);
+            _mover.WasInPortal = SceneMath.FindPortal(_map.Portals, _mover.X, _mover.Y) != null; // arrival spot, not the old one
         }
 
-        if (wantJump)
+        if (_mover.FellOut)
         {
-            _vy = OwnJump();
-            _ground = null;
-            PlaySfx("jump");
+            Console.WriteLine($"fell out of the world at ({_mover.X:F0},{_mover.Y:F0}), respawned at spawn");
+            Spawn();
+            SnapCamera(); // teleport: snap, don't swoosh across the map
         }
-        if (wantDrop)
-        {
-            _ground = null; // fall through; the landing check skips for a few frames
-            _dropFrames = DropFrames;
-        }
+        if (_mover.Ground != null || _mover.Climb != null) _canLeap = true; // grounded or held: the next airtime gets its leap back
 
-        // vertical: one-way platforms (pass through going up, land coming down)
-        if (_ground == null && _climb == null)
+        if (_mover.Action != _shownAction)
         {
-            _vy += Gravity * dt;
-            _vy = Math.Min(_vy, MaxFall);
-            float ny = _py + _vy * dt;
-            if (_vy > 0 && _dropFrames == 0)
-            {
-                int ix = (int)Math.Floor(_px), iy = (int)Math.Ceiling(_py); // ceiling: never snap up through a line
-                var g = SceneMath.GroundBelow(_map.Footholds, ix, iy);
-                if (g != null && ny >= SceneMath.FootholdY(g, ix))
-                {
-                    _py = SceneMath.FootholdY(g, ix);
-                    _vy = 0;
-                    _ground = g;
-                }
-                else
-                {
-                    _py = ny;
-                }
-            }
-            else
-            {
-                _py = ny;
-            }
-            if (_dropFrames > 0) _dropFrames--;
-            if (_ground == null && _py >= _map.Info.VrBottom) // fell out of the world: respawn
-            {
-                Console.WriteLine($"fell out of the world at ({_px:F0},{_py:F0}), respawned at spawn");
-                Spawn();
-                SnapCamera(); // teleport: snap, don't swoosh across the map
-            }
-        }
-        if (_ground != null || _climb != null) _canLeap = true; // grounded or held: the next airtime gets its leap back
-
-        string want = _attackLock > 0 ? "swingP1"
-            : _climb != null ? (_climb.Ladder ? "ladder" : "rope")
-            : _ground == null ? "jump" : down ? "prone" : dir != 0 && moved ? "walk2" : "stand2";
-        if (want != _action)
-        {
-            _action = want;
+            _shownAction = _mover.Action;
             _frame = 0;
             _timerMs = 0;
         }
-        if (_climb == null || _climbMoving) // still on a ladder: hold the pose
-            (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, _delays[_action]);
+        if (_mover.Climb == null || _mover.ClimbMoving) // still on a ladder: hold the pose
+            (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, _delays[_shownAction]);
         for (int i = 0; i < _map.Portals.Count; i++) // portal gates shimmer on their own loop
             if (_map.Portals[i].Frames.Count > 0)
                 _portalAnims[i] = SceneMath.AdvanceFrame(_portalAnims[i].frame, _portalAnims[i].timer, dtMs, _portalDelays[i]);
@@ -891,8 +776,8 @@ public partial class MushTownGame : Game
             var f = _fx[i];
             if (f.Loop) // buff loops ride the player and wrap until the buff ends
             {
-                f.X = _px;
-                f.Y = _py - FxCastDy;
+                f.X = _mover.X;
+                f.Y = _mover.Y - FxCastDy;
                 f.Timer += dtMs;
                 if (f.Timer < FxDelay) continue;
                 f.Timer -= FxDelay;
@@ -919,7 +804,7 @@ public partial class MushTownGame : Game
         if (_net != null)
         {
             if (_net.Connected)
-                _net.SendState(_mapId, _px, _py, Net.ActionCode(_action), (byte)_frame, _facingRight);
+                _net.SendState(_mapId, _mover.X, _mover.Y, Net.ActionCode(_mover.Action), (byte)_frame, _mover.FacingRight);
             while (_net.TryTake(out var e))
                 if (e.Gone)
                     _remotes.Remove(e.Id); // the name stays: ids never repeat, and a map-switch Gone is not a goodbye
@@ -969,7 +854,7 @@ public partial class MushTownGame : Game
         // events like net ones.
         if (_localWorld != null)
         {
-            var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _px, _py) };
+            var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _mover.X, _mover.Y) };
             var ev = _localWorld.Tick((int)dtMs, players);
             foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
             foreach (var h in ev.Hurts)
@@ -984,51 +869,8 @@ public partial class MushTownGame : Game
 
     // character around 70% down the screen, clamped to map bounds
     private (int x, int y) CameraTarget() => (
-        SceneMath.ClampCamera((int)Math.Floor(_px) - GameWidth / 2, _map.Info.VrLeft, _map.Info.VrRight, GameWidth),
-        SceneMath.ClampCamera((int)Math.Floor(_py) - (int)(GameHeight * 0.7), _map.Info.VrTop, _map.Info.VrBottom, GameHeight));
-
-    // Held Up/Down near a ladder or rope grabs on, centered on its x.
-    // Down-only at or below the foot does nothing (else it grabs and lets
-    // go in the same frame: a visible hop).
-    private void GrabLadder(bool up, bool down)
-    {
-        var l = SceneMath.FindLadder(_map.Ladders, _px, _py);
-        if (l == null) return;
-        if (!up && down && _py >= l.Y2) return;
-        ResetMotion();
-        _climb = l;
-        _px = l.X;
-        _ground = null;
-    }
-
-    // Slide along the grabbed ladder or rope. Up at the top steps onto the
-    // platform above when one is there; Down at the bottom lets go.
-    private void ClimbMove(bool up, bool down, float dt)
-    {
-        var l = _climb!;
-        int dirY = (down ? 1 : 0) - (up ? 1 : 0);
-        float ny = Math.Clamp(_py + dirY * ClimbSpeed * dt, l.Y1, l.Y2);
-        _climbMoving = ny != _py;
-        if (up && ny <= l.Y1)
-        {
-            var g = SceneMath.MountTop(_map.Footholds, l.X, l.Y1);
-            if (g != null)
-            {
-                _ground = g;
-                _py = SceneMath.FootholdY(g, l.X);
-                _climb = null;
-                _climbMoving = false;
-                _grabCooldown = GrabCooldown; // just mounted: walk off before Up can re-grab
-                return;
-            }
-        }
-        if (down && !up && ny >= l.Y2)
-        {
-            _climb = null;
-            _climbMoving = false; // let go, gravity takes over
-        }
-        _py = ny;
-    }
+        SceneMath.ClampCamera((int)Math.Floor(_mover.X) - GameWidth / 2, _map.Info.VrLeft, _map.Info.VrRight, GameWidth),
+        SceneMath.ClampCamera((int)Math.Floor(_mover.Y) - (int)(GameHeight * 0.7), _map.Info.VrTop, _map.Info.VrBottom, GameHeight));
 
     // Land on the ground under the target portal (same map or another one).
     // The exporter already proved the portal and its ground exist, so a miss
@@ -1047,13 +889,13 @@ public partial class MushTownGame : Game
         }
         var land = _map.Portals.FirstOrDefault(p => p.Pn == tn)
             ?? throw new InvalidDataException($"map {tm} has no portal '{tn}'");
-        _px = land.X;
-        _ground = SceneMath.ArrivalGround(_map.Footholds, land.X, land.Y)
+        _mover.X = land.X;
+        _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, land.X, land.Y)
             ?? throw new InvalidDataException($"map {tm} portal '{tn}' has no ground below");
-        _py = SceneMath.FootholdY(_ground, land.X);
-        ResetMotion();
+        _mover.Y = SceneMath.FootholdY(_mover.Ground, land.X);
+        _mover.OnTravel();
+        _attackLock = 0;
         SnapCamera();
-        _portalCooldown = PortalCooldown;
     }
 
     private void SnapCamera()
@@ -1139,12 +981,12 @@ public partial class MushTownGame : Game
 
         // the player, then each peer, then each mob: current frames, actors
         // by feet height (lower feet draw in front; ties keep this order)
-        int feetX = (int)Math.Floor(_px), feetY = (int)Math.Floor(_py);
+        int feetX = (int)Math.Floor(_mover.X), feetY = (int)Math.Floor(_mover.Y);
         var draws = new List<(int y, Action draw)>();
         var hero = _save?.Slots[_slot];
         draws.Add((feetY, () =>
         {
-            DrawAvatar(feetX, feetY, _action, _frame, _facingRight, hero?.Equips);
+            DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero?.Equips);
             if (hero != null)
                 DrawName(feetX - _cameraX, feetY + NameDown - _cameraY, hero.Name, PlateFor(hero.Equips));
         }
@@ -1233,7 +1075,7 @@ public partial class MushTownGame : Game
             var rect = new Rectangle(x - _cameraX, n.Cy - data.OriginY - _cameraY,
                 tex.Width, tex.Height);
             if (!HitRect(rect, gx, gy)) continue;
-            if (Math.Abs(n.X - _px) > QuestLog.TalkDx || Math.Abs(n.Cy - _py) > QuestLog.TalkDy) continue; // an overlapped NPC behind may be in reach
+            if (Math.Abs(n.X - _mover.X) > QuestLog.TalkDx || Math.Abs(n.Cy - _mover.Y) > QuestLog.TalkDy) continue; // an overlapped NPC behind may be in reach
             _talkNpc = n.NpcId;
             _talkQuest = 0;
             _talkPage = 0;
@@ -1409,7 +1251,7 @@ public partial class MushTownGame : Game
         if (chara == null) return false; // CLI sessions have no one to hurt
         int dealt = Progression.ApplyHurt(chara, damage, OwnDef());
         if (dealt == 0) return false; // harmless touch: no number, no death
-        _numbers.Add(new DamageNumber { Text = dealt.ToString(), X = _px, Y = _py - 90 });
+        _numbers.Add(new DamageNumber { Text = dealt.ToString(), X = _mover.X, Y = _mover.Y - 90 });
         if (chara.Hp != 0) return false;
         Die(chara);
         return true;
@@ -1420,10 +1262,10 @@ public partial class MushTownGame : Game
     {
         chara.Hp = Progression.BuffedMaxHp(chara.Level, OwnHpPct());
         chara.Mp = Progression.MaxMp(chara.Level);
-        _px = _map.Info.SpawnX;
-        _ground = SceneMath.GroundBelow(_map.Footholds, _map.Info.SpawnX, _map.Info.SpawnY)
+        _mover.X = _map.Info.SpawnX;
+        _mover.Ground = SceneMath.GroundBelow(_map.Footholds, _map.Info.SpawnX, _map.Info.SpawnY)
             ?? throw new InvalidDataException($"map {_mapId} has no ground under spawn");
-        _py = SceneMath.FootholdY(_ground, _map.Info.SpawnX);
+        _mover.Y = SceneMath.FootholdY(_mover.Ground, _map.Info.SpawnX);
         ResetMotion();
         SnapCamera();
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0; // death teleports: no reload on the same map, so end talk here
@@ -1532,12 +1374,12 @@ public partial class MushTownGame : Game
     {
         _attackLock = _skills[id].CastLockMs;
         PlaySfx(SwingKey()); // v1 skills whoosh like swings (no per-skill sounds yet)
-        SpawnCastFx(id, _px, _py, _facingRight);
+        SpawnCastFx(id, _mover.X, _mover.Y, _mover.FacingRight);
         int pct = CastPct(id);
         if (_net != null && _net.Connected) _net.SendSkillCast(id, pct);
         else if (_localWorld != null)
         {
-            foreach (var h in _localWorld.SkillStrike(_mapId, _px, _py, _facingRight, Random.Shared, OwnBuild(), id, pct))
+            foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, OwnBuild(), id, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
             DrainDrops(_localWorld);
         }
@@ -1556,7 +1398,7 @@ public partial class MushTownGame : Game
         PlaySfx("buff");
         StripLoopFx(id); // recasts re-hang one loop, never stack two
         SpawnLoopFx(id);
-        SpawnCastFx(id, _px, _py, _facingRight);
+        SpawnCastFx(id, _mover.X, _mover.Y, _mover.FacingRight);
         if (_net != null && _net.Connected) _net.SendSkillCast(id, 0);
         PushBuild();
     }
@@ -1588,7 +1430,7 @@ public partial class MushTownGame : Game
     private void SpawnLoopFx(int id)
     {
         if (_skills[id].Affected.Count == 0) return;
-        _fx.Add(new SkillFx { Skill = id, Loop = true, X = _px, Y = _py - FxCastDy, FacingRight = _facingRight });
+        _fx.Add(new SkillFx { Skill = id, Loop = true, X = _mover.X, Y = _mover.Y - FxCastDy, FacingRight = _mover.FacingRight });
     }
 
     // Rush/Flash Blade carry: shift along facing (staying inside the map),
@@ -1596,17 +1438,17 @@ public partial class MushTownGame : Game
     // takes it from there).
     private void Dash()
     {
-        _px = Math.Clamp(_px + (_facingRight ? DashPx : -DashPx), _map.Info.VrLeft, _map.Info.VrRight);
-        _ground = _ground == null ? null
-            : SceneMath.ArrivalGround(_map.Footholds, (int)_px, (int)_py + 2);
-        if (_ground != null) _py = SceneMath.FootholdY(_ground, (int)_px);
+        _mover.X = Math.Clamp(_mover.X + (_mover.FacingRight ? DashPx : -DashPx), _map.Info.VrLeft, _map.Info.VrRight);
+        _mover.Ground = _mover.Ground == null ? null
+            : SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, (int)_mover.Y + 2);
+        if (_mover.Ground != null) _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
     }
 
     // Leap Attack's floor check: a platform within range below the feet.
     private bool DiveGround()
     {
-        var land = SceneMath.GroundBelow(_map.Footholds, (int)Math.Floor(_px), (int)Math.Ceiling(_py));
-        return land != null && SceneMath.FootholdY(land, (int)_px) - _py <= LeapRange;
+        var land = SceneMath.GroundBelow(_map.Footholds, (int)Math.Floor(_mover.X), (int)Math.Ceiling(_mover.Y));
+        return land != null && SceneMath.FootholdY(land, (int)_mover.X) - _mover.Y <= LeapRange;
     }
 
     // Self Recovery pays out on its tick (both pools, capped at buffed max).
@@ -1665,9 +1507,9 @@ public partial class MushTownGame : Game
 
     // Warrior Mastery speeds run and jump together (one column, both axes).
     private float OwnWalk() =>
-        WalkSpeed * (100 + _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery)) / 100;
+        PlayerMover.WalkSpeed * (100 + _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery)) / 100;
     private float OwnJump() =>
-        JumpV0 * (100 + _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery)) / 100;
+        PlayerMover.JumpV0 * (100 + _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery)) / 100;
 
     // Builds change on level-up, learn, and buff edges: push them all.
     private void PushBuild() => _net?.SendBuild(OwnBuild());

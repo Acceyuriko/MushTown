@@ -188,13 +188,13 @@ public partial class MushTownGame
         }
         var npc = _map.Npcs.FirstOrDefault(n => n.NpcId == _shotTalk)
             ?? throw new InvalidDataException($"--talk needs NPC {_shotTalk} on map {_mapId}");
-        _px = npc.X - 30;
-        _ground = SceneMath.ArrivalGround(_map.Footholds, (int)_px, npc.Cy)
+        _mover.X = npc.X - 30;
+        _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, npc.Cy)
             ?? throw new InvalidDataException($"--talk found no ground near NPC {_shotTalk}");
-        _py = SceneMath.FootholdY(_ground, (int)_px);
+        _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
         ResetMotion();
-        _facingRight = true;
-        _action = "stand2";
+        _mover.FacingRight = true;
+        _mover.Action = "stand2";
         _frame = 0;
         _talkNpc = npc.NpcId;
         _talkQuest = 0;

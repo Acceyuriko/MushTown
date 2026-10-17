@@ -6,6 +6,18 @@ namespace MushTown.Shared;
 public abstract class Component
 {
     public GameObject Owner { get; internal set; } = null!;
+    public virtual void Update(float dt) { } // sim tick (first user: the player mover, S2)
+}
+
+// The headless twin of the Client's TreeDraw: steps one subtree.
+public static class TreeUpdate
+{
+    public static void UpdateObject(GameObject o, float dt)
+    {
+        if (!o.Enabled) return;
+        foreach (var c in o.Components) c.Update(dt);
+        foreach (var ch in o.Children) UpdateObject(ch, dt);
+    }
 }
 
 public sealed class GameObject
@@ -25,4 +37,10 @@ public sealed class GameObject
         return null;
     }
     public void AddChild(GameObject ch) { ch.Parent = this; _children.Add(ch); }
+    public bool RemoveChild(GameObject ch) // despawn: false when ch was never ours
+    {
+        if (!_children.Remove(ch)) return false;
+        ch.Parent = null;
+        return true;
+    }
 }

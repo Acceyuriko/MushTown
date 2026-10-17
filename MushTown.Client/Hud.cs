@@ -364,7 +364,7 @@ public partial class MushTownGame
         bossBar.Add(new BossBar(BossBarW, FindBoss));
         _gameScene.Add(bossBar);
         var minimap = new GameObject { NoHit = true };
-        minimap.Add(new Minimap(() => _map, () => _px, () => _py));
+        minimap.Add(new Minimap(() => _map, () => _mover.X, () => _mover.Y));
         _gameScene.Add(minimap);
         SyncPanelScenes(); // shots skip Update: without this the panels draw empty there (first Update no-ops, positions match)
     }

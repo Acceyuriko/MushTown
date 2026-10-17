@@ -1,9 +1,21 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S1 committed, S2 in progress (one-by-one, autonomous
+Status: S2 committed, S3 in progress (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- S2 world + mover (done): Component.Update + TreeUpdate walker
+  (Shared, headless) + RemoveChild; PlayerMover (walk, jump,
+  ladder, portal) moved from the Client verbatim; Client builds
+  a PlayerInput snapshot, steps the world, drains JumpSfx/Travel/
+  FellOut. Skills poke mover state pre-step (same order).
+  9 headless tests (walk/wall/jump/portal/ladder/drop/lock/void/
+  despawn). Gates 0/0 + 221/221, 20/20 shots match HEAD.
+  Playtest pending (feet must feel identical; known seam cost:
+  portal travel while holding Alt now arrives standing, not
+  jumping; one stale pose frame after travel/respawn;
+  swing/skill trigger frames no longer slide ~2px (lock now
+  zeroes dir same-frame)).
 - S1 core move (done): Component{Owner} + GameObject{structure}
   moved to Shared (Tree.cs, no Draw); Client gains IDrawable +
   TreeDraw walker; Scene/UiGfx/Rect/Button stay Client (input +
