@@ -1,9 +1,17 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S2 committed, S3 in progress (one-by-one, autonomous
+Status: S3 committed, S4 in progress (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- S3 fighter clocks (done): Fighter (attack lock, cooldowns,
+  buffs, orbs, regen timer) moved to Shared, held directly like
+  SkillCost; Client calls Tick at frame-top (the exact old spot),
+  drains ExpiredBuffs/RegenDue right after. Riding the world
+  step would shift every gate one phase (S2 lesson), so Update
+  stays a no-op. Cast pipeline + numbers/fx pooling stay for S4.
+  5 headless tests. Gates 0/0 + 226/226, 20/20 shots match
+  HEAD. Playtest pending.
 - S2 world + mover (done): Component.Update + TreeUpdate walker
   (Shared, headless) + RemoveChild; PlayerMover (walk, jump,
   ladder, portal) moved from the Client verbatim; Client builds

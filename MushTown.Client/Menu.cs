@@ -1213,7 +1213,7 @@ public partial class MushTownGame
             throw;
         }
         GameLog($"{chara.Name} entered the game ({mode})");
-        _localWorld = null; _mobs.Clear(); _drops.Clear(); _numbers.Clear(); _fx.Clear(); _skillCdMs.Clear(); _buffMs.Clear(); _orbs = 0; // net: the server pushes mobs
+        _localWorld = null; _mobs.Clear(); _drops.Clear(); _numbers.Clear(); _fx.Clear(); _fighter.Cooldowns.Clear(); _fighter.Buffs.Clear(); _fighter.Orbs = 0; // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
         _upWasDown = kb.IsKeyDown(Keys.Up);
@@ -1250,9 +1250,9 @@ public partial class MushTownGame
         _showShop = false; // NPC-bound like talk
         _talkKey = ""; _questKey = ""; _trackKey = ""; // cached #h names die with the char
         _fx.Clear();
-        _skillCdMs.Clear();
-        _buffMs.Clear();
-        _orbs = 0;
+        _fighter.Cooldowns.Clear();
+        _fighter.Buffs.Clear();
+        _fighter.Orbs = 0;
         ZeroCamera(); // no map behind the select screen anymore
         var kb = Keyboard.GetState(); // held Enter/Back must not fall through as a fresh press
         _enterWasDown = kb.IsKeyDown(Keys.Enter);

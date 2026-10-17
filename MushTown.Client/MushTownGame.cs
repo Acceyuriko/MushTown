@@ -26,7 +26,6 @@ public partial class MushTownGame : Game
     private const int DashPx = 220; // Rush/Flash Blade carry the caster this far along facing
     private const float DiveV = 900f; // Leap Attack slams down this fast (past MaxFall on purpose)
     private const int LeapRange = 400; // Leap Attack needs a platform within this far below
-    private const int RegenTickMs = 10000; // Self Recovery pays out every 10s, in combat too
 
     private const int SpawnMapId = 10000; // Maple Island: Southperry
 
@@ -74,7 +73,7 @@ public partial class MushTownGame : Game
     private float _timerMs;
     private bool _altWasDown, _upWasDown, _ctrlWasDown;
     private bool _qWasDown, _wWasDown, _eWasDown, _rWasDown, _tWasDown, _yWasDown, _uWasDown, _fWasDown, _gWasDown, _hWasDown, _jWasDown, _lWasDown, _zWasDown;
-    private float _attackLock; // ms of swing left: movement frozen until it hits 0
+    private readonly Fighter _fighter = new(); // combat clocks, ticked at frame-top (never in the world step)
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
     // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
@@ -88,10 +87,6 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, MobView> _mobs = new();
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<DamageNumber> _numbers = new();
-    private readonly Dictionary<int, float> _skillCdMs = new(); // ms left per cooling skill
-    private readonly Dictionary<int, float> _buffMs = new(); // ms left per live buff
-    private int _orbs; // combo orbs held (Combo Attack live only)
-    private float _regenMs = RegenTickMs; // ms to the next Self Recovery tick
     private readonly List<SkillFx> _fx = new(); // skill cast effects + hit sparks in flight
     private DmgData? _dmg; // basic damage skin digits, loaded once
 
@@ -365,7 +360,7 @@ public partial class MushTownGame : Game
     private void ResetMotion()
     {
         _mover.Reset();
-        _attackLock = 0;
+        _fighter.AttackLock = 0;
     }
 
     protected override void LoadContent()
@@ -567,15 +562,9 @@ public partial class MushTownGame : Game
         _timeMs = gameTime.TotalGameTime.TotalMilliseconds;
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float dtMs = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
-        if (_attackLock > 0) _attackLock = Math.Max(0, _attackLock - dtMs);
-        foreach (int id in _skillCdMs.Keys.ToList())
-            _skillCdMs[id] = Math.Max(0, _skillCdMs[id] - dtMs);
-        foreach (int id in _buffMs.Keys.ToList()) // buffs tick down, then leave (loops and stats go with them)
-        {
-            _buffMs[id] -= dtMs;
-            if (_buffMs[id] <= 0) EndBuff(id);
-        }
-        TickRegen(dtMs);
+        _fighter.Tick(dtMs);
+        foreach (int id in _fighter.ExpiredBuffs) EndBuff(id); // same spot, same order (ticks run first now, ends after)
+        if (_fighter.RegenDue) PayoutRegen();
         if (_save?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
             c.Hp = Math.Min(c.Hp, Progression.BuffedMaxHp(c.Level, OwnHpPct()));
 
@@ -609,14 +598,14 @@ public partial class MushTownGame : Game
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
         int dirNow = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
-        if (_attackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
+        if (_fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
 
         // Ctrl swings the polearm (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (freshCtrl && _mover.Climb == null && _attackLock <= 0 && HasJudge())
+        if (freshCtrl && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge())
         {
-            _attackLock = _delays["swingP1"].Sum();
+            _fighter.AttackLock = _delays["swingP1"].Sum();
             PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
@@ -661,7 +650,7 @@ public partial class MushTownGame : Game
             (freshQ, SkillData.SlashBlast), (freshT, SkillData.Brandish), (freshG, SkillData.IntrepidSlash),
             (freshH, SkillData.BeamBlade), (freshL, SkillData.ScarringSword),
         })
-            if (fresh && _mover.Climb == null && _attackLock <= 0 && HasJudge() && TryPaySkill(skill))
+            if (fresh && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && TryPaySkill(skill))
                 CastActive(skill);
 
         // W leaps again mid-air (never on the ground or a ladder): once per
@@ -678,7 +667,7 @@ public partial class MushTownGame : Game
 
         // E slams down from mid-air (never grounded): needs a platform in
         // range below, rings at once, then dives (drift steers the landing).
-        if (freshE && _mover.Ground == null && _mover.Climb == null && _attackLock <= 0 && HasJudge() &&
+        if (freshE && _mover.Ground == null && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() &&
             DiveGround() && TryPaySkill(SkillData.LeapAttack))
         {
             _mover.Vy = DiveV;
@@ -689,19 +678,19 @@ public partial class MushTownGame : Game
         // cast relays for peers. Recast refreshes. No judge needed: landing
         // the buff never touches a mob.
         foreach ((bool fresh, int skill) in new[] { (freshR, SkillData.IronBody), (freshU, SkillData.SpiritBlade) })
-            if (fresh && _mover.Climb == null && _attackLock <= 0 && TryPaySkill(skill))
+            if (fresh && _mover.Climb == null && _fighter.AttackLock <= 0 && TryPaySkill(skill))
                 CastBuff(skill);
 
         // F toggles Combo Attack: recast cancels free (orbs drop with it).
-        if (freshF && _mover.Climb == null && _attackLock <= 0)
+        if (freshF && _mover.Climb == null && _fighter.AttackLock <= 0)
         {
-            if (_buffMs.ContainsKey(SkillData.ComboAttack)) EndBuff(SkillData.ComboAttack);
+            if (_fighter.Buffs.ContainsKey(SkillData.ComboAttack)) EndBuff(SkillData.ComboAttack);
             else if (TryPaySkill(SkillData.ComboAttack)) CastBuff(SkillData.ComboAttack);
         }
 
         // Y/J dash then ring at the landing (Flash Blade, Rush).
         foreach ((bool fresh, int skill) in new[] { (freshY, SkillData.FlashBlade), (freshJ, SkillData.Rush) })
-            if (fresh && _mover.Climb == null && _attackLock <= 0 && HasJudge() && TryPaySkill(skill))
+            if (fresh && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && TryPaySkill(skill))
             {
                 Dash();
                 CastActive(skill);
@@ -718,7 +707,7 @@ public partial class MushTownGame : Game
             JumpHeld = alt,
             JumpPressed = freshAlt,
             UpPressed = freshUp,
-            Locked = _attackLock > 0,
+            Locked = _fighter.AttackLock > 0,
             Walk = OwnWalk(),
             Jump = OwnJump(),
         };
@@ -894,7 +883,7 @@ public partial class MushTownGame : Game
             ?? throw new InvalidDataException($"map {tm} portal '{tn}' has no ground below");
         _mover.Y = SceneMath.FootholdY(_mover.Ground, land.X);
         _mover.OnTravel();
-        _attackLock = 0;
+        _fighter.AttackLock = 0;
         SnapCamera();
     }
 
@@ -1211,12 +1200,12 @@ public partial class MushTownGame : Game
         _numbers.Add(new DamageNumber { Text = damage.ToString(), X = m.X, Y = headY });
         if (skill != 0 && _skills[skill].Hit.Count > 0)
             _fx.Add(new SkillFx { Skill = skill, Hit = true, X = m.X, Y = m.Y - bodyH / 2, FacingRight = true });
-        if (mine && skill != SkillData.FinalAttack && _buffMs.ContainsKey(SkillData.ComboAttack))
+        if (mine && skill != SkillData.FinalAttack && _fighter.Buffs.ContainsKey(SkillData.ComboAttack))
         {
             int chance = _skills[SkillData.ComboAttack].OrbChance * SkillLv(SkillData.ComboAttack)
                 + _skills[SkillData.ComboSynergy].SynChance * SkillLv(SkillData.ComboSynergy);
             if (Random.Shared.NextDouble() * 100 < chance) // visible count: rolled client-side, shown in the window
-                _orbs = Math.Min(_orbs + 1, _skills[SkillData.ComboAttack].OrbMax);
+                _fighter.Orbs = Math.Min(_fighter.Orbs + 1, _skills[SkillData.ComboAttack].OrbMax);
         }
         if (hpLeft == 0 && mine) { GainExp(exp); BumpQuestKills(m.Mob); }
     }
@@ -1276,7 +1265,7 @@ public partial class MushTownGame : Game
     // Armor and Endure always. Mob touches are the only thing it blocks.
     private int OwnDef() =>
         ItemData.EquipBonus(_save?.Slots[_slot]?.Equips, _items).def
-        + (_buffMs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0)
+        + (_fighter.Buffs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0)
         + _skills[SkillData.GuardianArmor].DefPct * SkillLv(SkillData.GuardianArmor)
         + _skills[SkillData.Endure].DefPct * SkillLv(SkillData.Endure);
 
@@ -1334,7 +1323,7 @@ public partial class MushTownGame : Game
     // One cast's client-side checks: learned, level, MP, cooldown. CLI
     // sessions carry no character (no pools), so they cannot cast, like potions.
     private bool TryPaySkill(int id) =>
-        _skillCost.Pay(_save?.Slots[_slot], id, SkillLv(id), _skillCdMs);
+        _skillCost.Pay(_save?.Slots[_slot], id, SkillLv(id), _fighter.Cooldowns);
 
     private int SkillLv(int id)
     {
@@ -1372,7 +1361,7 @@ public partial class MushTownGame : Game
     // send (net). The cast-time pct folds skill level and combo orbs.
     private void CastActive(int id)
     {
-        _attackLock = _skills[id].CastLockMs;
+        _fighter.AttackLock = _skills[id].CastLockMs;
         PlaySfx(SwingKey()); // v1 skills whoosh like swings (no per-skill sounds yet)
         SpawnCastFx(id, _mover.X, _mover.Y, _mover.FacingRight);
         int pct = CastPct(id);
@@ -1388,13 +1377,13 @@ public partial class MushTownGame : Game
     // Cast-time damage pct: the skill's level curve plus combo orbs (each orb
     // pays Combo Attack's rate plus Combo Synergy's, both at their levels).
     private int CastPct(int id) =>
-        _skillDmg.Pct(id, SkillLv(id), _orbs, SkillLv(SkillData.ComboAttack), SkillLv(SkillData.ComboSynergy));
+        _skillDmg.Pct(id, SkillLv(id), _fighter.Orbs, SkillLv(SkillData.ComboAttack), SkillLv(SkillData.ComboSynergy));
 
     // A paid buff cast: start the timer (recast refreshes), loop its art,
     // relay the effect, push the new build (buff stats feed damage).
     private void CastBuff(int id)
     {
-        _buffMs[id] = _skills[id].BuffMs;
+        _fighter.Buffs[id] = _skills[id].BuffMs;
         PlaySfx("buff");
         StripLoopFx(id); // recasts re-hang one loop, never stack two
         SpawnLoopFx(id);
@@ -1414,16 +1403,16 @@ public partial class MushTownGame : Game
     // and the build drops back (pools clamp next frame, never heal).
     private void EndBuff(int id)
     {
-        _buffMs.Remove(id);
+        _fighter.Buffs.Remove(id);
         StripLoopFx(id);
-        if (id == SkillData.ComboAttack) _orbs = 0;
+        if (id == SkillData.ComboAttack) _fighter.Orbs = 0;
         PushBuild();
     }
 
     // Map switches clear one-shot effects but keep buff timers: re-hang loops.
     private void RespawnBuffLoops()
     {
-        foreach (int id in _buffMs.Keys) SpawnLoopFx(id);
+        foreach (int id in _fighter.Buffs.Keys) SpawnLoopFx(id);
     }
 
     // Buff loop art, riding the player (buffs without art skip silently).
@@ -1452,11 +1441,8 @@ public partial class MushTownGame : Game
     }
 
     // Self Recovery pays out on its tick (both pools, capped at buffed max).
-    private void TickRegen(float dtMs)
+    private void PayoutRegen()
     {
-        _regenMs -= dtMs;
-        if (_regenMs > 0) return;
-        _regenMs += RegenTickMs;
         var chara = _save?.Slots[_slot];
         int lv = SkillLv(SkillData.SelfRecovery);
         if (chara == null || lv <= 0) return;
@@ -1489,7 +1475,7 @@ public partial class MushTownGame : Game
             + _skills[SkillData.PhysicalTraining].Dex * SkillLv(SkillData.PhysicalTraining);
         int atk = (worn.weapon > 0 ? worn.weapon : Progression.WeaponAtk)
             + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor);
-        if (_buffMs.ContainsKey(SkillData.SpiritBlade))
+        if (_fighter.Buffs.ContainsKey(SkillData.SpiritBlade))
             atk = atk * (100 + _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade)) / 100;
         int dmg = _skills[SkillData.WeaponMastery].DmgPct * SkillLv(SkillData.WeaponMastery);
         int crit = _skills[SkillData.WeaponMastery].CritPct * SkillLv(SkillData.WeaponMastery)
@@ -1501,7 +1487,7 @@ public partial class MushTownGame : Game
     // +MaxHP% from every source: Iron Body while live, Warrior Mastery and
     // Endure always. Pools, potions, and refills all cap at the buffed max.
     private int OwnHpPct() =>
-        (_buffMs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].HpPct * SkillLv(SkillData.IronBody) : 0)
+        (_fighter.Buffs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].HpPct * SkillLv(SkillData.IronBody) : 0)
         + _skills[SkillData.WarriorMastery].HpPct * SkillLv(SkillData.WarriorMastery)
         + _skills[SkillData.Endure].HpPct * SkillLv(SkillData.Endure);
 

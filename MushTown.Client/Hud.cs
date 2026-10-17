@@ -565,9 +565,9 @@ public partial class MushTownGame
                 var chara = _save?.Slots[_slot];
                 int lv = 0;
                 chara?.SkillLv.TryGetValue(id, out lv);
-                _skillCdMs.TryGetValue(id, out float cd);
-                _buffMs.TryGetValue(id, out float buff);
-                return new SkillLive(lv, chara?.Sp ?? 0, chara?.Level ?? 1, cd, buff, _orbs);
+                _fighter.Cooldowns.TryGetValue(id, out float cd);
+                _fighter.Buffs.TryGetValue(id, out float buff);
+                return new SkillLive(lv, chara?.Sp ?? 0, chara?.Level ?? 1, cd, buff, _fighter.Orbs);
             }));
             body.AddChild(holder);
         }
