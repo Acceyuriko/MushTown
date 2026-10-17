@@ -1,6 +1,6 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S6 committed, S7 in progress (one-by-one, autonomous
+Status: S7 committed, S8 in progress (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
@@ -293,8 +293,17 @@ Probe, carry, art, sim.
   Update spot (casts-before/drains-after), draw stays in the
   y-sorted list (the tree does not y-sort; S8 owns that). Z pickup
   and the server judge untouched (tables are S9-S10).
-- S7 NPCs, talk clicks, peers, name plates to tree. 1 sprint.
-- S8 map layers and camera as objects. 1 sprint.
+- S7 peers + live-game plates to tree (done): RemoteEvents become
+  PeerArt on _world children (spawn-or-update ApplyRemote,
+  RemovePeer/ClearPeers pair the dict with RemoveChild); plates are
+  sibling PlateArt (peers fill on Name events + spawn-pull, the
+  hero's syncs per frame + once after shot staging). Draw stays in
+  the y-sorted list. SCOPE CUT: NPCs + talk clicks move to S8 —
+  Quest.cs:80 rules static NPCs read MapData direct (no view copy),
+  their tree home is the S8 map object, and click-through-tree
+  needs S8's camera.
+- S8 map layers and camera as objects (+ S7 cut: NPCs, talk
+  clicks). 1 sprint.
 - S9-S10 quest/skill/drop full port: all def rows, all tables,
   quest log UI reads live states. 2 sprints. Adds the quest server
   protocol (new net messages plus server-side quest state per

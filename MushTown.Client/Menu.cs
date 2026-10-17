@@ -1198,7 +1198,7 @@ public partial class MushTownGame
             Spawn();
         }
         SnapCamera();
-        _remotes.Clear();
+        ClearPeers();
         _names.Clear(); // ids restart every server run: peer tags must not cross sessions
         try
         {
@@ -1241,7 +1241,7 @@ public partial class MushTownGame
         _server?.Dispose();
         _net = null;
         _server = null;
-        _remotes.Clear();
+        ClearPeers();
         _localWorld = null;
         ClearMobs();
         ClearDrops();

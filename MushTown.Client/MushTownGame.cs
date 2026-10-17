@@ -79,7 +79,8 @@ public partial class MushTownGame : Game
     // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
     private GameServer? _server;
     private NetClient? _net;
-    private readonly Dictionary<int, RemoteEvent> _remotes = new();
+    private readonly Dictionary<int, PeerArt> _remotes = new();
+    private readonly PlateArt _heroPlate = new(); // the hero's tag rides the player object (SyncHeroPlate fills it)
 
     // Mobs, keyed by server uid. Shot mode and dropped links drive a local
     // MobWorld; net play applies server events.
@@ -163,6 +164,51 @@ public partial class MushTownGame : Game
         _drops.Clear();
     }
 
+    private void ClearPeers()
+    {
+        foreach (var r in _remotes.Values) _world.RemoveChild(r.Owner);
+        _remotes.Clear();
+    }
+
+    // One peer gone (left or walked to another map): the Owner leaves with
+    // the dict entry. The name stays (ids never repeat).
+    private void RemovePeer(int id)
+    {
+        if (_remotes.Remove(id, out var gone)) _world.RemoveChild(gone.Owner);
+    }
+
+    // One peer state: spawn-or-update the pose (a new peer pulls its plate
+    // from the session names when the Name beat the first state).
+    private void ApplyRemote(RemoteEvent e)
+    {
+        if (!_remotes.TryGetValue(e.Id, out var p))
+        {
+            var o = new GameObject();
+            p = o.Add(new PeerArt { Id = e.Id });
+            var plate = o.Add(new PlateArt());
+            _world.AddChild(o);
+            _remotes[e.Id] = p;
+            if (_names.TryGetValue(e.Id, out var n)) { plate.HasName = true; plate.Name = n.Name; plate.Plate = n.Plate; }
+        }
+        p.X = e.X;
+        p.Y = e.Y;
+        p.Action = e.Action;
+        p.Frame = e.Frame;
+        p.FacingRight = e.FacingRight;
+    }
+
+    // The hero's plate follows the live chara (name + worn ring). Update
+    // re-syncs every frame, so equips never go stale; shots sync once after
+    // staging. No chara, no plate (CLI sessions).
+    private void SyncHeroPlate()
+    {
+        var hero = _save?.Slots[_slot];
+        if (hero == null) return;
+        _heroPlate.HasName = true;
+        _heroPlate.Name = hero.Name;
+        _heroPlate.Plate = PlateFor(hero.Equips);
+    }
+
     private readonly string _layoutPath;
     private readonly string _menuLayoutPath;
     private readonly string _charLayoutPath;
@@ -226,6 +272,7 @@ public partial class MushTownGame : Game
 
         var player = new GameObject();
         player.Add(_mover);
+        player.Add(_heroPlate);
         _world.AddChild(player);
         Exiting += (_, _) => { SaveChara(); _net?.Dispose(); _server?.Dispose(); };
         if (_shotPath != null && OperatingSystem.IsWindows())
@@ -408,6 +455,7 @@ public partial class MushTownGame : Game
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
         {
             SetupShotMobs();
+            SyncHeroPlate(); // staging is done (wear/buff/quest all staged the demo); shots skip Update
             SyncPanelScenes(); // staging (accept/open) runs after the scene build and shots skip Update
         }
     }
@@ -825,13 +873,22 @@ public partial class MushTownGame : Game
                 _net.SendState(_mapId, _mover.X, _mover.Y, Net.ActionCode(_mover.Action), (byte)_frame, _mover.FacingRight);
             while (_net.TryTake(out var e))
                 if (e.Gone)
-                    _remotes.Remove(e.Id); // the name stays: ids never repeat, and a map-switch Gone is not a goodbye
+                    RemovePeer(e.Id); // the name stays: ids never repeat, and a map-switch Gone is not a goodbye
                 else if (e.Map != _mapId)
-                    _remotes.Remove(e.Id); // peer on another map: not shown here
+                    RemovePeer(e.Id); // peer on another map: not shown here
                 else if (e.Frame < _charas[Net.ActionName(e.Action)].Frames.Count)
-                    _remotes[e.Id] = e; // bad frame: not ours, drop it
+                    ApplyRemote(e); // bad frame: not ours, drop it
             while (_net.TryTakeName(out var n))
+            {
                 _names[n.Id] = n;
+                if (_remotes.TryGetValue(n.Id, out var p)) // a live peer shows it now (later peers pull it at spawn)
+                {
+                    var plate = p.Owner.Get<PlateArt>()!; // spawn always hangs one
+                    plate.HasName = true;
+                    plate.Name = n.Name;
+                    plate.Plate = n.Plate;
+                }
+            }
             while (_net.TryTakeMob(out var m))
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
@@ -862,7 +919,7 @@ public partial class MushTownGame : Game
                 SpawnCastFx(f.Skill, f.X, f.Y, f.FacingRight);
             }
             if (!_net.Connected && _remotes.Count > 0)
-                _remotes.Clear(); // link lost: peers vanish, the local world takes over
+                ClearPeers(); // link lost: peers vanish, the local world takes over
             if (!_net.Connected && _localWorld == null)
                 StartLocalWorld(); // link lost: a fresh local world keeps the mobs working (kills come back: the drop resets the session)
         }
@@ -881,6 +938,7 @@ public partial class MushTownGame : Game
             ApplySpawns(ev.Spawns);
             foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);
         }
+        SyncHeroPlate();
 
         base.Update(gameTime);
     }
@@ -900,7 +958,7 @@ public partial class MushTownGame : Game
         {
             LoadMapData(tm);
             LoadMapTextures();
-            _remotes.Clear(); // peers stay on the old map; their live states refill this one
+            ClearPeers(); // peers stay on the old map; their live states refill this one
             if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
             else { ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them
             _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
@@ -1006,17 +1064,18 @@ public partial class MushTownGame : Game
         {
             DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero?.Equips);
             if (hero != null)
-                DrawName(feetX - _cameraX, feetY + NameDown - _cameraY, hero.Name, PlateFor(hero.Equips));
+                DrawName(feetX - _cameraX, feetY + NameDown - _cameraY, _heroPlate.Name, _heroPlate.Plate);
         }
         ));
         foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers show beginner art (only the name plate crosses, via Name)
         {
             int rx = (int)Math.Floor(r.X), ry = (int)Math.Floor(r.Y);
+            var plate = r.Owner.Get<PlateArt>()!; // spawn always hangs one
             draws.Add((ry, () =>
             {
                 DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight);
-                if (_names.TryGetValue(r.Id, out var n))
-                    DrawName(rx - _cameraX, ry + NameDown - _cameraY, n.Name, n.Plate);
+                if (plate.HasName)
+                    DrawName(rx - _cameraX, ry + NameDown - _cameraY, plate.Name, plate.Plate);
             }
             ));
         }
