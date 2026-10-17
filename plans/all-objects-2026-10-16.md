@@ -1,9 +1,15 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S3 committed, S4 in progress (one-by-one, autonomous
+Status: S4 committed, S5 in progress (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- S4 pooled numbers + fx (done): damage numbers, hit sparks,
+  cast effects, and buff loops ride two Stack freelists
+  (Take/Drop; live lists keep insertion order). Cast pipeline
+  stays Client-side (net/judge/fx-bound; SkillCost/SkillDamage
+  already Shared). No new tests (Client-side; fight/buff shots
+  cover spawns). Gates 0/0 + 226/226, 20/20 shots match HEAD.
 - S3 fighter clocks (done): Fighter (attack lock, cooldowns,
   buffs, orbs, regen timer) moved to Shared, held directly like
   SkillCost; Client calls Tick at frame-top (the exact old spot),
@@ -269,9 +275,10 @@ Probe, carry, art, sim.
   UiGfx), so Scene stays Client; only the structure moves. The
   plan letter is corrected, the intent kept.
 - S3-S4 fight: swing, skills, buffs, cooldowns, regen, pooled
-  numbers and fx. 2 sprints. Builds the flying circle hitbox here
-  (first flying skills land here; building it in P1 would mean code
-  with no user).
+  numbers and fx. 2 sprints. CORRECTION (S4): the flying circle
+  hitbox stays deferred — no flying skill exists in v1 (all 12
+  actives are instant rings; SkillData has no projectile
+  columns), so building it here would be code with no user.
 - S5-S6 mobs: AI to components, mob art to tree, drops and pickup.
   2 sprints.
 - S7 NPCs, talk clicks, peers, name plates to tree. 1 sprint.

@@ -88,6 +88,8 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<DamageNumber> _numbers = new();
     private readonly List<SkillFx> _fx = new(); // skill cast effects + hit sparks in flight
+    private readonly Stack<DamageNumber> _numberPool = new(); // freelists: spawn pops, removal pushes, live order untouched
+    private readonly Stack<SkillFx> _fxPool = new();
     private DmgData? _dmg; // basic damage skin digits, loaded once
 
     private sealed class MobView
@@ -135,6 +137,38 @@ public partial class MushTownGame : Game
         public bool FacingRight;
         public int Frame;
         public float Timer;
+    }
+
+    // Pooled spawn: pop or make, reset the fields the spawn site does not
+    // set (sites always set Text/X/Y and Skill/X/Y/FacingRight; spark and
+    // loop sites add Hit/Loop).
+    private DamageNumber TakeNumber()
+    {
+        var n = _numberPool.TryPop(out var p) ? p : new DamageNumber();
+        n.Age = 0;
+        return n;
+    }
+
+    private SkillFx TakeFx()
+    {
+        var f = _fxPool.TryPop(out var p) ? p : new SkillFx();
+        f.Hit = false;
+        f.Loop = false;
+        f.Frame = 0;
+        f.Timer = 0;
+        return f;
+    }
+
+    private void DropNumbers()
+    {
+        foreach (var n in _numbers) _numberPool.Push(n);
+        _numbers.Clear();
+    }
+
+    private void DropFx()
+    {
+        foreach (var f in _fx) _fxPool.Push(f);
+        _fx.Clear();
     }
 
     private readonly string _layoutPath;
@@ -758,7 +792,9 @@ public partial class MushTownGame : Game
         for (int i = _numbers.Count - 1; i >= 0; i--)
         {
             _numbers[i].Age += dtMs;
-            if (_numbers[i].Age >= NumberMs) _numbers.RemoveAt(i);
+            if (_numbers[i].Age < NumberMs) continue;
+            _numberPool.Push(_numbers[i]);
+            _numbers.RemoveAt(i);
         }
         for (int i = _fx.Count - 1; i >= 0; i--) // skill effects play once, then leave
         {
@@ -779,6 +815,7 @@ public partial class MushTownGame : Game
             if (f.Timer < FxDelay) continue;
             f.Timer -= FxDelay; // keep the overflow (single step: 100ms delays, 16ms ticks)
             if (++f.Frame < frames.Count) continue;
+            _fxPool.Push(f);
             _fx.RemoveAt(i);
         }
 
@@ -873,7 +910,7 @@ public partial class MushTownGame : Game
             LoadMapTextures();
             _remotes.Clear(); // peers stay on the old map; their live states refill this one
             if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
-            else { _mobs.Clear(); _drops.Clear(); _numbers.Clear(); _fx.Clear(); RespawnBuffLoops(); } // net: the server re-pushes them
+            else { _mobs.Clear(); _drops.Clear(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them
             _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
         }
         var land = _map.Portals.FirstOrDefault(p => p.Pn == tn)
@@ -1197,9 +1234,15 @@ public partial class MushTownGame : Game
         PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, _mobData[m.Mob].Boss) : "hit");
         float bodyH = _textures[MobFrames(m.Mob, m.Action)[0].Image].Height;
         float headY = m.Y - bodyH;
-        _numbers.Add(new DamageNumber { Text = damage.ToString(), X = m.X, Y = headY });
+        var num = TakeNumber();
+        num.Text = damage.ToString(); num.X = m.X; num.Y = headY;
+        _numbers.Add(num);
         if (skill != 0 && _skills[skill].Hit.Count > 0)
-            _fx.Add(new SkillFx { Skill = skill, Hit = true, X = m.X, Y = m.Y - bodyH / 2, FacingRight = true });
+        {
+            var spark = TakeFx();
+            spark.Skill = skill; spark.Hit = true; spark.X = m.X; spark.Y = m.Y - bodyH / 2; spark.FacingRight = true;
+            _fx.Add(spark);
+        }
         if (mine && skill != SkillData.FinalAttack && _fighter.Buffs.ContainsKey(SkillData.ComboAttack))
         {
             int chance = _skills[SkillData.ComboAttack].OrbChance * SkillLv(SkillData.ComboAttack)
@@ -1240,7 +1283,9 @@ public partial class MushTownGame : Game
         if (chara == null) return false; // CLI sessions have no one to hurt
         int dealt = Progression.ApplyHurt(chara, damage, OwnDef());
         if (dealt == 0) return false; // harmless touch: no number, no death
-        _numbers.Add(new DamageNumber { Text = dealt.ToString(), X = _mover.X, Y = _mover.Y - 90 });
+        var num = TakeNumber();
+        num.Text = dealt.ToString(); num.X = _mover.X; num.Y = _mover.Y - 90;
+        _numbers.Add(num);
         if (chara.Hp != 0) return false;
         Die(chara);
         return true;
@@ -1396,7 +1441,11 @@ public partial class MushTownGame : Game
     private void StripLoopFx(int id)
     {
         for (int i = _fx.Count - 1; i >= 0; i--)
-            if (_fx[i].Loop && _fx[i].Skill == id) _fx.RemoveAt(i);
+            if (_fx[i].Loop && _fx[i].Skill == id)
+            {
+                _fxPool.Push(_fx[i]);
+                _fx.RemoveAt(i);
+            }
     }
 
     // A buff ends (expiry, toggle, session): timer, loop, and orbs all go,
@@ -1419,7 +1468,9 @@ public partial class MushTownGame : Game
     private void SpawnLoopFx(int id)
     {
         if (_skills[id].Affected.Count == 0) return;
-        _fx.Add(new SkillFx { Skill = id, Loop = true, X = _mover.X, Y = _mover.Y - FxCastDy, FacingRight = _mover.FacingRight });
+        var loop = TakeFx();
+        loop.Skill = id; loop.Loop = true; loop.X = _mover.X; loop.Y = _mover.Y - FxCastDy; loop.FacingRight = _mover.FacingRight;
+        _fx.Add(loop);
     }
 
     // Rush/Flash Blade carry: shift along facing (staying inside the map),
@@ -1457,7 +1508,9 @@ public partial class MushTownGame : Game
     private void SpawnCastFx(int skill, float x, float y, bool facingRight)
     {
         if (_skills[skill].Effect.Count == 0) return;
-        _fx.Add(new SkillFx { Skill = skill, X = x, Y = y - FxCastDy, FacingRight = facingRight });
+        var fx = TakeFx();
+        fx.Skill = skill; fx.X = x; fx.Y = y - FxCastDy; fx.FacingRight = facingRight;
+        _fx.Add(fx);
     }
 
     // Our combat stats for the server (Build) and the local judge. CLI
@@ -1534,8 +1587,8 @@ public partial class MushTownGame : Game
     {
         _mobs.Clear();
         _drops.Clear();
-        _numbers.Clear();
-        _fx.Clear();
+        DropNumbers();
+        DropFx();
         RespawnBuffLoops(); // buff timers survive the switch, so their loops re-hang
         _localWorld!.EnterMap(_mapId);
         foreach (var s in _localWorld.MobsOn(_mapId))
