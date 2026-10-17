@@ -71,7 +71,7 @@ public sealed class MobWorld
     private readonly Dictionary<int, MapData> _maps = new();
     private readonly Dictionary<int, (int hp, double def, int exp, int touch, int speed, int aggro, bool boss)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
-    private readonly Dictionary<int, DropData> _dropTables = new();
+    private readonly Dictionary<int, DropTable> _dropTables = new();
     private readonly List<Mob> _lives = new();
     private readonly List<Grave> _graves = new();
     private readonly List<GroundDrop> _drops = new();
@@ -118,7 +118,7 @@ public sealed class MobWorld
                     throw new InvalidDataException($"mob {life.MobId} has bad ai stats (touch {mob.Touch}, speed {mob.Speed}, aggro {mob.Aggro})");
                 st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss);
                 _stats[life.MobId] = st;
-                _dropTables[life.MobId] = LoadDropTable(life.MobId);
+                _dropTables[life.MobId] = new DropTable(LoadDropTable(life.MobId));
             }
             fresh.Add(Plant(_nextUid++, life.MobId, map, life.X, life.Cy, st));
         }
@@ -364,22 +364,14 @@ public sealed class MobWorld
         return table;
     }
 
-    // One kill's drops from the mob's table: a meso pile in range always,
-    // then each listed item rolled independently (a 10% red + 4% blue
-    // rarely pays both). Paying entries compact into 14px slots from +7,
-    // so a coat with no potion lands at +7, not the old fixed +21.
+    // One kill's drops: the table rolls, the world places (EnterMap loads
+    // every spawned mob's table; lives only exist after EnterMap loaded it).
     private void DropKill(Mob m, Random rng)
     {
-        var data = _maps[m.Map]; // lives only exist after EnterMap loaded it
-        var table = _dropTables[m.MobId]; // EnterMap loads every spawned mob's table
-        DropOne(data, m, m.X - 7, DropKind.Mesos, table.MesoMin + rng.Next(table.MesoMax - table.MesoMin + 1), 1);
-        int slot = 0;
-        foreach (var d in table.Items)
-        {
-            if (rng.NextDouble() >= d.Chance) continue;
-            DropOne(data, m, m.X + 7 + 14 * slot, DropKind.Item, d.Item, d.Count);
-            slot++;
-        }
+        var data = _maps[m.Map];
+        var table = _dropTables[m.MobId];
+        foreach (var p in table.Roll(rng))
+            DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count);
     }
 
     // One loot drop: clamped inside the VR, lands on the ground below.

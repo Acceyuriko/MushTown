@@ -1,6 +1,6 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S8 committed, S9 in progress (one-by-one, autonomous
+Status: S9 committed, S10 in progress (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
@@ -311,12 +311,16 @@ Probe, carry, art, sim.
   CUT: static backs/tiles/objs stay MapData-direct (extends the
   no-view-copy rule: zero behavior to house, shells would be
   over-design).
-- S9-S10 quest/skill/drop full port: all def rows, all tables,
-  quest log UI reads live states. 2 sprints. Adds the quest server
-  protocol (new net messages plus server-side quest state per
-  player; LAN trusts the client until here). Reward stays as def
-  fields + TurnIn act unless a quest needs custom payout logic a
-  row cannot hold.
+- S9 drop tables to components (done): Shared DropTable over the
+  def row (Roll pays meso + items with slot offsets; placement
+  stays server-side), MobWorld holds tables and places payouts.
+  Quest/skill verified already live (S1 probe: QuestState/
+  SkillCost/SkillDamage, UI reads states, QuestKills never read
+  direct) — no stragglers, no churn. 4 direct Roll tests.
+- S10 quest server protocol (new net messages plus server-side
+  quest state per player; LAN trusts the client until here).
+  1 sprint. Reward stays as def fields + TurnIn act unless a quest
+  needs custom payout logic a row cannot hold.
 
 Total: about 18 sprints.
 
