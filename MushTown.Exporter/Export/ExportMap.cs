@@ -8,7 +8,7 @@ public static partial class Export
 {
     // W6 exports the Maple Island chain. Every map must resolve here: WZ dir
     // rule is not id/1e8, so FindMapImg searches Map0..Map9.
-    private static readonly int[] MapIds = new[] { 10000, 20000, 1000000, 1010000, 1020000, 2000000 };
+    private static readonly int[] MapIds = ExportList.Load("maps");
 
     // Every portal with a real target must land on an exported map and a
     // portal name that exists there ( Tn matches the target's Pn ).

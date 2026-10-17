@@ -78,7 +78,7 @@ public static partial class Export
 
     // Name tag plates, one per shipped ring (the ring's info/nameTag names
     // its node): 58 bamboo, 59 ink-and-wash, 129 island travel.
-    private static readonly int[] NameTagNodes = new[] { 58, 59, 129 };
+    private static readonly int[] NameTagNodes = ExportList.Load("nametags");
 
     // Basic damage skin digits: BasicEff.img NoRed0 0-9 (yellow; the set that
     // also carries Miss/guard words). Miss and the words stay for the week

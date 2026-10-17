@@ -6,7 +6,7 @@ namespace MushTown.Exporter;
 // Item exports: potion defs and wearable defs + icons.
 public static partial class Export
 {
-    private static readonly int[] PotionIds = new[] { ItemData.RedPotion, ItemData.BluePotion };
+    private static readonly int[] PotionIds = ExportList.Load("potions");
 
     // Def + icon per wearable: art-less rings ride along (no doll pixels).
     private static readonly string[] EquipGearPaths = new[]

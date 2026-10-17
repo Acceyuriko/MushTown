@@ -10,7 +10,7 @@ public static partial class Export
     // Exported quests: 1016 proves full Say pages (its pre is unexported,
     // so it never offers), 1027 is the W15 chain finale (Mai to Lucas talk),
     // 36301 is scripted with empty Say (the client falls back to summaries).
-    private static readonly int[] QuestIds = new[] { 1016, 1027, 36301 };
+    private static readonly int[] QuestIds = ExportList.Load("quests");
 
     private static bool ExportQuests(WzRoot baseRoot, string outDir)
     {
