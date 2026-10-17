@@ -1409,7 +1409,7 @@ public partial class MushTownGame
             _panelTex?.Dispose();
             _panelTex = tex;
         }
-        _logRoot.DrawSelf(_gfx); // bare root, never in a scene: hits stay code
+        TreeDraw.DrawSelf(_logRoot, _gfx); // bare root, never in a scene: hits stay code
     }
 
     private void DrawUi(string file, int x, int y, bool flip = false)

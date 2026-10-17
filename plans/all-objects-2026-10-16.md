@@ -1,10 +1,16 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: U-phase complete (U6 committed). S1 PAUSED for an
-architecture ruling (brief below; overnight run stops here per the
-"pause only for true architecture changes" rule). (Overnight run:
+Status: S1 committed, S2 in progress (one-by-one, autonomous
+review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
+- S1 core move (done): Component{Owner} + GameObject{structure}
+  moved to Shared (Tree.cs, no Draw); Client gains IDrawable +
+  TreeDraw walker; Scene/UiGfx/Rect/Button stay Client (input +
+  draw are UI-only). QuestState/QuestLog/SkillCost/SkillDamage
+  gain the base. Button.Draw goes virtual (Slot inherits it).
+  Pure move: gates 0/0 + 212/212, 20/20 shots match HEAD. No
+  Update pass yet (first user lands in S2). Playtest pending.
 - U6 panel art 2 (done): quest/settings/shop/talk panels in-tree.
   New visuals: Fill (plain body), FlatButton (hover-aware, reads
   the legacy _hoverId: sibling scenes keep stale hover when a
@@ -237,21 +243,11 @@ Probe, carry, art, sim.
   spawn/despawn, player mover (walk, jump, ladder, portal). 2 sprints.
   Moves the headless core (GameObject/Component/Scene) to Shared;
   QuestLog/QuestState/SkillCost/SkillDamage gain the base for free.
-  RULING NEEDED (analysis 2026-10-16, overnight run): Scene.cs is
-  coupled to Client-only types (Scene touches Button/Rect/Point,
-  Component.Draw takes UiGfx with SpriteBatch/Texture2D), and
-  Shared must stay MonoGame-free, so "move Scene to Shared" has
-  no direct shape. Three options: (A) move Component{Owner} +
-  GameObject{structure} only, Client gains IDrawable + a draw
-  walker, Scene stays Client (~45 mechanical component edits;
-  breaks the plan letter); (B) Shared references MonoGame and
-  takes Scene+UiGfx+Button+Rect+Slot (smallest move; breaks the
-  headless rule, server links SDL); (C) dependency inversion:
-  Shared defines IRect/IButton roles, Scene moves against them,
-  Client Button/Rect implement the roles, Draw stays Client via
-  IDrawable (truest to the plan letter, most design). No safe
-  sub-slice exists without this call (every S1 step needs
-  Component in Shared).
+  RULING (user, 2026-10-16): option A — copy Unity's layering
+  (core = structure + Update, input + rendering are modules on
+  top). Scene.cs couples to Client-only types (Button/Rect/Point,
+  UiGfx), so Scene stays Client; only the structure moves. The
+  plan letter is corrected, the intent kept.
 - S3-S4 fight: swing, skills, buffs, cooldowns, regen, pooled
   numbers and fx. 2 sprints. Builds the flying circle hitbox here
   (first flying skills land here; building it in P1 would mean code

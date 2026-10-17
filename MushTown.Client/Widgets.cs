@@ -14,11 +14,11 @@ public sealed class Rect : Component
 }
 
 // 3-slice stretched background. Children (added after) draw on top.
-public sealed class Panel : Component
+public sealed class Panel : Component, IDrawable
 {
     private readonly string _top, _mid, _bot;
     public Panel(string top, string mid, string bot) { _top = top; _mid = mid; _bot = bot; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var p = Owner.Get<Rect>()!.Box;
         var t0 = gfx.Tex(_top); var t1 = gfx.Tex(_mid); var t2 = gfx.Tex(_bot);
@@ -33,14 +33,14 @@ public sealed class Panel : Component
 // _hoverId world; gone at the W5 cleanup).
 public enum ButtonKind { Silent, Click } // click sfx via ClickTree (conditional sounds stay explicit in callbacks)
 
-public class Button : Component
+public class Button : Component, IDrawable
 {
     public string LegacyId = "";
     public ButtonKind Kind; // Silent by default (slots, titles, furniture, gated clicks)
     public bool HoverFill; // white-30 overlay when hovered (text rows)
     public Action? OnClick;
     public void Press() => OnClick?.Invoke();
-    public override void Draw(UiGfx gfx)
+    public virtual void Draw(UiGfx gfx)
     {
         if (HoverFill && gfx.HoverButton == this)
             gfx.Sb.Draw(gfx.Pixel, Owner.Get<Rect>()!.Box, new Color(255, 255, 255, 30));
@@ -55,11 +55,11 @@ internal static class MenuAlpha
 
 // State art: stem + _n/_h/_p by hover/pressed (the HUD buttons moved here from DrawHudButton).
 // Stretches to the rect: callers size rects from the _n art, so a future art resize would stretch, not overflow.
-public sealed class Image : Component
+public sealed class Image : Component, IDrawable
 {
     private readonly string _stem;
     public Image(string stem) => _stem = stem;
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         string key = _stem + (gfx.Hovered == Owner ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png");
         gfx.Sb.Draw(gfx.Tex(key), Owner.Get<Rect>()!.Box, Color.White);
@@ -68,7 +68,7 @@ public sealed class Image : Component
 
 // Bar visual: full backing, partial fill by live value/max, full cover
 // on top. The fill starts at the rect's top-left (matches DrawExpBar).
-public sealed class Bar : Component
+public sealed class Bar : Component, IDrawable
 {
     private readonly string _back, _fill, _cover;
     private readonly Func<(int Value, int Max)> _amount;
@@ -76,7 +76,7 @@ public sealed class Bar : Component
     {
         _back = back; _fill = fill; _cover = cover; _amount = amount;
     }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Tex(_back), r, Color.White);
@@ -90,7 +90,7 @@ public sealed class Bar : Component
 }
 
 // Fixed art: stretched to the Owner rect, or raw at an offset.
-public sealed class Picture : Component
+public sealed class Picture : Component, IDrawable
 {
     private readonly string? _key;
     private readonly Texture2D? _tex; // prebuilt backing (stat/skill/quest/settings bodies): no art key
@@ -101,7 +101,7 @@ public sealed class Picture : Component
     public Picture(string key) { _key = key; _stretch = true; }
     public Picture(string key, int dx, int dy) { _key = key; _dx = dx; _dy = dy; }
     public Picture(Texture2D tex, int dx, int dy) { _tex = tex; _dx = dx; _dy = dy; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         float a = gfx.Hovered == Owner ? gfx.Pressed ? PressAlpha : HoverAlpha : 1f;
@@ -113,13 +113,13 @@ public sealed class Picture : Component
 
 // Live baked text at a rect offset (UiText caches by string, so steady
 // text costs one lookup; changing text adds entries like the old draws).
-public sealed class LiveLabel : Component
+public sealed class LiveLabel : Component, IDrawable
 {
     private readonly Func<string> _text;
     private readonly int _dx, _dy;
     private readonly Color _color;
     public LiveLabel(Func<string> text, int dx, int dy, Color color) { _text = text; _dx = dx; _dy = dy; _color = color; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Ui.GetSmall(_text()), new Vector2(r.X + _dx, r.Y + _dy), _color);
@@ -127,11 +127,11 @@ public sealed class LiveLabel : Component
 }
 
 // Plate level digits: WZ levelPos stepping (matches DrawPlate).
-public sealed class PlateLevel : Component
+public sealed class PlateLevel : Component, IDrawable
 {
     private readonly Func<int> _level;
     public PlateLevel(Func<int> level) => _level = level;
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         int x = r.X + 28; // WZ levelPos; digits step 10 (numInterval)
@@ -145,12 +145,12 @@ public sealed class PlateLevel : Component
 
 // Centered art-digit number (was DrawBarNumber). The "/" is baked 12px
 // (font:number is Arial 12; the WZ separator name breaks path lookup).
-public sealed class BarNumber : Component
+public sealed class BarNumber : Component, IDrawable
 {
     private readonly Func<string> _text;
     private readonly int _centerDx, _dy;
     public BarNumber(Func<string> text, int centerDx, int dy) { _text = text; _centerDx = centerDx; _dy = dy; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         string text = _text();
@@ -177,11 +177,11 @@ public sealed class BarNumber : Component
 }
 
 // Quest tracker lines (matches DrawTracker).
-public sealed class Tracker : Component
+public sealed class Tracker : Component, IDrawable
 {
     private readonly Func<List<string>> _lines;
     public Tracker(Func<List<string>> lines) => _lines = lines;
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         int y = 10;
         var lines = _lines();
@@ -196,12 +196,12 @@ public sealed class Tracker : Component
 }
 
 // Boss HP bar (matches DrawBossBar).
-public sealed class BossBar : Component
+public sealed class BossBar : Component, IDrawable
 {
     private readonly int _w;
     private readonly Func<(string Name, int Hp, int MaxHp)?> _boss;
     public BossBar(int width, Func<(string Name, int Hp, int MaxHp)?> boss) { _w = width; _boss = boss; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var b = _boss();
         if (b == null) return;
@@ -215,12 +215,12 @@ public sealed class BossBar : Component
 }
 
 // Minimap (matches DrawMinimap).
-public sealed class Minimap : Component
+public sealed class Minimap : Component, IDrawable
 {
     private readonly Func<MapData> _map;
     private readonly Func<float> _px, _py;
     public Minimap(Func<MapData> map, Func<float> px, Func<float> py) { _map = map; _px = px; _py = py; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var map = _map();
         var tex = gfx.Tex(map.MiniMap.Image);
@@ -249,13 +249,13 @@ public sealed class Slot : Button
 }
 
 // Baked small text at a rect offset (matches the submenu text rows).
-public sealed class Label : Component
+public sealed class Label : Component, IDrawable
 {
     private readonly string _text;
     private readonly int _dx, _dy;
     public Color Tint = Color.White;
     public Label(string text, int dx, int dy) { _text = text; _dx = dx; _dy = dy; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Ui.GetSmall(_text), new Vector2(r.X + _dx, r.Y + _dy), Tint);
@@ -264,11 +264,11 @@ public sealed class Label : Component
 
 // The menu sign board: header, 3-slice body (the cream center
 // stretches), base (matches DrawSign). Needs no rect.
-public sealed class Sign : Component
+public sealed class Sign : Component, IDrawable
 {
     private readonly int _bodyH;
     public Sign(int bodyH) { _bodyH = bodyH; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var mid = gfx.Tex("menu/sign_mid.png");
         var head = gfx.Tex("menu/sign_top.png");
@@ -297,12 +297,12 @@ public sealed class Sign : Component
 
 // One server row: blank pill plus name left + IP right (matches
 // DrawServerRow). Sits on the row button (hover dims the pill).
-public sealed class ServerRow : Component
+public sealed class ServerRow : Component, IDrawable
 {
     private readonly string _name, _ip;
     private readonly Color _ink, _gray;
     public ServerRow(string name, string ip, Color ink, Color gray) { _name = name; _ip = ip; _ink = ink; _gray = gray; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         float a = gfx.Hovered == Owner ? gfx.Pressed ? MenuAlpha.Pressed : MenuAlpha.Hover : 1f;
@@ -323,11 +323,11 @@ public sealed class ServerRow : Component
 }
 
 // Cancel plaque: blank pill plus centered label (matches DrawCancelRow).
-public sealed class CancelRow : Component
+public sealed class CancelRow : Component, IDrawable
 {
     private readonly Color _ink;
     public CancelRow(Color ink) { _ink = ink; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         float a = gfx.Hovered == Owner ? gfx.Pressed ? MenuAlpha.Pressed : MenuAlpha.Hover : 1f;
@@ -339,14 +339,14 @@ public sealed class CancelRow : Component
 }
 
 // Live text centered on cx (matches DrawTextCentered/DrawSmallCentered).
-public sealed class CenterText : Component
+public sealed class CenterText : Component, IDrawable
 {
     private readonly Func<string> _text;
     private readonly int _cx, _y;
     private readonly Color _color;
     private readonly bool _small;
     public CenterText(Func<string> text, int cx, int y, Color color, bool small = false) { _text = text; _cx = cx; _y = y; _color = color; _small = small; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var t = _small ? gfx.Ui.GetSmall(_text()) : gfx.Ui.Get(_text());
         gfx.Sb.Draw(t, new Vector2(_cx - t.Width / 2, _y), _color);
@@ -356,12 +356,12 @@ public sealed class CenterText : Component
 // One pager cell: thumb under the art on the current page, then the
 // 3-state digit (matches the pager loop). Edge cells pin to the rect,
 // digits center (the art overflows the bar, like the official look).
-public sealed class PagerCell : Component
+public sealed class PagerCell : Component, IDrawable
 {
     private readonly string _stem;
     private readonly bool _current, _centered;
     public PagerCell(string stem, bool current, bool centered) { _stem = stem; _current = current; _centered = centered; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         string st = _current ? "p" : gfx.Hovered == Owner ? gfx.Pressed ? "p" : "h" : "n";
@@ -374,12 +374,12 @@ public sealed class PagerCell : Component
 }
 
 // Rounded fill over the Owner rect (matches DrawRound).
-public sealed class Round : Component
+public sealed class Round : Component, IDrawable
 {
     private readonly int _radius;
     private readonly Color _color;
     public Round(int radius, Color color) { _radius = radius; _color = color; }
-    public override void Draw(UiGfx gfx) => Fill(gfx, Owner.Get<Rect>()!.Box, _radius, _color);
+    public void Draw(UiGfx gfx) => Fill(gfx, Owner.Get<Rect>()!.Box, _radius, _color);
     public static void Fill(UiGfx gfx, Rectangle r, int radius, Color color)
     {
         for (int y = 0; y < r.Height; y++)
@@ -392,18 +392,18 @@ public sealed class Round : Component
 }
 
 // Fullscreen dim (matches DrawDim). Needs no rect.
-public sealed class Dim : Component
+public sealed class Dim : Component, IDrawable
 {
     private readonly int _alpha;
     public Dim(int alpha) { _alpha = alpha; }
-    public override void Draw(UiGfx gfx) =>
+    public void Draw(UiGfx gfx) =>
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(0, 0, MushTownGame.GameWidth, MushTownGame.GameHeight), new Color(0, 0, 0, _alpha));
 }
 
 // White box plus gray border (matches DrawWhitePanel).
-public sealed class WhitePanel : Component
+public sealed class WhitePanel : Component, IDrawable
 {
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Pixel, r, Color.White);
@@ -414,20 +414,20 @@ public sealed class WhitePanel : Component
 // Bridge: runs Menu draws inside the tree (game art the tree does not
 // own yet — the chars dolls now, job/setup previews next; gone when
 // the sim phase owns the doll).
-public sealed class Invoke : Component
+public sealed class Invoke : Component, IDrawable
 {
     private readonly Action<UiGfx> _draw;
     public Invoke(Action<UiGfx> draw) { _draw = draw; }
-    public override void Draw(UiGfx gfx) => _draw(gfx);
+    public void Draw(UiGfx gfx) => _draw(gfx);
 }
 
 // Art button: the png carries its own label, hover is a white overlay
 // (matches DrawImgButton). Sits on the button (hover lights it).
-public sealed class ImgButton : Component
+public sealed class ImgButton : Component, IDrawable
 {
     private readonly string _key;
     public ImgButton(string key) { _key = key; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Tex(_key), new Vector2(r.X, r.Y), Color.White);
@@ -436,11 +436,11 @@ public sealed class ImgButton : Component
 }
 
 // 2px box border (was DrawBoxBorder; WhitePanel and UiBox reuse the static).
-public sealed class Border : Component
+public sealed class Border : Component, IDrawable
 {
     private readonly Color _color;
     public Border(Color color) { _color = color; }
-    public override void Draw(UiGfx gfx) => Draw(gfx, Owner.Get<Rect>()!.Box, _color);
+    public void Draw(UiGfx gfx) => Draw(gfx, Owner.Get<Rect>()!.Box, _color);
     public static void Draw(UiGfx gfx, Rectangle r, Color color)
     {
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, r.Width, 2), color);
@@ -452,7 +452,7 @@ public sealed class Border : Component
 
 // Name box: white fill, gold when focused, live text or hint (matches
 // DrawUiBox). Sits on the name field (focus and text read live).
-public sealed class UiBox : Component
+public sealed class UiBox : Component, IDrawable
 {
     private readonly Func<string> _text;
     private readonly string _hint;
@@ -462,7 +462,7 @@ public sealed class UiBox : Component
     {
         _text = text; _hint = hint; _focused = focused; _ink = ink; _hintInk = hintInk;
     }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Pixel, r, Color.White);
@@ -475,24 +475,24 @@ public sealed class UiBox : Component
 }
 
 // Static big text at a fixed spot (setup labels).
-public sealed class Text : Component
+public sealed class Text : Component, IDrawable
 {
     private readonly string _text;
     private readonly int _x, _y;
     private readonly Color _color;
     public Text(string text, int x, int y, Color color) { _text = text; _x = x; _y = y; _color = color; }
-    public override void Draw(UiGfx gfx) =>
+    public void Draw(UiGfx gfx) =>
         gfx.Sb.Draw(gfx.Ui.Get(_text), new Vector2(_x, _y), _color);
 }
 
 // Log panel: dark fill plus the baked block (the bake stays in Menu:
 // it needs the lock + UiText wrapper). Lives on a bare root drawn by
 // DrawLogOverlay in menu and game (never in a scene: hits stay code).
-public sealed class LogPanel : Component
+public sealed class LogPanel : Component, IDrawable
 {
     private readonly Func<Texture2D?> _block;
     public LogPanel(Func<Texture2D?> block) { _block = block; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Pixel, r, new Color(10, 12, 28, 230));
@@ -503,11 +503,11 @@ public sealed class LogPanel : Component
 
 // Panel title strip: stretched hilong plus the lime caption (stat,
 // skill, quest, settings, shop share it). Reads the Owner body rect.
-public sealed class TitleBar : Component
+public sealed class TitleBar : Component, IDrawable
 {
     private readonly string _title;
     public TitleBar(string title) { _title = title; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Tex("ui/hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
@@ -517,13 +517,13 @@ public sealed class TitleBar : Component
 
 // One stat row: gray label left, live value right-aligned at +432
 // (matches DrawStatRow). Sits on the body with a row dy.
-public sealed class StatRow : Component
+public sealed class StatRow : Component, IDrawable
 {
     private readonly string _label;
     private readonly Func<string> _value;
     private readonly int _dy;
     public StatRow(string label, Func<string> value, int dy) { _label = label; _value = value; _dy = dy; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Ui.GetSmall(_label), new Vector2(r.X + 16, r.Y + _dy), new Color(50, 50, 60));
@@ -534,7 +534,7 @@ public sealed class StatRow : Component
 
 // Right-aligned live text at a body offset (meso coin total, stat
 // combat power). The bake picks the font (Meso vs Small).
-public sealed class RightLabel : Component
+public sealed class RightLabel : Component, IDrawable
 {
     private readonly Func<UiText, string, Texture2D> _bake;
     private readonly Func<string> _text;
@@ -544,7 +544,7 @@ public sealed class RightLabel : Component
     {
         _bake = bake; _text = text; _dx = dx; _dy = dy; _color = color;
     }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         var t = _bake(gfx.Ui, _text());
@@ -559,7 +559,7 @@ public readonly record struct SkillLive(int Lv, int Sp, int Level, float CdMs, f
 // One skill row: icon (gray when locked/cooling), name, sub line,
 // right side (req level / live seconds / key / [+]). Matches
 // DrawSkillRow; reads the Owner row rect.
-public sealed class SkillRow : Component
+public sealed class SkillRow : Component, IDrawable
 {
     private readonly SkillData _skill;
     private readonly string? _key;
@@ -569,7 +569,7 @@ public sealed class SkillRow : Component
     {
         _skill = skill; _key = key; _blurb = blurb; _live = live;
     }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         var s = _live();
@@ -602,13 +602,13 @@ public sealed class SkillRow : Component
 // One inventory cell: gold tint when worn, icon centered, count
 // bottom-right (matches DrawWornSlot/DrawInvSlot). Empty cells draw
 // nothing (counts read live: drops and drinks skip scene rebuilds).
-public sealed class InvSlot : Component
+public sealed class InvSlot : Component, IDrawable
 {
     private readonly string _image;
     private readonly Func<int> _count;
     private readonly bool _worn;
     public InvSlot(string image, Func<int> count, bool worn) { _image = image; _count = count; _worn = worn; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         int n = _count();
         if (n <= 0) return;
@@ -623,12 +623,12 @@ public sealed class InvSlot : Component
 
 // Plain body fill under the title strip (shop + talk bodies follow
 // the content height, so they take no fixed rounded backing).
-public sealed class Fill : Component
+public sealed class Fill : Component, IDrawable
 {
     private readonly Color _color;
     private readonly int _top;
     public Fill(Color color, int top) { _color = color; _top = top; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y + _top, r.Width, r.Height - _top), _color);
@@ -639,12 +639,12 @@ public sealed class Fill : Component
 // Reads the legacy hover id, not gfx.HoverButton: a front panel wins
 // the hover loop and the scenes behind keep stale hover state, so
 // the per-scene value would light covered buttons (legacy-exact).
-public sealed class FlatButton : Component
+public sealed class FlatButton : Component, IDrawable
 {
     private readonly string _label, _id;
     private readonly Func<string> _hover;
     public FlatButton(string label, string id, Func<string> hover) { _label = label; _id = id; _hover = hover; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var b = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Pixel, b, _hover() == _id ? new Color(52, 88, 110) : new Color(30, 50, 66));
@@ -654,11 +654,11 @@ public sealed class FlatButton : Component
 }
 
 // Settings [-]/[+] box: dark fill, glyph centered at +4 (matches DrawSettingsPanel).
-public sealed class StepBox : Component
+public sealed class StepBox : Component, IDrawable
 {
     private readonly string _glyph;
     public StepBox(string glyph) => _glyph = glyph;
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var b = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Pixel, b, new Color(0, 0, 0, 120));
@@ -670,11 +670,11 @@ public sealed class StepBox : Component
 // One shop row: icon centered in a 32px cell, name + price at +52
 // (matches DrawShopIcon + the row text). Strings bake at build: the
 // sync gate rebuilds when stock or sell rows change.
-public sealed class ShopRow : Component
+public sealed class ShopRow : Component, IDrawable
 {
     private readonly string _image, _line1, _line2;
     public ShopRow(string image, string line1, string line2) { _image = image; _line1 = line1; _line2 = line2; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         var icon = gfx.Tex(_image);
@@ -686,12 +686,12 @@ public sealed class ShopRow : Component
 
 // Live text in a live color (quest rows answer to select/done, talk
 // entries to offer/ready; both change without a scene rebuild).
-public sealed class LiveTint : Component
+public sealed class LiveTint : Component, IDrawable
 {
     private readonly Func<(string Text, Color Ink)> _row;
     private readonly int _dx, _dy;
     public LiveTint(Func<(string Text, Color Ink)> row, int dx, int dy) { _row = row; _dx = dx; _dy = dy; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         var (text, ink) = _row();
@@ -705,12 +705,12 @@ public readonly record struct QuestLive(List<string> Lines, List<(string Text, b
 
 // Selected-quest detail: wrapped lines yield to kill rows (the block
 // holds 10), then the turn-in line (matches DrawQuestPanel).
-public sealed class QuestDetail : Component
+public sealed class QuestDetail : Component, IDrawable
 {
     private readonly Func<QuestLive?> _data;
     private readonly int _dy;
     public QuestDetail(Func<QuestLive?> data, int dy) { _data = data; _dy = dy; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var d = _data();
         if (d == null) return;
@@ -731,12 +731,12 @@ public sealed class QuestDetail : Component
 }
 
 // Talk body lines at +16, step 16 (reads the Hud wrap cache).
-public sealed class TalkBody : Component
+public sealed class TalkBody : Component, IDrawable
 {
     private readonly Func<List<string>> _lines;
     private readonly int _dy;
     public TalkBody(Func<List<string>> lines, int dy) { _lines = lines; _dy = dy; }
-    public override void Draw(UiGfx gfx)
+    public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         int y = r.Y + _dy;

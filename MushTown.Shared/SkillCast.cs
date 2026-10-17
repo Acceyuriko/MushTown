@@ -4,7 +4,7 @@ namespace MushTown.Shared;
 // damage read defs live by id; the math stays in Progression (tested there).
 // Authority unchanged: net mode still sends the cast to the server, which
 // judges with its own random; local mode runs its own world.
-public sealed class SkillCost
+public sealed class SkillCost : Component
 {
     private readonly IReadOnlyDictionary<int, SkillData> _defs;
     public SkillCost(IReadOnlyDictionary<int, SkillData> defs) { _defs = defs; } // dumb ctor
@@ -20,7 +20,7 @@ public sealed class SkillCost
     }
 }
 
-public sealed class SkillDamage
+public sealed class SkillDamage : Component
 {
     private readonly IReadOnlyDictionary<int, SkillData> _defs;
     public SkillDamage(IReadOnlyDictionary<int, SkillData> defs) { _defs = defs; } // dumb ctor

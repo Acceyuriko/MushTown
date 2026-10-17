@@ -10,7 +10,7 @@ namespace MushTown.Shared;
 
 // One taken quest: live view over its def row plus the save. Dumb ctor:
 // the factory wires (id, log), all reads go live.
-public sealed class QuestState
+public sealed class QuestState : Component
 {
     public int QuestId { get; }
     private readonly QuestLog _log;
@@ -38,7 +38,7 @@ public sealed class QuestStateFactory
         _builders.TryGetValue(quest, out var b) ? b(quest, log) : new QuestState(quest, log);
 }
 
-public sealed class QuestLog
+public sealed class QuestLog : Component
 {
     // Talk reach: clicking an NPC past this box does nothing.
     public const int TalkDx = 90;

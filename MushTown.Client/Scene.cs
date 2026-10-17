@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using MushTown.Shared;
 
 namespace MushTown.Client;
 
@@ -18,29 +19,27 @@ public sealed class UiGfx
     public Button? HoverButton;
 }
 
-public abstract class Component
+// Visual components implement this (the Shared core has no Draw: the
+// server never draws). The walker below collects them per object.
+public interface IDrawable
 {
-    public GameObject Owner { get; internal set; } = null!;
-    public virtual void Draw(UiGfx gfx) { }
+    void Draw(UiGfx gfx);
 }
 
-public sealed class GameObject
+// Draws one object (self) or a subtree (self + children).
+public static class TreeDraw
 {
-    public bool Enabled = true;
-    public bool Modal; // swallows clicks below, even outside its rect (first user: delete modal, W2)
-    public bool NoHit; // art-only: hit-testing skips it (first users: HUD art, U2)
-    public GameObject? Parent { get; private set; }
-    private readonly List<Component> _components = new();
-    private readonly List<GameObject> _children = new();
-    public IReadOnlyList<GameObject> Children => _children;
-    public T Add<T>(T c) where T : Component { c.Owner = this; _components.Add(c); return c; }
-    public T? Get<T>() where T : Component
+    public static void DrawSelf(GameObject o, UiGfx gfx)
     {
-        foreach (var c in _components) if (c is T t) return t;
-        return null;
+        foreach (var c in o.Components) if (c is IDrawable d) d.Draw(gfx);
     }
-    public void AddChild(GameObject ch) { ch.Parent = this; _children.Add(ch); }
-    public void DrawSelf(UiGfx gfx) { foreach (var c in _components) c.Draw(gfx); }
+
+    public static void DrawObject(GameObject o, UiGfx gfx)
+    {
+        if (!o.Enabled) return;
+        DrawSelf(o, gfx);
+        foreach (var ch in o.Children) DrawObject(ch, gfx);
+    }
 }
 
 public sealed class Scene
@@ -83,14 +82,7 @@ public sealed class Scene
     {
         gfx.Hovered = Hovered;
         gfx.HoverButton = HoverButton;
-        foreach (var r in _roots) DrawObject(r, gfx);
-    }
-
-    private static void DrawObject(GameObject o, UiGfx gfx)
-    {
-        if (!o.Enabled) return;
-        o.DrawSelf(gfx);
-        foreach (var ch in o.Children) DrawObject(ch, gfx);
+        foreach (var r in _roots) TreeDraw.DrawObject(r, gfx);
     }
 
     private static GameObject? Hit(IReadOnlyList<GameObject> objs, int gx, int gy)
