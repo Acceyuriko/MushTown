@@ -40,39 +40,11 @@ public sealed class MobWorld
     private const int ReachY = 60;
     private const int BehindX = 10;
     private const int PushPx = 60; // Rush knocks mobs this far along the dash
-    private const int TouchX = 35; // touch box half-size (mob feet vs player feet)
-    private const int TouchY = 45;
-    private const int BossTouchX = 60; // Mushmom is ~120px wide: the small box would miss edge touches
-    private const int BossTouchY = 60;
-    private const int ChaseDy = 150; // chase only reaches nearby platforms
-    private const int TouchCdMs = 1000; // one touch per mob per second max
     private const int RespawnMs = 10000; // graves re-plant after 10s
     private const int BossRespawnMs = 300000; // the boss rests 5 min between fights
     private const int DropMs = 60000; // drops fade after 60s unclaimed
     public const int PickDx = 90; // pickup reach, x half-box (the client filters Z with these)
     public const int PickDy = 90; // ... and the server judges with them (a miss sends nothing)
-    private const float FallV = 700f; // airborne mobs fall at the client MaxFall
-
-    private sealed class Live
-    {
-        public int Uid;
-        public int Mob;
-        public int Map;
-        public float X;
-        public float Y;
-        public float HomeX; // spawn feet: graves re-plant here, void falls land here
-        public float HomeY;
-        public bool FacingRight;
-        public float TouchMs; // ms until this mob may touch again
-        public int Hp;
-        public int MaxHp;
-        public double Def;
-        public int Exp;
-        public int Touch;
-        public int Speed;
-        public int Aggro;
-        public bool Boss;
-    }
 
     private sealed class Grave
     {
@@ -100,7 +72,7 @@ public sealed class MobWorld
     private readonly Dictionary<int, (int hp, double def, int exp, int touch, int speed, int aggro, bool boss)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
     private readonly Dictionary<int, DropData> _dropTables = new();
-    private readonly List<Live> _lives = new();
+    private readonly List<Mob> _lives = new();
     private readonly List<Grave> _graves = new();
     private readonly List<GroundDrop> _drops = new();
     private readonly List<Drop> _fresh = new(); // kill drops waiting for broadcast
@@ -134,7 +106,7 @@ public sealed class MobWorld
         }
         // All lives join at once: a failed load must leave zero behind, so a
         // retry never duplicates the mobs that loaded before the bad one.
-        var fresh = new List<Live>();
+        var fresh = new List<Mob>();
         foreach (var life in data.Life)
         {
             if (!_stats.TryGetValue(life.MobId, out var st))
@@ -156,11 +128,11 @@ public sealed class MobWorld
 
     // One fresh body at the spawn feet (first plant and respawns share it).
     // Mobs face left until the AI turns them.
-    private static Live Plant(int uid, int mob, int map, float x, float y,
+    private static Mob Plant(int uid, int mob, int map, float x, float y,
         (int hp, double def, int exp, int touch, int speed, int aggro, bool boss) st) => new()
         {
             Uid = uid,
-            Mob = mob,
+            MobId = mob,
             Map = map,
             X = x,
             Y = y,
@@ -182,7 +154,7 @@ public sealed class MobWorld
         var list = new List<Spawn>();
         foreach (var m in _lives)
             if (m.Map == map)
-                list.Add(new Spawn(m.Uid, m.Mob, m.Map, m.X, m.Y, m.MaxHp, m.Hp));
+                list.Add(new Spawn(m.Uid, m.MobId, m.Map, m.X, m.Y, m.MaxHp, m.Hp));
         return list;
     }
 
@@ -209,22 +181,14 @@ public sealed class MobWorld
         foreach (var p in players) onMap.Add(p.map);
         var moves = new List<Move>();
         var hurts = new List<Hurt>();
-        float dt = ms / 1000f;
         foreach (var m in _lives)
         {
-            if (m.TouchMs > 0) m.TouchMs = Math.Max(0, m.TouchMs - ms);
-            var data = _maps[m.Map]; // lives only exist after EnterMap loaded it
-            if (SceneMath.StepTo(data.Footholds, (int)Math.Floor(m.X), (int)Math.Floor(m.Y)) == null)
-                Fall(m, data, dt); // off the line (pushed off, spawn offset): fall
-            else
-                Walk(m, data, players, dt);
+            m.Step(ms, _maps[m.Map], players); // lives only exist after EnterMap loaded it
             foreach (var p in players)
             {
-                if (p.map != m.Map || m.TouchMs > 0) continue;
-                int tx = m.Boss ? BossTouchX : TouchX, ty = m.Boss ? BossTouchY : TouchY;
-                if (Math.Abs(p.x - m.X) > tx || Math.Abs(p.y - m.Y) > ty) continue;
-                m.TouchMs = TouchCdMs;
-                hurts.Add(new Hurt(p.id, m.Uid, m.Mob, m.Map, m.Touch));
+                if (p.map != m.Map) continue;
+                if (!m.TryTouch(p.x, p.y)) continue;
+                hurts.Add(new Hurt(p.id, m.Uid, m.MobId, m.Map, m.Touch));
                 break; // one victim per tick per mob
             }
             if (onMap.Contains(m.Map))
@@ -239,7 +203,7 @@ public sealed class MobWorld
             _graves.RemoveAt(i);
             var live = Plant(_nextUid++, g.Mob, g.Map, g.X, g.Y, _stats[g.Mob]);
             _lives.Add(live);
-            spawns.Add(new Spawn(live.Uid, live.Mob, live.Map, live.X, live.Y, live.MaxHp, live.Hp));
+            spawns.Add(new Spawn(live.Uid, live.MobId, live.Map, live.X, live.Y, live.MaxHp, live.Hp));
         }
         var takes = new List<(int uid, int map)>();
         for (int i = _drops.Count - 1; i >= 0; i--)
@@ -251,70 +215,6 @@ public sealed class MobWorld
             takes.Add((d.Uid, d.Map));
         }
         return new TickEvents(moves, hurts, spawns, takes);
-    }
-
-    // One grounded step: chase the nearest in-range player, else keep the
-    // wander line. Pixel-by-pixel like the client (one stride would skip
-    // slope joints): a lost edge or a VR wall turns the mob around. A clean
-    // walk keeps the float stride (16ms local ticks move 0.64px: truncating
-    // to ints would freeze them); only an edge stop plants int feet.
-    private static void Walk(Live m, MapData data, List<(int id, int map, float x, float y)> players, float dt)
-    {
-        float best = float.MaxValue;
-        foreach (var p in players)
-        {
-            if (p.map != m.Map) continue;
-            float dx = Math.Abs(p.x - m.X);
-            if (dx > m.Aggro || Math.Abs(p.y - m.Y) > ChaseDy || dx >= best) continue;
-            best = dx;
-            if (p.x != m.X) m.FacingRight = p.x > m.X;
-        }
-        float rawX = m.X + (m.FacingRight ? 1 : -1) * m.Speed * dt;
-        float nx = Math.Clamp(rawX, data.Info.VrLeft, data.Info.VrRight);
-        if (nx != rawX)
-        {
-            m.FacingRight = !m.FacingRight; // VR wall: turn in place, next tick walks away
-            return;
-        }
-        int x1 = (int)Math.Floor(nx);
-        int stepX = Math.Sign(x1 - (int)Math.Floor(m.X));
-        int gx = (int)Math.Floor(m.X);
-        bool stopped = false;
-        while (true)
-        {
-            var step = SceneMath.StepTo(data.Footholds, gx, (int)Math.Floor(m.Y));
-            if (step == null)
-            {
-                m.FacingRight = !m.FacingRight; // walked off the edge: turn around
-                stopped = true;
-                break;
-            }
-            m.Y = SceneMath.FootholdY(step, gx);
-            m.X = gx;
-            if (gx == x1) break;
-            gx += stepX;
-        }
-        if (!stopped) m.X = nx;
-    }
-
-    // One airborne step: pushed-off mobs fall straight down, land on the
-    // first ground below, or pop home when the void eats them.
-    private static void Fall(Live m, MapData data, float dt)
-    {
-        float ny = m.Y + FallV * dt;
-        int ix = (int)Math.Floor(m.X);
-        var g = SceneMath.GroundBelow(data.Footholds, ix, (int)Math.Ceiling(m.Y));
-        if (g != null && ny >= SceneMath.FootholdY(g, ix))
-        {
-            m.Y = SceneMath.FootholdY(g, ix);
-            return;
-        }
-        m.Y = ny;
-        if (m.Y >= data.Info.VrBottom)
-        {
-            m.X = m.HomeX; // fell out of the world: pop home
-            m.Y = m.HomeY;
-        }
     }
 
     // Kill drops waiting for broadcast (the judge fills it, the caller drains it).
@@ -394,7 +294,7 @@ public sealed class MobWorld
         var st = _skills[skill];
         if (st.mobCount <= 0 || st.range <= 0)
             throw new InvalidDataException($"skill {skill} has bad damage stats");
-        var inRing = new List<(float dist2, Live m)>();
+        var inRing = new List<(float dist2, Mob m)>();
         foreach (var m in _lives)
         {
             if (m.Map != map) continue;
@@ -404,8 +304,8 @@ public sealed class MobWorld
         }
         inRing.Sort((a, b) => a.dist2.CompareTo(b.dist2)); // nearest first: the cap keeps the close ones
         var hits = new List<Hit>();
-        Live? firstAlive = null;
-        foreach ((float _, Live m) in inRing)
+        Mob? firstAlive = null;
+        foreach ((float _, Mob m) in inRing)
         {
             if (hits.Count >= st.mobCount) break;
             hits.Add(HitOne(m, skill, rng, build, pct));
@@ -422,7 +322,7 @@ public sealed class MobWorld
     // One damage roll applied to one live mob. The dead leave the world, a
     // grave (respawn), and their drops: mesos always, a potion sometimes
     // (the boss always pays its purse).
-    private Hit HitOne(Live m, int tag, Random rng, Build build, int pct)
+    private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct)
     {
         int damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct);
         m.Hp = Math.Max(0, m.Hp - damage);
@@ -436,9 +336,9 @@ public sealed class MobWorld
 
     // One death's aftermath (swings and skills share it): a grave at home
     // for the respawn timer, plus the kill's drops.
-    private void Bury(Live m, Random rng)
+    private void Bury(Mob m, Random rng)
     {
-        _graves.Add(new Grave { Map = m.Map, Mob = m.Mob, X = m.HomeX, Y = m.HomeY, MsLeft = m.Boss ? BossRespawnMs : RespawnMs });
+        _graves.Add(new Grave { Map = m.Map, Mob = m.MobId, X = m.HomeX, Y = m.HomeY, MsLeft = m.Boss ? BossRespawnMs : RespawnMs });
         DropKill(m, rng);
     }
 
@@ -468,10 +368,10 @@ public sealed class MobWorld
     // then each listed item rolled independently (a 10% red + 4% blue
     // rarely pays both). Paying entries compact into 14px slots from +7,
     // so a coat with no potion lands at +7, not the old fixed +21.
-    private void DropKill(Live m, Random rng)
+    private void DropKill(Mob m, Random rng)
     {
         var data = _maps[m.Map]; // lives only exist after EnterMap loaded it
-        var table = _dropTables[m.Mob]; // EnterMap loads every spawned mob's table
+        var table = _dropTables[m.MobId]; // EnterMap loads every spawned mob's table
         DropOne(data, m, m.X - 7, DropKind.Mesos, table.MesoMin + rng.Next(table.MesoMax - table.MesoMin + 1), 1);
         int slot = 0;
         foreach (var d in table.Items)
@@ -483,7 +383,7 @@ public sealed class MobWorld
     }
 
     // One loot drop: clamped inside the VR, lands on the ground below.
-    private void DropOne(MapData data, Live m, float x, int kind, int id, int count)
+    private void DropOne(MapData data, Mob m, float x, int kind, int id, int count)
     {
         float cx = Math.Clamp(x, data.Info.VrLeft, data.Info.VrRight);
         var d = new GroundDrop

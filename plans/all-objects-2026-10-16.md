@@ -1,6 +1,6 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S4 committed, S5 in progress (one-by-one, autonomous
+Status: S5 committed, S6 in progress (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
@@ -279,8 +279,13 @@ Probe, carry, art, sim.
   hitbox stays deferred — no flying skill exists in v1 (all 12
   actives are instant rings; SkillData has no projectile
   columns), so building it here would be code with no user.
-- S5-S6 mobs: AI to components, mob art to tree, drops and pickup.
-  2 sprints.
+- S5 mobs, AI to one Shared Mob component (done): Live state +
+  Walk/Fall/TryTouch moved from MobWorld, member names kept (only
+  Mob->MobId, class-name rule), Tick keeps its shape (Step + touch
+  loop + Hurt build in Server, records stay Server-side). Held
+  directly and stepped manually (Tick carries players, Update
+  cannot). Graves/judge/drops stay: not AI.
+- S6 mobs: mob art to tree, drops and pickup. 1 sprint.
 - S7 NPCs, talk clicks, peers, name plates to tree. 1 sprint.
 - S8 map layers and camera as objects. 1 sprint.
 - S9-S10 quest/skill/drop full port: all def rows, all tables,
