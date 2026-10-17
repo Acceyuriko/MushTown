@@ -84,7 +84,7 @@ public partial class MushTownGame : Game
     // Mobs, keyed by server uid. Shot mode and dropped links drive a local
     // MobWorld; net play applies server events.
     private MobWorld? _localWorld;
-    private readonly Dictionary<int, MobView> _mobs = new();
+    private readonly Dictionary<int, MobArt> _mobs = new();
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<DamageNumber> _numbers = new();
     private readonly List<SkillFx> _fx = new(); // skill cast effects + hit sparks in flight
@@ -92,29 +92,7 @@ public partial class MushTownGame : Game
     private readonly Stack<SkillFx> _fxPool = new();
     private DmgData? _dmg; // basic damage skin digits, loaded once
 
-    private sealed class MobView
-    {
-        public int Mob;
-        public float X;
-        public float Y;
-        public bool FacingRight; // AI poses face along (raw art faces left)
-        public int Hp;
-        public int MaxHp;
-        public string Action = ""; // idle, hit1, die1
-        public int Frame;
-        public float Timer;
-    }
-
-    // One ground drop: a meso pile (Id = amount) or a potion (Id + Count).
-    private sealed class DropView
-    {
-        public float X;
-        public float Y;
-        public int Kind;
-        public int Id;
-        public int Count;
-    }
-    private readonly Dictionary<int, DropView> _drops = new();
+    private readonly Dictionary<int, DropArt> _drops = new();
 
     private sealed class DamageNumber
     {
@@ -169,6 +147,20 @@ public partial class MushTownGame : Game
     {
         foreach (var f in _fx) _fxPool.Push(f);
         _fx.Clear();
+    }
+
+    // Art clears: the Owner leaves the tree with the dict entry (single
+    // removals pair the same two calls inline, like the S4 pools).
+    private void ClearMobs()
+    {
+        foreach (var m in _mobs.Values) _world.RemoveChild(m.Owner);
+        _mobs.Clear();
+    }
+
+    private void ClearDrops()
+    {
+        foreach (var d in _drops.Values) _world.RemoveChild(d.Owner);
+        _drops.Clear();
     }
 
     private readonly string _layoutPath;
@@ -526,7 +518,7 @@ public partial class MushTownGame : Game
             var ev = world.Tick(100, players);
             foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
             ApplySpawns(ev.Spawns);
-            foreach (var t in ev.Takes) _drops.Remove(t.uid);
+            foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);
         }
     }
 
@@ -782,7 +774,7 @@ public partial class MushTownGame : Game
             if (m.Timer < frames[m.Frame].Delay) continue;
             m.Timer -= frames[m.Frame].Delay; // keep the overflow (single step: delays run >= 100ms, ticks 16ms)
             if (++m.Frame < frames.Count) continue;
-            if (m.Action == "die1") _mobs.Remove(uid);
+            if (m.Action == "die1") { _mobs.Remove(uid); _world.RemoveChild(m.Owner); }
             else
             {
                 if (m.Action == "hit1") m.Action = MobIdle(m.Mob);
@@ -887,7 +879,7 @@ public partial class MushTownGame : Game
                 if (ApplyHurt(h.Damage))
                     break; // died: the rest were judged at the corpse
             ApplySpawns(ev.Spawns);
-            foreach (var t in ev.Takes) _drops.Remove(t.uid);
+            foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);
         }
 
         base.Update(gameTime);
@@ -910,7 +902,7 @@ public partial class MushTownGame : Game
             LoadMapTextures();
             _remotes.Clear(); // peers stay on the old map; their live states refill this one
             if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
-            else { _mobs.Clear(); _drops.Clear(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them
+            else { ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them
             _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
         }
         var land = _map.Portals.FirstOrDefault(p => p.Pn == tn)
@@ -1050,7 +1042,7 @@ public partial class MushTownGame : Game
         _spriteBatch.End();
     }
 
-    private void DrawMob(MobView m)
+    private void DrawMob(MobArt m)
     {
         var frame = MobFrames(m.Mob, m.Action)[m.Frame];
         var tex = _textures[frame.Image];
@@ -1112,7 +1104,7 @@ public partial class MushTownGame : Game
     }
 
     // One ground drop: the sprite sits on its feet (coin or potion icon).
-    private void DrawDrop(DropView d)
+    private void DrawDrop(DropArt d)
     {
         string image = d.Kind == DropKind.Mesos ? "ui/hud_coin.png" : _items[d.Id].Image;
         var tex = _textures[image];
@@ -1214,7 +1206,9 @@ public partial class MushTownGame : Game
     private void ApplySpawn(int uid, int mob, float x, float y, int maxHp, int hp)
     {
         string idle = LoadMob(mob);
-        _mobs[uid] = new MobView { Mob = mob, X = x, Y = y, Hp = hp, MaxHp = maxHp, Action = idle };
+        var o = new GameObject();
+        _mobs[uid] = o.Add(new MobArt { Mob = mob, X = x, Y = y, Hp = hp, MaxHp = maxHp, Action = idle });
+        _world.AddChild(o);
     }
 
     // A hit the server judged (or the local world struck): flinch or die, plus
@@ -1334,14 +1328,18 @@ public partial class MushTownGame : Game
         }
     }
 
-    private void ApplyDropSpawn(int uid, float x, float y, int kind, int id, int count) =>
-        _drops[uid] = new DropView { X = x, Y = y, Kind = kind, Id = id, Count = count };
+    private void ApplyDropSpawn(int uid, float x, float y, int kind, int id, int count)
+    {
+        var o = new GameObject();
+        _drops[uid] = o.Add(new DropArt { X = x, Y = y, Kind = kind, Id = id, Count = count });
+        _world.AddChild(o);
+    }
 
     // One drop gone: everyone clears the view, the taker claims the loot.
     // Mesos pile up; known drops land in a bag (equips in EQUIP, potions in USE).
     private void ApplyDropTake(int uid, bool mine, int kind, int id, int count)
     {
-        _drops.Remove(uid);
+        if (_drops.Remove(uid, out var gone)) _world.RemoveChild(gone.Owner);
         var chara = _save?.Slots[_slot];
         if (!mine || chara == null) return;
         PlaySfx("pickup");
@@ -1585,8 +1583,8 @@ public partial class MushTownGame : Game
 
     private void RefreshLocalMobs()
     {
-        _mobs.Clear();
-        _drops.Clear();
+        ClearMobs();
+        ClearDrops();
         DropNumbers();
         DropFx();
         RespawnBuffLoops(); // buff timers survive the switch, so their loops re-hang

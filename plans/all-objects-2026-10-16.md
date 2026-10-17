@@ -1,6 +1,6 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S5 committed, S6 in progress (one-by-one, autonomous
+Status: S6 committed, S7 in progress (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
@@ -285,7 +285,14 @@ Probe, carry, art, sim.
   loop + Hurt build in Server, records stay Server-side). Held
   directly and stepped manually (Tick carries players, Update
   cannot). Graves/judge/drops stay: not AI.
-- S6 mobs: mob art to tree, drops and pickup. 1 sprint.
+- S6 mobs, art to tree + drops and pickup (done): MobView/DropView
+  become MobArt/DropArt components on _world children (uid dicts
+  kept, same field names); spawn pairs Add+AddChild, removals pair
+  RemoveChild+dict-remove (ClearMobs/ClearDrops for the 4 clear
+  sites). No Update overrides: the anim tick stays at its exact
+  Update spot (casts-before/drains-after), draw stays in the
+  y-sorted list (the tree does not y-sort; S8 owns that). Z pickup
+  and the server judge untouched (tables are S9-S10).
 - S7 NPCs, talk clicks, peers, name plates to tree. 1 sprint.
 - S8 map layers and camera as objects. 1 sprint.
 - S9-S10 quest/skill/drop full port: all def rows, all tables,
