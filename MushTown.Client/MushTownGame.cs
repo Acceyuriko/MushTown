@@ -57,15 +57,16 @@ public partial class MushTownGame : Game
     private readonly Dictionary<string, List<int>> _delays = new();
     private List<int> _layers = null!;
     private readonly Dictionary<string, Texture2D> _textures = new();
-    private int _cameraX, _cameraY;
-    private float _camX, _camY, _camVX, _camVY;
+    private readonly CameraComp _camera = new();
     private double _timeMs; // scrolling backs drift with this (0 in shot mode: still image)
     private int _loadBeat;
-    private List<(int frame, float timer)> _portalAnims = new(); // one anim state per portal, aligned with _map.Portals
-    private List<List<int>> _portalDelays = new();
+    private List<PortalComp> _portals = new(); // live portal anims, aligned with _map.Portals
+    private List<NpcArt> _npcArts = new(); // live NPC views, one per spawn
 
-    // The sim world: one root object holding the player (mobs join in S5-S6).
+    // The sim world: one root holding the player, the camera, the map
+    // furniture, and the mob/drop/peer views.
     private readonly GameObject _world = new();
+    private GameObject _mapObj = new(); // rebuilt per map load: portal + NPC children
     private readonly PlayerMover _mover = new();
     private FootholdItem _spawnGround = null!;
     private string _shownAction = "stand2"; // last action the frames advanced on (resets the frame on change)
@@ -274,6 +275,9 @@ public partial class MushTownGame : Game
         player.Add(_mover);
         player.Add(_heroPlate);
         _world.AddChild(player);
+        var cam = new GameObject();
+        cam.Add(_camera);
+        _world.AddChild(cam);
         Exiting += (_, _) => { SaveChara(); _net?.Dispose(); _server?.Dispose(); };
         if (_shotPath != null && OperatingSystem.IsWindows())
             HideWindowEarly(); // headless shots: hide before first paint (load takes seconds)
@@ -398,7 +402,6 @@ public partial class MushTownGame : Game
         var layers = map.Tiles.Select(t => t.Layer).Concat(map.Objs.Select(o => o.Layer)).Distinct().OrderBy(l => l).ToList();
         var spawnGround = SceneMath.GroundBelow(map.Footholds, map.Info.SpawnX, map.Info.SpawnY)
             ?? throw new InvalidDataException($"map {mapId}: no foothold under spawn ({map.Info.SpawnX},{map.Info.SpawnY})");
-        var portalAnims = map.Portals.Select(_ => (0, 0f)).ToList();
         var portalDelays = map.Portals.Select(p => p.Frames.Select(f => f.Delay).ToList()).ToList();
         for (int i = 0; i < portalDelays.Count; i++)
             if (portalDelays[i].Any(x => x <= 0))
@@ -414,8 +417,23 @@ public partial class MushTownGame : Game
         _mover.Map = map; // the feet read the same ground
         _layers = layers;
         _spawnGround = spawnGround;
-        _portalAnims = portalAnims;
-        _portalDelays = portalDelays;
+        _world.RemoveChild(_mapObj); // old furniture leaves with the old map (first load: never added, false)
+        _mapObj = new GameObject();
+        _portals = new List<PortalComp>();
+        _npcArts = new List<NpcArt>();
+        for (int i = 0; i < map.Portals.Count; i++)
+        {
+            var o = new GameObject();
+            _portals.Add(o.Add(new PortalComp { Portal = map.Portals[i], Delays = portalDelays[i] }));
+            _mapObj.AddChild(o);
+        }
+        foreach (var s in map.Npcs)
+        {
+            var o = new GameObject();
+            _npcArts.Add(o.Add(new NpcArt { Spawn = s }));
+            _mapObj.AddChild(o);
+        }
+        _world.AddChild(_mapObj);
         EndTalkAndCheckNpcs(); // NPCs are static per map (talk ends with the map)
         PlayBgm(); // same track across a switch keeps playing
     }
@@ -620,8 +638,8 @@ public partial class MushTownGame : Game
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
         // Talk needs presence: walking out of reach closes the modal.
-        if (_talkNpc != 0 && !_map.Npcs.Any(n => n.NpcId == _talkNpc
-            && Math.Abs(n.X - _mover.X) <= QuestLog.TalkDx && Math.Abs(n.Cy - _mover.Y) <= QuestLog.TalkDy))
+        if (_talkNpc != 0 && !_npcArts.Any(a => a.Spawn.NpcId == _talkNpc
+            && Math.Abs(a.Spawn.X - _mover.X) <= QuestLog.TalkDx && Math.Abs(a.Spawn.Cy - _mover.Y) <= QuestLog.TalkDy))
         {
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         }
@@ -809,9 +827,9 @@ public partial class MushTownGame : Game
         }
         if (_mover.Climb == null || _mover.ClimbMoving) // still on a ladder: hold the pose
             (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, _delays[_shownAction]);
-        for (int i = 0; i < _map.Portals.Count; i++) // portal gates shimmer on their own loop
-            if (_map.Portals[i].Frames.Count > 0)
-                _portalAnims[i] = SceneMath.AdvanceFrame(_portalAnims[i].frame, _portalAnims[i].timer, dtMs, _portalDelays[i]);
+        foreach (var p in _portals) // portal gates shimmer on their own loop
+            if (p.Portal.Frames.Count > 0)
+                (p.Frame, p.Timer) = SceneMath.AdvanceFrame(p.Frame, p.Timer, dtMs, p.Delays);
 
         // Mob anims: idles loop, flinch returns to idle, death removes the body.
         foreach (int uid in _mobs.Keys.ToList())
@@ -860,10 +878,7 @@ public partial class MushTownGame : Game
         }
 
         var (targetX, targetY) = CameraTarget();
-        (_camX, _camVX) = SceneMath.SpringStep(_camX, _camVX, targetX, dt);
-        (_camY, _camVY) = SceneMath.SpringStep(_camY, _camVY, targetY, dt);
-        _cameraX = (int)Math.Round(_camX);
-        _cameraY = (int)Math.Round(_camY);
+        _camera.Follow(dt, targetX, targetY);
 
         // peers: send our state every frame (24 bytes x 60Hz is nothing on LAN,
         // so no timers), apply theirs as-is (no interpolation yet)
@@ -977,12 +992,7 @@ public partial class MushTownGame : Game
     private void SnapCamera()
     {
         var (x, y) = CameraTarget();
-        _camX = x;
-        _camY = y;
-        _camVX = 0;
-        _camVY = 0;
-        _cameraX = x;
-        _cameraY = y;
+        _camera.Snap(x, y);
     }
 
     protected override void Draw(GameTime gameTime)
@@ -1064,7 +1074,7 @@ public partial class MushTownGame : Game
         {
             DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero?.Equips);
             if (hero != null)
-                DrawName(feetX - _cameraX, feetY + NameDown - _cameraY, _heroPlate.Name, _heroPlate.Plate);
+                DrawName(feetX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
         }
         ));
         foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers show beginner art (only the name plate crosses, via Name)
@@ -1075,7 +1085,7 @@ public partial class MushTownGame : Game
             {
                 DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight);
                 if (plate.HasName)
-                    DrawName(rx - _cameraX, ry + NameDown - _cameraY, plate.Name, plate.Plate);
+                    DrawName(rx - _camera.X, ry + NameDown - _camera.Y, plate.Name, plate.Plate);
             }
             ));
         }
@@ -1089,8 +1099,8 @@ public partial class MushTownGame : Game
             var d = _drops[uid];
             draws.Add(((int)Math.Floor(d.Y), () => DrawDrop(d)));
         }
-        foreach (var n in _map.Npcs)
-            draws.Add((n.Cy, () => DrawNpc(n)));
+        foreach (var a in _npcArts)
+            draws.Add((a.Spawn.Cy, () => DrawNpc(a.Spawn)));
         foreach ((int _, Action draw) in draws.OrderBy(d => d.y))
             draw();
 
@@ -1110,7 +1120,7 @@ public partial class MushTownGame : Game
         int y = (int)Math.Floor(m.Y) - tex.Height;
         DrawTexture(frame.Image, x, y, m.FacingRight); // raw art faces left; the AI faces along
         if (m.Hp >= m.MaxHp || m.Hp <= 0) return; // fresh and dying mobs hide their bar
-        int px = (int)Math.Floor(m.X) - BarWidth / 2 - _cameraX, py = y - 8 - _cameraY;
+        int px = (int)Math.Floor(m.X) - BarWidth / 2 - _camera.X, py = y - 8 - _camera.Y;
         _spriteBatch.Draw(_pixel, new Rectangle(px, py, BarWidth, 5), Color.Black);
         _spriteBatch.Draw(_pixel, new Rectangle(px + 1, py + 1, Math.Max(1, (int)((BarWidth - 2) * (float)m.Hp / m.MaxHp)), 3), new Color(80, 220, 80));
     }
@@ -1127,7 +1137,7 @@ public partial class MushTownGame : Game
         int y = n.Cy - data.OriginY;
         DrawTexture($"npc/{n.NpcId}.png", x, y, n.FacingRight);
         var tag = _ui.GetSmall(data.Name);
-        int feetX = feet - _cameraX, tagY = y - 20 - _cameraY;
+        int feetX = feet - _camera.X, tagY = y - 20 - _camera.Y;
         _spriteBatch.Draw(_pixel,
             new Rectangle(feetX - tag.Width / 2 - 3, tagY, tag.Width + 6, 16),
             new Color(0, 0, 0, 120));
@@ -1143,13 +1153,14 @@ public partial class MushTownGame : Game
     // Click an NPC in talk reach: the talk panel opens (too far: nothing).
     private void NpcClick(int gx, int gy)
     {
-        foreach (var n in _map.Npcs.OrderByDescending(n => n.Cy)) // draw order: high feet on top, clicks match
+        foreach (var a in _npcArts.OrderByDescending(a => a.Spawn.Cy)) // draw order: high feet on top, clicks match
         {
+            var n = a.Spawn;
             var data = _npcs[n.NpcId];
             var tex = _textures[$"npc/{n.NpcId}.png"];
             int feet = n.X;
             int x = n.FacingRight ? SceneMath.FlipDrawX(feet, -data.OriginX, tex.Width) : feet - data.OriginX;
-            var rect = new Rectangle(x - _cameraX, n.Cy - data.OriginY - _cameraY,
+            var rect = new Rectangle(x - _camera.X, n.Cy - data.OriginY - _camera.Y,
                 tex.Width, tex.Height);
             if (!HitRect(rect, gx, gy)) continue;
             if (Math.Abs(n.X - _mover.X) > QuestLog.TalkDx || Math.Abs(n.Cy - _mover.Y) > QuestLog.TalkDy) continue; // an overlapped NPC behind may be in reach
@@ -1182,7 +1193,7 @@ public partial class MushTownGame : Game
             var frames = f.Loop ? _skills[f.Skill].Affected : f.Hit ? _skills[f.Skill].Hit : _skills[f.Skill].Effect;
             var tex = _textures[frames[f.Frame]];
             var o = new Vector2(tex.Width / 2f, tex.Height / 2f);
-            _spriteBatch.Draw(tex, new Vector2(f.X - _cameraX, f.Y - _cameraY), null, Color.White,
+            _spriteBatch.Draw(tex, new Vector2(f.X - _camera.X, f.Y - _camera.Y), null, Color.White,
                 0f, o, 1f, f.FacingRight ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         }
     }
@@ -1199,8 +1210,8 @@ public partial class MushTownGame : Game
             var tint = new Color(255, 255, 255, alpha);
             int totalW = 0;
             foreach (char c in n.Text) totalW += _textures[dmg.Digits[c - '0'].Image].Width;
-            float x = n.X - totalW / 2f - _cameraX;
-            float baseY = n.Y - NumberRise * k - _cameraY;
+            float x = n.X - totalW / 2f - _camera.X;
+            float baseY = n.Y - NumberRise * k - _camera.Y;
             foreach (char c in n.Text)
             {
                 var d = dmg.Digits[c - '0'];
@@ -1667,12 +1678,11 @@ public partial class MushTownGame : Game
         }
 
         // live portals shimmer over the tiles, behind the characters
-        for (int i = 0; i < _map.Portals.Count; i++)
+        foreach (var p in _portals)
         {
-            var portal = _map.Portals[i];
-            if (portal.Frames.Count == 0) continue;
-            var f = portal.Frames[_portalAnims[i].frame];
-            DrawTexture(f.Image, portal.X + f.Dx, portal.Y + f.Dy, false);
+            if (p.Portal.Frames.Count == 0) continue;
+            var f = p.Portal.Frames[p.Frame];
+            DrawTexture(f.Image, p.Portal.X + f.Dx, p.Portal.Y + f.Dy, false);
         }
     }
 
@@ -1729,7 +1739,7 @@ public partial class MushTownGame : Game
     {
         var tex = _textures[b.Image];
         var (x, y, cx, cy, left, right, top, bottom) =
-            SceneMath.BackLayout(b, tex.Width, tex.Height, _cameraX, _cameraY, GameWidth, GameHeight, _timeMs);
+            SceneMath.BackLayout(b, tex.Width, tex.Height, _camera.X, _camera.Y, GameWidth, GameHeight, _timeMs);
 
         for (int j = top; j < bottom; j++)
             for (int i = left; i < right; i++)
@@ -1738,7 +1748,7 @@ public partial class MushTownGame : Game
 
     private void DrawTexture(string image, int worldX, int worldY, bool flip)
     {
-        _spriteBatch.Draw(_textures[image], new Vector2(worldX - _cameraX, worldY - _cameraY), null, Color.White,
+        _spriteBatch.Draw(_textures[image], new Vector2(worldX - _camera.X, worldY - _camera.Y), null, Color.White,
             0f, Vector2.Zero, 1f, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
     }
 

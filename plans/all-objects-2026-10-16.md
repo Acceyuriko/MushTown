@@ -1,6 +1,6 @@
 # All-objects design — plan (grilled 2026-10-16)
 
-Status: S7 committed, S8 in progress (one-by-one, autonomous
+Status: S8 committed, S9 in progress (one-by-one, autonomous
 review-loop per slice, user decides ties). (Overnight run:
 each slice ends with autonomous review-loop; user reviews in the
 morning). UI input migration (W1-W5) is done and committed.
@@ -302,8 +302,15 @@ Probe, carry, art, sim.
   Quest.cs:80 rules static NPCs read MapData direct (no view copy),
   their tree home is the S8 map object, and click-through-tree
   needs S8's camera.
-- S8 map layers and camera as objects (+ S7 cut: NPCs, talk
-  clicks). 1 sprint.
+- S8 camera + map furniture as objects (done): CameraComp on a
+  _world child (spring + rounded X/Y, Snap/Follow, manual tick at
+  its exact spot, ~20 readers rewired); portals become PortalComp
+  (anim + delays in the comp, parallel lists deleted); NPCs become
+  NpcArt refs under a per-load map object (draw/click/presence/
+  shot-pose rewired, validation still reads _map direct). SCOPE
+  CUT: static backs/tiles/objs stay MapData-direct (extends the
+  no-view-copy rule: zero behavior to house, shells would be
+  over-design).
 - S9-S10 quest/skill/drop full port: all def rows, all tables,
   quest log UI reads live states. 2 sprints. Adds the quest server
   protocol (new net messages plus server-side quest state per

@@ -1093,7 +1093,7 @@ public partial class MushTownGame
 
     // Char select draws in screen pixels (no map behind it now): park the
     // camera at the origin; StartGame snaps it back on entry.
-    private void ZeroCamera() { _camX = _camY = 0; _cameraX = _cameraY = 0; }
+    private void ZeroCamera() { _camera.FX = _camera.FY = _camera.X = _camera.Y = 0; }
 
     // Server choice confirmed: characters become the hub (first occupied selected).
     private void EnterChars(string? host)
@@ -1373,12 +1373,12 @@ public partial class MushTownGame
     private void DrawSetupAvatar()
     {
         // DrawAvatar speaks world pixels: park the camera while previewing on art
-        int camX = _cameraX, camY = _cameraY;
-        _cameraX = 0;
-        _cameraY = 0;
+        int camX = _camera.X, camY = _camera.Y;
+        _camera.X = 0;
+        _camera.Y = 0;
         DrawAvatar(450, 735, "stand2", 0, false);
-        _cameraX = camX;
-        _cameraY = camY;
+        _camera.X = camX;
+        _camera.Y = camY;
     }
 
     // Wooden buttons answer with transparency (the log plaque still draws raw).

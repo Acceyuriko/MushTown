@@ -77,8 +77,8 @@ public partial class MushTownGame
             LoadTexture($"npc/{id}.png");
     }
 
-    // Static per map: draw/click read _map.Npcs direct (NPCs never move, so no
-    // view copy). Talk ends with the map; missing art fails loud, not at draw.
+    // Static per map: draw/click read the NPC views (refs into _map.Npcs,
+    // never copies). Talk ends with the map; missing art fails loud, not at draw.
     private void EndTalkAndCheckNpcs()
     {
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
@@ -186,7 +186,7 @@ public partial class MushTownGame
             _questSel = 90001;
             return;
         }
-        var npc = _map.Npcs.FirstOrDefault(n => n.NpcId == _shotTalk)
+        var npc = _npcArts.FirstOrDefault(a => a.Spawn.NpcId == _shotTalk)?.Spawn
             ?? throw new InvalidDataException($"--talk needs NPC {_shotTalk} on map {_mapId}");
         _mover.X = npc.X - 30;
         _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, npc.Cy)
