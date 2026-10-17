@@ -3,12 +3,12 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // Peer pose + name plates, one per live peer (moved to tree children in
-// S7; the hero's plate rides the player object). Plates are sibling
-// components, not child objects: pre-S8 there are no transforms, so the
-// anchor math stays in Draw and S8 re-parents when it lands. No Update
-// overrides: peers snap on net events, plates fill on Name events, the
-// hero plate syncs once per frame (live-derived from worn gear). The
-// game removes the Owner alongside the dict.
+// S7; the hero's plate rides the player object). Plates stay sibling
+// components, not child objects: the tree has no transforms, so the
+// anchor math lives in Draw. No Update overrides: peers snap on net
+// events, plates fill on Name events, the hero plate syncs once per
+// frame (live-derived from worn gear). The game removes the Owner
+// alongside the dict.
 public sealed class PeerArt : Component
 {
     public int Id;

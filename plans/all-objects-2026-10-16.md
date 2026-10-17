@@ -148,42 +148,62 @@ No stray systems. Defs stay data.
 - One `QuestState` component per quest taken. Holds kill counts,
   done flag.
 - `Reward` component: exp, mesos, items (Q5: three fields only now;
-  fame and skill points come with their systems).
+  fame and skill points come with their systems). VERDICT (S10):
+  DROPPED — Reward stays def fields + TurnIn act (no quest needs
+  custom payout logic a row cannot hold; a component would be a
+  shell).
 - One `TurnIn` act runs all rewards.
 
 ## Skill (agreed)
 
 - `SkillDef` data: name, max level, art keys.
-- Player holds `SkillBar` (ids, levels, cooldowns).
+- Player holds `SkillBar` (ids, levels, cooldowns). VERDICT:
+  DROPPED — levels live on the save (SkillLv), cooldowns in
+  Fighter; a SkillBar object would duplicate both.
 - Shared components per cast, all read the def row:
-  - `Cost`: HP, MP.
+  - `Cost`: HP, MP. DONE (SkillCost, S1 probe).
   - `Hitbox`: circles only (user ruled). Many circles per skill
-    build other shapes.
-  - `Damage`: multiplier, hit count.
-  - `BuffFx`: stat, amount, time (buffs only).
+    build other shapes. VERDICT: DEFERRED to flying skills (none
+    in v1; melee reach is hardcoded numbers).
+  - `Damage`: multiplier, hit count. DONE (SkillDamage, S1 probe).
+  - `BuffFx`: stat, amount, time (buffs only). VERDICT: DROPPED —
+    buff clocks live in Fighter, buff loops ride the S4 fx pool.
 - Paths (Q6, user ruled): fixed paths are point lists in data;
   logic paths (homing, meso-blast style) are mover code that reads
   live targets each tick. Data only names the mover plus numbers
-  (speed, turn rate, blast range).
+  (speed, turn rate, blast range). VERDICT: DEFERRED with Hitbox
+  (no flying skills in v1).
 
 ## Drop (agreed)
 
 - `DropTable` data: chances, item list, meso range.
 - Each mob object holds a `DropTable` component with a table id.
+  VERDICT (S9): CORRECTED — tables live in MobWorld keyed by
+  MobId (bodies re-plant per spawn; a per-mob field would copy
+  the table per body); DropTable holds the def row, not an id
+  (no table registry exists).
 - One `Loot` act for all mobs and bosses (Q10). Reads the table,
   rolls once, spawns drops. Boss tables are bigger rows.
   Quest scripted drops go through the same act with bonus lines.
+  VERDICT (S9): DROPPED — Roll + DropKill/DropOne split the job;
+  a Loot act would be a pass-through.
 
 ## Layout (Q3, agreed)
 
 - Layout JSON nodes map to `GameObject` + `Rect` + children.
+  VERDICT: CORRECTED — Layout JSON carries positions only; sizes
+  stay in code (one spelling per visual, no second source).
 - Hot reload first: edit JSON, press a key, trees rebuild. No restart.
+  VERDICT: BEAT SPEC — auto FileSystemWatcher reload, no key press.
 - In-game editor only if hot reload proves too slow. Not planned.
 
 ## Global objects (Q7, agreed)
 
 - `SceneManager` holds the screen scene plus one globals scene that
   never drops: audio, quest log, save store, net client, clock.
+  VERDICT: DROPPED — audio/questlog/save/net/clock stay held
+  directly (exactly one owner each; a globals scene adds lookup
+  without a user). SceneManager stays screen-only.
 - Plain `GameObject`s, no singletons. Tests build one global alone.
 - Matches Unity: one scene, many root objects; globals match
   `DontDestroyOnLoad` managers.
@@ -191,16 +211,22 @@ No stray systems. Defs stay data.
 ## Factories (Q8, Q9, agreed)
 
 - One small factory per kind: `MobFactory`, `DropFactory`,
-  `FxFactory`. No god factory.
+  `FxFactory`. No god factory. VERDICT: DROPPED — one builder
+  each (mob spawn, art creation, fx Take); a factory per single
+  case is ceremony. QuestStateFactory stays (custom per-quest
+  states are the known extension point; its registry has no
+  production users yet, one test pins it).
 - Each holds its own id-to-builder map. Builders register at boot.
 - Constructors stay dumb (store parts, set fields). Setup logic
   lives in the factory act, so pool reuse can run it.
-- Unknown id fails loud with the id in the log.
+- Unknown id fails loud with the id in the log. KEPT ad hoc
+  (QuestLog.State and MobWorld throw with the id).
 
 ## Pooling (Q11, agreed)
 
 - Pool high-churn small things only: damage numbers, hit sparks,
-  cast effects, flying projectiles.
+  cast effects, flying projectiles. VERDICT (S4): projectiles
+  DROPPED — no flying skill exists in v1, nothing to pool.
 - No pool for mobs, drops, quests, skills. Rare spawns with state;
   pooling them buys reset bugs.
 
@@ -284,15 +310,20 @@ Probe, carry, art, sim.
   Mob->MobId, class-name rule), Tick keeps its shape (Step + touch
   loop + Hurt build in Server, records stay Server-side). Held
   directly and stepped manually (Tick carries players, Update
-  cannot). Graves/judge/drops stay: not AI.
+  cannot). Graves/judge/drops stay: not AI. Gates 0/0 + 226/226,
+  21/21 shots match HEAD. Review R1 converged, no R2. Playtest
+  pending.
 - S6 mobs, art to tree + drops and pickup (done): MobView/DropView
   become MobArt/DropArt components on _world children (uid dicts
   kept, same field names); spawn pairs Add+AddChild, removals pair
   RemoveChild+dict-remove (ClearMobs/ClearDrops for the 4 clear
   sites). No Update overrides: the anim tick stays at its exact
   Update spot (casts-before/drains-after), draw stays in the
-  y-sorted list (the tree does not y-sort; S8 owns that). Z pickup
-  and the server judge untouched (tables are S9-S10).
+  y-sorted list (the tree does not y-sort; S8 verdict: the list
+  stays, moving it buys nothing and risks pixels). Z pickup
+  and the server judge untouched (tables are S9-S10). Gates 0/0
+  + 226/226, 22/22 shots match HEAD. Review R1 converged, no R2.
+  Playtest pending.
 - S7 peers + live-game plates to tree (done): RemoteEvents become
   PeerArt on _world children (spawn-or-update ApplyRemote,
   RemovePeer/ClearPeers pair the dict with RemoveChild); plates are
@@ -301,22 +332,29 @@ Probe, carry, art, sim.
   the y-sorted list. SCOPE CUT: NPCs + talk clicks move to S8 —
   Quest.cs:80 rules static NPCs read MapData direct (no view copy),
   their tree home is the S8 map object, and click-through-tree
-  needs S8's camera.
+  needs S8's camera. Gates 0/0 + 226/226, 22/22 shots match HEAD.
+  Review R1 converged, no R2. Playtest pending.
 - S8 camera + map furniture as objects (done): CameraComp on a
   _world child (spring + rounded X/Y, Snap/Follow, manual tick at
-  its exact spot, ~20 readers rewired); portals become PortalComp
-  (anim + delays in the comp, parallel lists deleted); NPCs become
-  NpcArt refs under a per-load map object (draw/click/presence/
-  shot-pose rewired, validation still reads _map direct). SCOPE
-  CUT: static backs/tiles/objs stay MapData-direct (extends the
-  no-view-copy rule: zero behavior to house, shells would be
-  over-design).
+  its exact spot, ~20 uses rewired incl. 11 draw reads); portals
+  become PortalComp (anim + delays in the comp, parallel lists
+  deleted); NPCs become NpcArt refs under a per-load map object
+  (draw/click/presence/shot-pose rewired, validation still reads
+  _map direct). SCOPE CUT: static backs/tiles/objs stay
+  MapData-direct (extends the no-view-copy rule: zero behavior to
+  house, shells would be over-design). Y-SORT VERDICT: the
+  y-sorted draw list stays; the tree never y-sorts (audit fix:
+  S6 promised S8 owns it, S8 finds the move buys nothing and
+  risks pixels). Gates 0/0 + 226/226, 22/22 shots match HEAD.
+  Review R1 converged, no R2. Playtest pending.
 - S9 drop tables to components (done): Shared DropTable over the
   def row (Roll pays meso + items with slot offsets; placement
   stays server-side), MobWorld holds tables and places payouts.
   Quest/skill verified already live (S1 probe: QuestState/
   SkillCost/SkillDamage, UI reads states, QuestKills never read
-  direct) — no stragglers, no churn. 4 direct Roll tests.
+  direct) — no stragglers, no churn. 4 direct Roll tests. Gates
+  0/0 + 230/230, 22/22 shots match HEAD. Review R1 converged
+  (1-ulp float assoc accepted), no R2. Playtest pending.
 - S10 quest server protocol (done): QuestSync/Accept/Complete/
   Ok/Kill messages; server holds one QuestLog + chara copy per
   client (Sync on connect + level-up), judges intents and kill
@@ -325,11 +363,32 @@ Probe, carry, art, sim.
   customs the host lacks go unanswered (logged, dialog stays for
   Bye). Quest drains before mob hits; re-syncs merge, never clobber
   (R1 P0: level-up Sync wiped the just-pushed counter). 8 protocol
-  tests. LAN trusts the host's quest files now.
+  tests. Gates 0/0 + 238/238, 22/22 shots match HEAD. Review R1
+  (1 P0 + 1 P1 + 1 P1-test fixed) + R2 clean. Playtest pending.
+  LAN trusts the host's quest files now.
 
 Total: about 18 sprints.
 
 ## Risks
 
 - U1-U6 stay pixel-same. S-phase can not. New baselines there.
+  VERDICT: CLOSED — S-phase stayed pixel-same too (every S
+  commit matches HEAD: S1-S4 20/20, S5 21/21, S6-S10 22/22; no
+  baselines re-cut; batch grew 20->22 as stat + settings
+  screens joined).
 - Shot mode must keep every flag alive through the sim phase.
+  VERDICT: HELD — all flags alive at S10.
+
+## After S10 (audit 2026-10-17)
+
+- No next phase is scoped. Next step is user playtests, then
+  scope from acceptance.
+- Playtest tracker (all pending): P1, C1, U1, U2, U3, U4 (modal
+  buttons under delete modal), U5, U6, S1, S2 (feet must feel
+  identical; portal-Alt arrival stands; one stale pose frame;
+  trigger frames no longer slide ~2px), S3, S4, S5, S6, S7, S8,
+  S9, S10 (net quests: accept/kill/turn-in + joiner customs
+  silence).
+- Deferred futures (not promises): flying skills + Hitbox
+  circles + paths, fame + SP rewards, ETC bag, Mob/Drop/Fx
+  factories, globals scene, JSON sizes in Layout.

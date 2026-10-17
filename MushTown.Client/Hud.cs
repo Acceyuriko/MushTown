@@ -100,7 +100,7 @@ public partial class MushTownGame
     private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
     private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
     private readonly SceneManager _scenes = new();
-    private Scene _gameScene = null!; // W1: the submenu only; later weeks add the rest
+    private Scene _gameScene = null!; // HUD furniture + exp + submenu + buttons + plate + bars + tracker + boss bar + minimap
     private Scene _invScene = new(), _statScene = new(), _skillScene = new();
     private readonly CarryHand _hand = new(); // game-level: panel rebuilds swap scenes, the held piece survives
     private Scene _questScene = new(), _settingsScene = new(), _shopScene = new(), _talkScene = new();
@@ -284,7 +284,8 @@ public partial class MushTownGame
 
     private Texture2D TexByKey(string key) => _textures[key]; // full keys ("ui/..."): all screens share one lookup
 
-    // W1: the game scene holds the submenu only; later weeks add the rest.
+    // The game scene holds HUD furniture, exp, submenu, buttons, plate,
+    // bars, tracker, boss bar, and minimap.
     // Built after textures load, rebuilt on layout reload (a rebuild
     // resets the submenu to closed, same as the panel positions above).
     private void BuildGameScene()
