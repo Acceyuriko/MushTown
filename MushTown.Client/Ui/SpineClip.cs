@@ -15,7 +15,7 @@ public sealed class SpineClip : IDisposable
     public int Frame;
     public float Timer;
     private readonly BasicEffect _fx;
-    private readonly float _scale, _ox, _oy; // baked units land in the static art rect
+    private readonly float _ox, _oy; // baked units land 1:1, centered on the static art rect
     private VertexPositionColorTexture[] _verts = new VertexPositionColorTexture[256]; // reused: Draw runs every frame
     private static readonly BlendState _multiply = new() // 2: src*dst
     {
@@ -32,14 +32,15 @@ public sealed class SpineClip : IDisposable
         AlphaDestinationBlend = Blend.One,
     };
 
-    private SpineClip(BasicEffect fx, float scale, float ox, float oy)
+    private SpineClip(BasicEffect fx, float ox, float oy)
     {
         _fx = fx;
-        _scale = scale; _ox = ox; _oy = oy;
+        _ox = ox; _oy = oy;
     }
 
-    // Fits the solid figure (normal-blend slots over all frames; additive
-    // glows may spill past) into the class static art rect.
+    // Draws the rig 1:1 (baked units are pixels) and centers its
+    // all-frames bounds on the static art rect. Fitting the bounds INTO
+    // the rect shrank big-motion classes to mush (Ren drew at 0.48).
     public static SpineClip Load(GraphicsDevice gd, string jsonPath, int viewW, int viewH, Rectangle target)
     {
         var data = MushTownGame.LoadJson<SpineData>(jsonPath);
@@ -63,19 +64,18 @@ public sealed class SpineClip : IDisposable
                     minY = Math.Min(minY, f.V[i + 1]); maxY = Math.Max(maxY, f.V[i + 1]);
                 }
         }
-        // Empty or zero-size bounds: nothing to fit, fail loud.
+        // Empty or zero-size bounds: nothing to center, fail loud.
         if (minX >= maxX || minY >= maxY)
             throw new InvalidDataException($"{jsonPath} figure has no size");
-        float scale = Math.Min(target.Width / (maxX - minX), target.Height / (maxY - minY));
         var fx = new BasicEffect(gd)
         {
             Projection = Matrix.CreateOrthographicOffCenter(0, viewW, viewH, 0, 0, 1),
             TextureEnabled = true,
             VertexColorEnabled = true,
         };
-        var clip = new SpineClip(fx, scale,
-            target.X + (target.Width - (maxX - minX) * scale) / 2 - minX * scale,
-            target.Y + (target.Height - (maxY - minY) * scale) / 2 + maxY * scale);
+        var clip = new SpineClip(fx,
+            target.X + (target.Width - (maxX - minX)) / 2 - minX,
+            target.Y + (target.Height - (maxY - minY)) / 2 + maxY);
         clip.Data = data;
         clip.Tex.AddRange(tex);
         return clip;
@@ -116,7 +116,7 @@ public sealed class SpineClip : IDisposable
             if (_verts.Length < n) _verts = new VertexPositionColorTexture[n];
             for (int i = 0; i < n; i++)
                 _verts[i] = new VertexPositionColorTexture(
-                    new Vector3(_ox + f.V[i * 2] * _scale, _oy - f.V[i * 2 + 1] * _scale, 0),
+                    new Vector3(_ox + f.V[i * 2], _oy - f.V[i * 2 + 1], 0),
                     color, new Vector2(uvs[i * 2], uvs[i * 2 + 1]));
             foreach (var pass in _fx.CurrentTechnique.Passes)
             {
