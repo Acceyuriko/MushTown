@@ -6,7 +6,7 @@ namespace MushTown.Exporter;
 // Written from the WZ bytes; only the rect/trim/rotate are needed.
 public sealed class Atlas
 {
-    public sealed record Page(string Name, int W, int H);
+    public sealed record Page(string Name, int W, int H, bool Pma);
     public sealed record Region(string Name, int Page, int X, int Y, int W, int H,
         int Ox, int Oy, int OrigW, int OrigH, int Rot);
 
@@ -64,7 +64,8 @@ public sealed class Atlas
             else if (keys.TryGetValue("size", out string? size))
             {
                 int[] wh = Nums(size, 2);
-                atlas.Pages.Add(new Page(name, wh[0], wh[1]));
+                // pma marks premultiplied pages; absent means straight alpha.
+                atlas.Pages.Add(new Page(name, wh[0], wh[1], keys.TryGetValue("pma", out var pma) && pma == "true"));
             }
             else throw new InvalidDataException($"atlas: block '{name}' is neither page nor region");
         }

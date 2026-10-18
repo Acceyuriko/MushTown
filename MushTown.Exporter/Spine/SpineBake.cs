@@ -68,7 +68,13 @@ public static class SpineBake
         var buf = new byte[raw.Length];
         raw.CopyTo(buf);
         var atlas = Atlas.Parse(atlasText);
-        var baked = RigBaker.Bake(buf, atlas);
+        // Page placement, straight off the class node: the rig origin lands at
+        // origin. Rigs without the node are authored at the page top-left.
+        // Sia carries scale 150: her rig draws at 150%.
+        var classNode = ui.Find(dir);
+        var origin = classNode?.Nodes["origin"]?.Value as Wz_Vector;
+        float scale = classNode?.Nodes["scale"]?.Value is IConvertible n ? Convert.ToSingle(n) / 100f : 1;
+        var baked = RigBaker.Bake(buf, atlas, origin?.X ?? 0, origin?.Y ?? 0, scale);
         Directory.CreateDirectory(outDir);
         foreach (var page in atlas.Pages)
         {

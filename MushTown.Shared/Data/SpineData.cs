@@ -28,5 +28,15 @@ public sealed class SpineData
 {
     [JsonPropertyName("fps")] public float Fps { get; set; }
     [JsonPropertyName("pages")] public List<string> Pages { get; set; } = new();
+    // Where the rig origin (0,0) lands on the page. Rigs are authored in page
+    // pixels: the 4.1 mesh rigs already start at the page's top-left corner,
+    // the two region rigs sit centered and carry a WZ origin on the class
+    // node. Export bakes it here.
+    [JsonPropertyName("ox")] public float Ox { get; set; }
+    [JsonPropertyName("oy")] public float Oy { get; set; }
+    // Atlas pages are premultiplied (pma:t in the atlas text) for 10 of the 11
+    // baked classes; Sia's pages are straight alpha. The client bakes the
+    // matching blend state from this flag.
+    [JsonPropertyName("pma")] public bool Pma { get; set; }
     [JsonPropertyName("slots")] public List<SpineSlot> Slots { get; set; } = new();
 }

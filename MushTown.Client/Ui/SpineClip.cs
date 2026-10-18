@@ -15,7 +15,7 @@ public sealed class SpineClip : IDisposable
     public int Frame;
     public float Timer;
     private readonly BasicEffect _fx;
-    private readonly float _ox, _oy; // baked units land 1:1, centered on the static art rect
+    private readonly float _ox, _oy; // baked rig origin on the page
     private VertexPositionColorTexture[] _verts = new VertexPositionColorTexture[256]; // reused: Draw runs every frame
     private static readonly BlendState _multiply = new() // 2: src*dst
     {
@@ -38,10 +38,11 @@ public sealed class SpineClip : IDisposable
         _ox = ox; _oy = oy;
     }
 
-    // Draws the rig 1:1 (baked units are pixels) and centers its
-    // all-frames bounds on the static art rect. Fitting the bounds INTO
-    // the rect shrank big-motion classes to mush (Ren drew at 0.48).
-    public static SpineClip Load(GraphicsDevice gd, string jsonPath, int viewW, int viewH, Rectangle target)
+    // Baked units are page pixels: rig (0,0) draws at (ox, oy) with y up.
+    // No fitting, no centering, no cropping: each rig is authored in page
+    // space, so its own origin is the official place (Saitama and Ren are
+    // close-ups by design, exactly like their static art).
+    public static SpineClip Load(GraphicsDevice gd, string jsonPath, int viewW, int viewH)
     {
         var data = MushTownGame.LoadJson<SpineData>(jsonPath);
         if (data.Fps <= 0 || data.Slots.Count == 0 || data.Slots[0].Frames.Count == 0)
@@ -53,29 +54,13 @@ public sealed class SpineClip : IDisposable
             using var stream = File.OpenRead(Path.Combine(dir, page));
             tex.Add(Texture2D.FromStream(gd, stream));
         }
-        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
-        foreach (var s in data.Slots)
-        {
-            if (s.Blend != 0) continue;
-            foreach (var f in s.Frames)
-                for (int i = 0; i < f.V.Length; i += 2)
-                {
-                    minX = Math.Min(minX, f.V[i]); maxX = Math.Max(maxX, f.V[i]);
-                    minY = Math.Min(minY, f.V[i + 1]); maxY = Math.Max(maxY, f.V[i + 1]);
-                }
-        }
-        // Empty or zero-size bounds: nothing to center, fail loud.
-        if (minX >= maxX || minY >= maxY)
-            throw new InvalidDataException($"{jsonPath} figure has no size");
         var fx = new BasicEffect(gd)
         {
             Projection = Matrix.CreateOrthographicOffCenter(0, viewW, viewH, 0, 0, 1),
             TextureEnabled = true,
             VertexColorEnabled = true,
         };
-        var clip = new SpineClip(fx,
-            target.X + (target.Width - (maxX - minX)) / 2 - minX,
-            target.Y + (target.Height - (maxY - minY)) / 2 + maxY);
+        var clip = new SpineClip(fx, data.Ox, data.Oy);
         clip.Data = data;
         clip.Tex.AddRange(tex);
         return clip;
@@ -108,7 +93,13 @@ public sealed class SpineClip : IDisposable
                 1 => BlendState.Additive,
                 2 => _multiply,
                 3 => _screen,
-                _ => BlendState.NonPremultiplied,
+                // Atlas pages carry their own alpha convention: pma:t pages
+                // are premultiplied and MonoGame's FromStream leaves them
+                // as-is, so they need premultiplied blending. Straight-alpha
+                // pages (Sia) keep the plain blend. Blending a premultiplied
+                // page as straight alpha darkened every glow layer: Erel's
+                // light beams drew as gray slabs.
+                _ => Data.Pma ? BlendState.AlphaBlend : BlendState.NonPremultiplied,
             };
             float[] uvs = f.Uv ?? s.Uvs;
             var color = new Color(f.C[0], f.C[1], f.C[2], f.C[3]);

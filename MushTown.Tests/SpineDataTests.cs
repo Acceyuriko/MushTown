@@ -15,6 +15,9 @@ public class SpineDataTests
         {
             Fps = 30,
             Pages = ["a.png"],
+            Ox = 625,
+            Oy = 880,
+            Pma = true,
             Slots = [new SpineSlot
             {
                 Blend = 1, Tris = [0, 1, 2], Uvs = [0, 0, 1, 1],
@@ -27,6 +30,12 @@ public class SpineDataTests
         var back = JsonSerializer.Deserialize<SpineData>(json)!;
 
         Assert.AreEqual(30, back.Fps);
+        Assert.AreEqual(625, back.Ox);
+        Assert.AreEqual(880, back.Oy);
+        Assert.IsTrue(back.Pma);
+        Assert.IsTrue(json.Contains("\"ox\":625"));
+        Assert.IsTrue(json.Contains("\"oy\":880"));
+        Assert.IsTrue(json.Contains("\"pma\":true"));
         Assert.AreEqual(1, back.Slots.Count);
         Assert.AreEqual(1, back.Slots[0].Blend);
         Assert.AreEqual(2, back.Slots[0].Frames[0].V[1]);

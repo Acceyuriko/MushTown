@@ -12,9 +12,10 @@ public sealed class RigBaker
 {
     public sealed record FrameData(float[] Verts, float[] Color, int Page, float[]? Uvs);
     public sealed record SlotData(int Blend, int[] Tris, float[] Uvs, List<FrameData> Frames);
-    public sealed record BakedAnim(float Fps, List<string> Pages, List<SlotData> Slots);
+    public sealed record BakedAnim(float Fps, List<string> Pages, List<SlotData> Slots,
+        float Ox, float Oy, bool Pma);
 
-    public static BakedAnim Bake(byte[] skel, Atlas atlas)
+    public static BakedAnim Bake(byte[] skel, Atlas atlas, float ox, float oy, float scale)
     {
         var r = new SkelReader(skel);
         float fps = r.ReadHeader();
@@ -60,7 +61,8 @@ public sealed class RigBaker
 
         int frames = Math.Max(1, (int)Math.Round(duration * fps));
         var baked = new BakedAnim(fps,
-            atlas.Pages.Select(p => p.Name).ToList(), new List<SlotData>(slots.Count));
+            atlas.Pages.Select(p => p.Name).ToList(), new List<SlotData>(slots.Count),
+            ox, oy, atlas.Pages[0].Pma);
         var skin = skins["default"];
         for (int s = 0; s < slots.Count; s++)
         {
@@ -90,8 +92,11 @@ public sealed class RigBaker
                         fd = new FrameData(Array.Empty<float>(), fd.Color, fd.Page, fd.Uvs);
                     regFrames.Add(fd);
                 }
+                // Quad corners are BL, BR, TL, TR. Each uv pairs its corner
+                // with the matching texture corner; v=0 is the atlas page
+                // top, so BL samples (0,1).
                 baked.Slots.Add(new SlotData(slot.Blend, new int[] { 0, 1, 2, 2, 1, 3 },
-                    PageUvs(new float[] { 0, 0, 1, 0, 0, 1, 1, 1 }, atlas, setRegion), regFrames));
+                    PageUvs(new float[] { 0, 1, 1, 1, 0, 0, 1, 0 }, atlas, setRegion), regFrames));
                 continue;
             }
             var mesh = att as SkelReader.MeshAtt;
@@ -113,9 +118,13 @@ public sealed class RigBaker
             baked.Slots.Add(new SlotData(slot.Blend,
                 mesh?.Tris ?? Array.Empty<int>(), uvs, outFrames));
         }
-        // The client fits normal-blend verts; without any there is nothing to show.
+        // Without any normal-blend geometry there is nothing to show.
         if (!baked.Slots.Any(s => s.Blend == 0 && s.Frames.Any(f => f.Verts.Length > 0)))
             throw new InvalidDataException("rig has no normal-blend geometry");
+        if (scale != 1)
+            foreach (var s in baked.Slots)
+                foreach (var f in s.Frames)
+                    for (int i = 0; i < f.Verts.Length; i++) f.Verts[i] *= scale;
         return baked;
     }
 
@@ -490,6 +499,9 @@ public sealed class RigBaker
         {
             Fps = anim.Fps,
             Pages = anim.Pages,
+            Ox = anim.Ox,
+            Oy = anim.Oy,
+            Pma = anim.Pma,
             Slots = anim.Slots.Select(s => new SpineSlot
             {
                 Blend = s.Blend,

@@ -48,9 +48,7 @@ public partial class MushTownGame
         }
         if (animated && _spineId != job.Id)
         {
-            var (w, h) = PngSize(Path.Combine(_assetsDir, job.Art));
-            var next = SpineClip.Load(GraphicsDevice, spineJson, GameWidth, GameHeight,
-                new Rectangle(-job.ArtX, -job.ArtY, w, h));
+            var next = SpineClip.Load(GraphicsDevice, spineJson, GameWidth, GameHeight);
             _spine?.Dispose();
             _spine = next;
             _spineId = job.Id;
@@ -239,16 +237,4 @@ public partial class MushTownGame
         _scenes.Show(_menuScene);
     }
 
-    // PNG width/height straight from the IHDR: the spine fit needs the art
-    // size without paying for the texture.
-    private static (int w, int h) PngSize(string path)
-    {
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"missing exported png: {Path.GetFullPath(path)}", path);
-        using var stream = File.OpenRead(path);
-        var head = new byte[24];
-        stream.ReadExactly(head);
-        return (head[16] << 24 | head[17] << 16 | head[18] << 8 | head[19],
-            head[20] << 24 | head[21] << 16 | head[22] << 8 | head[23]);
-    }
 }

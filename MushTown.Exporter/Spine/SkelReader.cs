@@ -254,15 +254,19 @@ public sealed class SkelReader
         return new MeshAtt(name, path, data, uvs, tris, seq, color);
     }
 
+    // 4.1 region order, straight from SkeletonBinary.readAttachment:
+    // path, rotation, x, y, scaleX, scaleY, width, height, color, sequence.
+    // Rotation comes FIRST; reading x first rotated every region by its own y
+    // (Sia's face by 171.8 degrees, her foot stars all over) and shifted it.
     private RegionAtt ReadRegion(string name, List<string> table)
     {
         string path = ReadStringRef(table) ?? name;
-        float x = ReadFloat(), y = ReadFloat(), rot = ReadFloat();
+        float rot = ReadFloat(), x = ReadFloat(), y = ReadFloat();
         float sx = ReadFloat(), sy = ReadFloat(), w = ReadFloat(), h = ReadFloat();
         int color = ReadInt32();
-        int trailer = ReadByte();
-        if (trailer != 0)
-            throw new InvalidDataException($"region {name} trailer byte is {trailer}, want 0, at {_pos}");
+        int seq = ReadByte();
+        if (seq != 0)
+            throw new InvalidDataException($"region {name} has a sequence, not baked, at {_pos}");
         return new RegionAtt(name, path, x, y, rot, sx, sy, w, h, color);
     }
 
