@@ -119,6 +119,11 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
+        if (!SpineBake.BakeAll(ui, outDir)) // missing ClassSelect aborts, like the other steps
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         if (!ExportUiFrames(ui, outDir))
         {
             Environment.ExitCode = 1;

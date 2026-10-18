@@ -5,6 +5,10 @@ using MushTown.Exporter;
 //   dump     <path-under-Base> [depth]        print WZ node structure
 //   catdump  <Category> <path> [depth]        same, inside a category wz
 //   find     <node name>                      locate nodes by name under Base
+//   cat      <Category> <path>               print a string node's full value
+//   raw      <Category> <path> <out>         save a raw-data node's bytes
+//   spine    <skel-file> [bone]              print a .skel rig's bones, slots, and timelines
+//   spinebake [id|all]                       bake ClassSelect rigs to assets/spine/
 //   uipng    [Category] <node-path> <out.png>   save one canvas as png
 //   export   [DataDir] [OutDir]               export map + character assets
 //   questscan <npcid> [<npcid>...]       list quests starting/ending at these NPCs
@@ -23,7 +27,7 @@ switch (cmd)
         return;
 
     case "dump":
-        if (!TryDepth(2, out int dumpDepth)) return;
+        if (!TryOptionalInt(2, 3, "depth", out int dumpDepth)) return;
         Environment.ExitCode = Dump.Run(WzRoot.LoadBase(ExporterPaths.DataDir), Arg(1, ""), dumpDepth) ? 0 : 1;
         return;
 
@@ -34,7 +38,7 @@ switch (cmd)
             Environment.ExitCode = 1;
             return;
         }
-        if (!TryDepth(3, out int catDepth)) return;
+        if (!TryOptionalInt(3, 3, "depth", out int catDepth)) return;
         Environment.ExitCode = Dump.Run(WzRoot.LoadCategory(ExporterPaths.DataDir, args[1]), args[2], catDepth) ? 0 : 1;
         return;
 
@@ -46,6 +50,41 @@ switch (cmd)
             return;
         }
         Environment.ExitCode = Dump.Find(WzRoot.LoadBase(ExporterPaths.DataDir), args[1]) ? 0 : 1;
+        return;
+
+    case "cat":
+        if (args.Length < 3)
+        {
+            Console.WriteLine("usage: cat <Category> <path>");
+            Environment.ExitCode = 1;
+            return;
+        }
+        Environment.ExitCode = Dump.Cat(WzRoot.LoadCategory(ExporterPaths.DataDir, args[1]), args[2]) ? 0 : 1;
+        return;
+
+    case "raw":
+        if (args.Length < 4)
+        {
+            Console.WriteLine("usage: raw <Category> <path> <out>");
+            Environment.ExitCode = 1;
+            return;
+        }
+        Environment.ExitCode = Dump.Raw(WzRoot.LoadCategory(ExporterPaths.DataDir, args[1]), args[2], args[3]) ? 0 : 1;
+        return;
+
+    case "spine":
+        if (args.Length < 2)
+        {
+            Console.WriteLine("usage: spine <skel-file> [bone]");
+            Environment.ExitCode = 1;
+            return;
+        }
+        if (!TryOptionalInt(2, -1, "bone", out int bone)) return;
+        Environment.ExitCode = Dump.Spine(args[1], bone) ? 0 : 1;
+        return;
+
+    case "spinebake":
+        Environment.ExitCode = SpineBake.Run(args.Length > 1 ? args[1] : "all") ? 0 : 1;
         return;
 
     case "uipng":
@@ -75,20 +114,20 @@ switch (cmd)
 
     default:
         Console.WriteLine($"unknown command: {cmd}");
-        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir] | questscan <npcid> [<npcid>...]");
+        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | cat <Category> <path> | raw <Category> <path> <out> | spine <skel-file> [bone] | spinebake [id|all] | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir] | questscan <npcid> [<npcid>...]");
         Environment.ExitCode = 1;
         return;
 }
 
 string Arg(int i, string fallback) => args.Length > i ? args[i] : fallback;
 
-// An unparsable depth is a bad argument, not something to silently ignore.
-bool TryDepth(int i, out int depth)
+// An unparsable optional number is a bad argument, not something to silently ignore.
+bool TryOptionalInt(int i, int fallback, string label, out int v)
 {
-    depth = 3;
+    v = fallback;
     if (args.Length <= i) return true;
-    if (int.TryParse(args[i], out depth)) return true;
-    Console.WriteLine($"bad depth: {args[i]}");
+    if (int.TryParse(args[i], out v)) return true;
+    Console.WriteLine($"bad {label}: {args[i]}");
     Environment.ExitCode = 1;
     return false;
 }

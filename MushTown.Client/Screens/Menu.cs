@@ -346,6 +346,13 @@ public partial class MushTownGame
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
         _jobs = LoadJson<JobListData>(Path.Combine(_assetsDir, "ui", "jobs.json")).Jobs; // class roster
         if (_jobs.Count == 0) throw new InvalidDataException("jobs.json has no classes: re-export");
+        if (_shotJob != 0) // --job <id>: the shot poses that class instead of the page default
+        {
+            int at = _jobs.FindIndex(j => j.Id == _shotJob);
+            if (at < 0) throw new InvalidDataException($"--job {_shotJob} is not on the roster");
+            _jobPage = at / (JobCols * JobRows);
+            _jobPick = at;
+        }
         foreach (var job in _jobs) { LoadTexture(job.Card); LoadTexture(job.Name); LoadTexture(job.Mark); } // big art loads on pick
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
         foreach (var item in _items.Values) LoadTexture(item.Image); // icons for the scanned defs
@@ -578,7 +585,7 @@ public partial class MushTownGame
             case Screen.Saves: UpdateSaves(click, enter, gx, gy); break;
             case Screen.Server: UpdateServer(click, enter, esc, gx, gy, r); break;
             case Screen.Chars: UpdateChars(click, enter, esc, gx, gy, dtMs); break;
-            case Screen.Job: UpdateJob(click, enter, esc, gx, gy); break;
+            case Screen.Job: UpdateJob(click, enter, esc, gx, gy, dtMs); break;
             case Screen.Setup: UpdateSetup(click, enter, esc, gx, gy); break;
         }
     }

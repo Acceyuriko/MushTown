@@ -15,6 +15,8 @@ public partial class MushTownGame
     private const int JobPlayable = 110; // every other class answers "Not playable yet."
     private const int JobTextW = 305; // WZ descWH width: name, blurb, and stat rows use it
     private string? _jobArt; // class art currently in _textures (BuildJobScene keeps one)
+    private SpineClip? _spine; // baked animation for the picked class, if it has one
+    private int _spineId = -1;
 
     private JobData Picked => _jobs[_jobPick];
     private int JobPages => (_jobs.Count + JobCols * JobRows - 1) / (JobCols * JobRows);
@@ -29,12 +31,41 @@ public partial class MushTownGame
     private void BuildJobScene()
     {
         var job = Picked;
-        // One art at a time: picks and revisits load the new one and evict the old.
-        if (_jobArt != job.Art)
+        // Animated classes play their bake; the rest keep static art. Only
+        // one side is resident: picks and revisits evict whatever is old.
+        string spineJson = Path.Combine(_assetsDir, "spine", job.Id.ToString(), $"{job.Id}.json");
+        bool animated = File.Exists(spineJson);
+        if (animated && _jobArt != null)
+        {
+            if (_textures.Remove(_jobArt, out var old)) old.Dispose();
+            _jobArt = null;
+        }
+        if (!animated && _spine != null)
+        {
+            _spine.Dispose();
+            _spine = null;
+            _spineId = -1;
+        }
+        if (animated && _spineId != job.Id)
+        {
+            var (w, h) = PngSize(Path.Combine(_assetsDir, job.Art));
+            var next = SpineClip.Load(GraphicsDevice, spineJson, GameWidth, GameHeight,
+                new Rectangle(-job.ArtX, -job.ArtY, w, h));
+            _spine?.Dispose();
+            _spine = next;
+            _spineId = job.Id;
+        }
+        if (!animated && _jobArt != job.Art)
         {
             if (_jobArt != null && _textures.Remove(_jobArt, out var old)) old.Dispose();
             LoadTexture(job.Art);
             _jobArt = job.Art;
+        }
+        if (_shotPath != null && _spine != null)
+        {
+            // Frozen pose: Update never runs in shots. --frame picks it (0 = mid-motion default).
+            int n = _spine.Data.Slots[0].Frames.Count;
+            _spine.Frame = _shotFrame == 0 ? n / 3 : _shotFrame % n;
         }
         _menuScene = new Scene();
         var bg = new GameObject { NoHit = true };
@@ -42,8 +73,12 @@ public partial class MushTownGame
         bg.Add(new Picture("ui/job_bg.png"));
         _menuScene.Add(bg);
         var art = new GameObject { NoHit = true };
-        art.Add(new Rect(RectOf(job.Art, -job.ArtX, -job.ArtY))); // WZ origin: every class art places itself
-        art.Add(new Picture(job.Art, 0, 0));
+        if (_spine != null) art.Add(new SpineMesh(_spine));
+        else
+        {
+            art.Add(new Rect(RectOf(job.Art, -job.ArtX, -job.ArtY))); // WZ origin: every class art places itself
+            art.Add(new Picture(job.Art, 0, 0));
+        }
         _menuScene.Add(art);
         // The list panel: dark backing plus the WZ glass grid. The official
         // client blurs what sits behind the panel; that is a shader we skip,
@@ -183,8 +218,9 @@ public partial class MushTownGame
         _scenes.Show(_menuScene);
     }
 
-    private void UpdateJob(bool click, bool enter, bool esc, int gx, int gy)
+    private void UpdateJob(bool click, bool enter, bool esc, int gx, int gy, float dtMs)
     {
+        _spine?.Advance(dtMs);
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (esc) { JobToChars(); return; }
         GameObject? took = click ? ClickTree(_scenes.Current, gx, gy) : null;
@@ -201,5 +237,18 @@ public partial class MushTownGame
         _screen = Screen.Job;
         BuildJobScene();
         _scenes.Show(_menuScene);
+    }
+
+    // PNG width/height straight from the IHDR: the spine fit needs the art
+    // size without paying for the texture.
+    private static (int w, int h) PngSize(string path)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"missing exported png: {Path.GetFullPath(path)}", path);
+        using var stream = File.OpenRead(path);
+        var head = new byte[24];
+        stream.ReadExactly(head);
+        return (head[16] << 24 | head[17] << 16 | head[18] << 8 | head[19],
+            head[20] << 24 | head[21] << 16 | head[22] << 8 | head[23]);
     }
 }

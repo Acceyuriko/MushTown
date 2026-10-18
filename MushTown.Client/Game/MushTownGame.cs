@@ -31,6 +31,7 @@ public partial class MushTownGame : Game
     private readonly string? _joinHost;
     private readonly string? _shotScreen;
     private readonly int _shotTalk; // --talk <npc>: which NPC the talk shot opens
+    private readonly int _shotJob; // --job <id>: which class the job shot poses
     private readonly bool _shotHit;
     private readonly int _shotSkill; // --skill <id>: 0 means no skill pose
     private readonly int _shotSkillTab; // --skilltab: which job tab the skill window opens on
@@ -96,7 +97,7 @@ public partial class MushTownGame : Game
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false)
+    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
@@ -107,6 +108,7 @@ public partial class MushTownGame : Game
         _joinHost = joinHost;
         _shotScreen = shotScreen;
         _shotTalk = shotTalk;
+        _shotJob = shotJob;
         _shotHit = shotHit;
         _shotSkill = shotSkill;
         _shotSkillTab = shotSkillTab;
@@ -223,7 +225,8 @@ public partial class MushTownGame : Game
         {
             if (!_charas.ContainsKey(_shotAction))
                 throw new InvalidDataException($"unknown action: {_shotAction}");
-            if (_shotFrame >= _charas[_shotAction].Frames.Count)
+            // Job screens pose the spine clip, not the char: --frame is the clip frame there.
+            if (_shotScreen is not ("job" or "job2") && _shotFrame >= _charas[_shotAction].Frames.Count)
                 throw new InvalidDataException($"action {_shotAction} has no frame {_shotFrame}");
             _mover.Action = _shotAction;
             _frame = _shotFrame;
@@ -844,7 +847,7 @@ public partial class MushTownGame : Game
         }
     }
 
-    private static T LoadJson<T>(string path)
+    internal static T LoadJson<T>(string path)
     {
         if (!File.Exists(path))
             throw new FileNotFoundException(

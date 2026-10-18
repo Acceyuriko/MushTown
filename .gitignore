@@ -5,11 +5,12 @@ obj/
 [Oo]bj/
 
 # Local game data (exported from MapleStory, copyrighted - never commit)
-assets/
-data/
+# Rooted: source folders like MushTown.Shared/Data/ must stay committable.
+/assets/
+/data/
 
 # Logs
-logs/
+/logs/
 *.log
 
 # IDE
