@@ -78,13 +78,18 @@ public sealed class SkelReader
 
     public sealed record Slot(string Name, int Bone, string? Attachment, int Color, int Blend, int Dark);
 
+    public abstract record SkinAtt(string Name, string Path, int Color);
+
     public sealed record MeshAtt(string Name, string Path, float[] Verts, float[] Uvs, int[] Tris,
-        int[]? Seq, int Color);
+        int[]? Seq, int Color) : SkinAtt(Name, Path, Color);
+
+    public sealed record RegionAtt(string Name, string Path, float X, float Y, float Rot,
+        float Sx, float Sy, float W, float H, int Color) : SkinAtt(Name, Path, Color);
 
     public sealed record Frame1(float Time, float Value, float[]? Curve); // curve null is linear
     public sealed record Frame2(float Time, float X, float Y, float[]? CurveX, float[]? CurveY);
 
-    public sealed record FrameRgba(float Time, float R, float G, float B, float A, float[]? Curve);
+    public sealed record FrameRgba(float Time, float R, float G, float B, float A, float[]? Curve); // null linear, empty stepped, 16 bezier
     public sealed record FrameSeq(float Time, int Index, float Delay);
     public sealed record FrameDeform(float Time, int Start, float[] Verts, float[]? Curve);
 
@@ -149,11 +154,11 @@ public sealed class SkelReader
 
     // Skin section. Verified: slot count, then per slot a slot index,
     // attachment count, and per attachment a name ref (null means the slot
-    // name), flags with the type in the low 3 bits (2 is mesh), and data.
-    public Dictionary<string, Dictionary<string, Dictionary<string, MeshAtt>>> ReadSkins(
+    // name), flags (always 0), a type byte (0 region, 2 mesh), and data.
+    public Dictionary<string, Dictionary<string, Dictionary<string, SkinAtt>>> ReadSkins(
         List<Slot> slots, List<string> table)
     {
-        var skins = new Dictionary<string, Dictionary<string, Dictionary<string, MeshAtt>>>();
+        var skins = new Dictionary<string, Dictionary<string, Dictionary<string, SkinAtt>>>();
         int slotCount = ReadVarint(true);
         if (slotCount > 0) skins["default"] = ReadSkinAttachments(slots, table, slotCount);
         int n = ReadVarint(true);
@@ -168,23 +173,28 @@ public sealed class SkelReader
         return skins;
     }
 
-    private Dictionary<string, Dictionary<string, MeshAtt>> ReadSkinAttachments(
+    private Dictionary<string, Dictionary<string, SkinAtt>> ReadSkinAttachments(
         List<Slot> slots, List<string> table, int slotCount)
     {
-        var sk = new Dictionary<string, Dictionary<string, MeshAtt>>();
+        var sk = new Dictionary<string, Dictionary<string, SkinAtt>>();
         for (int i = 0; i < slotCount; i++)
         {
             int slotIndex = ReadVarint(true);
             string slotName = slots[slotIndex].Name;
-            var atts = new Dictionary<string, MeshAtt>();
+            var atts = new Dictionary<string, SkinAtt>();
             int m = ReadVarint(true);
             for (int j = 0; j < m; j++)
             {
                 string name = ReadStringRef(table) ?? slotName;
                 int flags = ReadByte(), type = ReadByte();
-                if (flags != 0 || type != 2)
-                    throw new InvalidDataException($"attachment {name} has flags {flags} type {type}, want 0/2, at {_pos}");
-                atts[name] = ReadMesh(name, table);
+                if (flags != 0)
+                    throw new InvalidDataException($"attachment {name} has flags {flags}, want 0, at {_pos}");
+                atts[name] = type switch
+                {
+                    2 => ReadMesh(name, table),
+                    0 => ReadRegion(name, table),
+                    _ => throw new InvalidDataException($"attachment {name} has type {type}, want 0/2, at {_pos}"),
+                };
             }
             sk[slotName] = atts;
         }
@@ -228,19 +238,32 @@ public sealed class SkelReader
             data = list.ToArray();
         }
         // Trailer: hull (half the runtime value), an optional 4-byte
-        // sequence exactly when path differs from name, a zero byte, edge
+        // sequence exactly when path differs from name, a trailer byte
+        // (0 plain, 1 sequence; both carry the same fields after it), edge
         // count plus BE int16 edges, width, height.
         ReadVarint(true); // hull, unused: the tris already bound the mesh
         int[]? seq = null;
         if (path != name)
             seq = new int[] { ReadByte(), ReadByte(), ReadByte(), ReadByte() }; // start, count, setup, pad digits
-        int zero = ReadByte();
-        if (zero != 0)
-            throw new InvalidDataException($"attachment {name} trailer byte is {zero}, want 0, at {_pos}");
+        int trailer = ReadByte(); // 1 marks a sequence mesh; it carries no extra bytes here
+        if (trailer is not (0 or 1))
+            throw new InvalidDataException($"attachment {name} trailer byte is {trailer}, want 0/1, at {_pos}");
         int edges = ReadVarint(true);
         _pos += edges * 2;
         ReadFloat(); ReadFloat(); // width, height; the atlas already has them
         return new MeshAtt(name, path, data, uvs, tris, seq, color);
+    }
+
+    private RegionAtt ReadRegion(string name, List<string> table)
+    {
+        string path = ReadStringRef(table) ?? name;
+        float x = ReadFloat(), y = ReadFloat(), rot = ReadFloat();
+        float sx = ReadFloat(), sy = ReadFloat(), w = ReadFloat(), h = ReadFloat();
+        int color = ReadInt32();
+        int trailer = ReadByte();
+        if (trailer != 0)
+            throw new InvalidDataException($"region {name} trailer byte is {trailer}, want 0, at {_pos}");
+        return new RegionAtt(name, path, x, y, rot, sx, sy, w, h, color);
     }
 
     // Events section. Hero has none; anything else fails loud.
@@ -420,7 +443,17 @@ public sealed class SkelReader
             if (f < frames - 1)
             {
                 float[] next = Frame();
-                list.Add(Mk(cur, ReadCurve()));
+                int curve = ReadByte();
+                float[]? c = null;
+                if (curve == 1) c = Array.Empty<float>(); // stepped
+                else if (curve == 2)
+                {
+                    c = new float[16]; // one 4-float bezier per channel, like Timeline2
+                    for (int i = 0; i < 16; i++) c[i] = ReadFloat();
+                }
+                else if (curve != 0)
+                    throw new InvalidDataException($"rgba curve {curve} at {_pos}");
+                list.Add(Mk(cur, c));
                 cur = next;
             }
             else list.Add(Mk(cur, null));

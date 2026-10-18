@@ -17,6 +17,20 @@ public sealed class SpineClip : IDisposable
     private readonly BasicEffect _fx;
     private readonly float _scale, _ox, _oy; // baked units land in the static art rect
     private VertexPositionColorTexture[] _verts = new VertexPositionColorTexture[256]; // reused: Draw runs every frame
+    private static readonly BlendState _multiply = new() // 2: src*dst
+    {
+        ColorSourceBlend = Blend.DestinationColor,
+        ColorDestinationBlend = Blend.Zero,
+        AlphaSourceBlend = Blend.Zero,
+        AlphaDestinationBlend = Blend.One,
+    };
+    private static readonly BlendState _screen = new() // 3: src+dst-src*dst
+    {
+        ColorSourceBlend = Blend.One,
+        ColorDestinationBlend = Blend.InverseSourceColor,
+        AlphaSourceBlend = Blend.One,
+        AlphaDestinationBlend = Blend.One,
+    };
 
     private SpineClip(BasicEffect fx, float scale, float ox, float oy)
     {
@@ -82,12 +96,20 @@ public sealed class SpineClip : IDisposable
     {
         var gd = gfx.Sb.GraphicsDevice;
         gfx.Sb.End();
+        var rs = gd.RasterizerState;
+        gd.RasterizerState = RasterizerState.CullNone; // mirrored bones flip winding; Spine shows both sides
         foreach (var s in Data.Slots)
         {
             var f = s.Frames[Frame];
             if (f.V.Length == 0) continue;
             _fx.Texture = Tex[f.P];
-            gd.BlendState = s.Blend == 1 ? BlendState.Additive : BlendState.NonPremultiplied;
+            gd.BlendState = s.Blend switch
+            {
+                1 => BlendState.Additive,
+                2 => _multiply,
+                3 => _screen,
+                _ => BlendState.NonPremultiplied,
+            };
             float[] uvs = f.Uv ?? s.Uvs;
             var color = new Color(f.C[0], f.C[1], f.C[2], f.C[3]);
             int n = f.V.Length / 2;
@@ -103,6 +125,7 @@ public sealed class SpineClip : IDisposable
             }
         }
         gd.BlendState = BlendState.NonPremultiplied;
+        gd.RasterizerState = rs;
         gfx.Sb.Begin(blendState: BlendState.NonPremultiplied);
     }
 

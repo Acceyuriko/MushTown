@@ -40,8 +40,7 @@ public sealed class RigBaker
         float duration = 0;
         foreach (var tls in anim.Slots.Values)
         {
-            if (tls.Attach.Count > 0)
-                throw new InvalidDataException("attachment timelines are not baked");
+            foreach (var f in tls.Attach) duration = Math.Max(duration, f.Time);
             foreach (var f in tls.Rgba) duration = Math.Max(duration, f.Time);
             foreach (var f in tls.Seq) duration = Math.Max(duration, f.Time);
         }
@@ -66,19 +65,49 @@ public sealed class RigBaker
         for (int s = 0; s < slots.Count; s++)
         {
             var slot = slots[s];
-            if (slot.Blend is not (0 or 1))
-                throw new InvalidDataException($"slot {slot.Name} blends {slot.Blend}: want 0 or 1");
+            if (slot.Blend is not (0 or 1 or 2 or 3))
+                throw new InvalidDataException($"slot {slot.Name} blends {slot.Blend}: want 0..3");
             if (slot.Dark != -1) // -1 is white: a real dark tint is two-color, not baked
                 throw new InvalidDataException($"slot {slot.Name} has a dark tint");
-            var mesh = slot.Attachment != null && skin.TryGetValue(slot.Name, out var atts)
-                && atts.TryGetValue(slot.Attachment, out var o) ? o : null;
+            string? bakedAtt = BakedAttachment(slot, anim, s);
+            SkelReader.SkinAtt? att = bakedAtt != null && skin.TryGetValue(slot.Name, out var atts)
+                && atts.TryGetValue(bakedAtt, out var o) ? o : null;
+            if (att is SkelReader.RegionAtt reg)
+            {
+                if (anim.Slots.TryGetValue(s, out var rtls) && rtls.Seq.Count > 0)
+                    throw new InvalidDataException($"region {reg.Name} has sequence timelines");
+                if (anim.Deforms.Any(d => d.Slot == s))
+                    throw new InvalidDataException($"region {reg.Name} has deform timelines");
+                var setRegion = RegionFor(atlas, reg.Path, -1, null);
+                if (setRegion.Ox != 0 || setRegion.Oy != 0 || setRegion.OrigW != setRegion.W || setRegion.OrigH != setRegion.H)
+                    throw new InvalidDataException($"region {reg.Name} is trimmed, not baked");
+                var regFrames = new List<FrameData>(frames);
+                for (int f = 0; f < frames; f++)
+                {
+                    float t = duration * f / frames;
+                    var fd = BakeRegionFrame(bones, slots, anim, s, reg, setRegion, t);
+                    if (AttachHidden(anim, s, slot.Attachment, bakedAtt, t))
+                        fd = new FrameData(Array.Empty<float>(), fd.Color, fd.Page, fd.Uvs);
+                    regFrames.Add(fd);
+                }
+                baked.Slots.Add(new SlotData(slot.Blend, new int[] { 0, 1, 2, 2, 1, 3 },
+                    PageUvs(new float[] { 0, 0, 1, 0, 0, 1, 1, 1 }, atlas, setRegion), regFrames));
+                continue;
+            }
+            var mesh = att as SkelReader.MeshAtt;
             var seq = mesh?.Seq;
             Atlas.Region? setupRegion = mesh == null ? null : RegionFor(atlas, mesh.Path, -1, seq);
             int pairs = mesh == null ? 0 : PairCount(mesh);
             var outFrames = new List<FrameData>(frames);
             for (int f = 0; f < frames; f++)
-                outFrames.Add(BakeFrame(bones, slots, anim, s, mesh, pairs, seq, setupRegion,
-                    atlas, duration * f / frames));
+            {
+                float t = duration * f / frames;
+                var fd = BakeFrame(bones, slots, anim, s, mesh, pairs, seq, setupRegion,
+                    atlas, t);
+                if (AttachHidden(anim, s, slot.Attachment, bakedAtt, t))
+                    fd = new FrameData(Array.Empty<float>(), fd.Color, fd.Page, fd.Uvs);
+                outFrames.Add(fd);
+            }
             float[] uvs = mesh == null ? Array.Empty<float>()
                 : seq != null ? Array.Empty<float>() : PageUvs(mesh.Uvs, atlas, setupRegion!);
             baked.Slots.Add(new SlotData(slot.Blend,
@@ -88,6 +117,36 @@ public sealed class RigBaker
         if (!baked.Slots.Any(s => s.Blend == 0 && s.Frames.Any(f => f.Verts.Length > 0)))
             throw new InvalidDataException("rig has no normal-blend geometry");
         return baked;
+    }
+
+    // The baked attachment: the single shown one, if the timeline plus
+    // setup show at most one. Setup shows before the first key; nulls are
+    // hides. Two shown attachments is a swap and is not baked.
+    private static string? BakedAttachment(SkelReader.Slot slot, SkelReader.Anim anim, int s)
+    {
+        if (!anim.Slots.TryGetValue(s, out var tls) || tls.Attach.Count == 0) return slot.Attachment;
+        var keys = tls.Attach;
+        var shown = new HashSet<string?>();
+        if (keys[0].Time > 0) shown.Add(slot.Attachment);
+        foreach (var k in keys) shown.Add(k.Name);
+        shown.Remove(null);
+        if (shown.Count > 1)
+            throw new InvalidDataException($"slot {slot.Name} swaps attachments, not baked");
+        return shown.Count == 1 ? shown.First() : null;
+    }
+
+    // Attachment timelines show/hide the baked attachment. Before the first
+    // key the setup shows; after, the last key at or before t shows.
+    private static bool AttachHidden(SkelReader.Anim anim, int s, string? setup, string? baked, float t)
+    {
+        if (!anim.Slots.TryGetValue(s, out var tls) || tls.Attach.Count == 0) return false;
+        string? cur = setup;
+        foreach (var k in tls.Attach)
+        {
+            if (k.Time > t) break;
+            cur = k.Name;
+        }
+        return cur != baked;
     }
 
     private static FrameData BakeFrame(List<SkelReader.Bone> bones, List<SkelReader.Slot> slots,
@@ -111,6 +170,34 @@ public sealed class RigBaker
         }
         float[] color = ColorAt(slots[slotIndex], mesh, anim, slotIndex, t);
         return new FrameData(verts, color, page, uvs);
+    }
+
+    private static FrameData BakeRegionFrame(List<SkelReader.Bone> bones, List<SkelReader.Slot> slots,
+        SkelReader.Anim anim, int slotIndex, SkelReader.RegionAtt reg, Atlas.Region region, float t)
+    {
+        float[] m = WorldMatrices(bones, anim, t);
+        float[] verts = RegionSkin(reg, slots[slotIndex].Bone, m);
+        float[] color = ColorAt(slots[slotIndex], reg, anim, slotIndex, t);
+        return new FrameData(verts, color, region.Page, null);
+    }
+
+    // Region quad: 4 corners scaled, rotated, placed, then posed by the
+    // slot bone. Corner order matches the file-uv order in the Bake loop.
+    private static float[] RegionSkin(SkelReader.RegionAtt reg, int slotBone, float[] m)
+    {
+        double c = Math.Cos(reg.Rot * Math.PI / 180), s = Math.Sin(reg.Rot * Math.PI / 180);
+        float hw = reg.W / 2, hh = reg.H / 2;
+        var world = new float[8];
+        int b = slotBone * 6;
+        for (int v = 0; v < 4; v++)
+        {
+            float lx = (v % 2 == 0 ? -hw : hw) * reg.Sx;
+            float ly = (v < 2 ? -hh : hh) * reg.Sy;
+            float x = (float)(c * lx - s * ly) + reg.X, y = (float)(s * lx + c * ly) + reg.Y;
+            world[v * 2] = m[b] * x + m[b + 1] * y + m[b + 4];
+            world[v * 2 + 1] = m[b + 2] * x + m[b + 3] * y + m[b + 5];
+        }
+        return world;
     }
 
     // Bone world matrices, 6 floats each (a, b, c, d, tx, ty). Bones come
@@ -242,11 +329,11 @@ public sealed class RigBaker
 
     // Final vertex color: attachment tint times the slot part. The rgba
     // timeline replaces the slot setup color; without one setup shows.
-    private static float[] ColorAt(SkelReader.Slot slot, SkelReader.MeshAtt? mesh,
+    private static float[] ColorAt(SkelReader.Slot slot, SkelReader.SkinAtt? att,
         SkelReader.Anim anim, int slotIndex, float t)
     {
         const int white = unchecked((int)0xFFFFFFFF); // slot without attachment: untinted
-        float[] c = Rgba(slot.Color), m = Rgba(mesh?.Color ?? white);
+        float[] c = Rgba(slot.Color), m = Rgba(att?.Color ?? white);
         float r = c[0] * m[0], g = c[1] * m[1], b = c[2] * m[2], a = c[3] * m[3];
         if (anim.Slots.TryGetValue(slotIndex, out var tls) && tls.Rgba.Count > 0)
         {
@@ -259,14 +346,21 @@ public sealed class RigBaker
                 {
                     r = fr[i].R * m[0]; g = fr[i].G * m[1]; b = fr[i].B * m[2]; a = fr[i].A * m[3];
                 }
-                else
+                else if (fr[i].Curve == null)
                 {
-                    float pct = fr[i].Curve == null ? (t - fr[i].Time) / (fr[i + 1].Time - fr[i].Time)
-                        : BezierVal(fr[i].Time, 0, fr[i + 1].Time, 1, fr[i].Curve!, t);
+                    float pct = (t - fr[i].Time) / (fr[i + 1].Time - fr[i].Time);
                     r = (fr[i].R + (fr[i + 1].R - fr[i].R) * pct) * m[0];
                     g = (fr[i].G + (fr[i + 1].G - fr[i].G) * pct) * m[1];
                     b = (fr[i].B + (fr[i + 1].B - fr[i].B) * pct) * m[2];
                     a = (fr[i].A + (fr[i + 1].A - fr[i].A) * pct) * m[3];
+                }
+                else // one 4-float bezier per channel; insane controls are corrupt tool output
+                {
+                    float[] cv = fr[i].Curve!;
+                    r = Ease(fr[i].Time, fr[i].R, fr[i + 1].Time, fr[i + 1].R, cv, 0, t) * m[0];
+                    g = Ease(fr[i].Time, fr[i].G, fr[i + 1].Time, fr[i + 1].G, cv, 4, t) * m[1];
+                    b = Ease(fr[i].Time, fr[i].B, fr[i + 1].Time, fr[i + 1].B, cv, 8, t) * m[2];
+                    a = Ease(fr[i].Time, fr[i].A, fr[i + 1].Time, fr[i + 1].A, cv, 12, t) * m[3];
                 }
             }
         }
@@ -306,6 +400,16 @@ public sealed class RigBaker
 
     // Cubic Bezier sampled through a 10-segment linearized table, uniform
     // in s: matches the posing probe far better than the true cubic.
+    // One channel eased by its bezier slice. Controls past 1e6 are corrupt
+    // (p18200 slot142 frame2 has 2e35); linear then, the likely intent.
+    private static float Ease(float t0, float v0, float t1, float v1, float[] c, int o, float t)
+    {
+        for (int k = 0; k < 4; k++)
+            if (Math.Abs(c[o + k]) > 1e6)
+                return v0 + (v1 - v0) * (t - t0) / (t1 - t0);
+        return BezierVal(t0, v0, t1, v1, new float[] { c[o], c[o + 1], c[o + 2], c[o + 3] }, t);
+    }
+
     private static float BezierVal(float t0, float v0, float t1, float v1, float[] c, float t)
     {
         float px = t0, py = v0;

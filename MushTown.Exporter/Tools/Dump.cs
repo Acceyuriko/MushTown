@@ -101,16 +101,22 @@ public static class Dump
         foreach (var (slot, atts) in skins["default"])
             foreach (var (name, att) in atts)
             {
+                if (att is SkelReader.RegionAtt reg)
+                {
+                    Console.WriteLine($"  {slot}/{name} region path={reg.Path} x={reg.X:F1} y={reg.Y:F1} rot={reg.Rot:F1} sx={reg.Sx:F3} sy={reg.Sy:F3} w={reg.W:F0} h={reg.H:F0} color={reg.Color:X8}");
+                    continue;
+                }
+                var mesh = (SkelReader.MeshAtt)att;
                 string weight = "";
-                if (att.Verts.Length != att.Uvs.Length)
+                if (mesh.Verts.Length != mesh.Uvs.Length)
                 {
                     float min = 99, max = -99;
-                    int p = 0, vCount = att.Uvs.Length / 2;
+                    int p = 0, vCount = mesh.Uvs.Length / 2;
                     for (int v = 0; v < vCount; v++)
                     {
                         float s = 0;
-                        int n = (int)att.Verts[p++];
-                        for (int k = 0; k < n; k++) { p++; p++; p++; s += att.Verts[p++]; }
+                        int n = (int)mesh.Verts[p++];
+                        for (int k = 0; k < n; k++) { p++; p++; p++; s += mesh.Verts[p++]; }
                         min = Math.Min(min, s); max = Math.Max(max, s);
                     }
                     weight = $" wsum=[{min:F4},{max:F4}]";
@@ -119,14 +125,14 @@ public static class Dump
                     var first = new List<int>();
                     for (int v = 0; v < vCount; v++)
                     {
-                        int n = (int)att.Verts[p++];
+                        int n = (int)mesh.Verts[p++];
                         if (v < 4) first.Add(n);
                         mx = Math.Max(mx, n);
                         q += n; p += n * 4;
                     }
                     weight += $" quads={q} maxn={mx} first=[{string.Join(",", first)}]";
                 }
-                Console.WriteLine($"  {slot}/{name} path={att.Path} verts={att.Verts.Length} uvs={att.Uvs.Length} tris={att.Tris.Length} uv0={att.Uvs[0]:F4},{att.Uvs[1]:F4} uv1={att.Uvs[2]:F4},{att.Uvs[3]:F4} color={att.Color:X8}{weight}");
+                Console.WriteLine($"  {slot}/{name} path={mesh.Path} verts={mesh.Verts.Length} uvs={mesh.Uvs.Length} tris={mesh.Tris.Length} uv0={mesh.Uvs[0]:F4},{mesh.Uvs[1]:F4} uv1={mesh.Uvs[2]:F4},{mesh.Uvs[3]:F4} color={mesh.Color:X8}{weight}");
             }
         r.ReadEvents();
         Console.WriteLine($"no events, anims at {r.Position}");

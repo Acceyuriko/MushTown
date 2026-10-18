@@ -48,11 +48,21 @@ public static class SpineBake
 
     private static bool BakeOne(WzRoot ui, string id, string rootOutDir)
     {
+        if (!int.TryParse(id, out _)) { Console.WriteLine($"{id}: bad id"); return false; }
         string dir = $"Login.img/ClassSelect/back/1/{id}";
         string outDir = Path.Combine(rootOutDir, "spine", id);
-        File.Delete(Path.Combine(outDir, $"{id}.json")); // skip means static: no stale clip survives a failed bake
-        var skelNode = ui.Find($"{dir}/skeleton.skel");
-        if (skelNode?.Value is not Wz_RawData raw) { Console.WriteLine($"{id}: no skeleton"); return false; }
+        string jsonPath = Path.Combine(outDir, $"{id}.json");
+        if (File.Exists(jsonPath)) File.Delete(jsonPath); // skip means static: no stale clip survives a failed bake
+        string rig = ui.Find($"{dir}/spine")?.Value as string ?? "skeleton";
+        var skelNode = ui.Find($"{dir}/{rig}.skel");
+        if (skelNode?.Value is not Wz_RawData raw)
+        {
+            var jsonNode = ui.Find($"{dir}/{rig}.json");
+            Console.WriteLine(jsonNode?.Value is string
+                ? $"{id}: {rig}.json rigs are not baked yet"
+                : $"{id}: no skeleton");
+            return false;
+        }
         var atlasNode = ui.Find($"{dir}/atlas");
         if (atlasNode?.Value is not string atlasText) { Console.WriteLine($"{id}: no atlas"); return false; }
         var buf = new byte[raw.Length];
