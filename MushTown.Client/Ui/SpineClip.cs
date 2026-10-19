@@ -52,7 +52,9 @@ public sealed class SpineClip : IDisposable
         foreach (string page in data.Pages)
         {
             using var stream = File.OpenRead(Path.Combine(dir, page));
-            tex.Add(Texture2D.FromStream(gd, stream));
+            var pageTex = Texture2D.FromStream(gd, stream);
+            if (!data.Pma) BleedTransparent(pageTex);
+            tex.Add(pageTex);
         }
         var fx = new BasicEffect(gd)
         {
@@ -64,6 +66,45 @@ public sealed class SpineClip : IDisposable
         clip.Data = data;
         clip.Tex.AddRange(tex);
         return clip;
+    }
+
+    // FromStream round-trips the image through premultiplied alpha, which turns
+    // the RGB of every fully transparent texel into black. Filtering across a
+    // straight-alpha edge then mixes that black into the visible colour and
+    // draws a dark fringe (Adele's mouth patch showed a dotted ring). Put the
+    // nearest opaque colour back: alpha 0 texels draw nothing on their own.
+    private static void BleedTransparent(Texture2D tex)
+    {
+        int w = tex.Width;
+        var src = new Color[w * tex.Height];
+        tex.GetData(src);
+        var px = (Color[])src.Clone();
+        for (int y = 0; y < tex.Height; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                if (src[y * w + x].A != 0) continue;
+                int r = 0, g = 0, b = 0, n = 0;
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int yy = y + dy;
+                    if (yy < 0 || yy >= tex.Height) continue;
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int xx = x + dx;
+                        if (xx < 0 || xx >= w) continue;
+                        Color c = src[yy * w + xx];
+                        if (c.A == 0) continue;
+                        r += c.R;
+                        g += c.G;
+                        b += c.B;
+                        n++;
+                    }
+                }
+                if (n > 0) px[y * w + x] = new Color(r / n, g / n, b / n, 0);
+            }
+        }
+        tex.SetData(px);
     }
 
     public void Advance(float dtMs)
