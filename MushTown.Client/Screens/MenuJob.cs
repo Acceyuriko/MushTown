@@ -211,6 +211,9 @@ public partial class MushTownGame
 
     private void JobToChars()
     {
+        // Back from "new": _slot still points at the empty target slot, and the
+        // scene only builds select/delete over a hero. Pick a filled one first.
+        SelectFirstHero();
         _screen = Screen.Chars;
         BuildCharsScene();
         _scenes.Show(_menuScene);
