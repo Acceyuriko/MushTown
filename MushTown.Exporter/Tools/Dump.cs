@@ -66,92 +66,36 @@ public static class Dump
         return true;
     }
 
-    // Reads a .skel file off disk and prints its header, string table,
-    // bones, slots, skins, and full anim timelines. Fails loud on any
-    // divergence so the 4.1 layout gets pinned.
+    // Reads a .skel file off disk and prints what the shared reader makes of
+    // it: bones, slots, skins and every anim timeline. The bake reads rigs the
+    // same way, so this is exactly what gets baked.
     public static bool Spine(string file, int boneDetail = -1)
     {
-        var r = new SkelReader(File.ReadAllBytes(file));
-        Console.WriteLine($"hash {r.ReadInt32():X8}{r.ReadInt32():X8}");
-        Console.WriteLine($"version {r.ReadString()}");
-        Console.WriteLine($"frame x={r.ReadFloat()} y={r.ReadFloat()} w={r.ReadFloat()} h={r.ReadFloat()}");
-        bool nonessential = r.ReadByte() != 0;
-        Console.WriteLine($"nonessential {nonessential} fps {r.ReadFloat()} images {r.ReadString()} audio {r.ReadString()}");
-        int sn = r.ReadVarint(true);
-        var table = new List<string>(sn);
-        for (int i = 0; i < sn; i++) table.Add(r.ReadString() ?? "");
-        Console.WriteLine($"strings {sn}: {string.Join(" ", table)}");
-        var bones = r.ReadBones();
-        Console.WriteLine($"bones {bones.Count}, next offset {r.Position}");
-        var slots = r.ReadSlots(table);
-        Console.WriteLine($"slots {slots.Count}, next offset {r.Position}");
-        for (int i = 0; i < slots.Count; i++)
+        var rig = SkelReader.Read(File.ReadAllBytes(file));
+        Console.WriteLine($"fps {rig.Fps}, bones {rig.Bones.Count}, slots {rig.Slots.Count}, anims {rig.Anims.Count}");
+        for (int i = 0; i < rig.Bones.Count; i++)
         {
-            var s = slots[i];
-            Console.WriteLine($"  slot{i} {s.Name} bone={s.Bone} att={s.Attachment} color={s.Color:X8} dark={s.Dark:X8} blend={s.Blend}");
+            var b = rig.Bones[i];
+            Console.WriteLine($"  bone{i} {b.Name} parent={b.Parent} x={b.X:F1} y={b.Y:F1} rot={b.Rot:F1} sx={b.Sx:F3} sy={b.Sy:F3} shx={b.Shx} shy={b.Shy} len={b.Len:F1}");
         }
-        for (int i = 0; i < bones.Count; i++)
-            if (bones[i].Shx != 0 || bones[i].Shy != 0)
-                Console.WriteLine($"  shear-setup b{i}: {bones[i].Shx},{bones[i].Shy}");
-        r.ReadConstraints();
-        Console.WriteLine($"no constraints, skins at {r.Position}");
-        var skins = r.ReadSkins(slots, table);
-        int total = skins.Values.Sum(s => s.Values.Sum(a => a.Count));
-        Console.WriteLine($"skins {skins.Count}, attachments {total}, next offset {r.Position}");
-        foreach (var (slot, atts) in skins["default"])
-            foreach (var (name, att) in atts)
-            {
-                if (att is SkelReader.RegionAtt reg)
-                {
-                    Console.WriteLine($"  {slot}/{name} region path={reg.Path} x={reg.X:F1} y={reg.Y:F1} rot={reg.Rot:F1} sx={reg.Sx:F3} sy={reg.Sy:F3} w={reg.W:F0} h={reg.H:F0} color={reg.Color:X8}");
-                    continue;
-                }
-                var mesh = (SkelReader.MeshAtt)att;
-                string weight = "";
-                if (mesh.Verts.Length != mesh.Uvs.Length)
-                {
-                    float min = 99, max = -99;
-                    int p = 0, vCount = mesh.Uvs.Length / 2;
-                    for (int v = 0; v < vCount; v++)
-                    {
-                        float s = 0;
-                        int n = (int)mesh.Verts[p++];
-                        for (int k = 0; k < n; k++) { p++; p++; p++; s += mesh.Verts[p++]; }
-                        min = Math.Min(min, s); max = Math.Max(max, s);
-                    }
-                    weight = $" wsum=[{min:F4},{max:F4}]";
-                    int q = 0, mx = 0;
-                    p = 0;
-                    var first = new List<int>();
-                    for (int v = 0; v < vCount; v++)
-                    {
-                        int n = (int)mesh.Verts[p++];
-                        if (v < 4) first.Add(n);
-                        mx = Math.Max(mx, n);
-                        q += n; p += n * 4;
-                    }
-                    weight += $" quads={q} maxn={mx} first=[{string.Join(",", first)}]";
-                }
-                Console.WriteLine($"  {slot}/{name} path={mesh.Path} verts={mesh.Verts.Length} uvs={mesh.Uvs.Length} tris={mesh.Tris.Length} uv0={mesh.Uvs[0]:F4},{mesh.Uvs[1]:F4} uv1={mesh.Uvs[2]:F4},{mesh.Uvs[3]:F4} color={mesh.Color:X8}{weight}");
-            }
-        r.ReadEvents();
-        Console.WriteLine($"no events, anims at {r.Position}");
-        var anims = r.ReadAnims(table);
-        foreach (var a in anims)
+        for (int i = 0; i < rig.Slots.Count; i++)
+        {
+            var s = rig.Slots[i];
+            Console.WriteLine($"  slot{i} {s.Name} bone={rig.Bones[s.Bone].Name} att={s.Attachment} color={s.Color:X8} dark={s.Dark:X8} blend={s.Blend}");
+        }
+        foreach (var (skin, bySlot) in rig.Skins)
+        {
+            Console.WriteLine($"skin {skin}: {bySlot.Count} slots, {bySlot.Values.Sum(a => a.Count)} attachments");
+            foreach (var (slot, atts) in bySlot)
+                foreach (var (name, att) in atts)
+                    Console.WriteLine($"  {slot}/{name} {DescribeAtt(att)}");
+        }
+        foreach (var a in rig.Anims)
         {
             int tls = a.Slots.Values.Sum(s => (s.Attach.Count > 0 ? 1 : 0) + (s.Rgba.Count > 0 ? 1 : 0) + (s.Seq.Count > 0 ? 1 : 0))
                 + a.Bones.Values.Sum(b => b.One.Count + b.Two.Count)
                 + a.Deforms.Count + a.DrawOrderCount + a.EventCount;
-            int rot = a.Bones.Values.Sum(b => b.One.ContainsKey(0) ? 1 : 0);
-            int tra = a.Bones.Values.Sum(b => b.Two.ContainsKey(1) ? 1 : 0);
-            int scl = a.Bones.Values.Sum(b => b.Two.ContainsKey(4) ? 1 : 0);
-            int shr = a.Bones.Values.Sum(b => b.Two.ContainsKey(7) ? 1 : 0);
-            int rgba = a.Slots.Values.Sum(s => s.Rgba.Count > 0 ? 1 : 0);
-            int seq = a.Slots.Values.Sum(s => s.Seq.Count > 0 ? 1 : 0);
-            int rbez = a.Slots.Values.Sum(s => s.Rgba.Count(f => f.Curve != null && f.Curve.Length > 0));
-            int dbez = a.Deforms.Sum(d => d.Frames.Count(f => f.Curve != null && f.Curve.Length > 0));
-            Console.WriteLine($"anim {a.Name}: {tls} timelines, slots {a.Slots.Count}, bones {a.Bones.Count}, deform {a.Deforms.Count}, draw {a.DrawOrderCount}, events {a.EventCount}");
-            Console.WriteLine($"  rotate {rot}, translate {tra}, scale {scl}, shear {shr}, rgba {rgba}, seq {seq}, rgbaBez {rbez}, deformBez {dbez}");
+            Console.WriteLine($"anim {a.Name}: {tls} timelines, slots {a.Slots.Count}, bones {a.Bones.Count}, deform {a.Deforms.Count}, draw {a.DrawOrderCount}, events {a.EventCount}, constraint end {a.ConstraintEnd}");
             foreach (var (slot, st) in a.Slots)
             {
                 foreach (var f in st.Seq)
@@ -178,10 +122,46 @@ public static class Dump
                 }
             }
         }
-        Console.WriteLine($"end offset {r.Position}");
         return true;
     }
 
+    private static string DescribeAtt(SkelReader.SkinAtt att)
+    {
+        if (att is SkelReader.RegionAtt reg)
+            return $"region path={reg.Path} x={reg.X:F1} y={reg.Y:F1} rot={reg.Rot:F1} sx={reg.Sx:F3} sy={reg.Sy:F3} w={reg.W:F0} h={reg.H:F0} color={reg.Color:X8} seq={FmtSeq(reg.Seq)}";
+        if (att is SkelReader.NoDrawAtt)
+            return "no-draw (bounding box, path, point or clipping)";
+        var mesh = (SkelReader.MeshAtt)att;
+        string weight = "";
+        if (mesh.Verts.Length != mesh.Uvs.Length)
+        {
+            float min = 99, max = -99;
+            int p = 0, vCount = mesh.Uvs.Length / 2;
+            for (int v = 0; v < vCount; v++)
+            {
+                float s = 0;
+                int n = (int)mesh.Verts[p++];
+                for (int k = 0; k < n; k++) { p++; p++; p++; s += mesh.Verts[p++]; }
+                min = Math.Min(min, s); max = Math.Max(max, s);
+            }
+            weight = $" wsum=[{min:F4},{max:F4}]";
+            int q = 0, mx = 0;
+            p = 0;
+            var first = new List<int>();
+            for (int v = 0; v < vCount; v++)
+            {
+                int n = (int)mesh.Verts[p++];
+                if (v < 4) first.Add(n);
+                mx = Math.Max(mx, n);
+                q += n; p += n * 4;
+            }
+            weight += $" quads={q} maxn={mx} first=[{string.Join(",", first)}]";
+        }
+        return $"mesh path={mesh.Path} verts={mesh.Verts.Length} uvs={mesh.Uvs.Length} tris={mesh.Tris.Length} uv0={mesh.Uvs[0]:F4},{mesh.Uvs[1]:F4} uv1={mesh.Uvs[2]:F4},{mesh.Uvs[3]:F4} color={mesh.Color:X8} seq={FmtSeq(mesh.Seq)}{weight}";
+    }
+
+    private static string FmtSeq(SkelReader.SeqAtt? seq) =>
+        seq == null ? "-" : $"{seq.Count}@{seq.Start}+{seq.Setup}/{seq.Digits}";
     private static string FmtCurve(float[]? c) =>
         c == null ? "lin" : c.Length == 0 ? "step" : string.Join(",", c.Select(v => v.ToString("F4")));
 

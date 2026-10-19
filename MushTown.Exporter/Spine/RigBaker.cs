@@ -15,30 +15,20 @@ public sealed class RigBaker
     public sealed record BakedAnim(float Fps, List<string> Pages, List<SlotData> Slots,
         float Ox, float Oy, bool Pma);
 
-    public static BakedAnim Bake(byte[] skel, Atlas atlas, float ox, float oy, float scale)
+    public static BakedAnim Bake(SkelReader.Rig rig, Atlas atlas, float ox, float oy, float scale)
     {
-        var r = new SkelReader(skel);
-        float fps = r.ReadHeader();
-        var table = r.ReadStrings();
-        var bones = r.ReadBones();
-        var slots = r.ReadSlots(table);
-        if (!float.IsFinite(fps) || fps <= 0)
-            throw new InvalidDataException($"fps {fps} cannot bake");
-        if (slots.Count == 0)
-            throw new InvalidDataException("rig has no slots");
-        r.ReadConstraints();
-        var skins = r.ReadSkins(slots, table);
-        r.ReadEvents();
-        var anims = r.ReadAnims(table);
+        float fps = rig.Fps;
+        var bones = rig.Bones;
+        var slots = rig.Slots;
+        var skins = rig.Skins;
+        var anims = rig.Anims;
         if (anims.Count != 1)
             throw new InvalidDataException($"want 1 animation, got {anims.Count}");
-        if (r.Position != r.Length)
-            throw new InvalidDataException($"bake stopped at {r.Position}, file is {r.Length}");
         var anim = anims[0];
-        if (anim.DrawOrderCount > 0)
-            throw new InvalidDataException("draw order timelines are not baked");
-
-        float duration = 0;
+        // Draw order timelines only reorder layers (class 220). The bake
+        // draws slots in setup order, which is what the splash shows except
+        // while the timeline runs.
+        float duration = anim.ConstraintEnd;
         foreach (var tls in anim.Slots.Values)
         {
             foreach (var f in tls.Attach) duration = Math.Max(duration, f.Time);
@@ -47,9 +37,10 @@ public sealed class RigBaker
         }
         foreach (var tls in anim.Bones.Values)
         {
-            // Bone timeline ids: 0 rotate, 1 translate, 4 scale, 7 shear.
+            // Bone timeline ids: 0/2/3 rotate, translate x/y; 5/6 scale x/y;
+            // 8/9 shear x/y; 1/4/7 the two-component versions.
             foreach (int type in tls.One.Keys)
-                if (type != 0)
+                if (type is not (0 or 2 or 3 or 5 or 6 or 8 or 9))
                     throw new InvalidDataException($"single-component timeline {type} is not baked");
             foreach (int type in tls.Two.Keys)
                 if (type is not (1 or 4 or 7))
@@ -71,52 +62,40 @@ public sealed class RigBaker
                 throw new InvalidDataException($"slot {slot.Name} blends {slot.Blend}: want 0..3");
             if (slot.Dark != -1) // -1 is white: a real dark tint is two-color, not baked
                 throw new InvalidDataException($"slot {slot.Name} has a dark tint");
-            string? bakedAtt = BakedAttachment(slot, anim, s);
-            SkelReader.SkinAtt? att = bakedAtt != null && skin.TryGetValue(slot.Name, out var atts)
-                && atts.TryGetValue(bakedAtt, out var o) ? o : null;
-            if (att is SkelReader.RegionAtt reg)
+            var shown = ShownAttachments(slot, anim, s);
+            var atts = new List<SkelReader.SkinAtt?>(shown.Count);
+            foreach (string name in shown)
+                atts.Add(skin.TryGetValue(slot.Name, out var map) && map.TryGetValue(name, out var a) ? a : null);
+            if (atts.Count == 0 || atts.All(a => a is SkelReader.NoDrawAtt)) continue;
+            if (atts.Any(a => a is null))
+                throw new InvalidDataException($"slot {slot.Name} shows an attachment the skin lacks");
+            var drawable = atts.Where(a => a is not SkelReader.NoDrawAtt).ToList();
+            if (drawable[0] is SkelReader.RegionAtt)
             {
-                if (anim.Slots.TryGetValue(s, out var rtls) && rtls.Seq.Count > 0)
-                    throw new InvalidDataException($"region {reg.Name} has sequence timelines");
                 if (anim.Deforms.Any(d => d.Slot == s))
-                    throw new InvalidDataException($"region {reg.Name} has deform timelines");
-                var setRegion = RegionFor(atlas, reg.Path, -1, null);
-                if (setRegion.Ox != 0 || setRegion.Oy != 0 || setRegion.OrigW != setRegion.W || setRegion.OrigH != setRegion.H)
-                    throw new InvalidDataException($"region {reg.Name} is trimmed, not baked");
-                var regFrames = new List<FrameData>(frames);
+                    throw new InvalidDataException($"slot {slot.Name} has deform timelines on a region");
+            }
+            else if (drawable.Any(a => a is not SkelReader.MeshAtt))
+                throw new InvalidDataException($"slot {slot.Name} shows a non-mesh attachment");
+            // Flipping attachments need not share a shape (an eye can flip
+            // between two meshes). One baked slot per shape; every frame
+            // shows the one the timeline picks and leaves the others empty.
+            foreach (var group in ShapeGroups(atts))
+            {
+                var lead = atts[group[0]]!;
+                bool multi = group.Count > 1;
+                var outFrames = new List<FrameData>(frames);
                 for (int f = 0; f < frames; f++)
                 {
                     float t = duration * f / frames;
-                    var fd = BakeRegionFrame(bones, slots, anim, s, reg, setRegion, t);
-                    if (AttachHidden(anim, s, slot.Attachment, bakedAtt, t))
-                        fd = new FrameData(Array.Empty<float>(), fd.Color, fd.Page, fd.Uvs);
-                    regFrames.Add(fd);
+                    int cur = shown.IndexOf(AttachAt(slot, anim, s, t) ?? "");
+                    outFrames.Add(cur >= 0 && group.Contains(cur)
+                        ? BakeAtt(bones, slots, anim, s, atts[cur]!, atlas, multi, t)
+                        : new FrameData(Array.Empty<float>(), ColorAt(slot, null, anim, s, t), 0, null));
                 }
-                // Quad corners are BL, BR, TL, TR. Each uv pairs its corner
-                // with the matching texture corner; v=0 is the atlas page
-                // top, so BL samples (0,1).
-                baked.Slots.Add(new SlotData(slot.Blend, new int[] { 0, 1, 2, 2, 1, 3 },
-                    PageUvs(new float[] { 0, 1, 1, 1, 0, 0, 1, 0 }, atlas, setRegion), regFrames));
-                continue;
+                baked.Slots.Add(new SlotData(slot.Blend, ShapeTris(lead),
+                    multi ? Array.Empty<float>() : SlotUvs(lead, atlas), outFrames));
             }
-            var mesh = att as SkelReader.MeshAtt;
-            var seq = mesh?.Seq;
-            Atlas.Region? setupRegion = mesh == null ? null : RegionFor(atlas, mesh.Path, -1, seq);
-            int pairs = mesh == null ? 0 : PairCount(mesh);
-            var outFrames = new List<FrameData>(frames);
-            for (int f = 0; f < frames; f++)
-            {
-                float t = duration * f / frames;
-                var fd = BakeFrame(bones, slots, anim, s, mesh, pairs, seq, setupRegion,
-                    atlas, t);
-                if (AttachHidden(anim, s, slot.Attachment, bakedAtt, t))
-                    fd = new FrameData(Array.Empty<float>(), fd.Color, fd.Page, fd.Uvs);
-                outFrames.Add(fd);
-            }
-            float[] uvs = mesh == null ? Array.Empty<float>()
-                : seq != null ? Array.Empty<float>() : PageUvs(mesh.Uvs, atlas, setupRegion!);
-            baked.Slots.Add(new SlotData(slot.Blend,
-                mesh?.Tris ?? Array.Empty<int>(), uvs, outFrames));
         }
         // Without any normal-blend geometry there is nothing to show.
         if (!baked.Slots.Any(s => s.Blend == 0 && s.Frames.Any(f => f.Verts.Length > 0)))
@@ -128,85 +107,134 @@ public sealed class RigBaker
         return baked;
     }
 
-    // The baked attachment: the single shown one, if the timeline plus
-    // setup show at most one. Setup shows before the first key; nulls are
-    // hides. Two shown attachments is a swap and is not baked.
-    private static string? BakedAttachment(SkelReader.Slot slot, SkelReader.Anim anim, int s)
+    // Every attachment a slot ever shows, setup included, in first-shown
+    // order. More than one means the timeline flips between them (effect
+    // flipbooks); each frame then takes the one shown at that time.
+    private static List<string> ShownAttachments(SkelReader.Slot slot, SkelReader.Anim anim, int s)
     {
-        if (!anim.Slots.TryGetValue(s, out var tls) || tls.Attach.Count == 0) return slot.Attachment;
-        var keys = tls.Attach;
-        var shown = new HashSet<string?>();
-        if (keys[0].Time > 0) shown.Add(slot.Attachment);
-        foreach (var k in keys) shown.Add(k.Name);
-        shown.Remove(null);
-        if (shown.Count > 1)
-            throw new InvalidDataException($"slot {slot.Name} swaps attachments, not baked");
-        return shown.Count == 1 ? shown.First() : null;
+        var names = new List<string>();
+        if (!anim.Slots.TryGetValue(s, out var tls) || tls.Attach.Count == 0)
+        {
+            if (slot.Attachment != null) names.Add(slot.Attachment);
+            return names;
+        }
+        if (tls.Attach[0].Time > 0 && slot.Attachment != null) names.Add(slot.Attachment);
+        foreach (var k in tls.Attach)
+            if (k.Name != null && !names.Contains(k.Name)) names.Add(k.Name);
+        return names;
     }
 
-    // Attachment timelines show/hide the baked attachment. Before the first
-    // key the setup shows; after, the last key at or before t shows.
-    private static bool AttachHidden(SkelReader.Anim anim, int s, string? setup, string? baked, float t)
+    // The attachment a slot shows at time t: the setup shows before the
+    // first key, after that the last key at or before t. Null is a hide.
+    private static string? AttachAt(SkelReader.Slot slot, SkelReader.Anim anim, int s, float t)
     {
-        if (!anim.Slots.TryGetValue(s, out var tls) || tls.Attach.Count == 0) return false;
-        string? cur = setup;
+        if (!anim.Slots.TryGetValue(s, out var tls) || tls.Attach.Count == 0) return slot.Attachment;
+        string? cur = slot.Attachment;
         foreach (var k in tls.Attach)
         {
             if (k.Time > t) break;
             cur = k.Name;
         }
-        return cur != baked;
+        return cur;
     }
 
-    private static FrameData BakeFrame(List<SkelReader.Bone> bones, List<SkelReader.Slot> slots,
-        SkelReader.Anim anim, int slotIndex, SkelReader.MeshAtt? mesh, int pairs, int[]? seq,
-        Atlas.Region? setupRegion, Atlas atlas, float t)
+    // Shown attachments grouped by shape, first-shown order: all regions
+    // share the quad, meshes share a triangle list. Attachments that never
+    // draw are left out, so a frame showing one stays empty.
+    private static List<List<int>> ShapeGroups(List<SkelReader.SkinAtt?> atts)
     {
-        float[] verts = Array.Empty<float>();
-        int page = setupRegion?.Page ?? 0;
-        float[]? uvs = null;
-        if (mesh != null)
+        var keys = new List<string>();
+        var groups = new List<List<int>>();
+        for (int i = 0; i < atts.Count; i++)
         {
-            float[] m = WorldMatrices(bones, anim, t);
-            float[] deform = DeformAt(anim, slotIndex, mesh.Name, pairs * 2, t);
-            verts = Skin(mesh, slots[slotIndex].Bone, m, deform);
-            if (seq != null)
-            {
-                var region = RegionFor(atlas, mesh.Path, SeqIndexAt(anim, slotIndex, seq, t), seq);
-                page = region.Page;
-                uvs = PageUvs(mesh.Uvs, atlas, region);
-            }
+            if (atts[i] is SkelReader.NoDrawAtt) continue;
+            string key = string.Join(",", ShapeTris(atts[i]!));
+            int g = keys.IndexOf(key);
+            if (g < 0) { keys.Add(key); groups.Add(new List<int>()); g = groups.Count - 1; }
+            groups[g].Add(i);
         }
-        float[] color = ColorAt(slots[slotIndex], mesh, anim, slotIndex, t);
-        return new FrameData(verts, color, page, uvs);
+        return groups;
+    }
+
+    // Quad corners are BL, BR, TL, TR.
+    private static int[] ShapeTris(SkelReader.SkinAtt att) =>
+        att is SkelReader.RegionAtt ? new int[] { 0, 1, 2, 2, 1, 3 } : ((SkelReader.MeshAtt)att).Tris;
+
+    private static float[] SlotUvs(SkelReader.SkinAtt att, Atlas atlas)
+    {
+        if (att is SkelReader.RegionAtt r)
+        {
+            var region = RegionFor(atlas, r.Path, -1, r.Seq);
+            return PageUvs(RegionCanvasUvs(region), atlas, region);
+        }
+        var mesh = (SkelReader.MeshAtt)att;
+        return PageUvs(mesh.Uvs, atlas, RegionFor(atlas, mesh.Path, -1, mesh.Seq));
+    }
+
+    // One frame of one attachment: a quad for regions, a skinned mesh for
+    // meshes. perFrame says the slot flips between attachments, so every
+    // frame has to carry its own uvs.
+    private static FrameData BakeAtt(List<SkelReader.Bone> bones, List<SkelReader.Slot> slots,
+        SkelReader.Anim anim, int slotIndex, SkelReader.SkinAtt att, Atlas atlas, bool perFrame, float t) =>
+        att is SkelReader.RegionAtt reg
+            ? BakeRegionFrame(bones, slots, anim, slotIndex, reg, atlas, perFrame, t)
+            : BakeFrame(bones, slots, anim, slotIndex, (SkelReader.MeshAtt)att, atlas, perFrame, t);
+
+    private static FrameData BakeFrame(List<SkelReader.Bone> bones, List<SkelReader.Slot> slots,
+        SkelReader.Anim anim, int slotIndex, SkelReader.MeshAtt mesh, Atlas atlas, bool perFrame, float t)
+    {
+        float[] m = WorldMatrices(bones, anim, t);
+        float[] deform = DeformAt(anim, slotIndex, mesh.Name, PairCount(mesh) * 2, t);
+        float[] verts = Skin(mesh, slots[slotIndex].Bone, m, deform);
+        var region = RegionFor(atlas, mesh.Path, mesh.Seq == null ? -1 : SeqIndexAt(anim, slotIndex, mesh.Seq, t), mesh.Seq);
+        return new FrameData(verts, ColorAt(slots[slotIndex], mesh, anim, slotIndex, t), region.Page,
+            perFrame || mesh.Seq != null ? PageUvs(mesh.Uvs, atlas, region) : null);
     }
 
     private static FrameData BakeRegionFrame(List<SkelReader.Bone> bones, List<SkelReader.Slot> slots,
-        SkelReader.Anim anim, int slotIndex, SkelReader.RegionAtt reg, Atlas.Region region, float t)
+        SkelReader.Anim anim, int slotIndex, SkelReader.RegionAtt reg, Atlas atlas, bool perFrame, float t)
     {
         float[] m = WorldMatrices(bones, anim, t);
-        float[] verts = RegionSkin(reg, slots[slotIndex].Bone, m);
+        var region = reg.Seq == null ? RegionFor(atlas, reg.Path, -1, null)
+            : RegionFor(atlas, reg.Path, SeqIndexAt(anim, slotIndex, reg.Seq, t), reg.Seq);
+        float[] verts = RegionSkin(reg, slots[slotIndex].Bone, m, region);
         float[] color = ColorAt(slots[slotIndex], reg, anim, slotIndex, t);
-        return new FrameData(verts, color, region.Page, null);
+        return new FrameData(verts, color, region.Page,
+            perFrame || reg.Seq != null ? PageUvs(RegionCanvasUvs(region), atlas, region) : null);
     }
 
-    // Region quad: 4 corners scaled, rotated, placed, then posed by the
-    // slot bone. Corner order matches the file-uv order in the Bake loop.
-    private static float[] RegionSkin(SkelReader.RegionAtt reg, int slotBone, float[] m)
+    // Region quad: the untrimmed rect scaled to the attachment size, with
+    // the trimmed border left out, then rotated and placed, then posed by
+    // the slot bone. This is RegionAttachment.updateRegion: a region whose
+    // atlas entry is packed at 0.8 (a scale: page) draws 1.25x its packed
+    // pixels. Corner order matches the uv order: BL, BR, TL, TR.
+    private static float[] RegionSkin(SkelReader.RegionAtt reg, int slotBone, float[] m, Atlas.Region r)
     {
+        float rsx = reg.Sx * reg.W / r.OrigW, rsy = reg.Sy * reg.H / r.OrigH;
+        float left = -reg.W / 2 * reg.Sx + r.Ox * rsx;
+        float bottom = -reg.H / 2 * reg.Sy + r.Oy * rsy;
+        float right = left + r.W * rsx, top = bottom + r.H * rsy;
         double c = Math.Cos(reg.Rot * Math.PI / 180), s = Math.Sin(reg.Rot * Math.PI / 180);
-        float hw = reg.W / 2, hh = reg.H / 2;
         var world = new float[8];
         int b = slotBone * 6;
         for (int v = 0; v < 4; v++)
         {
-            float lx = (v % 2 == 0 ? -hw : hw) * reg.Sx;
-            float ly = (v < 2 ? -hh : hh) * reg.Sy;
+            float lx = v % 2 == 0 ? left : right;
+            float ly = v < 2 ? bottom : top;
             float x = (float)(c * lx - s * ly) + reg.X, y = (float)(s * lx + c * ly) + reg.Y;
             world[v * 2] = m[b] * x + m[b + 1] * y + m[b + 4];
             world[v * 2 + 1] = m[b + 2] * x + m[b + 3] * y + m[b + 5];
         }
         return world;
+    }
+
+    // The region's own corners as canvas-space uvs (y down), the space mesh
+    // uvs and PageUvs already use, so both share one rotation-aware mapping.
+    private static float[] RegionCanvasUvs(Atlas.Region r)
+    {
+        float u0 = (float)r.Ox / r.OrigW, u1 = (float)(r.Ox + r.W) / r.OrigW;
+        float v0 = (float)(r.OrigH - r.Oy - r.H) / r.OrigH, v1 = (float)(r.OrigH - r.Oy) / r.OrigH;
+        return new float[] { u0, v1, u1, v1, u0, v0, u1, v0 }; // BL, BR, TL, TR
     }
 
     // Bone world matrices, 6 floats each (a, b, c, d, tx, ty). Bones come
@@ -222,14 +250,30 @@ public sealed class RigBaker
             float x = b.X, y = b.Y, rot = b.Rot, sx = b.Sx, sy = b.Sy, shx = b.Shx, shy = b.Shy;
             if (anim.Bones.TryGetValue(i, out var tls))
             {
-                // Bone timeline ids: 0 rotate, 1 translate, 4 scale, 7 shear.
+                // Bone timeline ids, one and two-component alike: rotate 0,
+                // translate 1 / x 2 / y 3, scale 4 / x 5 / y 6, shear 7 / x 8 / y 9.
                 if (tls.Two.TryGetValue(1, out var tr) && Sample2(tr, t) is float[] p)
                 { x += p[0]; y += p[1]; }
+                else
+                {
+                    if (tls.One.TryGetValue(2, out var tx2) && Sample1(tx2, t) is float vx2) x += vx2;
+                    if (tls.One.TryGetValue(3, out var ty2) && Sample1(ty2, t) is float vy2) y += vy2;
+                }
                 if (tls.One.TryGetValue(0, out var ro) && Sample1(ro, t) is float r) rot += r;
                 if (tls.Two.TryGetValue(4, out var sc) && Sample2(sc, t) is float[] q)
                 { sx *= q[0]; sy *= q[1]; }
+                else
+                {
+                    if (tls.One.TryGetValue(5, out var sx2) && Sample1(sx2, t) is float vx5) sx *= vx5;
+                    if (tls.One.TryGetValue(6, out var sy2) && Sample1(sy2, t) is float vy6) sy *= vy6;
+                }
                 if (tls.Two.TryGetValue(7, out var sh) && Sample2(sh, t) is float[] h)
                 { shx += h[0]; shy += h[1]; }
+                else
+                {
+                    if (tls.One.TryGetValue(8, out var shx2) && Sample1(shx2, t) is float vx8) shx += vx8;
+                    if (tls.One.TryGetValue(9, out var shy2) && Sample1(shy2, t) is float vy9) shy += vy9;
+                }
             }
             double c = Math.Cos(rot * Math.PI / 180), s = Math.Sin(rot * Math.PI / 180);
             double shxC = Math.Cos(shx * Math.PI / 180), shxS = Math.Sin(shx * Math.PI / 180);
@@ -419,6 +463,10 @@ public sealed class RigBaker
         return BezierVal(t0, v0, t1, v1, new float[] { c[o], c[o + 1], c[o + 2], c[o + 3] }, t);
     }
 
+    // Curve control points arrive in absolute units (time and value), the way
+    // the 4.x binary rigs store them; the 2.1 JSON reader converts its
+    // percentage curves before handing them over. Values come out of the ten
+    // samples linearized in s.
     private static float BezierVal(float t0, float v0, float t1, float v1, float[] c, float t)
     {
         float px = t0, py = v0;
@@ -437,27 +485,28 @@ public sealed class RigBaker
         return u * u * u * p0 + 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s * p3;
     }
 
-    // Active sequence region index at time t: the last frame at or before t
-    // gives a base index, advancing one region per delay. Absolute counters
-    // wrap around the region count.
-    private static int SeqIndexAt(SkelReader.Anim anim, int slot, int[] seq, float t)
+    // Active sequence region index at time t, 0-based like the timeline's
+    // own index: the last frame at or before t picks the start, then one
+    // region per delay. Without a timeline the setup region shows.
+    private static int SeqIndexAt(SkelReader.Anim anim, int slot, SkelReader.SeqAtt seq, float t)
     {
         if (!anim.Slots.TryGetValue(slot, out var tls) || tls.Seq.Count == 0)
-            return seq[2] - seq[0]; // no timeline: the setup frame shows
+            return seq.Setup;
         var fr = tls.Seq;
-        if (t < fr[0].Time) return seq[2] - seq[0]; // before the first key: setup shows
+        if (t < fr[0].Time) return seq.Setup;
         int i = fr.Count - 1;
         while (i > 0 && fr[i].Time > t) i--;
-        int start = seq[0], count = seq[1];
+        int count = seq.Count;
         int abs = fr[i].Index + (fr[i].Delay > 0 ? (int)((t - fr[i].Time) / fr[i].Delay) : 0);
-        return ((abs - start) % count + count) % count;
+        return (abs % count + count) % count;
     }
 
-    private static Atlas.Region RegionFor(Atlas atlas, string path, int seqIndex, int[]? seq)
+    // Sequence regions are numbered 'path' + (start + index), zero padded.
+    private static Atlas.Region RegionFor(Atlas atlas, string path, int seqIndex, SkelReader.SeqAtt? seq)
     {
-        if (seqIndex < 0 && seq != null) seqIndex = seq[2] - seq[0]; // setup frame
-        string name = seq == null || seqIndex < 0 ? path
-            : path + (seqIndex + seq[0]).ToString().PadLeft(seq[3], '0');
+        if (seqIndex < 0 && seq != null) seqIndex = seq.Setup; // setup pose
+        string name = seq == null ? path
+            : path + (seqIndex + seq.Start).ToString().PadLeft(seq.Digits, '0');
         if (!atlas.Regions.TryGetValue(name, out var region))
             throw new InvalidDataException($"atlas has no region '{name}'");
         return region;

@@ -55,18 +55,26 @@ public static class SpineBake
         if (File.Exists(jsonPath)) File.Delete(jsonPath); // skip means static: no stale clip survives a failed bake
         string rig = ui.Find($"{dir}/spine")?.Value as string ?? "skeleton";
         var skelNode = ui.Find($"{dir}/{rig}.skel");
-        if (skelNode?.Value is not Wz_RawData raw)
+        var jsonNode = ui.Find($"{dir}/{rig}.json");
+        SkelReader.Rig parsed;
+        if (skelNode?.Value is Wz_RawData raw)
         {
-            var jsonNode = ui.Find($"{dir}/{rig}.json");
-            Console.WriteLine(jsonNode?.Value is string
-                ? $"{id}: {rig}.json rigs are not baked yet"
-                : $"{id}: no skeleton");
+            var buf = new byte[raw.Length];
+            raw.CopyTo(buf);
+            parsed = SkelReader.Read(buf);
+        }
+        else if (jsonNode?.Value is string jsonText)
+        {
+            parsed = JsonSkelReader.Read(jsonText);
+        }
+        else
+        {
+            Console.WriteLine($"{id}: no skeleton");
             return false;
         }
-        var atlasNode = ui.Find($"{dir}/atlas");
+        // Binary rigs name the atlas node "atlas", the JSON ones "<rig>.atlas".
+        var atlasNode = ui.Find($"{dir}/atlas") ?? ui.Find($"{dir}/{rig}.atlas");
         if (atlasNode?.Value is not string atlasText) { Console.WriteLine($"{id}: no atlas"); return false; }
-        var buf = new byte[raw.Length];
-        raw.CopyTo(buf);
         var atlas = Atlas.Parse(atlasText);
         // Page placement, straight off the class node: the rig origin lands at
         // origin. Rigs without the node are authored at the page top-left.
@@ -74,7 +82,7 @@ public static class SpineBake
         var classNode = ui.Find(dir);
         var origin = classNode?.Nodes["origin"]?.Value as Wz_Vector;
         float scale = classNode?.Nodes["scale"]?.Value is IConvertible n ? Convert.ToSingle(n) / 100f : 1;
-        var baked = RigBaker.Bake(buf, atlas, origin?.X ?? 0, origin?.Y ?? 0, scale);
+        var baked = RigBaker.Bake(parsed, atlas, origin?.X ?? 0, origin?.Y ?? 0, scale);
         Directory.CreateDirectory(outDir);
         foreach (var page in atlas.Pages)
         {

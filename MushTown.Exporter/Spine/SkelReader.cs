@@ -19,6 +19,10 @@ public sealed class SkelReader
     public int Position => _pos;
     public int Length => _data.Length;
 
+    // Header flag: fps, image paths, bone colors and mesh edges only exist
+    // when it is set. 6 of the 56 splash rigs leave it off.
+    public bool Nonessential { get; private set; }
+
     public byte ReadByte() => _data[_pos++];
 
     // 7-bit little-endian groups, high bit continues.
@@ -80,11 +84,19 @@ public sealed class SkelReader
 
     public abstract record SkinAtt(string Name, string Path, int Color);
 
+    // Sequence attachment: switches between the numbered regions
+    // 'path{start..start+count-1}', zero padded to digits, starting at setup.
+    public sealed record SeqAtt(int Count, int Start, int Digits, int Setup);
+
     public sealed record MeshAtt(string Name, string Path, float[] Verts, float[] Uvs, int[] Tris,
-        int[]? Seq, int Color) : SkinAtt(Name, Path, Color);
+        SeqAtt? Seq, int Color) : SkinAtt(Name, Path, Color);
+
+    // Bounding boxes, paths, points and clipping masks never draw. Paths do
+    // drive path constraints, which the bake does not solve.
+    public sealed record NoDrawAtt(string Name, string Path) : SkinAtt(Name, Path, -1);
 
     public sealed record RegionAtt(string Name, string Path, float X, float Y, float Rot,
-        float Sx, float Sy, float W, float H, int Color) : SkinAtt(Name, Path, Color);
+        float Sx, float Sy, float W, float H, int Color, SeqAtt? Seq) : SkinAtt(Name, Path, Color);
 
     public sealed record Frame1(float Time, float Value, float[]? Curve); // curve null is linear
     public sealed record Frame2(float Time, float X, float Y, float[]? CurveX, float[]? CurveY);
@@ -95,14 +107,48 @@ public sealed class SkelReader
 
     public sealed record DeformTls(int Slot, string Attach, List<FrameDeform> Frames);
 
+    public sealed record PathConstraint(string Name, int[] Bones, int TargetSlot, int PositionMode,
+        int SpacingMode, int RotateMode, float OffsetRotation, float Position, float Spacing,
+        float MixRotate, float MixX, float MixY);
+
     public sealed record BoneTls(Dictionary<int, List<Frame1>> One, Dictionary<int, List<Frame2>> Two);
     public sealed record SlotTls(List<(float Time, string? Name)> Attach, List<FrameRgba> Rgba,
         List<FrameSeq> Seq);
 
+    // ConstraintEnd is the last constraint timeline key: the animation lasts
+    // at least that long even when nothing else is that late.
     public sealed record Anim(string Name, Dictionary<int, SlotTls> Slots, Dictionary<int, BoneTls> Bones,
-        List<DeformTls> Deforms, int DrawOrderCount, int EventCount);
+        List<DeformTls> Deforms, int DrawOrderCount, int EventCount, float ConstraintEnd);
 
-    // File header: hash, version, frame rect, fps, path strings. Returns fps.
+    // A parsed rig, whatever it was parsed from: the binary reader and the
+    // JSON one both hand this to the baker.
+    public sealed record Rig(float Fps, List<Bone> Bones, List<Slot> Slots,
+        Dictionary<string, Dictionary<string, Dictionary<string, SkinAtt>>> Skins, List<Anim> Anims);
+
+    // Whole binary rig in one call.
+    public static Rig Read(byte[] data)
+    {
+        var r = new SkelReader(data);
+        float fps = r.ReadHeader();
+        var table = r.ReadStrings();
+        var bones = r.ReadBones();
+        var slots = r.ReadSlots(table);
+        if (!float.IsFinite(fps) || fps <= 0)
+            throw new InvalidDataException($"fps {fps} cannot bake");
+        if (slots.Count == 0)
+            throw new InvalidDataException("rig has no slots");
+        r.ReadConstraints();
+        var skins = r.ReadSkins(slots, table);
+        r.ReadEvents();
+        var anims = r.ReadAnims(table);
+        if (r.Position != r.Length)
+            throw new InvalidDataException($"bake stopped at {r.Position}, file is {r.Length}");
+        return new Rig(fps, bones, slots, skins, anims);
+    }
+
+    // File header: hash, version, frame rect, nonessential flag, then fps and
+    // the image/audio paths only if the flag is set. Returns fps; a rig
+    // without one plays at Spine's default 30.
     public float ReadHeader()
     {
         ReadInt32(); ReadInt32(); // hash
@@ -110,7 +156,8 @@ public sealed class SkelReader
         if (version == null || !version.StartsWith("4.1"))
             throw new InvalidDataException($"want spine 4.1, got {version}");
         ReadFloat(); ReadFloat(); ReadFloat(); ReadFloat(); // frame rect
-        ReadByte(); // nonessential
+        Nonessential = ReadByte() != 0;
+        if (!Nonessential) return 30;
         float fps = ReadFloat();
         ReadString(); ReadString(); // images, audio paths
         return fps;
@@ -143,13 +190,31 @@ public sealed class SkelReader
         return slots;
     }
 
-    // Constraint sections. The splash rigs use none, so any nonzero count
-    // fails loud instead of guessing three more layouts.
-    public void ReadConstraints()
+    // Constraint sections. IK and transform constraints never show up in
+    // the splash rigs and would need solving, so a nonzero count fails loud.
+    // The four path-constraint rigs (120, 320, 410, 2500) are read past: the
+    // bake draws their bones at their own pose.
+    public List<PathConstraint> ReadConstraints()
     {
-        int ik = ReadVarint(true), tc = ReadVarint(true), path = ReadVarint(true);
-        if (ik != 0 || tc != 0 || path != 0)
-            throw new InvalidDataException($"skeleton has constraints ik={ik} tc={tc} path={path} at {_pos}");
+        int ik = ReadVarint(true), tc = ReadVarint(true);
+        if (ik != 0 || tc != 0)
+            throw new InvalidDataException($"skeleton has ik={ik} transform={tc} constraints, not baked");
+        int n = ReadVarint(true);
+        var constraints = new List<PathConstraint>(n);
+        for (int i = 0; i < n; i++)
+        {
+            string name = ReadString() ?? $"path{i}";
+            ReadVarint(true); // order
+            ReadByte(); // skin required
+            int bones = ReadVarint(true);
+            var linked = new int[bones];
+            for (int k = 0; k < bones; k++) linked[k] = ReadVarint(true);
+            int slot = ReadVarint(true);
+            int positionMode = ReadVarint(true), spacingMode = ReadVarint(true), rotateMode = ReadVarint(true);
+            constraints.Add(new PathConstraint(name, linked, slot, positionMode, spacingMode, rotateMode,
+                ReadFloat(), ReadFloat(), ReadFloat(), ReadFloat(), ReadFloat(), ReadFloat()));
+        }
+        return constraints;
     }
 
     // Skin section. Verified: slot count, then per slot a slot index,
@@ -193,6 +258,7 @@ public sealed class SkelReader
                 {
                     2 => ReadMesh(name, table),
                     0 => ReadRegion(name, table),
+                    1 or 4 or 5 or 6 => ReadNoDraw(name, type),
                     _ => throw new InvalidDataException($"attachment {name} has type {type}, want 0/2, at {_pos}"),
                 };
             }
@@ -237,20 +303,18 @@ public sealed class SkelReader
             }
             data = list.ToArray();
         }
-        // Trailer: hull (half the runtime value), an optional 4-byte
-        // sequence exactly when path differs from name, a trailer byte
-        // (0 plain, 1 sequence; both carry the same fields after it), edge
-        // count plus BE int16 edges, width, height.
+        // Trailer: hull (half the runtime value), an optional sequence
+        // (flag byte plus count/start/digits/setup index; region names then
+        // carry the frame number), then edge count plus BE int16 edges and
+        // width/height, which exist only when the header flag is set.
         ReadVarint(true); // hull, unused: the tris already bound the mesh
-        int[]? seq = null;
-        if (path != name)
-            seq = new int[] { ReadByte(), ReadByte(), ReadByte(), ReadByte() }; // start, count, setup, pad digits
-        int trailer = ReadByte(); // 1 marks a sequence mesh; it carries no extra bytes here
-        if (trailer is not (0 or 1))
-            throw new InvalidDataException($"attachment {name} trailer byte is {trailer}, want 0/1, at {_pos}");
-        int edges = ReadVarint(true);
-        _pos += edges * 2;
-        ReadFloat(); ReadFloat(); // width, height; the atlas already has them
+        SeqAtt? seq = ReadSequence();
+        if (Nonessential)
+        {
+            int edges = ReadVarint(true);
+            _pos += edges * 2;
+            ReadFloat(); ReadFloat(); // width, height; the atlas already has them
+        }
         return new MeshAtt(name, path, data, uvs, tris, seq, color);
     }
 
@@ -264,10 +328,61 @@ public sealed class SkelReader
         float rot = ReadFloat(), x = ReadFloat(), y = ReadFloat();
         float sx = ReadFloat(), sy = ReadFloat(), w = ReadFloat(), h = ReadFloat();
         int color = ReadInt32();
-        int seq = ReadByte();
-        if (seq != 0)
-            throw new InvalidDataException($"region {name} has a sequence, not baked, at {_pos}");
-        return new RegionAtt(name, path, x, y, rot, sx, sy, w, h, color);
+        return new RegionAtt(name, path, x, y, rot, sx, sy, w, h, color, ReadSequence());
+    }
+
+    // Sequence: flag byte, then region count, first index, digit count and
+    // setup index. A sequence attachment switches between the numbered
+    // regions 'path00', 'path01', ... over time.
+    private SeqAtt? ReadSequence()
+    {
+        if (ReadByte() == 0) return null;
+        int count = ReadVarint(true), start = ReadVarint(true);
+        return new SeqAtt(count, start, ReadVarint(true), ReadVarint(true));
+    }
+
+    // The four attachment types that never draw, read past so the skin
+    // section stays aligned: bounding box 1, path 4, point 5, clipping 6.
+    // Only regions and meshes carry a path ref, so these start straight in.
+    private NoDrawAtt ReadNoDraw(string name, int type)
+    {
+        switch (type)
+        {
+            case 1:
+                ReadVertices(ReadVarint(true));
+                break;
+            case 4:
+                ReadByte(); ReadByte(); // closed, constant speed
+                int verts = ReadVarint(true);
+                ReadVertices(verts);
+                _pos += verts / 3 * 4; // one length float per three components
+                break;
+            case 5:
+                ReadFloat(); ReadFloat(); ReadFloat(); // rotation, x, y
+                break;
+            default:
+                ReadVarint(true); // clipping end slot
+                ReadVertices(ReadVarint(true));
+                break;
+        }
+        if (Nonessential) ReadInt32(); // color
+        return new NoDrawAtt(name, name);
+    }
+
+    // Vertices as the mesh reader builds them: a leading flag, then raw xy
+    // floats or per-vertex counts of bone/x/y/weight quads.
+    private void ReadVertices(int verts)
+    {
+        if (ReadByte() == 0)
+        {
+            _pos += verts * 2 * 4;
+            return;
+        }
+        for (int v = 0; v < verts; v++)
+            for (int k = 0, n = ReadVarint(true); k < n; k++)
+            {
+                ReadVarint(true); ReadFloat(); ReadFloat(); ReadFloat();
+            }
     }
 
     // Events section. Hero has none; anything else fails loud.
@@ -328,11 +443,29 @@ public sealed class SkelReader
                 }
                 bones[bone] = tls;
             }
-            for (int c = 0; c < 3; c++) // ik, transform, path timelines
+            // Constraint timelines: ik, transform, then path. Only the four
+            // path-constraint rigs carry any, and since the bake leaves the
+            // constrained bones at their own pose, they are only read for
+            // the length of the animation.
+            float constraintEnd = 0;
+            for (int c = 0; c < 2; c++)
+                if (ReadVarint(true) != 0)
+                    throw new InvalidDataException($"animation has ik or transform timelines at {_pos}");
+            for (int i = 0, pn = ReadVarint(true); i < pn; i++)
             {
-                int cn = ReadVarint(true);
-                if (cn != 0)
-                    throw new InvalidDataException($"animation has {cn} constraint timelines at {_pos}");
+                ReadVarint(true); // path constraint index
+                for (int j = 0, tn = ReadVarint(true); j < tn; j++)
+                {
+                    int type = ReadByte(), frames = ReadVarint(true);
+                    ReadVarint(true); // bezier count
+                    if (type == 2) constraintEnd = Math.Max(constraintEnd, ReadPathMix(frames));
+                    else if (type is 0 or 1)
+                    {
+                        var keys = ReadTimeline1(frames);
+                        constraintEnd = Math.Max(constraintEnd, keys[^1].Time);
+                    }
+                    else throw new InvalidDataException($"path timeline type {type} at {_pos}");
+                }
             }
             var deforms = new List<DeformTls>();
             for (int i = 0, dn = ReadVarint(true); i < dn; i++)
@@ -350,9 +483,14 @@ public sealed class SkelReader
                         {
                             if (!slots.TryGetValue(slot, out var tls))
                                 slots[slot] = tls = new SlotTls(new(), new(), new());
-                            // 4.1 sequence frame: time, int32 index, delay.
+                            // 4.1 sequence frame: time, one BE int32 packing
+                            // the mode (low nibble) and the sequence index.
                             for (int f = 0; f < frames; f++)
-                                tls.Seq.Add(new FrameSeq(ReadFloat(), ReadInt32(), ReadFloat()));
+                            {
+                                float time = ReadFloat();
+                                int modeAndIndex = ReadInt32();
+                                tls.Seq.Add(new FrameSeq(time, modeAndIndex >> 4, ReadFloat()));
+                            }
                         }
                         else throw new InvalidDataException($"attachment timeline type {type} at {_pos}");
                     }
@@ -369,9 +507,27 @@ public sealed class SkelReader
             {
                 ReadFloat(); ReadVarint(true); ReadVarint(false); ReadFloat(); ReadString();
             }
-            anims.Add(new Anim(name, slots, bones, deforms, draw, ev));
+            anims.Add(new Anim(name, slots, bones, deforms, draw, ev, constraintEnd));
         }
         return anims;
+    }
+
+    // Path mix frames: time plus three mixes per frame. Returns the last
+    // frame's time.
+    private float ReadPathMix(int frames)
+    {
+        float time = ReadFloat();
+        ReadFloat(); ReadFloat(); ReadFloat();
+        for (int f = 0; f < frames - 1; f++)
+        {
+            time = ReadFloat();
+            ReadFloat(); ReadFloat(); ReadFloat();
+            int curve = ReadByte();
+            if (curve == 2) { for (int i = 0; i < 12; i++) ReadFloat(); }
+            else if (curve is not (0 or 1))
+                throw new InvalidDataException($"path mix curve {curve} at {_pos}");
+        }
+        return time;
     }
 
     private float[]? ReadCurve()
@@ -508,7 +664,7 @@ public sealed class SkelReader
             float len = ReadFloat();
             ReadVarint(true); // inherit mode, baked as-is (always normal here)
             ReadByte(); // skin required, always false here
-            ReadInt32(); // gray color
+            if (Nonessential) ReadInt32(); // gray color
             bones.Add(new Bone(name, parent, rot, x, y, sx, sy, shx, shy, len));
         }
         return bones;
