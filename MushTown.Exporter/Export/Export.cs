@@ -13,6 +13,23 @@ public static partial class Export
     internal static bool BakeCharacter(WzRoot baseRoot, WzRoot chara, string outDir, string action, string hairImg) =>
         ExportCharacter(baseRoot, chara, outDir, action, hair: hairImg);
 
+    // One panel's art export: the workers use it to get their art fast,
+    // without the full export.
+    public static bool RunPanel(string name, string outDir)
+    {
+        var ui = WzRoot.LoadCategory(ExporterPaths.DataDir, "UI");
+        return name switch
+        {
+            "inventory" => ExportInventoryUi(ui, outDir),
+            "stat" => ExportStatUi(ui, outDir),
+            "skill" => ExportSkillUi(ui, outDir),
+            "quest" => ExportQuestUi(ui, outDir),
+            "map" => ExportMapUi(ui, WzRoot.LoadCategory(ExporterPaths.DataDir, "Map"), WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir),
+            "keys" => ExportKeyUi(ui, outDir),
+            _ => false,
+        };
+    }
+
     public static void Run(string dataDir, string outDir)
     {
         var baseRoot = WzRoot.LoadBase(dataDir);
@@ -139,6 +156,13 @@ public static partial class Export
             return;
         }
         if (!ExportHud(ui, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
+        // The game panels: one export step per panel.
+        if (!ExportInventoryUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, outDir)
+            || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir))
         {
             Environment.ExitCode = 1;
             return;

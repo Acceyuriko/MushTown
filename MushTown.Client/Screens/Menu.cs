@@ -162,15 +162,19 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" => Screen.Game,
+                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" => Screen.Game,
                 _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
             if (shotScreen is "stat" or "hud") _showStat = true;
+            if (shotScreen == "equip") { _showStat = true; _statTab = 1; _statDetail = ItemData.Mop; }
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
             if (shotScreen == "quest") { _showQuest = true; _topPanel = 3; }
             if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
+            if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
+            if (shotScreen == "worldmap") ShowWindow(HotkeyAction.WorldMap);
+            if (shotScreen == "keys") ShowWindow(HotkeyAction.KeyConfig);
             if (shotScreen == "chars2") _page = 1; // empty page: the demo fills page 1 only
             if (shotScreen == "job2") { _jobPage = 1; _jobPick = 14; } // second card page: proves paging draws other classes
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
@@ -367,10 +371,6 @@ public partial class MushTownGame
             foreach (string f in skill.Hit) LoadTexture(f);
             foreach (string f in skill.Affected) LoadTexture(f);
         }
-        _statBack = RoundedBacking(448, 406, new Color(62, 96, 118), 3);
-        _skillBack = RoundedBacking(SkillW, SkillBodyH, new Color(62, 96, 118), 3);
-        _questBack = RoundedBacking(QuestW, QuestBodyH, new Color(62, 96, 118), 3);
-        _settingsBack = RoundedBacking(SettingsW, SettingsBodyH, new Color(62, 96, 118), 3);
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
         LoadNpcTextures(); // NPC stand textures (quest json already loaded in Initialize)
         if (_shotPath != null && _screen == Screen.Chars)
@@ -539,7 +539,7 @@ public partial class MushTownGame
     private static bool HitRect(Rectangle r, int gx, int gy) =>
         gx >= r.X && gx < r.X + r.Width && gy >= r.Y && gy < r.Y + r.Height;
 
-    private (int gx, int gy) MouseGamePos(MouseState ms)
+    internal (int gx, int gy) MouseGamePos(MouseState ms)
     {
         int screenW = GraphicsDevice.PresentationParameters.BackBufferWidth;
         int screenH = GraphicsDevice.PresentationParameters.BackBufferHeight;
@@ -681,10 +681,7 @@ public partial class MushTownGame
         _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
         _zWasDown = kb.IsKeyDown(Keys.Z);
         SeedSkillKeys(kb);
-        _iWasDown = kb.IsKeyDown(Keys.I);
-        _cWasDown = kb.IsKeyDown(Keys.C);
-        _kWasDown = kb.IsKeyDown(Keys.K);
-        _vWasDown = kb.IsKeyDown(Keys.V);
+        SeedHotkeys(kb);
         _mover.WasInPortal = SceneMath.FindPortal(_map.Portals, _mover.X, _mover.Y) != null;
         _screen = Screen.Game;
         BuildGameScene();

@@ -25,12 +25,7 @@ public partial class MushTownGame
         "hud_sub_bg0.png", "hud_sub_bg1.png", "hud_sub_bg2.png",
         "hud_qslot.png", "hud_qslotcover.png",
         "hud_key_ctrl.png", "hud_key_alt.png", "hud_key_i.png", "hud_key_c.png",
-        "hud_inv.png",
-        "hud_itab_s0.png", "hud_itab_s1.png", "hud_itab_s2.png",
-        "hud_itab_s3.png", "hud_itab_s4.png", "hud_itab_s5.png",
-        "hud_itab_n0.png", "hud_itab_n1.png", "hud_itab_n2.png",
-        "hud_itab_n3.png", "hud_itab_n4.png", "hud_itab_n5.png",
-        "hud_coin.png", "hud_stat.png", "hud_stathilong.png", "hud_statx.png",
+        "hud_coin.png", "hud_stathilong.png", "hud_statx.png",
     };
     private readonly Dictionary<int, ItemData> _items = new();
     private ManifestData _manifest = null!;
@@ -65,7 +60,6 @@ public partial class MushTownGame
     private readonly Dictionary<int, ShopData> _shops = new(); // keeper stocks (LoadShops)
     private List<int> _shopStock = null!; // the open shop's stock (OpenShop snapshots it: talk state clears)
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
-    private bool _iWasDown, _cWasDown, _kWasDown, _vWasDown;
 
     private static Rectangle PlateRect() => new(Layout.Plate.X, Layout.Plate.Y, 250, 35);
     private static Rectangle HpRect() => new(Layout.HpMp.X, Layout.HpMp.Y, 205, 46); // cover bottom flush with EXP top
@@ -73,42 +67,41 @@ public partial class MushTownGame
     private static Rectangle CharBtnRect() => new(Layout.CharBtn.X, Layout.CharBtn.Y, 34, 37);
     private static Rectangle QslotRect() => new(Layout.Qslot.X, Layout.Qslot.Y, 557, 67);
     private static Rectangle ExpRect() => new(0, 758, 1366, 10);
-    private Point _invPos = new(Layout.Inv.X, Layout.Inv.Y), _statPos = new(Layout.Stat.X, Layout.Stat.Y);
-    private Point _skillPos = new(Layout.Skill.X, Layout.Skill.Y);
+    private Point _invPos = new(0, 0), _statPos = new(0, 0);
+    private Point _skillPos = new(0, 0); // the skill window takes its spot from layouts/panel-skill.json
     private Point? _dragInv, _dragStat, _dragSkill, _dragQuest, _dragSettings, _dragShop; // title grab offsets while held
     private int _topPanel = 1; // the front panel: 0 = inventory, 1 = stat, 2 = skill, 3 = quest, 4 = settings, 5 = shop
-    private Texture2D _statBack = null!; // navy body backing, corners rounded to match the art
-    private Texture2D _skillBack = null!; // same navy, skill window size
-    private Texture2D _questBack = null!; // same navy, quest window size
-    private Texture2D _settingsBack = null!; // same navy, settings window size
 
     private Texture2D Tex(string file) => _textures["ui/" + file];
 
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
     {
         UpdateHudHover(gx, gy); // every frame (clicks return early below)
-        bool i = kb.IsKeyDown(Keys.I);
-        if (i && !_iWasDown && _talkNpc == 0) { _showInv = !_showInv; _dragInv = null; if (_showInv) _topPanel = 0; PlaySfx("click"); } // hiding mid-drag drops the grab
-        _iWasDown = i;
-        bool c = kb.IsKeyDown(Keys.C);
-        if (c && !_cWasDown && _talkNpc == 0) { _showStat = !_showStat; _dragStat = null; if (_showStat) _topPanel = 1; PlaySfx("click"); } // hiding mid-drag drops the grab
-        _cWasDown = c;
-        bool k = kb.IsKeyDown(Keys.K);
-        if (k && !_kWasDown && _talkNpc == 0) { _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; PlaySfx("click"); } // hiding mid-drag drops the grab
-        _kWasDown = k;
-        bool v = kb.IsKeyDown(Keys.V);
-        if (v && !_vWasDown && _talkNpc == 0) { _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) _topPanel = 3; PlaySfx("click"); } // hiding mid-drag drops the grab; the modal freezes panels
-        _vWasDown = v;
+        var hotkey = FreshHotkey(kb);
+        if (hotkey != null && _talkNpc == 0)
+        {
+            bool old = true; // the old panels click here; the new windows click themselves
+            switch (hotkey.Value)
+            {
+                case HotkeyAction.Inventory: _showInv = !_showInv; _dragInv = null; if (_showInv) _topPanel = 0; break; // hiding mid-drag drops the grab
+                case HotkeyAction.Stat: _showStat = !_showStat; _dragStat = null; if (_showStat) _topPanel = 1; break;
+                case HotkeyAction.Skill: _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; break;
+                case HotkeyAction.Quest: _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) _topPanel = 3; break; // the modal freezes panels
+                case HotkeyAction.Settings: if (_showSettings) CloseSettings(); else OpenSettings(); break;
+                default: old = false; ToggleWindow(hotkey.Value); break; // the new windows draw above the older panels
+            }
+            if (old) PlaySfx("click");
+        }
         // Title drag runs on held (down starts it in the chain below).
         if (_dragInv.HasValue)
         {
             if (!held) _dragInv = null;
-            else _invPos = ClampPanel(new Point(gx - _dragInv.Value.X, gy - _dragInv.Value.Y), 242);
+            else _invPos = ClampPanel(new Point(gx - _dragInv.Value.X, gy - _dragInv.Value.Y), InvRect().Width);
         }
         if (_dragStat.HasValue)
         {
             if (!held) _dragStat = null;
-            else _statPos = ClampPanel(new Point(gx - _dragStat.Value.X, gy - _dragStat.Value.Y), 448);
+            else _statPos = ClampPanel(new Point(gx - _dragStat.Value.X, gy - _dragStat.Value.Y), StatW);
         }
         if (_dragSkill.HasValue)
         {
@@ -118,7 +111,7 @@ public partial class MushTownGame
         if (_dragQuest.HasValue)
         {
             if (!held) _dragQuest = null;
-            else _questPos = ClampPanel(new Point(gx - _dragQuest.Value.X, gy - _dragQuest.Value.Y), QuestW);
+            else { _questDragged = true; _questPos = ClampPanel(new Point(gx - _dragQuest.Value.X, gy - _dragQuest.Value.Y), QuestW); }
         }
         if (_dragSettings.HasValue)
         {
@@ -131,6 +124,8 @@ public partial class MushTownGame
             else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW);
         }
         SyncPanelScenes(); // drags + tab flips move the baked Rects (hover ran first, so it lags one frame, like legacy)
+        DragWindows(held, gx, gy); // the new windows move by their title
+        SyncWindows(); // the new windows rebuild when they move
         if (!click) return;
         UpdateHudClick(gx, gy); // click sounds play by Button Kind inside ClickTree (the flag funnel is gone)
     }
@@ -151,6 +146,7 @@ public partial class MushTownGame
     {
         _hoverItem = false;
         if (_talkNpc != 0) { _gameScene.ClearHover(); SfxOnHover(_talkScene.Hover(gx, gy)); return; }
+        if (HoverWindows(gx, gy)) { _gameScene.ClearHover(); return; } // the new windows sit on top
         foreach (var (show, scene) in PanelsFrontToBack())
         {
             if (!show) continue;
@@ -169,6 +165,7 @@ public partial class MushTownGame
     private void UpdateHudClick(int gx, int gy)
     {
         if (_talkNpc != 0) { ClickTree(_talkScene, gx, gy); return; } // modal: talk swallows every click
+        if (ClickWindows(gx, gy)) { _submenu.Enabled = false; return; } // the new windows sit on top
         bool onInv = _showInv && HitRect(InvRect(), gx, gy);
         bool onStat = _showStat && HitRect(StatRect(), gx, gy);
         bool onSkill = _showSkill && HitRect(SkillRect(), gx, gy);
@@ -249,7 +246,7 @@ public partial class MushTownGame
         AddSubArtRow(0, "ui/hud_sub_char", () => { _showStat = true; _submenu.Enabled = false; _topPanel = 1; });
         AddSubArtRow(1, "ui/hud_sub_item", () => { _showInv = true; _submenu.Enabled = false; _topPanel = 0; });
         AddSubTextRow(2, "Quest", () => { _showQuest = true; _submenu.Enabled = false; _topPanel = 3; });
-        AddSubTextRow(3, "Settings", () => { _showSettings = true; _submenu.Enabled = false; _topPanel = 4; });
+        AddSubTextRow(3, "Settings", () => { OpenSettings(); _submenu.Enabled = false; });
         AddSubTextRow(4, "Exit", () => { _submenu.Enabled = false; if (_save != null) ToChars(); else Exit(); });
         _gameScene.Add(_submenu);
         var charBtn = new GameObject();
@@ -281,15 +278,18 @@ public partial class MushTownGame
         var qslot = new GameObject { NoHit = true };
         qslot.Add(new Rect(QslotRect()));
         qslot.Add(new Picture("ui/hud_qslot.png"));
-        (string file, string action)[] keys = new[] { ("hud_key_ctrl.png", "Attack"), ("hud_key_alt.png", "Jump"), ("hud_key_i.png", "Items"), ("hud_key_c.png", "Stats") }; // fixed W9 hotkeys: official key art top-left (icons arrive with skills/potions)
+        (string file, string action, HotkeyAction? hotkey)[] keys = new (string, string, HotkeyAction?)[] { ("hud_key_ctrl.png", "Attack", null), ("hud_key_alt.png", "Jump", null), ("hud_key_i.png", "Items", HotkeyAction.Inventory), ("hud_key_c.png", "Stats", HotkeyAction.Stat) }; // official key art top-left; the rebindable ones show the cap of the current binding
+        KeyConfigWindow.LoadCaps(this);
         for (int i = 0; i < keys.Length; i++)
         {
             var s = QslotCell(i);
+            var file = keys[i].file; // the loop variable is shared: copy it for the lambda
             var cell = new GameObject(); // NoHit rides the qslot parent (Hit skips the whole subtree)
             cell.Add(new Rect(s));
-            cell.Add(new Picture("ui/" + keys[i].file, 2, 2));
+            if (keys[i].hotkey is HotkeyAction hk) cell.Add(new Invoke(gfx => DrawQuickslotCap(gfx, s, hk, file)));
+            else cell.Add(new Picture("ui/" + file, 2, 2));
             var a = _ui.GetSmall(keys[i].action);
-            cell.Add(new Label(keys[i].action, (s.Width - a.Width) / 2, 2 + Tex(keys[i].file).Height) { Tint = Color.Gray });
+            cell.Add(new Label(keys[i].action, (s.Width - a.Width) / 2, 2 + Tex(file).Height) { Tint = Color.Gray });
             qslot.AddChild(cell);
         }
         var gloss = new GameObject(); // NoHit rides the qslot parent (Hit skips the whole subtree)
@@ -369,6 +369,16 @@ public partial class MushTownGame
         return o;
     }
 
+    // One art button (the art has normal, hover and pressed states).
+    internal static GameObject ArtButton(Rectangle r, string stem, Action onClick)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(r));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+        o.Add(new Image(stem));
+        return o;
+    }
+
     // Dispatches a click and plays the hit Button's Kind. Conditional
     // sounds (shopbuy, gated clicks) stay explicit in their callbacks;
     // the old flag-snapshot funnel is gone.
@@ -422,8 +432,8 @@ public partial class MushTownGame
         return new Rectangle(p.X + 6, y, 109, 26);
     }
 
-    private Point _questPos = new(Layout.Quest.X, Layout.Quest.Y); // quest window opens centered-ish, drags after
-    private Point _settingsPos = new(Layout.Settings.X, Layout.Settings.Y); // settings window opens centered-ish, drags after
+    private Point _questPos = new(0, 0); // quest window opens centered-ish, drags after
+    private Point _settingsPos = SettingsLayoutPos(); // settings window opens centered-ish, drags after
     private Point _shopPos = new(Layout.Shop.X, Layout.Shop.Y); // shop window opens centered-ish, drags after
 
     private void DrawHud(int gx, int gy, bool pressed)
@@ -437,6 +447,7 @@ public partial class MushTownGame
         else if (_topPanel == 3) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); }
         else if (_topPanel == 4) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); }
         else { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); }
+        DrawWindows(); // the new windows (minimap, world map, key settings) draw above the older panels
         if (_talkNpc != 0) _talkScene.Draw(_gfx); // modal: above everything
         if (!_hand.Empty) // the held piece rides the cursor (take-1: no count to show)
         {
@@ -451,8 +462,17 @@ public partial class MushTownGame
         return new Rectangle(r.X + 6 + i * 34, r.Y + 2, 34, 31);
     }
 
+    // The quick slot shows the official cap of the key the action has now
+    // (the player can rebind it in the key settings window).
+    private void DrawQuickslotCap(UiGfx gfx, Rectangle s, HotkeyAction action, string fallback)
+    {
+        string cap = KeyConfigWindow.CapArt(HotkeyKey(action));
+        var tex = gfx.Tex(cap != "" ? cap : fallback);
+        gfx.Sb.Draw(tex, new Vector2(s.X + 2, s.Y + 2), Color.White);
+    }
+
     // Solid backing with rounded corners (the art's own radius is ~3px, measured).
-    private Texture2D RoundedBacking(int w, int h, Color color, int r)
+    internal Texture2D RoundedBacking(int w, int h, Color color, int r)
     {
         var tex = new Texture2D(GraphicsDevice, w, h);
         Color[] px = new Color[w * h];

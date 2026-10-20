@@ -174,9 +174,7 @@ public static partial class Export
             ($"{sb3}/KeyConfig/key/56", "hud_key_alt.png"),
             ($"{sb3}/KeyConfig/key/23", "hud_key_i.png"),
             ($"{sb3}/KeyConfig/key/46", "hud_key_c.png"),
-            ("UIInventory.img/Inventory/backgrnd", "hud_inv.png"),
             ("UIWindow.img/Item/BtCoin/normal/0", "hud_coin.png"),
-            ("UICharacterInfo.img/common/detailStat/canvas:attackBack", "hud_stat.png"),
             ("UICharacterInfo.img/common/detailStat/canvas:highlightLong", "hud_stathilong.png"),
             ("UICharacterInfo.img/common/main/button:close/normal/0", "hud_statx.png"),
         };
@@ -184,11 +182,6 @@ public static partial class Export
             files.Add(($"{sb3}/main/namePlate/levelNum/{d}", $"hud_lv{d}.png"));
         for (int d = 0; d <= 9; d++)
             files.Add(($"{sb3}/main/status/normal/gauge/number/{d}", $"hud_num{d}.png"));
-        for (int tab = 0; tab < 6; tab++)
-        {
-            files.Add(($"UIInventory.img/Inventory/AutoBuild/tab:category/selected/{tab}", $"hud_itab_s{tab}.png"));
-            files.Add(($"UIInventory.img/Inventory/AutoBuild/tab:category/normal/{tab}", $"hud_itab_n{tab}.png"));
-        }
         // number's 11th child is "\" (the HP/MP separator): its name breaks
         // path lookup, so the client bakes "/" instead. No other symbols exist.
         (string state, string suffix)[] states = new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") };

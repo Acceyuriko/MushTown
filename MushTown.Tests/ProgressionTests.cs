@@ -124,6 +124,42 @@ public class ProgressionTests
         Assert.IsFalse(Progression.LearnSkill(chara, new SkillData { SkillId = 2, ReqLevel = 1, MaxLevel = 1 })); // too poor
     }
 
+    // The MAX button: the skill goes as high as the SP reach.
+    [TestMethod]
+    public void LearnSkillMax_SpendsAllPoints()
+    {
+        var skill = new SkillData { SkillId = SkillData.SlashBlast, ReqLevel = 1, MaxLevel = 10 };
+        var chara = new CharaSlot { Name = "hero", Level = 5, Sp = 5 };
+        Assert.AreEqual(5, Progression.LearnSkillMax(chara, skill));
+        Assert.AreEqual(5, chara.SkillLv[SkillData.SlashBlast]);
+        Assert.AreEqual(0, chara.Sp);
+    }
+
+    // MAX stops at the skill's max level and keeps the rest of the SP.
+    [TestMethod]
+    public void LearnSkillMax_StopsAtMaxLevel()
+    {
+        var skill = new SkillData { SkillId = SkillData.SlashBlast, ReqLevel = 1, MaxLevel = 3 };
+        var chara = new CharaSlot { Name = "hero", Level = 5, Sp = 20 };
+        Assert.AreEqual(3, Progression.LearnSkillMax(chara, skill));
+        Assert.AreEqual(3, chara.SkillLv[SkillData.SlashBlast]);
+        Assert.AreEqual(17, chara.Sp);
+    }
+
+    // MAX with no SP (or too young) buys nothing.
+    [TestMethod]
+    public void LearnSkillMax_NoPoints_BuysNothing()
+    {
+        var skill = new SkillData { SkillId = SkillData.SlashBlast, ReqLevel = 1, MaxLevel = 10 };
+        var chara = new CharaSlot { Name = "hero", Level = 5, Sp = 0 };
+        Assert.AreEqual(0, Progression.LearnSkillMax(chara, skill));
+        Assert.IsFalse(chara.SkillLv.ContainsKey(SkillData.SlashBlast));
+        Assert.AreEqual(0, chara.Sp);
+        var young = new CharaSlot { Name = "hero", Level = 1, Sp = 9 };
+        Assert.AreEqual(0, Progression.LearnSkillMax(young, new SkillData { SkillId = SkillData.Brandish, ReqLevel = 9, MaxLevel = 10 }));
+        Assert.AreEqual(9, young.Sp);
+    }
+
     // Iron Body's +HP% stretches the pool (Endure stacks on top).
     [TestMethod]
     public void BuffedMaxHp_StretchesPool()
@@ -197,7 +233,7 @@ public class ProgressionTests
         };
         Assert.IsTrue(Progression.WearEquip(chara, ItemData.Mop, EquipDefs()));
         Assert.IsTrue(Progression.WearEquip(chara, ItemData.BambooRing, EquipDefs()));
-        Assert.AreEqual(2, chara.Equips.Count);
+        Assert.AreEqual(2, chara.Equips!.Count);
         Assert.IsTrue(Progression.WearEquip(chara, ItemData.InkRing, EquipDefs()));
         Assert.AreEqual(2, chara.Equips.Count);
         Assert.IsTrue(chara.Equips.Contains(ItemData.Mop));

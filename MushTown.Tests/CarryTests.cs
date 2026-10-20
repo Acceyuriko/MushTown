@@ -119,7 +119,7 @@ public sealed class CarryTests
         Assert.IsFalse(c.Equips.Contains(Axe));
         Assert.AreEqual(1, c.Equips.Count(w => w == Sword));
         hand.Return(c); // Esc: the old piece lands in the bag, never back on the doll
-        Assert.AreEqual(1, c.EquipBag[Axe]);
+        Assert.AreEqual(1, c.EquipBag![Axe]);
         Assert.AreEqual(1, c.Equips.Count(w => w == Sword));
     }
 

@@ -6,16 +6,16 @@ namespace MushTown.Tests;
 [TestClass]
 public class LayoutTests
 {
-    private const string Full = """{"inv":[1,2],"stat":[3,4],"skill":[19,20],"quest":[21,22],"settings":[23,24],"shop":[25,26],"plate":[5,6],"hpmp":[7,8],"menuBtn":[9,10],"charBtn":[11,12],"qslot":[13,14],"coin":[15,16],"meso":[17,18]}""";
+    private const string Full = """{"shop":[25,26],"plate":[5,6],"hpmp":[7,8],"menuBtn":[9,10],"charBtn":[11,12],"qslot":[13,14]}""";
 
     // Layout fields are shared statics: leave them as found.
-    private ((int X, int Y) inv, (int X, int Y) stat, (int X, int Y) skill, (int X, int Y) quest, (int X, int Y) settings, (int X, int Y) shop, (int X, int Y) plate, (int X, int Y) hpmp, (int X, int Y) menuBtn, (int X, int Y) charBtn, (int X, int Y) qslot, (int X, int Y) coin, (int X, int Y) meso) _saved;
+    private ((int X, int Y) shop, (int X, int Y) plate, (int X, int Y) hpmp, (int X, int Y) menuBtn, (int X, int Y) charBtn, (int X, int Y) qslot) _saved;
 
     [TestInitialize]
-    public void Save() => _saved = (Layout.Inv, Layout.Stat, Layout.Skill, Layout.Quest, Layout.Settings, Layout.Shop, Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot, Layout.Coin, Layout.Meso);
+    public void Save() => _saved = (Layout.Shop, Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot);
 
     [TestCleanup]
-    public void Restore() => (Layout.Inv, Layout.Stat, Layout.Skill, Layout.Quest, Layout.Settings, Layout.Shop, Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot, Layout.Coin, Layout.Meso) = _saved;
+    public void Restore() => (Layout.Shop, Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot) = _saved;
 
     [TestMethod]
     public void Load_FullFile_OverridesAll()
@@ -24,19 +24,12 @@ public class LayoutTests
         try
         {
             Layout.Load(path);
-            Assert.AreEqual((1, 2), Layout.Inv);
-            Assert.AreEqual((3, 4), Layout.Stat);
-            Assert.AreEqual((19, 20), Layout.Skill);
-            Assert.AreEqual((21, 22), Layout.Quest);
-            Assert.AreEqual((23, 24), Layout.Settings);
             Assert.AreEqual((25, 26), Layout.Shop);
             Assert.AreEqual((5, 6), Layout.Plate);
             Assert.AreEqual((7, 8), Layout.HpMp);
             Assert.AreEqual((9, 10), Layout.MenuBtn);
             Assert.AreEqual((11, 12), Layout.CharBtn);
             Assert.AreEqual((13, 14), Layout.Qslot);
-            Assert.AreEqual((15, 16), Layout.Coin);
-            Assert.AreEqual((17, 18), Layout.Meso);
         }
         finally { File.Delete(path); }
     }
@@ -48,21 +41,14 @@ public class LayoutTests
         try
         {
             Layout.Load(path);
-            File.WriteAllText(path, """{"_help":"ignored","inv":[100,200]}""");
+            File.WriteAllText(path, """{"_help":"ignored","qslot":[100,200]}""");
             Layout.Load(path);
-            Assert.AreEqual((100, 200), Layout.Inv);
-            Assert.AreEqual((3, 4), Layout.Stat);
-            Assert.AreEqual((19, 20), Layout.Skill);
-            Assert.AreEqual((21, 22), Layout.Quest);
-            Assert.AreEqual((23, 24), Layout.Settings);
+            Assert.AreEqual((100, 200), Layout.Qslot);
             Assert.AreEqual((25, 26), Layout.Shop);
             Assert.AreEqual((5, 6), Layout.Plate);
             Assert.AreEqual((7, 8), Layout.HpMp);
             Assert.AreEqual((9, 10), Layout.MenuBtn);
             Assert.AreEqual((11, 12), Layout.CharBtn);
-            Assert.AreEqual((13, 14), Layout.Qslot);
-            Assert.AreEqual((15, 16), Layout.Coin);
-            Assert.AreEqual((17, 18), Layout.Meso);
         }
         finally { File.Delete(path); }
     }
@@ -73,15 +59,15 @@ public class LayoutTests
         string path = WriteTemp(Full);
         try
         {
-            string[] bad = ["{\"inv\":[100,200],\"stat\":[1]}", "{\"inv\":[100,200],\"stat\":\"bad\"}", "{\"inv\":[100,200],\"coin\":[1.5,2]}", "{\"inv\":[100,200],\"meso\":[1,2,3]}"];
+            string[] bad = ["{\"qslot\":[100,200],\"plate\":[1]}", "{\"qslot\":[100,200],\"plate\":\"bad\"}", "{\"qslot\":[100,200],\"charBtn\":[1.5,2]}", "{\"qslot\":[100,200],\"menuBtn\":[1,2,3]}"];
             foreach (string json in bad)
             {
                 Layout.Load(path);
                 File.WriteAllText(path, json);
                 try { Layout.Load(path); Assert.Fail($"expected a JsonException for {json}"); }
                 catch (JsonException) { }
-                Assert.AreEqual((1, 2), Layout.Inv, json);
-                Assert.AreEqual((17, 18), Layout.Meso, json);
+                Assert.AreEqual((13, 14), Layout.Qslot, json);
+                Assert.AreEqual((11, 12), Layout.CharBtn, json);
                 File.WriteAllText(path, Full);
             }
         }

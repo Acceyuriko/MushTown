@@ -20,6 +20,7 @@ public partial class MushTownGame
             _save.Slots[_slot] ??= DemoChara();
             foreach (int id in _equips)
                 if (!Wear(id)) throw new InvalidDataException($"--wear found no {id} in the demo bag");
+            BuildStatScene(); // the equip page shows the worn items: bake them in
         }
         if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))
             throw new InvalidDataException($"unknown skill: {_shotSkill}");

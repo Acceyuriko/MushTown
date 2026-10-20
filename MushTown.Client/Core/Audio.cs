@@ -35,6 +35,7 @@ public partial class MushTownGame
             if (json == null) return;
             _bgmVol = Math.Clamp(json.Bgm, 0, 100);
             _sfxVol = Math.Clamp(json.Sfx, 0, 100);
+            LoadHotkeys(json.Keys);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
     }
@@ -42,13 +43,14 @@ public partial class MushTownGame
     private void SaveSettings()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); // fresh checkouts have no data/ yet (SaveStore.Save does the same)
-        File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgmVol, Sfx = _sfxVol }));
+        File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgmVol, Sfx = _sfxVol, Keys = SaveHotkeys() }));
     }
 
     private sealed class Settings
     {
         public int Bgm { get; set; } = 80;
         public int Sfx { get; set; } = 80;
+        public Dictionary<string, string>? Keys { get; set; } // the panel hotkeys (action name -> key name)
     }
 
     // Our own 44-byte header (SoundExport.ToWav writes it): channels at 22,
@@ -89,8 +91,7 @@ public partial class MushTownGame
         _sfx[key].Play(_sfxVol / 100f, 0f, 0f);
     }
 
-    // +/- buttons in the settings window (step 10). The Kind click
-    // confirms the press; the SFX row also previews its new volume.
+    // The options window slider sets the volume; the change saves right away.
     private void BumpVolume(bool bgm, int d)
     {
         if (bgm) _bgmVol = Math.Clamp(_bgmVol + d, 0, 100);

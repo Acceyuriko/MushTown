@@ -3,246 +3,265 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Quest-side panels: quest, settings, shop, talk (modal).
+// The quest window (official UIWindow.img/Quest art) and the talk panel (modal).
 public partial class MushTownGame
 {
-    private const int QuestW = 320; // quest window: accepted list + detail
-    private const int QuestRowH = 22;
-    private const int QuestListH = 5 * QuestRowH; // 5 rows, no scroll in v1
-    private const int QuestBodyH = QuestListH + 190; // list + detail block
-    private const int SettingsW = 260; // settings window: 2 volume rows
-    private const int SettingsRowH = 38;
-    private const int SettingsBodyH = 10 + 2 * SettingsRowH + 10; // top pad + rows + bottom pad
-    private const int ShopW = 340; // shop window: buy rows + sell rows (height follows the bag)
-    private const int ShopRowH = 40;
+    // The official quest art: the list panel (left) and the detail panel (right).
+    private const int QuestListW = 245;   // Quest/backgrnd
+    private const int QuestDetailW = 305; // Quest/backgrnd2
+    private const int QuestW = QuestListW + QuestDetailW;
+    private const int QuestBodyH = 396;   // both panels are 396 tall
     private const int TalkW = 440; // talk panel: body + quest entries + buttons
     private const int TalkBtnW = 90, TalkBtnH = 24;
 
-    private Rectangle QuestRect() => new(_questPos.X, _questPos.Y, QuestW, 16 + QuestBodyH);
-    private Rectangle QuestTitleRect() => new(_questPos.X, _questPos.Y, QuestW, 16);
+    // Every number of this window lives in layouts/panel-quest.json.
+    private static readonly PanelLayout _questLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-quest.json"));
+
+    // The quest art (the exporter writes these names).
+    private static readonly string[] QuestFiles = new[]
+    {
+        "quest_list.png", "quest_detail.png", "quest_x.png",
+        "quest_tab0.png", "quest_tab1.png", "quest_tab2.png",
+        "quest_icon0.png", "quest_icon1.png",
+        "quest_basic.png", "quest_prob.png", "quest_reward.png",
+        "quest_gauge.png", "quest_gauge_fill.png",
+    };
+
+    private bool _questDragged; // the player dragged the window: the file spot does not win
+
+    private Rectangle QuestRect() => new(_questPos.X, _questPos.Y, QuestW, QuestBodyH);
+    private Rectangle QuestListRect() => new(_questPos.X, _questPos.Y, QuestListW, QuestBodyH);
+    private Rectangle QuestDetailRect() => new(_questPos.X + QuestListW, _questPos.Y, QuestDetailW, QuestBodyH);
+
+    // The QUEST strip on the list panel drags the window.
+    private Rectangle QuestTitleRect() => new(_questPos.X, _questPos.Y, QuestListW, _questLay.Get("titleH", 20));
     private Rectangle QuestXRect()
     {
-        var r = QuestRect();
-        return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
+        var r = QuestDetailRect();
+        return new Rectangle(r.X + _questLay.Get("closeX", 288), r.Y + _questLay.Get("closeY", 2), 11, 11);
     }
 
-    private Rectangle SettingsRect() => new(_settingsPos.X, _settingsPos.Y, SettingsW, 16 + SettingsBodyH);
-    private Rectangle SettingsTitleRect() => new(_settingsPos.X, _settingsPos.Y, SettingsW, 16);
-    private Rectangle SettingsXRect()
-    {
-        var r = SettingsRect();
-        return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
-    }
+    // The selected quest, live (the kill counters change under the open panel).
+    private sealed record QuestDetailData(
+        string Name, string Level, List<string> Lines, List<(string Text, bool Done)> Kills,
+        List<string> Rewards, string TurnIn, int Percent);
 
-    // Volume row buttons: [-] and [+] boxes around the value.
-    private Rectangle SettingsMinusRect(int i)
-    {
-        var r = SettingsRect();
-        return new Rectangle(r.X + 120, r.Y + 16 + 10 + i * SettingsRowH, 30, 24);
-    }
-
-    private Rectangle SettingsPlusRect(int i)
-    {
-        var r = SettingsRect();
-        return new Rectangle(r.X + 200, r.Y + 16 + 10 + i * SettingsRowH, 30, 24);
-    }
-
-    // Sell rows: owned potions first, then owned equips (both in tab order).
-    // Draw and clicks share this list, so row i is always row i.
-    private List<(int id, int count)> ShopSellRows()
-    {
-        var rows = new List<(int, int)>();
-        var chara = _save?.Slots[_slot];
-        if (chara == null) return rows;
-        foreach (int id in _potions)
-            if (chara.Use?.TryGetValue(id, out int n) == true && n > 0) rows.Add((id, n));
-        foreach (int id in _equips)
-            if (chara.EquipBag?.TryGetValue(id, out int n) == true && n > 0) rows.Add((id, n));
-        return rows;
-    }
-
-    // Shop rects: mesos line 20, Buy header 18 + stock rows, Sell header 18
-    // + bag rows (an empty bag keeps one row for the "empty" line).
-    private Rectangle ShopRect()
-    {
-        int sells = Math.Max(1, ShopSellRows().Count);
-        int body = 20 + 18 + _shopStock.Count * ShopRowH + 18 + sells * ShopRowH + 10;
-        return new Rectangle(_shopPos.X, _shopPos.Y, ShopW, 16 + body);
-    }
-
-    private Rectangle ShopTitleRect() => new(_shopPos.X, _shopPos.Y, ShopW, 16);
-
-    private Rectangle ShopXRect()
-    {
-        var r = ShopRect();
-        return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
-    }
-
-    private int ShopBuyTop() => _shopPos.Y + 16 + 20 + 18;
-
-    private int ShopSellTop() => ShopBuyTop() + _shopStock.Count * ShopRowH + 18;
-
-    private Rectangle ShopBuyRect(int i) =>
-        new(_shopPos.X + ShopW - 80, ShopBuyTop() + i * ShopRowH + 7, 68, 26);
-
-    private Rectangle ShopSellRect(int i) =>
-        new(_shopPos.X + ShopW - 80, ShopSellTop() + i * ShopRowH + 7, 68, 26);
-
-    // Click a stock row: buy one at WZ price (a broke wallet logs and skips).
-    private void BuyFromShop(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        if (chara == null) return; // CLI sessions carry no wallet
-        var def = _items[id];
-        int price = def.Price;
-        if (Shop.Buy(chara, id, price))
-        {
-            GameLog($"bought {def.Name} for {price:#,##0} mesos");
-            PlaySfx("shopbuy");
-        }
-        else GameLog($"not enough mesos for {def.Name} ({price:#,##0})");
-    }
-
-    // Click a bag row: sell one at half price (rows show owned only, so it lands).
-    private void SellToShop(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        if (chara == null) return; // CLI sessions carry no bag
-        var def = _items[id];
-        if (Shop.Sell(chara, id, def))
-        {
-            GameLog($"sold {def.Name} for {Shop.SellPrice(def.Price):#,##0} mesos");
-            PlaySfx("click");
-        }
-    }
+    private QuestDetailData? _questDetail; // the built detail (the header, the gauge and the body share it)
 
     private void BuildQuestScene(List<int> accepted)
     {
+        PlaceQuestWindow();
+        // The window opens on the first quest: without a pick the whole right
+        // panel (name, gauge, description) would stay empty.
+        if (_questSel == 0 && accepted.Count > 0) _questSel = accepted[0];
+        foreach (string f in QuestFiles) LoadTexture("ui/" + f);
         _questScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(QuestRect())); // no Button: the body swallows, like the legacy fallthrough
-        body.Add(new TitleBar("QUEST"));
-        body.Add(new Picture(_questBack, 0, 16));
-        for (int row = 0; row < accepted.Count && row < 5; row++) // draw shows 5: clicks match
+        body.Add(new Picture("ui/quest_list.png", 0, 0));
+        body.Add(new Picture("ui/quest_detail.png", QuestListW, 0));
+
+        // The official tab labels (Available / In Progress / Complete). The WZ
+        // has no dimmer art for the other tabs, so all three draw the same.
+        int tx = _questLay.Get("tabX", 8), ty = _questLay.Get("tabY", 27), gap = _questLay.Get("tabGap", 10);
+        int w0 = Tex("quest_tab0.png").Width, w1 = Tex("quest_tab1.png").Width;
+        body.Add(new Picture("ui/quest_tab0.png", tx, ty));
+        body.Add(new Picture("ui/quest_tab1.png", tx + w0 + gap, ty));
+        body.Add(new Picture("ui/quest_tab2.png", tx + w0 + w1 + gap * 2, ty));
+
+        int maxRows = _questLay.Get("maxRows", 5);
+        for (int row = 0; row < accepted.Count && row < maxRows; row++) // draw shows the same rows the clicks take
         {
             int i = row; // for-loop variables capture shared: copy per row
             int qid = accepted[i];
-            string name = _quests[qid].Name;
-            var rb = PanelButton(QuestRowRect(i), "questrow" + i, () => _questSel = accepted[i], ButtonKind.Click);
-            rb.Add(new LiveTint(() =>
+            var rr = QuestRowRect(i);
+            var rb = new GameObject();
+            rb.Add(new Rect(rr));
+            var btn = new Button { LegacyId = "questrow" + i, Kind = ButtonKind.Click, OnClick = () => _questSel = qid };
+            rb.Add(btn);
+            // The row lights up under the mouse (the white hover fill of the
+            // Button would vanish on the white list panel).
+            rb.Add(new Invoke(gfx =>
             {
-                var c = _save?.Slots[_slot];
-                bool done = _questLog.State(qid).IsComplete(c!); // rows exist only with a chara
-                var ink = qid == _questSel ? new Color(255, 220, 0)
-                    : done ? new Color(120, 255, 120) : Color.White;
-                return ((done ? "? " : "") + name, ink);
-            }, 4, 3));
+                if (gfx.HoverButton != btn) return;
+                gfx.Sb.Draw(gfx.Pixel, rr, new Color(90, 140, 200, 70));
+            }));
+            rb.Add(new Invoke(gfx => DrawQuestIcon(gfx, rr, qid)));
+            rb.Add(new LiveTint(() => QuestRowInk(qid), _questLay.Get("nameX", 22), _questLay.Get("nameY", 2)));
+            rb.Add(new RightLabel((ui, t) => ui.GetSmall(t), () => QuestLevelText(qid), rr.Width - _questLay.Get("levelX", 8), _questLay.Get("levelY", 3), new Color(120, 130, 145)));
+            rb.Add(new LiveLabel(() => QuestRowProgress(qid), _questLay.Get("nameX", 22), _questLay.Get("progY", 17), new Color(130, 140, 155)));
             body.AddChild(rb);
         }
-        body.AddChild(PanelButton(QuestTitleRect(), "", () => _dragQuest = _questScene.LastClick - _questPos)); // silent, like legacy
+
+        // The detail panel (right): the quest name, the level, the gauge.
+        var dr = QuestDetailRect();
+        var head = new GameObject { NoHit = true };
+        head.Add(new Rect(dr));
+        head.Add(new LiveLabel(() => QuestDetail()?.Name ?? "", _questLay.Get("headX", 30), _questLay.Get("headY", 32), Color.White, LabelFont.Mid));
+        head.Add(new LiveLabel(() => QuestDetail()?.Level ?? "", _questLay.Get("headX", 30), _questLay.Get("headLevelY", 58), new Color(195, 215, 235)));
+        head.Add(new Invoke(gfx => DrawQuestGauge(gfx, dr)));
+        body.AddChild(head);
+
+        var text = new GameObject { NoHit = true };
+        text.Add(new Rect(QuestRect()));
+        text.Add(new Invoke(gfx => DrawQuestBody(gfx)));
+        body.AddChild(text);
+
+        body.AddChild(PanelButton(QuestTitleRect(), "", () => { _questDragged = true; _dragQuest = _questScene.LastClick - _questPos; })); // silent, like legacy
         var x = PanelButton(QuestXRect(), "x3", () => _showQuest = false, ButtonKind.Click);
-        x.Add(new Picture("ui/hud_statx.png"));
+        x.Add(new Picture("ui/quest_x.png"));
         body.AddChild(x);
-        var detail = new GameObject { NoHit = true };
-        detail.Add(new Rect(QuestRect()));
-        detail.Add(new QuestDetail(() =>
-        {
-            var c = _save?.Slots[_slot];
-            if (c == null || !_quests.TryGetValue(_questSel, out var sel) || !c.Quests.Contains(_questSel)) return null;
-            return new QuestLive(QuestDetailLines(c, sel), sel.Kills.Select((k, i) =>
-            {
-                int n = _questLog.KillCount(c, _questSel, i);
-                return ($"{MobName(k.Mob)} {n}/{k.Count}", n >= k.Count);
-            }).ToList(), sel.NeedItemsToComplete ? "Need items" : $"Turn in: {NpcName(sel.Npc1)}");
-        }, 16 + QuestListH + 10));
-        body.AddChild(detail);
         _questScene.Add(body);
     }
 
-    // Selected-quest wrapped lines, re-wrapped when the sel or its kill
-    // counts change (counters ride the key: a kill under the open panel
-    // re-renders #a, same as the talk cache).
-    private List<string> QuestDetailLines(CharaSlot chara, QuestData sel)
+    // The panel file owns the window spot until the player drags it.
+    private void PlaceQuestWindow()
     {
-        string key = _questSel + ":" + string.Join(",", sel.Kills.Select((_, i) => _questLog.KillCount(chara, _questSel, i)));
+        if (!_questDragged) _questPos = new Point(_questLay.Get("x", 400), _questLay.Get("y", 110));
+    }
+
+    private Rectangle QuestRowRect(int i)
+    {
+        int x = _questLay.Get("rowX", 8), y = _questLay.Get("rowY", 52), h = _questLay.Get("rowH", 30);
+        var r = QuestListRect();
+        return new Rectangle(r.X + x, r.Y + y + i * h, QuestListW - x * 2, h);
+    }
+
+    // The quest is ready to turn in (every kill done).
+    private bool QuestReady(int qid)
+    {
+        var c = _save?.Slots[_slot];
+        return c != null && _questLog.State(qid).IsComplete(c);
+    }
+
+    // The list icon: the yellow "!" when the quest is ready to turn in.
+    private void DrawQuestIcon(UiGfx gfx, Rectangle rr, int qid)
+    {
+        gfx.Sb.Draw(gfx.Tex(QuestReady(qid) ? "ui/quest_icon0.png" : "ui/quest_icon1.png"),
+            new Vector2(rr.X + _questLay.Get("iconX", 4), rr.Y + _questLay.Get("iconY", 2)), Color.White);
+    }
+
+    // The quest row in the list: the name (gold when selected) and the state.
+    private (string Text, Color Ink) QuestRowInk(int qid)
+    {
+        bool done = QuestReady(qid);
+        // The list panel is white: the name needs a dark ink, not white.
+        var ink = qid == _questSel ? new Color(255, 220, 0) : done ? new Color(0, 150, 0) : new Color(45, 50, 60);
+        return ((done ? "? " : "") + _quests[qid].Name, ink);
+    }
+
+    // The row's second line: the first unmet kill, or the turn-in hint.
+    private string QuestRowProgress(int qid)
+    {
+        var c = _save?.Slots[_slot];
+        if (c == null || !_quests.TryGetValue(qid, out var q)) return "";
+        if (QuestReady(qid)) return "Ready to turn in";
+        for (int i = 0; i < q.Kills.Count; i++)
+        {
+            int n = _questLog.KillCount(c, qid, i);
+            if (n < q.Kills[i].Count) return $"{MobName(q.Kills[i].Mob)} {n}/{q.Kills[i].Count}";
+        }
+        return "";
+    }
+
+    private string QuestLevelText(int qid)
+    {
+        return _quests.TryGetValue(qid, out var q)
+            ? q.LvMax > 0 ? $"Lv.{q.LvMin}-{q.LvMax}" : $"Lv.{q.LvMin}+"
+            : "";
+    }
+
+    // The selected quest's detail (null when nothing is selected). It is
+    // built once per change and reused by the header, the gauge and the body.
+    private QuestDetailData? QuestDetail()
+    {
+        var c = _save?.Slots[_slot];
+        if (c == null || !_quests.TryGetValue(_questSel, out var sel) || !c.Quests.Contains(_questSel)) return null;
+        // Counters ride the key: a kill under the open panel rebuilds it.
+        string key = _questSel + ":" + string.Join(",", sel.Kills.Select((_, i) => _questLog.KillCount(c, _questSel, i)));
         if (key != _questKey)
         {
             _questKey = key;
-            _questLines = _ui.Wrap(QText(sel.Progress), QuestW - 24);
+            _questLines = _ui.Wrap(QText(sel.Progress), _questLay.Get("bodyW", 268));
+            var kills = new List<(string, bool)>();
+            int have = 0, need = 0;
+            for (int i = 0; i < sel.Kills.Count; i++)
+            {
+                int n = _questLog.KillCount(c, _questSel, i);
+                have += Math.Min(n, sel.Kills[i].Count);
+                need += sel.Kills[i].Count;
+                kills.Add(($"{MobName(sel.Kills[i].Mob)} {n}/{sel.Kills[i].Count}", n >= sel.Kills[i].Count));
+            }
+            _questDetail = new QuestDetailData(sel.Name, QuestLevelText(_questSel), _questLines, kills,
+                sel.RewardLines(id => _items[id].Name),
+                sel.NeedItemsToComplete ? "Need items" : $"Turn in: {NpcName(sel.Npc1)}",
+                need > 0 ? have * 100 / need : 0);
         }
-        return _questLines;
+        return _questDetail;
     }
 
-    private void BuildSettingsScene()
+    // The header's progress bar (the official Gauge2 art).
+    private void DrawQuestGauge(UiGfx gfx, Rectangle dr)
     {
-        _settingsScene = new Scene();
-        var body = new GameObject();
-        body.Add(new Rect(SettingsRect())); // no Button: the body swallows, like the legacy fallthrough
-        body.Add(new TitleBar("SETTINGS"));
-        body.Add(new Picture(_settingsBack, 0, 16));
-        string[] labels = { "Music", "Sound" };
-        for (int r = 0; r < 2; r++)
-        {
-            int i = r; // for-loop variables capture shared: copy per row
-            body.Add(new Label(labels[i], 12, 16 + 10 + i * SettingsRowH + 4));
-            var minus = PanelButton(SettingsMinusRect(i), "setminus" + i, () => BumpVolume(i == 0, -10), ButtonKind.Click);
-            minus.Add(new StepBox("-"));
-            body.AddChild(minus);
-            var plus = PanelButton(SettingsPlusRect(i), "setplus" + i, () => BumpVolume(i == 0, 10), ButtonKind.Click);
-            plus.Add(new StepBox("+"));
-            plus.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => (i == 0 ? _bgmVol : _sfxVol).ToString(), 0, 4, Color.White));
-            body.AddChild(plus);
-        }
-        body.AddChild(PanelButton(SettingsTitleRect(), "", () => _dragSettings = _settingsScene.LastClick - _settingsPos)); // silent, like legacy
-        var x = PanelButton(SettingsXRect(), "x4", () => _showSettings = false, ButtonKind.Click);
-        x.Add(new Picture("ui/hud_statx.png"));
-        body.AddChild(x);
-        _settingsScene.Add(body);
+        var d = QuestDetail();
+        if (d == null) return;
+        int x = dr.X + _questLay.Get("gaugeX", 200), y = dr.Y + _questLay.Get("gaugeY", 64);
+        gfx.Sb.Draw(gfx.Tex("ui/quest_gauge.png"), new Vector2(x, y), Color.White);
+        int w = _questLay.Get("gaugeW", 75) * d.Percent / 100;
+        if (w > 0)
+            gfx.Sb.Draw(gfx.Tex("ui/quest_gauge_fill.png"), new Rectangle(x + _questLay.Get("gaugeInX", 2),
+                y + _questLay.Get("gaugeInY", 2), w, _questLay.Get("gaugeFillH", 4)), Color.White);
     }
 
-    private void BuildShopScene(List<(int id, int count)> sells)
+    // The body of the detail panel: the official section titles with the
+    // description, the kills, the reward and the turn-in line. It stops at
+    // the bottom bar, so a long quest does not draw over the buttons.
+    private void DrawQuestBody(UiGfx gfx)
     {
-        _shopScene = new Scene();
-        var body = new GameObject();
-        body.Add(new Rect(ShopRect())); // no Button: the body swallows, like the legacy fallthrough
-        body.Add(new TitleBar("SHOP"));
-        body.Add(new Fill(new Color(62, 96, 118), 16));
-        body.Add(new LiveLabel(() => $"Mesos: {(_save?.Slots[_slot]?.Mesos ?? 0):#,##0}", 12, 16 + 4, new Color(255, 220, 0)));
-        body.Add(new Label("Buy", 12, 16 + 22));
-        var r = ShopRect();
-        for (int i = 0; i < _shopStock.Count; i++)
+        var d = QuestDetail();
+        if (d == null) return;
+        int x = _questPos.X + QuestListW + _questLay.Get("bodyX", 14);
+        int y = _questPos.Y + _questLay.Get("bodyY", 124);
+        int lh = _questLay.Get("lineH", 16);
+        int bottom = y + _questLay.Get("bodyH", 240);
+        var ink = new Color(45, 50, 60);
+        bool full = false; // the body is full: nothing more is drawn
+        void Art(string key, int gap)
         {
-            int s = i; // for-loop variables capture shared: copy per row
-            int id = _shopStock[s];
-            var def = _items[id];
-            var holder = new GameObject { NoHit = true };
-            holder.Add(new Rect(new Rectangle(r.X, ShopBuyTop() + s * ShopRowH, ShopW, ShopRowH)));
-            holder.Add(new ShopRow(def.Image, def.Name, $"{def.Price:#,##0}"));
-            body.AddChild(holder);
-            var buy = PanelButton(ShopBuyRect(s), "buy" + s, () => BuyFromShop(_shopStock[s]));
-            buy.Add(new FlatButton("Buy", "buy" + s, () => _hoverId));
-            body.AddChild(buy);
+            if (full) return;
+            var t = gfx.Tex("ui/" + key);
+            if (y + t.Height > bottom) { full = true; return; }
+            gfx.Sb.Draw(t, new Vector2(x, y), Color.White);
+            y += gap;
         }
-        body.Add(new Label("Sell", 12, ShopSellTop() - r.Y - 16));
-        if (sells.Count == 0)
-            body.Add(new Label("Your bag is empty.", 12, ShopSellTop() - r.Y + 12) { Tint = new Color(130, 140, 150) });
-        for (int i = 0; i < sells.Count; i++)
+        void Line(string text, Color color)
         {
-            int s = i; // for-loop variables capture shared: copy per row
-            int id = sells[s].id;
-            var holder = new GameObject { NoHit = true };
-            holder.Add(new Rect(new Rectangle(r.X, ShopSellTop() + s * ShopRowH, ShopW, ShopRowH)));
-            holder.Add(new ShopRow(_items[id].Image, $"{_items[id].Name} x{sells[s].count}", $"{Shop.SellPrice(_items[id].Price):#,##0}"));
-            body.AddChild(holder);
-            var sell = PanelButton(ShopSellRect(s), "sell" + s, () => SellToShop(sells[s].id));
-            sell.Add(new FlatButton("Sell", "sell" + s, () => _hoverId));
-            body.AddChild(sell);
+            if (full) return;
+            if (y + lh > bottom) { full = true; return; }
+            gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(x, y), color);
+            y += lh;
         }
-        body.AddChild(PanelButton(ShopTitleRect(), "", () => _dragShop = _shopScene.LastClick - _shopPos)); // silent, like legacy
-        var x = PanelButton(ShopXRect(), "x5", () => _showShop = false, ButtonKind.Click);
-        x.Add(new Picture("ui/hud_statx.png"));
-        body.AddChild(x);
-        _shopScene.Add(body);
+        Art("quest_basic.png", _questLay.Get("secGap", 14));
+        foreach (string line in d.Lines) Line(line, ink);
+        y += _questLay.Get("secSpace", 4);
+        Art("quest_prob.png", _questLay.Get("secGap", 14));
+        foreach (var k in d.Kills) Line(k.Text, k.Done ? new Color(0, 130, 0) : ink);
+        y += _questLay.Get("secSpace", 4);
+        Art("quest_reward.png", _questLay.Get("rewardGap", 20));
+        foreach (string line in d.Rewards) Line(line, ink);
+        y += _questLay.Get("secSpace", 4);
+        Line(d.TurnIn, new Color(190, 130, 0));
+    }
+
+    // Quest window: accepted quests on top (click to select), the selected
+    // quest's progress below (objectives with live counts + turn-in).
+    private List<int> QuestRows()
+    {
+        var chara = _save?.Slots[_slot];
+        // Unknown ids (removed custom file, stale save) hide everywhere: the
+        // tracker skips them too, so draw, click, and tracker agree.
+        return chara == null ? new List<int>()
+            : chara.Quests.Where(id => _quests.ContainsKey(id)).OrderBy(id => id).ToList();
     }
 
     private void BuildTalkScene()
@@ -288,23 +307,6 @@ public partial class MushTownGame
             body.AddChild(bb);
         }
         _talkScene.Add(body);
-    }
-
-    // Quest window: accepted quests on top (click to select), the selected
-    // quest's progress below (objectives with live counts + turn-in).
-    private List<int> QuestRows()
-    {
-        var chara = _save?.Slots[_slot];
-        // Unknown ids (removed custom file, stale save) hide everywhere: the
-        // tracker skips them too, so draw, click, and tracker agree.
-        return chara == null ? new List<int>()
-            : chara.Quests.Where(id => _quests.ContainsKey(id)).OrderBy(id => id).ToList();
-    }
-
-    private Rectangle QuestRowRect(int i)
-    {
-        var r = QuestRect();
-        return new Rectangle(r.X + 8, r.Y + 16 + 6 + i * QuestRowH, QuestW - 16, QuestRowH);
     }
 
     // Talk panel (modal): NPC name on top, one page of body, quest entries in

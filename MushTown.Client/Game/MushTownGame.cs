@@ -123,6 +123,9 @@ public partial class MushTownGame : Game
         _charLayoutPath = Path.Combine(dir, "charselect-layout.json");
         _jobLayoutPath = Path.Combine(dir, "jobselect-layout.json");
         _setupLayoutPath = Path.Combine(dir, "setup-layout.json");
+        new MinimapWindow(this); // the new windows keep themselves in the list
+        new WorldMapWindow(this);
+        new KeyConfigWindow(this);
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
@@ -342,7 +345,7 @@ public partial class MushTownGame : Game
             foreach (var frame in gear.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -350,6 +353,7 @@ public partial class MushTownGame : Game
             SetupShotMobs();
             SyncHeroPlate(); // staging is done (wear/buff/quest all staged the demo); shots skip Update
             SyncPanelScenes(); // staging (accept/open) runs after the scene build and shots skip Update
+            SyncWindows(); // the new windows (minimap, world map, key settings) build here
         }
     }
 
@@ -397,6 +401,12 @@ public partial class MushTownGame : Game
                 _submenu.Enabled = false; _showInv = false; _showStat = false; _showSkill = false;
                 _showQuest = false; _showSettings = false; _showShop = false;
                 _dragInv = _dragStat = _dragSkill = _dragQuest = _dragSettings = _dragShop = null; // hiding mid-drag drops the grab
+                PlaySfx("click");
+                base.Update(gameTime); return;
+            }
+            if (UiWindow.List.Any(w => w.Show)) // Esc closes the new windows too
+            {
+                foreach (var w in UiWindow.List) w.Show = false;
                 PlaySfx("click");
                 base.Update(gameTime); return;
             }
@@ -881,16 +891,32 @@ public partial class MushTownGame : Game
         CharLayout.Load(_charLayoutPath);
         JobLayout.Load(_jobLayoutPath);
         SetupLayout.Load(_setupLayoutPath);
+        PanelLayout.ReloadAll(); // the panel files (layouts/panel-*.json)
         if (_ui != null) _ui.RefreshFonts(); // null only on the ctor reload, before content loads
-        _invPos = new Point(Layout.Inv.X, Layout.Inv.Y);
-        _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);
-        _skillPos = new Point(Layout.Skill.X, Layout.Skill.Y);
-        _questPos = new Point(Layout.Quest.X, Layout.Quest.Y);
-        _settingsPos = new Point(Layout.Settings.X, Layout.Settings.Y);
+        _invPos = new Point(0, 0); _invPlaced = false; // the inventory takes its spot from its own file again
+        _statPos = new Point(0, 0); _statPlaced = false; // the stat window takes its spot from its own file again
+        _questPos = new Point(0, 0); _questDragged = false; // the quest window takes its spot from its own file again
+        _skillPos = new Point(0, 0); _skillDragged = false; // the skill window takes its spot from its own file again
+        _settingsPos = SettingsLayoutPos();
         _shopPos = new Point(Layout.Shop.X, Layout.Shop.Y);
         _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
+        foreach (var w in UiWindow.List) { w.Pos = w.LayoutPos(); w.Built = false; w.Drag = null; } // the new windows go back to the file spot
         if (_contentLoaded) BuildScreenScene(); // ctor reload skips: no textures yet
     }
+
+    // The layouts folder (next to assets/). Every panel reads its own file
+    // from here: layouts/panel-<name>.json.
+    public static string LayoutsDir => Path.Combine(Path.GetDirectoryName(FindAssetsDir())!, "layouts");
+
+    // The assets folder (the exported art and the json files).
+    internal static string AssetsDir => FindAssetsDir();
+
+    // The game data the new windows read.
+    internal MapData GameMap => _map;
+    internal float PlayerX => _mover.X;
+    internal float PlayerY => _mover.Y;
+    internal CharaSlot? Hero => _save?.Slots[_slot];
+    internal int Meso => _save?.Slots[_slot]?.Mesos ?? 0;
 
     private static string FindAssetsDir()
     {

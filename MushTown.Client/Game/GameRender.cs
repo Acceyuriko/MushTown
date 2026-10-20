@@ -175,7 +175,7 @@ public partial class MushTownGame
             0f, Vector2.Zero, 1f, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
     }
 
-    private void LoadTexture(string image)
+    internal void LoadTexture(string image)
     {
         if (_textures.ContainsKey(image)) return;
 

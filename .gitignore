@@ -3,6 +3,8 @@ bin/
 obj/
 [Bb]in/
 [Oo]bj/
+# Agent build folders (AGENT_BUILD=name)
+/.build/
 
 # Local game data (exported from MapleStory, copyrighted - never commit)
 # Rooted: source folders like MushTown.Shared/Data/ must stay committable.

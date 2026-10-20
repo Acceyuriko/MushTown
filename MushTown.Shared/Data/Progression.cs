@@ -52,15 +52,35 @@ public static class Progression
     public static int SkillDamage(SkillData data, int lv) =>
         data.MaxLevel <= 1 ? data.DmgLo : data.DmgLo + (data.DmgHi - data.DmgLo) * (lv - 1) / (data.MaxLevel - 1);
 
+    // The SP cost of one skill level.
+    public const int SkillSpCost = 1;
+
+    // Can the character raise this skill right now? The rule LearnSkill uses:
+    // the character level, an unspent point and headroom under max.
+    public static bool CanLearn(CharaSlot chara, SkillData data)
+    {
+        chara.SkillLv.TryGetValue(data.SkillId, out int lv);
+        return chara.Level >= data.ReqLevel && chara.Sp >= SkillSpCost && lv < data.MaxLevel;
+    }
+
     // Spends one SP to raise a skill: needs the character level, an unspent
     // point, and headroom under max. Returns false when nothing happens.
     public static bool LearnSkill(CharaSlot chara, SkillData data)
     {
+        if (!CanLearn(chara, data)) return false;
         chara.SkillLv.TryGetValue(data.SkillId, out int lv);
-        if (chara.Level < data.ReqLevel || chara.Sp <= 0 || lv >= data.MaxLevel) return false;
         chara.SkillLv[data.SkillId] = lv + 1;
-        chara.Sp--;
+        chara.Sp -= SkillSpCost;
         return true;
+    }
+
+    // Raises the skill as far as the SP go (the MAX button). Returns the
+    // levels bought: 0 when nothing happens (no SP, too young, already maxed).
+    public static int LearnSkillMax(CharaSlot chara, SkillData data)
+    {
+        int bought = 0;
+        while (LearnSkill(chara, data)) bought++;
+        return bought;
     }
 
     // Adds EXP, levels up while the bar is full. Each level: auto stat points

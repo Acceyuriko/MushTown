@@ -1,0 +1,12 @@
+<Project>
+  <!-- The agent build: set the AGENT_BUILD env var (any name) and every
+       project puts its output in .build/<name>/<project>/. Two agents can
+       build and run at the same time. Without the env var nothing moves. -->
+  <PropertyGroup Condition="'$(AGENT_BUILD)' != ''">
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).build/$(AGENT_BUILD)/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory).build/$(AGENT_BUILD)/$(MSBuildProjectName)/bin/</BaseOutputPath>
+    <!-- The old obj/ still holds generated files: keep them out of the build. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

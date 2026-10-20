@@ -392,3 +392,36 @@ public sealed class CharaPart
     // Draw order from zmap.img; smaller draws later (in front). List is sorted back-to-front.
     public int Z { get; set; }
 }
+
+// The map window data the exporter wrote: assets/ui/mapui.json.
+public sealed class MapUiData
+{
+    public List<string> Frame { get; set; } = new();
+    public WorldUiData World { get; set; } = new();
+    public List<MapNameUi> Maps { get; set; } = new();
+}
+
+// The world map art and the regions on it (Map/WorldMap/WorldMap.img).
+public sealed class WorldUiData
+{
+    public string Image { get; set; } = "";
+    public List<WorldRegionUi> Regions { get; set; } = new();
+}
+
+// One region: the official title, where its mark sits in the art, and the
+// map ids that belong to it.
+public sealed class WorldRegionUi
+{
+    public string Title { get; set; } = "";
+    public int X { get; set; }
+    public int Y { get; set; }
+    public List<int> Maps { get; set; } = new();
+}
+
+// One map's official names (String.wz Map.img).
+public sealed class MapNameUi
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Street { get; set; } = "";
+}

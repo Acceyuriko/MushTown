@@ -238,13 +238,23 @@ public sealed class Minimap : Component, IDrawable
         int x = MushTownGame.GameWidth - 8 - w, y = 8;
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 2, y - 2, w + 4, h + 4), new Color(0, 0, 0, 160));
         gfx.Sb.Draw(tex, new Rectangle(x, y, w, h), Color.White);
+        MapDots.Draw(gfx, map, _px(), _py(), x, y, w, h);
+    }
+}
+
+// The map dots: the portals (blue) and the player (yellow). The HUD
+// minimap and the big map window draw the same dots.
+public static class MapDots
+{
+    public static void Draw(UiGfx gfx, MapData map, float playerX, float playerY, int x, int y, int w, int h)
+    {
         foreach (var p in map.Portals)
         {
             var (dx, dy) = map.MiniMap.ToDot(p.X, p.Y, w, h);
             gfx.Sb.Draw(gfx.Pixel, new Rectangle(x + dx - 1, y + dy - 1, 3, 3), new Color(80, 160, 255));
         }
-        var (px, py) = map.MiniMap.ToDot(_px(), _py(), w, h);
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(x + px - 1, y + py - 1, 3, 3), new Color(255, 220, 0));
+        var (ux, uy) = map.MiniMap.ToDot(playerX, playerY, w, h);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(x + ux - 1, y + uy - 1, 3, 3), new Color(255, 220, 0));
     }
 }
 
@@ -456,23 +466,6 @@ public sealed class TitleBar : Component, IDrawable
     }
 }
 
-// One stat row: gray label left, live value right-aligned at +432
-// (matches DrawStatRow). Sits on the body with a row dy.
-public sealed class StatRow : Component, IDrawable
-{
-    private readonly string _label;
-    private readonly Func<string> _value;
-    private readonly int _dy;
-    public StatRow(string label, Func<string> value, int dy) { _label = label; _value = value; _dy = dy; }
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Ui.GetSmall(_label), new Vector2(r.X + 16, r.Y + _dy), new Color(50, 50, 60));
-        var v = gfx.Ui.GetSmall(_value());
-        gfx.Sb.Draw(v, new Vector2(r.X + 432 - v.Width, r.Y + _dy), Color.Black);
-    }
-}
-
 // Right-aligned live text at a body offset (meso coin total, stat
 // combat power). The bake picks the font (Meso vs Small).
 public sealed class RightLabel : Component, IDrawable
@@ -496,49 +489,6 @@ public sealed class RightLabel : Component, IDrawable
 // Live skill numbers per draw (level/SP/cooldown/buff/orbs change
 // without a scene rebuild, so the row reads them every frame).
 public readonly record struct SkillLive(int Lv, int Sp, int Level, float CdMs, float BuffMs, int Orbs);
-
-// One skill row: icon (gray when locked/cooling), name, sub line,
-// right side (req level / live seconds / key / [+]). Matches
-// DrawSkillRow; reads the Owner row rect.
-public sealed class SkillRow : Component, IDrawable
-{
-    private readonly SkillData _skill;
-    private readonly string? _key;
-    private readonly string _blurb;
-    private readonly Func<SkillLive> _live;
-    public SkillRow(SkillData skill, string? key, string blurb, Func<SkillLive> live)
-    {
-        _skill = skill; _key = key; _blurb = blurb; _live = live;
-    }
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Box;
-        var s = _live();
-        bool locked = s.Level < _skill.ReqLevel;
-        bool maxed = s.Lv >= _skill.MaxLevel;
-        bool learnable = !locked && !maxed && s.Sp > 0;
-        bool cooling = !locked && s.CdMs > 0;
-        bool live = s.BuffMs > 0;
-        gfx.Sb.Draw(gfx.Tex(locked || cooling ? _skill.Disabled : _skill.Icon), new Vector2(r.X + 10, r.Y + 8), Color.White);
-        var ink = locked ? new Color(130, 140, 150) : Color.White;
-        gfx.Sb.Draw(gfx.Ui.GetSmall(_skill.Name), new Vector2(r.X + 50, r.Y + 4), ink);
-        string sub = _skill.Kind == SkillData.KindPassive
-            ? $"Lv.{s.Lv}/{_skill.MaxLevel}  {_blurb}"
-            : _skill.Kind == SkillData.KindBuff
-            ? $"Lv.{s.Lv}/{_skill.MaxLevel}  MP {_skill.Mp}  {_skill.BuffMs / 1000}s{(_skill.SkillId == SkillData.ComboAttack && live ? $"  {s.Orbs} orbs" : "")}"
-            : $"Lv.{s.Lv}/{_skill.MaxLevel}  MP {_skill.Mp}  CD {_skill.CooldownMs / 1000}s";
-        gfx.Sb.Draw(gfx.Ui.GetSmall(sub), new Vector2(r.X + 50, r.Y + 24), ink);
-        string right = locked ? $"Lv.{_skill.ReqLevel}"
-            : live ? $"{(int)Math.Ceiling(s.BuffMs / 1000)}s"
-            : cooling ? $"{(int)Math.Ceiling(s.CdMs / 1000)}s"
-            : _key ?? $"{s.Lv}/{_skill.MaxLevel}";
-        var rc = locked ? new Color(255, 120, 120)
-            : live || cooling ? new Color(255, 220, 0) : Color.White;
-        if (learnable) { right += " [+]"; rc = new Color(120, 255, 120); }
-        var rt = gfx.Ui.GetSmall(right);
-        gfx.Sb.Draw(rt, new Vector2(r.X + r.Width - 8 - rt.Width, r.Y + 4), rc);
-    }
-}
 
 // One inventory cell: gold tint when worn, icon centered, count
 // bottom-right (matches DrawWornSlot/DrawInvSlot). Empty cells draw
@@ -594,20 +544,6 @@ public sealed class FlatButton : Component, IDrawable
     }
 }
 
-// Settings [-]/[+] box: dark fill, glyph centered at +4 (matches DrawSettingsPanel).
-public sealed class StepBox : Component, IDrawable
-{
-    private readonly string _glyph;
-    public StepBox(string glyph) => _glyph = glyph;
-    public void Draw(UiGfx gfx)
-    {
-        var b = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Pixel, b, new Color(0, 0, 0, 120));
-        var t = gfx.Ui.GetSmall(_glyph);
-        gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 4), Color.White);
-    }
-}
-
 // One shop row: icon centered in a 32px cell, name + price at +52
 // (matches DrawShopIcon + the row text). Strings bake at build: the
 // sync gate rebuilds when stock or sell rows change.
@@ -637,37 +573,6 @@ public sealed class LiveTint : Component, IDrawable
         var r = Owner.Get<Rect>()!.Box;
         var (text, ink) = _row();
         gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(r.X + _dx, r.Y + _dy), ink);
-    }
-}
-
-// Selected-quest block per draw (null when the block hides: no chara,
-// unknown sel, or sel not accepted). Lines ride the Hud wrap cache.
-public readonly record struct QuestLive(List<string> Lines, List<(string Text, bool Done)> Kills, string TurnIn);
-
-// Selected-quest detail: wrapped lines yield to kill rows (the block
-// holds 10), then the turn-in line (matches DrawQuestPanel).
-public sealed class QuestDetail : Component, IDrawable
-{
-    private readonly Func<QuestLive?> _data;
-    private readonly int _dy;
-    public QuestDetail(Func<QuestLive?> data, int dy) { _data = data; _dy = dy; }
-    public void Draw(UiGfx gfx)
-    {
-        var d = _data();
-        if (d == null) return;
-        var r = Owner.Get<Rect>()!.Box;
-        int y = r.Y + _dy;
-        foreach (string line in d.Value.Lines.Take(10 - d.Value.Kills.Count))
-        {
-            gfx.Sb.Draw(gfx.Ui.GetSmall(line), new Vector2(r.X + 12, y), Color.White);
-            y += 16;
-        }
-        foreach (var k in d.Value.Kills)
-        {
-            gfx.Sb.Draw(gfx.Ui.GetSmall(k.Text), new Vector2(r.X + 12, y), k.Done ? new Color(120, 255, 120) : Color.White);
-            y += 16;
-        }
-        gfx.Sb.Draw(gfx.Ui.GetSmall(d.Value.TurnIn), new Vector2(r.X + 12, y), new Color(255, 220, 0));
     }
 }
 
