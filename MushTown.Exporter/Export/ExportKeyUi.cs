@@ -27,12 +27,20 @@ public static partial class Export
         string dir = Path.Combine(outDir, "ui");
         Directory.CreateDirectory(dir);
 
-        // the key window: the frame and the buttons
+        // the key window: the frame, the official keyboard and the buttons
         if (!UiPng.Save(ui, "StatusBar3.img/KeyConfig/backgrnd", Path.Combine(dir, "keys_bg.png"))) return false;
+        if (!UiPng.Save(ui, "StatusBar3.img/KeyConfig/backgrnd3", Path.Combine(dir, "keys_kb.png"))) return false;
         foreach (var (node, name) in new[]
         {
             ("StatusBar3.img/KeyConfig/button:presetSave", "keys_save"),
             ("StatusBar3.img/KeyConfig/button:Default", "keys_reset"),
+            ("StatusBar3.img/KeyConfig/button:presetUndo", "keys_cancel"),
+            ("StatusBar3.img/KeyConfig/button:presetCopy", "keys_copy"),
+            ("StatusBar3.img/KeyConfig/button:presetApplication", "keys_apply"),
+            ("StatusBar3.img/KeyConfig/button:customDefalultKey", "keys_custom"),
+            ("StatusBar3.img/KeyConfig/button:presetPage1", "keys_pg1"),
+            ("StatusBar3.img/KeyConfig/button:presetPage2", "keys_pg2"),
+            ("StatusBar3.img/KeyConfig/button:presetPage3", "keys_pg3"),
         })
             foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
                 if (!UiPng.Save(ui, $"{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;

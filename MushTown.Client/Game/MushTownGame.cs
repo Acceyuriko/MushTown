@@ -406,7 +406,7 @@ public partial class MushTownGame : Game
             }
             if (UiWindow.List.Any(w => w.Show)) // Esc closes the new windows too
             {
-                foreach (var w in UiWindow.List) w.Show = false;
+                foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
                 PlaySfx("click");
                 base.Update(gameTime); return;
             }

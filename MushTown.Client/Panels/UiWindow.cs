@@ -38,6 +38,9 @@ public abstract class UiWindow
     // Build the scene for the current state.
     public abstract void Build();
 
+    // The game closed the window (Esc). A window with a draft throws it away.
+    public virtual void OnClosed() { }
+
     // Start a title drag: the game moves the window while the mouse is held.
     public void StartDrag() => Drag = new Point(Scene.LastClick.X - Pos.X, Scene.LastClick.Y - Pos.Y);
 

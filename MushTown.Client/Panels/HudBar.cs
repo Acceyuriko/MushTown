@@ -471,22 +471,6 @@ public partial class MushTownGame
         gfx.Sb.Draw(tex, new Vector2(s.X + 2, s.Y + 2), Color.White);
     }
 
-    // Solid backing with rounded corners (the art's own radius is ~3px, measured).
-    internal Texture2D RoundedBacking(int w, int h, Color color, int r)
-    {
-        var tex = new Texture2D(GraphicsDevice, w, h);
-        Color[] px = new Color[w * h];
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-            {
-                int dx = Math.Min(x, w - 1 - x), dy = Math.Min(y, h - 1 - y);
-                bool cut = dx < r && dy < r && (dx - r) * (dx - r) + (dy - r) * (dy - r) > r * r;
-                px[y * w + x] = cut ? Color.Transparent : color;
-            }
-        tex.SetData(px);
-        return tex;
-    }
-
     // Rounds the title strip's top corners in place (drawn stretched ~2x wide,
     // so the native ellipse is rx=2 by ry=3).
     private static void RoundTopCorners(Texture2D tex, int rx, int ry)

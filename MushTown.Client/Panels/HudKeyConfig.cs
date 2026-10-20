@@ -1,5 +1,4 @@
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
 
@@ -7,7 +6,8 @@ namespace MushTown.Client;
 
 // The key settings window: the official KeyConfig art. The official grid
 // under the keyboard holds the game actions: the player presses an action
-// in its cell, drags it onto a key and saves.
+// in its cell, drags it onto a key and saves. The official keyboard shows
+// the key letters, or the icon of the action a key has.
 public sealed class KeyConfigWindow : UiWindow
 {
     private readonly MushTownGame _game;
@@ -34,36 +34,33 @@ public sealed class KeyConfigWindow : UiWindow
     private static KeyFile Spots => _file ??= MushTownGame.LoadJson<KeyFile>(
         Path.Combine(Path.GetDirectoryName(MushTownGame.LayoutsDir)!, "assets", "ui", "keys.json"));
 
-    // The game actions in the grid: the action, the official icon, the short
-    // code the bound key shows. The icons are the official KeyConfig ones.
-    private static readonly (HotkeyAction Action, int Icon, string Code)[] Actions =
+    // The game actions in the grid: the action and the official icon.
+    private static readonly (HotkeyAction Action, int Icon)[] Actions =
     {
-        (HotkeyAction.Inventory, 1, "INV"),
-        (HotkeyAction.Stat, 2, "STA"),
-        (HotkeyAction.Skill, 3, "SKL"),
-        (HotkeyAction.Quest, 8, "QST"),
-        (HotkeyAction.Minimap, 7, "MIN"),
-        (HotkeyAction.WorldMap, 5, "WLD"),
-        (HotkeyAction.Settings, 202, "SET"),
+        (HotkeyAction.Inventory, 1),
+        (HotkeyAction.Stat, 2),
+        (HotkeyAction.Skill, 3),
+        (HotkeyAction.Quest, 8),
+        (HotkeyAction.Minimap, 7),
+        (HotkeyAction.WorldMap, 5),
+        (HotkeyAction.Settings, 46),
     };
 
-    // The pending bindings and the action the player holds.
+    // The pending bindings, the action the player holds and the picked
+    // preset slot.
     private readonly Dictionary<HotkeyAction, string> _draft = new();
     private HotkeyAction? _held;
-
-    // The key boxes are baked once: one texture for the free keys, one for
-    // the bound keys (a rounded box per key per frame is too many draws).
-    private Texture2D? _freeKey, _boundKey;
+    private int _slot;
 
     public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 660), _lay.Get("h", 624));
     public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("titleH", 18));
     public override Point LayoutPos() => new(_lay.Get("x", 353), _lay.Get("y", 72));
 
-    // One key box on the official key grid (the WZ keyPos spot).
+    // One key box of the official keyboard (the WZ keyPos spot).
     private Rectangle KeyRect(Spot s) => new(
         Pos.X + s.X + _lay.Get("keyDx", 0),
         Pos.Y + s.Y + _lay.Get("keyDy", 33),
-        _lay.Get("keyW", 26), _lay.Get("keyH", 21));
+        _lay.Get("keyW", 32), _lay.Get("keyH", 32));
 
     // One official grid cell (the art draws the cells, the actions sit in them).
     private Rectangle CellRect(int index)
@@ -78,7 +75,7 @@ public sealed class KeyConfigWindow : UiWindow
     public void Open()
     {
         _draft.Clear();
-        foreach (var (action, _, _) in Actions) _draft[action] = _game.HotkeyKey(action);
+        foreach (var (action, _) in Actions) _draft[action] = _game.HotkeyKey(action);
         _held = null;
         _game.ShowWindow(HotkeyAction.KeyConfig);
     }
@@ -86,40 +83,42 @@ public sealed class KeyConfigWindow : UiWindow
     // Close the window: the unsaved changes and the held action go away.
     public void Close()
     {
+        OnClosed();
+        Show = false;
+    }
+
+    // The game closed the window (Esc): the draft and the held action go away.
+    public override void OnClosed()
+    {
         _draft.Clear();
         _held = null;
-        Show = false;
     }
 
     public override void Build()
     {
         _game.LoadTexture("ui/keys_bg.png");
+        _game.LoadTexture("ui/keys_kb.png");
         _game.LoadTexture("ui/hud_statx.png");
-        foreach (string stem in new[] { "ui/keys_save", "ui/keys_reset" })
+        _game.LoadTexture("ui/keys_custom_p.png");
+        foreach (string stem in new[] { "ui/keys_save", "ui/keys_reset", "ui/keys_cancel", "ui/keys_copy", "ui/keys_apply", "ui/keys_pg1", "ui/keys_pg2", "ui/keys_pg3" })
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
                 _game.LoadTexture(stem + state);
         foreach (var s in Spots.Keys)
             if (s.Cap != "") _game.LoadTexture("ui/" + s.Cap);
         foreach (var a in Actions) _game.LoadTexture($"ui/keys_icon_{a.Icon}.png");
 
-        if (_freeKey == null || _freeKey.IsDisposed)
-        {
-            int w = _lay.Get("keyW", 26), h = _lay.Get("keyH", 21);
-            _freeKey = _game.RoundedBacking(w, h, new Color(238, 238, 238), 3);
-            _boundKey = _game.RoundedBacking(w, h, new Color(255, 210, 60), 3);
-        }
-
         // The draft starts from the saved bindings (a window built without
         // Open, the shot mode).
         if (_draft.Count == 0)
-            foreach (var (action, _, _) in Actions) _draft[action] = _game.HotkeyKey(action);
+            foreach (var (action, _) in Actions) _draft[action] = _game.HotkeyKey(action);
 
         Scene = new Scene();
         var root = new GameObject();
         root.Add(new Rect(Rect()));
         root.Add(new Picture("ui/keys_bg.png"));
+        root.Add(new Picture("ui/keys_kb.png", _lay.Get("kbX", 20), _lay.Get("kbY", 100)));
 
-        // The keys: the official cap, or the action that took the key.
+        // The keys: the official letter, or the icon of the action on it.
         foreach (var spot in Spots.Keys)
         {
             var s = spot;
@@ -136,13 +135,42 @@ public sealed class KeyConfigWindow : UiWindow
             int index = i;
             var o = new GameObject();
             o.Add(new Rect(CellRect(index)));
-            o.Add(new Button { OnClick = () => Pick(a.Action) });
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(a.Action) });
             o.Add(new Invoke(gfx => DrawCell(gfx, a, index)));
             root.AddChild(o);
         }
 
-        root.AddChild(ArtButton("ui/keys_save", _lay.Get("saveX", 562), _lay.Get("saveY", 568), 78, 27, Save));
+        // The Custom tab: the window has only this page, so the tab is the
+        // current one. It is a plain picture in the pressed look: no click,
+        // no hover.
+        root.Add(new Picture("ui/keys_custom_p.png", _lay.Get("customX", 19), _lay.Get("customY", 66)));
+
+        // The presets: copy the draft into the slot, apply the slot.
+        root.AddChild(ArtButton("ui/keys_copy", _lay.Get("copyX", 380), _lay.Get("copyY", 73), 67, 19, Copy));
+        root.AddChild(ArtButton("ui/keys_apply", _lay.Get("applyX", 573), _lay.Get("applyY", 73), 67, 19, Apply));
+        for (int i = 0; i < 3; i++)
+        {
+            int slot = i;
+            string stem = $"ui/keys_pg{i + 1}";
+            int x = _lay.Get($"pg{i + 1}X", 505 + 20 * i), y = _lay.Get($"pg{i + 1}Y", 76);
+            var o = new GameObject();
+            o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 12, 12)));
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _slot = slot });
+            // The picked slot is drawn pressed, so the player sees it.
+            o.Add(new Invoke(gfx =>
+            {
+                string art = _slot == slot ? stem + "_p.png"
+                    : gfx.Hovered == o ? (gfx.Pressed ? stem + "_p.png" : stem + "_h.png")
+                    : stem + "_n.png";
+                gfx.Sb.Draw(gfx.Tex(art), new Vector2(Pos.X + x, Pos.Y + y), Color.White);
+            }));
+            root.AddChild(o);
+        }
+
+        // The bottom buttons: cancel, reset and save.
+        root.AddChild(ArtButton("ui/keys_cancel", _lay.Get("cancelX", 474), _lay.Get("cancelY", 568), 87, 27, Cancel));
         root.AddChild(ArtButton("ui/keys_reset", _lay.Get("resetX", 176), _lay.Get("resetY", 568), 67, 27, Default));
+        root.AddChild(ArtButton("ui/keys_save", _lay.Get("saveX", 562), _lay.Get("saveY", 568), 78, 27, Save));
 
         // The title strip drags the window.
         var title = new GameObject();
@@ -175,27 +203,24 @@ public sealed class KeyConfigWindow : UiWindow
         return o;
     }
 
-    // One key: the free box with the official cap, or the gold box with the
-    // action that took the key.
+    // One key: the official letter, or the icon of the action on the key.
     private void DrawKey(UiGfx gfx, Spot s)
     {
         var r = KeyRect(s);
-        string? code = CodeFor(KeyName(s.Code));
-        if (code != null)
+        var action = ActionFor(KeyName(s.Code));
+        if (action != null)
         {
-            gfx.Sb.Draw(_boundKey!, new Vector2(r.X, r.Y), Color.White);
-            var t = gfx.Ui.GetSmall(code);
-            gfx.Sb.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, r.Y + (r.Height - t.Height) / 2), new Color(40, 40, 60));
+            var icon = gfx.Tex($"ui/keys_icon_{IconOf(action.Value)}.png");
+            gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
             return;
         }
-        gfx.Sb.Draw(_freeKey!, new Vector2(r.X, r.Y), Color.White);
         if (s.Cap == "") return;
         var cap = gfx.Tex("ui/" + s.Cap);
         gfx.Sb.Draw(cap, new Vector2(r.X + (r.Width - cap.Width) / 2, r.Y + (r.Height - cap.Height) / 2), Color.White);
     }
 
     // The action in its official grid cell.
-    private void DrawCell(UiGfx gfx, (HotkeyAction Action, int Icon, string Code) a, int index)
+    private void DrawCell(UiGfx gfx, (HotkeyAction Action, int Icon) a, int index)
     {
         var r = CellRect(index);
         var icon = gfx.Tex($"ui/keys_icon_{a.Icon}.png");
@@ -242,8 +267,16 @@ public sealed class KeyConfigWindow : UiWindow
         _draft[action] = key;
     }
 
-    // Save: the game writes the whole map and saves it once.
-    private void Save() => _game.SetHotkeys(_draft);
+    // Save: the game writes the whole map and saves it once. The KeyConfig
+    // action has no cell in the window, so its current key is kept.
+    private void Save()
+    {
+        var map = new Dictionary<HotkeyAction, string>(_draft)
+        {
+            [HotkeyAction.KeyConfig] = _game.HotkeyKey(HotkeyAction.KeyConfig),
+        };
+        _game.SetHotkeys(map);
+    }
 
     // Default: the official bindings come back (the button art says Default).
     private void Default()
@@ -253,12 +286,34 @@ public sealed class KeyConfigWindow : UiWindow
             if (action != HotkeyAction.KeyConfig) _draft[action] = key;
     }
 
-    // The short code of the action that has this key.
-    private string? CodeFor(string key)
+    // Cancel: the draft goes back to the saved bindings (the changes are lost).
+    private void Cancel()
+    {
+        _draft.Clear();
+        foreach (var (action, _) in Actions) _draft[action] = _game.HotkeyKey(action);
+        _held = null;
+    }
+
+    // Copy: the draft goes into the picked preset slot.
+    private void Copy() => _game.SaveHotkeyPreset(_slot, _draft);
+
+    // Apply: the picked preset slot comes into the draft (the player can
+    // still press Save). An empty slot has no bindings, so the official
+    // client ignores it: the draft keeps its keys.
+    private void Apply()
+    {
+        var slot = _game.HotkeyPreset(_slot);
+        if (slot.Count == 0) return;
+        _draft.Clear();
+        foreach (var (action, _) in Actions) _draft[action] = slot.GetValueOrDefault(action, "");
+    }
+
+    // The action that has this key.
+    private HotkeyAction? ActionFor(string key)
     {
         if (key == "") return null;
         foreach (var a in Actions)
-            if (_draft.GetValueOrDefault(a.Action) == key) return a.Code;
+            if (_draft.GetValueOrDefault(a.Action) == key) return a.Action;
         return null;
     }
 

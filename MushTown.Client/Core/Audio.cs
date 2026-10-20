@@ -36,6 +36,7 @@ public partial class MushTownGame
             _bgmVol = Math.Clamp(json.Bgm, 0, 100);
             _sfxVol = Math.Clamp(json.Sfx, 0, 100);
             LoadHotkeys(json.Keys);
+            LoadHotkeyPresets(json.Presets);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
     }
@@ -43,7 +44,7 @@ public partial class MushTownGame
     private void SaveSettings()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); // fresh checkouts have no data/ yet (SaveStore.Save does the same)
-        File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgmVol, Sfx = _sfxVol, Keys = SaveHotkeys() }));
+        File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgmVol, Sfx = _sfxVol, Keys = SaveHotkeys(), Presets = SaveHotkeyPresets() }));
     }
 
     private sealed class Settings
@@ -51,6 +52,7 @@ public partial class MushTownGame
         public int Bgm { get; set; } = 80;
         public int Sfx { get; set; } = 80;
         public Dictionary<string, string>? Keys { get; set; } // the panel hotkeys (action name -> key name)
+        public List<Dictionary<string, string>>? Presets { get; set; } // the three saved binding sets
     }
 
     // Our own 44-byte header (SoundExport.ToWav writes it): channels at 22,

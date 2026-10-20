@@ -16,20 +16,6 @@ public enum HotkeyAction
     KeyConfig, // no key by default: the options window opens it
 }
 
-// The names the key settings panel shows. They are MonoGame key names, so
-// Enum.TryParse turns one into the key to watch; the modifier keys get a
-// shorter label here.
-public static class HotkeyNames
-{
-    public static string Label(string key) => key switch
-    {
-        "LeftControl" or "RightControl" => "Ctrl",
-        "LeftAlt" or "RightAlt" => "Alt",
-        "LeftShift" or "RightShift" => "Shift",
-        _ => key,
-    };
-}
-
 public partial class MushTownGame
 {
     // action -> key name. The key settings panel edits this and saves it.
@@ -100,6 +86,26 @@ public partial class MushTownGame
         [HotkeyAction.KeyConfig] = "",
     };
 
+    // The three saved binding sets (the key window's preset slots).
+    private readonly List<Dictionary<HotkeyAction, string>> _hotkeyPresets = new()
+    {
+        new(), new(), new(),
+    };
+
+    // The bindings in a preset slot. An empty slot gives an empty map.
+    public Dictionary<HotkeyAction, string> HotkeyPreset(int slot) =>
+        slot >= 0 && slot < _hotkeyPresets.Count
+            ? new Dictionary<HotkeyAction, string>(_hotkeyPresets[slot])
+            : new Dictionary<HotkeyAction, string>();
+
+    // Save a binding set into a preset slot.
+    public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map)
+    {
+        if (slot < 0 || slot >= _hotkeyPresets.Count) return;
+        _hotkeyPresets[slot] = new Dictionary<HotkeyAction, string>(map);
+        SaveSettings();
+    }
+
     // The key bound to an action, or "" when it has none.
     public string HotkeyKey(HotkeyAction action) => _hotkeys.GetValueOrDefault(action) ?? "";
 
@@ -123,5 +129,32 @@ public partial class MushTownGame
         foreach (var (action, key) in _hotkeys)
             map[action.ToString()] = key;
         return map;
+    }
+
+    // Load the saved preset slots (a missing list keeps the empty slots).
+    private void LoadHotkeyPresets(List<Dictionary<string, string>>? saved)
+    {
+        if (saved == null) return;
+        for (int i = 0; i < _hotkeyPresets.Count && i < saved.Count; i++)
+        {
+            var slot = new Dictionary<HotkeyAction, string>();
+            foreach (var (action, key) in saved[i])
+                if (Enum.TryParse<HotkeyAction>(action, out var a)) slot[a] = key;
+            _hotkeyPresets[i] = slot;
+        }
+    }
+
+    // The preset slots for the settings file.
+    private List<Dictionary<string, string>> SaveHotkeyPresets()
+    {
+        var list = new List<Dictionary<string, string>>();
+        foreach (var slot in _hotkeyPresets)
+        {
+            var map = new Dictionary<string, string>();
+            foreach (var (action, key) in slot)
+                map[action.ToString()] = key;
+            list.Add(map);
+        }
+        return list;
     }
 }
