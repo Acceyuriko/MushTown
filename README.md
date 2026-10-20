@@ -33,12 +33,12 @@
 窗口按相机偏移绘制：背景按 `cx` 铺砖 + `rx` 视差、物件支持 `f=1` 左右翻，整幅画面
 按比例放大到全屏（屏幕不是 1366×768 的形状时左右或上下留黑边），角色站在出生点地面上。
 
-**W3 已完成：纸娃娃穿上装备。** 角色从裸体 4 件套变成 11 个 img
-（身体/头/脸/头发 + 帽子/上衣/裤子/鞋/手套/披风/武器），stand2 站姿 3 帧、每帧 16 个
-部件按 zmap 图层排序画对（披风在后、衣服盖住身体、武器在前）。客户端逻辑不用改（只改了一行注释）。
+**W3 已完成：纸娃娃穿上装备。** 角色从裸体 4 件套变成 8 个 img
+（身体/头/脸/头发 + 裤子/上衣/鞋/武器），stand1 站姿 3 帧、每帧 12 个
+部件按 zmap 图层排序画对（裤子在下、上衣盖住身体、武器在前）。客户端逻辑不用改（只改了一行注释）。
 
-**W4 已完成：角色会动了。** 导出 stand2/walk2/jump 三个动作（每帧 16/16/17 个
-部件），客户端按 delay 切帧：左右走（walk2）、Alt 跳（jump）、站立（stand2），
+**W4 已完成：角色会动了。** 导出 stand1/walk1/jump 三个动作（每帧 12/12/14 个
+部件），客户端按 delay 切帧：左右走（walk1）、Alt 跳（jump）、站立（stand1），
 朝向左右翻转，相机跟随，平地跳跃落地。截图加 `--action/--frame/--facing` 参数。
 
 **W5 已完成：双人同屏。** 一个开房（`--host`）、一个加入（`--join <ip>`），
@@ -51,6 +51,13 @@
 （`data/saves.json`，原子写）：建角→下线→重登，数据不丢。
 无参数进存档菜单；`--host/--join/--shot` 照旧直跳（无存档）。
 
+## 界面布局文件
+
+五个页面的位置、盒子尺寸、字号都在 `layouts/` 下的 json 里：`menu-layout.json`（主菜单）、
+`charselect-layout.json`（选角）、`jobselect-layout.json`（选职业）、`setup-layout.json`（创建角色）、
+`hud-layout.json`（游戏内面板）。
+改完存盘就生效（Debug 版热重载，不用重编译）。键可以只留想改的那几个，其余保持现值。
+
 ## 常用命令
 
 命令都在仓库根目录下运行（`assets/`、`logs/` 等相对路径都按当前目录解析）。
@@ -62,11 +69,13 @@ dotnet run --project MushTown.Exporter -- smoke [Data路径]           # WzLib �
 dotnet run --project MushTown.Exporter -- dump [路径] [深度]         # 看 Base 树里的 WZ 节点结构（缺路径=整棵树）
 dotnet run --project MushTown.Exporter -- catdump <分类> <路径> [深度] # 看某个分类 wz（如 Character）里的节点
 dotnet run --project MushTown.Exporter -- find <节点名>              # 按名字定位节点
+dotnet run --project MushTown.Exporter -- pick item <目录> <前缀>  # 列出该目录下 img 的 id + 名字 + 动作
+dotnet run --project MushTown.Exporter -- pick hair <输出png> <id,id,...>  # 发型对照图（选默认发型用）
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录] # 导出 assets/
 dotnet run --project MushTown.Client                                # 打开游戏窗口（存档菜单）
 dotnet run --project MushTown.Client -- --host                       # 开房（本机当主机，无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>                   # 加入主机（本机双开用 127.0.0.1）
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop]  # 截图后退出（frame 从 0 数）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk1] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop]  # 截图后退出（frame 从 0 数）
 git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```
 

@@ -42,4 +42,24 @@ internal static class LayoutJson
                 throw new JsonException($"bad array \"{key}\"");
         return arr;
     }
+
+    // A [w,h] box (the drawn size).
+    internal static (int W, int H) GetSize(JsonElement root, string key, (int W, int H) def)
+    {
+        var (w, h) = GetPoint(root, key, def);
+        return (w, h);
+    }
+
+    // An [r,g,b] colour.
+    internal static (int R, int G, int B) GetColor(JsonElement root, string key, (int R, int G, int B) def)
+    {
+        if (!root.TryGetProperty(key, out var el)) return def;
+        if (el.ValueKind != JsonValueKind.Array || el.GetArrayLength() != 3
+            || el[0].ValueKind != JsonValueKind.Number || el[1].ValueKind != JsonValueKind.Number
+            || el[2].ValueKind != JsonValueKind.Number
+            || !el[0].TryGetInt32(out int r) || !el[1].TryGetInt32(out int g) || !el[2].TryGetInt32(out int b))
+            throw new JsonException($"bad color \"{key}\"");
+        if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) throw new JsonException($"bad color \"{key}\"");
+        return (r, g, b);
+    }
 }

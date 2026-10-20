@@ -12,6 +12,8 @@ using MushTown.Exporter;
 //   uipng    [Category] <node-path> <out.png>   save one canvas as png
 //   export   [DataDir] [OutDir]               export map + character assets
 //   questscan <npcid> [<npcid>...]       list quests starting/ending at these NPCs
+//   pick item <folder> <prefix>          list Character part ids with names
+//   pick hair <out.png> <id,id,...>       contact sheet of the doll per hair
 // Only smoke and export take a DataDir; the others always read the default one,
 // so their first argument is their own.
 string cmd = args.Length > 0 ? args[0] : "smoke";
@@ -112,9 +114,24 @@ switch (cmd)
         Environment.ExitCode = QuestScan.Run(WzRoot.LoadBase(ExporterPaths.DataDir), args[1..]) ? 0 : 1;
         return;
 
+    case "pick":
+        if (args.Length >= 4 && args[1] == "item")
+        {
+            Environment.ExitCode = Pick.Items(args[2], args[3]) ? 0 : 1;
+            return;
+        }
+        if (args.Length >= 4 && args[1] == "hair")
+        {
+            Environment.ExitCode = Pick.Hair(args[2], args[3]) ? 0 : 1;
+            return;
+        }
+        Console.WriteLine("usage: pick item <folder> <prefix> | pick hair <out.png> <id,id,...>");
+        Environment.ExitCode = 1;
+        return;
+
     default:
         Console.WriteLine($"unknown command: {cmd}");
-        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | cat <Category> <path> | raw <Category> <path> <out> | spine <skel-file> [bone] | spinebake [id|all] | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir] | questscan <npcid> [<npcid>...]");
+        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | cat <Category> <path> | raw <Category> <path> <out> | spine <skel-file> [bone] | spinebake [id|all] | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir] | questscan <npcid> [<npcid>...] | pick item <folder> <prefix> | pick hair <out.png> <id,id,...>");
         Environment.ExitCode = 1;
         return;
 }

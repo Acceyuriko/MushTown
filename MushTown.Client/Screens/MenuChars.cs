@@ -154,7 +154,7 @@ public partial class MushTownGame
         AdvanceClip(_motes, dtMs);
         if (_walkSlot != _slot) { _walkSlot = _slot; _walkFrame = 0; _walkT = 0; } // fresh selection walks from frame 0
         _walkT += dtMs;
-        var delays = _delays["walk2"];
+        var delays = _delays["walk1"];
         if (_walkT >= delays[_walkFrame]) { _walkT -= delays[_walkFrame]; _walkFrame = (_walkFrame + 1) % delays.Count; }
         if (_csDeleteModal.Enabled)
         {
@@ -255,9 +255,9 @@ public partial class MushTownGame
                 DrawUi("cs_pillar.png", px, fy + CharLayout.Pillar.Y, !faceRight);
                 DrawClip(_portal, fx, fy);
                 DrawClip(_motes, fx, fy); // glow stays behind: the walker stays crisp
-                DrawAvatar(fx, fy, "walk2", _walkFrame, faceRight, s.Equips);
+                DrawAvatar(fx, fy, "walk1", _walkFrame, faceRight, s.Equips);
             }
-            else DrawAvatar(fx, fy, "stand2", 0, faceRight, s.Equips);
+            else DrawAvatar(fx, fy, "stand1", 0, faceRight, s.Equips);
             DrawName(fx, fy + CharLayout.TagDown, s.Name, PlateFor(s.Equips));
         }
     }

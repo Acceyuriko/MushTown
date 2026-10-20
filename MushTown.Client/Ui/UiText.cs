@@ -22,12 +22,16 @@ public sealed class UiText : IDisposable
     private readonly Font _meso;
     private Font _list;
     private Font _cancel;
+    private Font _setupName;
+    private Font _setupError;
     private readonly Dictionary<string, Texture2D> _cache = new();
     private readonly Dictionary<string, Texture2D> _cacheSmall = new();
     private readonly Dictionary<string, Texture2D> _cacheMid = new();
     private readonly Dictionary<string, Texture2D> _cacheMeso = new();
     private readonly Dictionary<string, Texture2D> _cacheList = new();
     private readonly Dictionary<string, Texture2D> _cacheCancel = new();
+    private readonly Dictionary<string, Texture2D> _cacheSetupName = new();
+    private readonly Dictionary<string, Texture2D> _cacheSetupError = new();
 
     public UiText(GraphicsDevice gd, string fontsDir)
     {
@@ -49,6 +53,8 @@ public sealed class UiText : IDisposable
             : new Font("Arial", 12, FontStyle.Bold, GraphicsUnit.Pixel);
         _list = Maple(MenuLayout.ListSize);
         _cancel = Maple(MenuLayout.CancelSize);
+        _setupName = Maple(SetupLayout.NameFont);
+        _setupError = Maple(SetupLayout.ErrorFont);
     }
 
     // MapleStory Bold, or YaHei when the TTFs are missing.
@@ -57,16 +63,24 @@ public sealed class UiText : IDisposable
         : new Font("Microsoft YaHei", px, GraphicsUnit.Pixel);
 
     // Live layout reload rebuilds the menu fonts (sizes come from the file).
-    public void RefreshListFonts()
+    public void RefreshFonts()
     {
         _list.Dispose();
         _cancel.Dispose();
+        _setupName.Dispose();
+        _setupError.Dispose();
         foreach (var tex in _cacheList.Values) tex.Dispose();
         foreach (var tex in _cacheCancel.Values) tex.Dispose();
+        foreach (var tex in _cacheSetupName.Values) tex.Dispose();
+        foreach (var tex in _cacheSetupError.Values) tex.Dispose();
         _cacheList.Clear();
         _cacheCancel.Clear();
+        _cacheSetupName.Clear();
+        _cacheSetupError.Clear();
         _list = Maple(MenuLayout.ListSize);
         _cancel = Maple(MenuLayout.CancelSize);
+        _setupName = Maple(SetupLayout.NameFont);
+        _setupError = Maple(SetupLayout.ErrorFont);
     }
 
     public Texture2D Get(string text) => GetFrom(_cache, _font, text);
@@ -85,6 +99,11 @@ public sealed class UiText : IDisposable
 
     // The Cancel row gets its own size (menu-layout.json cancelSize).
     public Texture2D GetListCancel(string text) => GetFrom(_cacheCancel, _cancel, text);
+
+    // Setup page text: the name field and the error line (setup-layout.json
+    // nameFont / errorFont).
+    public Texture2D GetSetupName(string text) => GetFrom(_cacheSetupName, _setupName, text);
+    public Texture2D GetSetupError(string text) => GetFrom(_cacheSetupError, _setupError, text);
 
     private Texture2D GetFrom(Dictionary<string, Texture2D> cache, Font font, string text)
     {
@@ -170,11 +189,15 @@ public sealed class UiText : IDisposable
         _meso.Dispose();
         _list.Dispose();
         _cancel.Dispose();
+        _setupName.Dispose();
+        _setupError.Dispose();
         foreach (var tex in _cache.Values) tex.Dispose();
         foreach (var tex in _cacheSmall.Values) tex.Dispose();
         foreach (var tex in _cacheMid.Values) tex.Dispose();
         foreach (var tex in _cacheMeso.Values) tex.Dispose();
         foreach (var tex in _cacheList.Values) tex.Dispose();
         foreach (var tex in _cacheCancel.Values) tex.Dispose();
+        foreach (var tex in _cacheSetupName.Values) tex.Dispose();
+        foreach (var tex in _cacheSetupError.Values) tex.Dispose();
     }
 }

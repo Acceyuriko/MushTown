@@ -1,0 +1,23 @@
+{
+  "_help": "Setup (name your hero) screen in 1366x768 space. panel is the board top-left (the top card plus the lower card under it); every other position except avatar is an offset inside that board, so moving the board moves the whole panel. avatar is the preview doll's feet on the screen (an absolute spot, not a board offset). *Size keys are the drawn boxes (the card and button art stretches into them; the name box and caret use theirs), except classNameSize: that is the box the class-name art centres in (it keeps its own size). Font sizes are display px, the same px as the positions (the text is baked at that size). Keys may be omitted (keeps current value). DEBUG builds reload this file live on save. Keys: panel/avatar = the board top-left and the doll's feet; cardSize/cardBot/cardBotSize = the two card boxes; nameField/nameFieldSize = the white name box (baked into the card art at that spot); nameFont = name text size; nameText = name text offset (x from the box's left edge, y added to the centred spot); caret/caretGap = the caret box and the gap to the text; className/classNameSize = the Job row box the class name art centres in; classTint = that art's colour; confirm/confirmSize and cancel/cancelSize = the two buttons; errorFont = error line size; error = the error line's anchor (the text centres on it horizontally; its top edge sits on the anchor's y).",
+  "panel": [960, 220],
+  "avatar": [515, 420],
+  "cardSize": [366, 202],
+  "cardBot": [0, 202],
+  "cardBotSize": [366, 91],
+  "nameField": [27, 90],
+  "nameFieldSize": [312, 42],
+  "nameFont": 16,
+  "nameText": [10, 0],
+  "caret": [2, 16],
+  "caretGap": -2,
+  "className": [71, 156],
+  "classNameSize": [273, 54],
+  "classTint": [70, 96, 120],
+  "confirm": [12, 231],
+  "confirmSize": [166, 43],
+  "cancel": [186, 231],
+  "cancelSize": [167, 43],
+  "errorFont": 22,
+  "error": [183, 300]
+}

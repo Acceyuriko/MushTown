@@ -6,9 +6,8 @@ namespace MushTown.Exporter;
 // UI exports: lobby art, animated frame sets, name tags, cursor, HUD, digits.
 public static partial class Export
 {
-    // Saves lobby art: (node path, file name). Char-select and job buttons
-    // carry real 3-state art (_n/_h/_p); setup buttons keep one normal PNG
-    // with a client hover overlay.
+    // Saves lobby art: (node path, file name). Char-select, job and setup
+    // buttons carry real 3-state art (_n/_h/_p).
     // Must match Menu.cs UiFiles: every file there must be listed here.
     private static readonly (string node, string file)[] UiFiles = new[]
     {
@@ -23,8 +22,14 @@ public static partial class Export
         ("Login.img/ClassSelect/button:make/mouseOver/0", "btn_make_h.png"),
         ("Login.img/ClassSelect/button:make/pressed/0", "btn_make_p.png"),
         ("LoginBack.img/CustomizeChar/000/0/0", "setupbg.png"),
-        ("Login.img/CustomizeChar/000/BtYes/normal/0", "btn_confirm.png"),
-        ("Login.img/CustomizeChar/000/BtNo/normal/0", "btn_cancel.png"),
+        ("Login.img/CustomizeChar/12200/board/avatarTop", "setup_panel.png"),
+        ("Login.img/CustomizeChar/12200/board/boardBottom", "setup_panel_bot.png"),
+        ("Login.img/CustomizeChar/12200/BtYes/normal/0", "setup_ok_n.png"),
+        ("Login.img/CustomizeChar/12200/BtYes/mouseOver/0", "setup_ok_h.png"),
+        ("Login.img/CustomizeChar/12200/BtYes/pressed/0", "setup_ok_p.png"),
+        ("Login.img/CustomizeChar/12200/BtNo/normal/0", "setup_cancel_n.png"),
+        ("Login.img/CustomizeChar/12200/BtNo/mouseOver/0", "setup_cancel_h.png"),
+        ("Login.img/CustomizeChar/12200/BtNo/pressed/0", "setup_cancel_p.png"),
         ("Login.img/CharSelect/BtSelect/normal/0", "cs_select_n.png"),
         ("Login.img/CharSelect/BtSelect/mouseOver/0", "cs_select_h.png"),
         ("Login.img/CharSelect/BtSelect/pressed/0", "cs_select_p.png"),

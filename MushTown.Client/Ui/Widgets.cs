@@ -430,26 +430,9 @@ public sealed class Invoke : Component, IDrawable
     public void Draw(UiGfx gfx) => _draw(gfx);
 }
 
-// Art button: the png carries its own label, hover is a white overlay
-// (matches DrawImgButton). Sits on the button (hover lights it).
-public sealed class ImgButton : Component, IDrawable
+// 2px box border (was DrawBoxBorder; WhitePanel uses it).
+public static class Border
 {
-    private readonly string _key;
-    public ImgButton(string key) { _key = key; }
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Tex(_key), new Vector2(r.X, r.Y), Color.White);
-        if (gfx.Hovered == Owner) gfx.Sb.Draw(gfx.Pixel, r, new Color(255, 255, 255, 40));
-    }
-}
-
-// 2px box border (was DrawBoxBorder; WhitePanel and UiBox reuse the static).
-public sealed class Border : Component, IDrawable
-{
-    private readonly Color _color;
-    public Border(Color color) { _color = color; }
-    public void Draw(UiGfx gfx) => Draw(gfx, Owner.Get<Rect>()!.Box, _color);
     public static void Draw(UiGfx gfx, Rectangle r, Color color)
     {
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, r.Width, 2), color);
@@ -457,41 +440,6 @@ public sealed class Border : Component, IDrawable
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y, 2, r.Height), color);
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X + r.Width - 2, r.Y, 2, r.Height), color);
     }
-}
-
-// Name box: white fill, gold when focused, live text or hint (matches
-// DrawUiBox). Sits on the name field (focus and text read live).
-public sealed class UiBox : Component, IDrawable
-{
-    private readonly Func<string> _text;
-    private readonly string _hint;
-    private readonly Func<bool> _focused;
-    private readonly Color _ink, _hintInk;
-    public UiBox(Func<string> text, string hint, Func<bool> focused, Color ink, Color hintInk)
-    {
-        _text = text; _hint = hint; _focused = focused; _ink = ink; _hintInk = hintInk;
-    }
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Pixel, r, Color.White);
-        Border.Draw(gfx, r, _focused() ? Color.Gold : new Color(160, 160, 160));
-        string text = _text(), show = text == "" ? _hint : text;
-        if (show == "") return;
-        var tex = gfx.Ui.Get(show);
-        gfx.Sb.Draw(tex, new Vector2(r.X + 10, r.Y + (r.Height - tex.Height) / 2), text == "" ? _hintInk : _ink);
-    }
-}
-
-// Static big text at a fixed spot (setup labels).
-public sealed class Text : Component, IDrawable
-{
-    private readonly string _text;
-    private readonly int _x, _y;
-    private readonly Color _color;
-    public Text(string text, int x, int y, Color color) { _text = text; _x = x; _y = y; _color = color; }
-    public void Draw(UiGfx gfx) =>
-        gfx.Sb.Draw(gfx.Ui.Get(_text), new Vector2(_x, _y), _color);
 }
 
 // Panel title strip: stretched hilong plus the lime caption (stat,

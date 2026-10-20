@@ -37,30 +37,31 @@ public static class Net
 
     // Every character action, in load order. Exporter and client init reuse
     // this so a new action needs one list edit (plus its code switch arms).
-    public static readonly string[] Actions = { "stand2", "walk2", "jump", "ladder", "rope", "prone", "swingP1" };
+    // The names follow the one-handed sword: stand1/walk1/swingO1.
+    public static readonly string[] Actions = { "stand1", "walk1", "jump", "ladder", "rope", "prone", "swingO1" };
 
     // Action name <-> code. Both throw on bad input (fail loud, never guess).
     public static byte ActionCode(string action) => action switch
     {
-        "stand2" => ActStand,
-        "walk2" => ActWalk,
+        "stand1" => ActStand,
+        "walk1" => ActWalk,
         "jump" => ActJump,
         "ladder" => ActLadder,
         "rope" => ActRope,
         "prone" => ActProne,
-        "swingP1" => ActSwing,
+        "swingO1" => ActSwing,
         _ => throw new InvalidDataException($"bad action name {action}"),
     };
 
     public static string ActionName(byte action) => action switch
     {
-        ActStand => "stand2",
-        ActWalk => "walk2",
+        ActStand => "stand1",
+        ActWalk => "walk1",
         ActJump => "jump",
         ActLadder => "ladder",
         ActRope => "rope",
         ActProne => "prone",
-        ActSwing => "swingP1",
+        ActSwing => "swingO1",
         _ => throw new InvalidDataException($"bad action code {action}"),
     };
 

@@ -79,7 +79,7 @@ public partial class MushTownGame
     private static readonly Color MenuInk = new(43, 8, 5); // baked button text median, sampled off btn_astra
 
     // Must match Export.cs UiFiles: every name here must be exported, or LoadTexture throws.
-    // Char-select and job buttons carry real 3-state art (_n/_h/_p); frame sets
+    // Char-select, job and setup buttons carry real 3-state art (_n/_h/_p); frame sets
     // (cs_ghost/cs_portal/cs_motes) load through LoadUiClip instead.
     private static readonly string[] UiFiles = new[]
     {
@@ -102,7 +102,9 @@ public partial class MushTownGame
         "listbg.png", "btn_make_n.png", "btn_make_h.png", "btn_make_p.png",
         "job_bg.png", "job_cover.png",
         "job_page_l.png", "job_page_r.png",
-        "setupbg.png", "btn_confirm.png", "btn_cancel.png",
+        "setupbg.png", "setup_panel.png", "setup_panel_bot.png",
+        "setup_ok_n.png", "setup_ok_h.png", "setup_ok_p.png",
+        "setup_cancel_n.png", "setup_cancel_h.png", "setup_cancel_p.png",
     };
 
     // Wooden sign art (tracked art/menu/*.png, like custom quests/): the menu
@@ -380,7 +382,7 @@ public partial class MushTownGame
             _ghost.Frame = ghostPose;
             _portal.Frame = portalPose;
             _motes.Frame = motesPose; // the mid-cycle flash frame would white out the shot
-            _walkFrame = Math.Min(1, _delays["walk2"].Count - 1);
+            _walkFrame = Math.Min(1, _delays["walk1"].Count - 1);
         }
         LoadTexture("ui/cursor.png"); // outside UiFiles (that table is plain pngs; the cursor ships origin jsons too)
         _cursorHot = LoadJson<CursorData>(Path.Combine(_assetsDir, "ui", "cursor.json"));

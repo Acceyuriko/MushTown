@@ -50,7 +50,7 @@ public sealed class MoverTests
         TreeUpdate.UpdateObject(world, 1f); // the real path the Client steps
         Assert.AreEqual(240f, m.X);
         Assert.IsTrue(m.FacingRight);
-        Assert.AreEqual("walk2", m.Action);
+        Assert.AreEqual("walk1", m.Action);
         Assert.IsNotNull(m.Ground);
         world.Enabled = false;
         TreeUpdate.UpdateObject(world, 1f);
@@ -144,7 +144,7 @@ public sealed class MoverTests
         m.Input = locked;
         m.Update(Dt);
         Assert.AreEqual(100f, m.X);
-        Assert.AreEqual("swingP1", m.Action);
+        Assert.AreEqual("swingO1", m.Action);
     }
 
     [TestMethod]

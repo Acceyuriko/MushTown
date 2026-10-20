@@ -249,11 +249,13 @@ public sealed class ItemData
     public const int IslandRing = 1112162; // Island Travel Name Tag Ring (Ri, plate 129): cash shop (later)
 
     // Beginner img per worn slot: the doll merge draws these when the slot
-    // sits empty (only slots with v1 equips need entries).
+    // sits empty (only slots with v1 equips need entries). The beginner's
+    // "Ma" is the longcoat 01050287; the pants 01060026 are a separate baked
+    // part and no v1 gear swaps them.
     public static readonly Dictionary<string, string> BeginnerImgs = new()
     {
-        ["Wp"] = "01442000",
-        ["Ma"] = "01040036",
+        ["Wp"] = "01302000",
+        ["Ma"] = "01050287",
     };
 
     // Worn bonuses: weapon PAD (0 when none worn: the caller keeps the
@@ -379,7 +381,7 @@ public sealed class CharaPart
 {
     public string Image { get; set; } = "";
 
-    // Source img id (00002000, 01040036, ...): the doll merge keeps base
+    // Source img id (00002000, 01050287, ...): the doll merge keeps base
     // parts and swaps each worn slot's beginner img for the worn gear.
     public string Img { get; set; } = "";
 

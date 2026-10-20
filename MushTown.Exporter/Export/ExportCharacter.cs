@@ -10,29 +10,28 @@ public static partial class Export
 
     private const string BodyImg = @"00002000.img";
     private const string HeadImg = @"00012000.img";
-    private const string HairImg = @"Hair\00030000.img";
+    private const string HairImg = @"Hair\00030020.img";
     private const string FaceImg = @"Face\00020000.img";
 
-    // Beginner gear on top of the naked body. Body, head and hair must carry
-    // every action; gear without the art falls back to its stand2 frame (face
-    // stays special: one default emotion node shared by every frame).
+    // Beginner gear on top of the naked body: the modern beginner default
+    // (Purple Muffler Outfit + Yellow Adventure Shoes) plus the one-handed
+    // Sword the stand1/walk1/swingO1 art is baked from. The striped boxers
+    // stay under the outfit so a worn coat (the one Ma gear in v1) still has
+    // legs to show.
     private static readonly string[] CharaEquips = new[]
     {
-        @"Cap\01000000.img",
-        @"Coat\01040036.img",
         @"Pants\01060026.img",
-        @"Shoes\01070001.img",
-        @"Glove\01080001.img",
-        @"Cape\01100000.img",
-        @"Weapon\01442000.img",
+        @"Longcoat\01050287.img",
+        @"Shoes\01072833.img",
+        @"Weapon\01302000.img",
     };
 
     // Wearable gear: img path + the beginner img it swaps out of the doll
     // merge (swap position = the beginner img's slot in CharaEquips).
     private static readonly (string gear, string beginner)[] CharaGears = new[]
     {
-        (@"Coat\01040039.img", @"Coat\01040036.img"),
-        (@"Weapon\01442004.img", @"Weapon\01442000.img"),
+        (@"Coat\01040039.img", @"Longcoat\01050287.img"),
+        (@"Weapon\01442004.img", @"Weapon\01302000.img"),
     };
 
     // img/action/frame with a uol resolved at both levels (AvatarCanvas.cs:1203-1226)
@@ -44,9 +43,27 @@ public static partial class Export
 
     private static string ImgId(string img) => Path.GetFileNameWithoutExtension(img);
 
-    private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir, string action,
-        string? gear = null, string? gearBeginner = null)
+    // The equip's stand pose frame for a frame it has no art of (a polearm on
+    // a sword body): stand1 first, then stand2; a pose with fewer frames
+    // repeats its last one. The frame is picked by number like FindImgFrame.
+    private static (Wz_Node? node, string pose) FindStandFrame(WzRoot looseRoot, string img, int frameIdx)
     {
+        foreach (string action in new[] { "stand1", "stand2" })
+        {
+            var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{img}\{action}"));
+            if (actionNode == null) continue;
+            var frames = actionNode.Nodes.Where(n => int.TryParse(n.Text, out _)).OrderBy(n => int.Parse(n.Text)).ToList();
+            if (frames.Count == 0) continue;
+            var frame = frames.FirstOrDefault(n => n.Text == frameIdx.ToString()) ?? frames[^1];
+            return (WzNodeUtil.ResolveUol(frame), action);
+        }
+        return (null, "");
+    }
+
+    private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir, string action,
+        string? gear = null, string? gearBeginner = null, string? hair = null)
+    {
+        string hairImg = hair ?? HairImg;
         // One gear's parts across one action: same frames, same bones, only
         // the target img's parts kept (prefix beginners feed the trash frame
         // for bones; identical bytes may rewrite beginner pngs, harmless).
@@ -98,10 +115,10 @@ public static partial class Export
                 Console.WriteLine($"{tag} frame {frameIdx}: {HeadImg} node not found");
                 return false;
             }
-            var hairFrame = FindImgFrame(looseRoot, HairImg, action, frameIdx);
+            var hairFrame = FindImgFrame(looseRoot, hairImg, action, frameIdx);
             if (hairFrame == null)
             {
-                Console.WriteLine($"{tag} frame {frameIdx}: {HairImg} node not found");
+                Console.WriteLine($"{tag} frame {frameIdx}: {hairImg} node not found");
                 return false;
             }
 
@@ -122,7 +139,7 @@ public static partial class Export
             missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(HeadImg), headFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
             if (face) // back-facing frames drop the whole face img (AvatarCanvas.cs:1111-1117)
                 missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(FaceImg), faceNode, outDir, frameIdx, saved, zNames, face, action, "chara/body");
-            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(HairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(hairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
             foreach (string img in CharaEquips)
             {
                 bool isTarget = img == gearBeginner;
@@ -131,14 +148,15 @@ public static partial class Export
                 if (equipFrame == null)
                 {
                     // equips without this art (weapon/glove climb frames) reuse
-                    // their stand2 frame; body/head/hair stay strict above
-                    equipFrame = FindImgFrame(looseRoot, path, "stand2", frameIdx);
+                    // their stand pose; body/head/hair stay strict above
+                    var (standFrame, pose) = FindStandFrame(looseRoot, path, frameIdx);
+                    equipFrame = standFrame;
                     if (equipFrame == null)
                     {
                         Console.WriteLine($"{tag} frame {frameIdx}: {path} node not found");
                         return false;
                     }
-                    Console.WriteLine($"{tag} frame {frameIdx}: {path} falls back to stand2");
+                    Console.WriteLine($"{tag} frame {frameIdx}: {path} falls back to {pose}");
                 }
                 var sink = gear == null || isTarget ? outFrame : trash!;
                 missing += AddFrameParts(baseRoot, sink, bones, ImgId(path), equipFrame, outDir, frameIdx, saved, zNames, face, action,
@@ -188,8 +206,8 @@ public static partial class Export
             // the image and bones, so naming follows the raw node (AvatarCanvas.cs:749)
             string name = raw.Text;
             Wz_Node? part = WzNodeUtil.ResolveUol(raw);
-            // beginner: face flag from the body frame, EarType 0, hair out (this cap
-            // leaves hairOverHead showing, verified in logs/w3_stand2.png), first weapon
+            // beginner: face flag from the body frame, EarType 0, hair out (the
+            // beginner set has no cap, so hairOverHead shows), first weapon
             // a dangling part has no parent; the frame itself tells multi weapons apart
             bool multiWeapon = (part?.ParentNode ?? frame).Nodes["weapon1"] != null;
             bool visible = SceneMath.PartVisible(name, face, earType: 0, hairCover: false,

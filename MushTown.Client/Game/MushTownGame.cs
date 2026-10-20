@@ -61,7 +61,7 @@ public partial class MushTownGame : Game
     private GameObject _mapObj = new(); // rebuilt per map load: portal + NPC children
     private readonly PlayerMover _mover = new();
     private FootholdItem _spawnGround = null!;
-    private string _shownAction = "stand2"; // last action the frames advanced on (resets the frame on change)
+    private string _shownAction = "stand1"; // last action the frames advanced on (resets the frame on change)
     private int _frame;
     private float _timerMs;
     private bool _altWasDown, _upWasDown, _ctrlWasDown;
@@ -92,6 +92,7 @@ public partial class MushTownGame : Game
     private readonly string _menuLayoutPath;
     private readonly string _charLayoutPath;
     private readonly string _jobLayoutPath;
+    private readonly string _setupLayoutPath;
 #if DEBUG
     private FileSystemWatcher? _layoutWatcher;
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
@@ -121,6 +122,7 @@ public partial class MushTownGame : Game
         _menuLayoutPath = Path.Combine(dir, "menu-layout.json");
         _charLayoutPath = Path.Combine(dir, "charselect-layout.json");
         _jobLayoutPath = Path.Combine(dir, "jobselect-layout.json");
+        _setupLayoutPath = Path.Combine(dir, "setup-layout.json");
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
@@ -452,12 +454,12 @@ public partial class MushTownGame : Game
         int dirNow = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
         if (_fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
 
-        // Ctrl swings the polearm (not on a ladder): the swing locks movement
+        // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
         if (freshCtrl && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge())
         {
-            _fighter.AttackLock = _delays["swingP1"].Sum();
+            _fighter.AttackLock = _delays["swingO1"].Sum();
             PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
@@ -876,7 +878,8 @@ public partial class MushTownGame : Game
         MenuLayout.Load(_menuLayoutPath);
         CharLayout.Load(_charLayoutPath);
         JobLayout.Load(_jobLayoutPath);
-        if (_ui != null) _ui.RefreshListFonts(); // null only on the ctor reload, before content loads
+        SetupLayout.Load(_setupLayoutPath);
+        if (_ui != null) _ui.RefreshFonts(); // null only on the ctor reload, before content loads
         _invPos = new Point(Layout.Inv.X, Layout.Inv.Y);
         _statPos = new Point(Layout.Stat.X, Layout.Stat.Y);
         _skillPos = new Point(Layout.Skill.X, Layout.Skill.Y);

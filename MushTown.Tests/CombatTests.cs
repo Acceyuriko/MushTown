@@ -6,7 +6,7 @@ namespace MushTown.Tests;
 [TestClass]
 public class CombatTests
 {
-    // The v1 beginner (4/4, polearm 32): max range 29, min 5. Each stage below
+    // The v1 beginner (4/4, weapon 32): max range 29, min 5. Each stage below
     // pins one line of Damage.Calc (bwiki structure: range -> roll -> defense
     // -> min 1). Live rolls use NextDouble, so 29 itself never lands; the
     // test pins the formula bound, not a live roll.

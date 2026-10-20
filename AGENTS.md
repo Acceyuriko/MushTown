@@ -17,6 +17,7 @@
 - 快捷键一个都不分给调试工具，日志面板用鼠标点开。
 - `WzComparerR2/` 是 git 子模块，锁定 commit；要改解析器先 fork，不要就地大改。
 - 客户端**内部固定按 1366×768 渲染**（GameWidth/GameHeight），再整幅按比例放大到无边框全屏；不是扩大相机范围。窗口尺寸变化要跟着当前屏幕重新适配。
+- 界面的定位数字、盒子尺寸、字号都放 `layouts/*.json`（菜单/选角/选职业/创建角色/HUD 各一个），不要写死在代码里；Debug 版存盘即热重载，Release 版只在启动时读一次。
 
 ## 常用命令
 
@@ -36,9 +37,11 @@ dotnet run --project MushTown.Exporter -- spinebake [id|all]  # 烘焙职业 Spi
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录]  # 导出 assets/
 dotnet run --project MushTown.Exporter -- find <节点名>      # 按名字定位 WZ 节点
 dotnet run --project MushTown.Exporter -- questscan <npcid> [<npcid>...]  # 列出起止于这些 NPC 的任务
+dotnet run --project MushTown.Exporter -- pick item <分类目录> <前缀>  # 列出该目录下的 img id + 名字 + 动作
+dotnet run --project MushTown.Exporter -- pick hair <输出png> <id,id,...>  # 每个发型一张的对照图（选默认发型用）
 dotnet run --project MushTown.Client                        # 打开游戏窗口（存档菜单）
 dotnet run --project MushTown.Client -- --host               # 开房（无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>           # 加入主机
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk2] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab 0] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]  # 截图后退出（验收用，frame 从 0 数，--hit 摆拍打怪，--skill 摆拍技能，--skilltab 选技能页，--drop 摆拍掉落，--wear 穿满 demo 装备，--aiticks 跑 n 步 AI，quest 摆拍任务窗+追踪，talk+--talk 摆拍 NPC 对话，settings 摆拍音量窗，shop+--talk 摆拍商店，job/job2+--job 摆拍指定职业，--frame 非0时覆盖脊柱冻结帧）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk1] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab 0] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]  # 截图后退出（验收用，frame 从 0 数，--hit 摆拍打怪，--skill 摆拍技能，--skilltab 选技能页，--drop 摆拍掉落，--wear 穿满 demo 装备，--aiticks 跑 n 步 AI，quest 摆拍任务窗+追踪，talk+--talk 摆拍 NPC 对话，settings 摆拍音量窗，shop+--talk 摆拍商店，job/job2+--job 摆拍指定职业，--frame 非0时覆盖脊柱冻结帧）
 git clone --recurse-submodules <仓库>                       # 克隆要带子模块
 ```

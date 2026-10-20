@@ -18,7 +18,7 @@ using MushTown.Client;
 // Anything else is a mistake, not something to ignore.
 string? shotPath = null;
 int shotMap = 10000;
-string shotAction = "stand2";
+string shotAction = "stand1";
 int shotFrame = 0;
 bool shotFacingRight = false;
 bool host = false;

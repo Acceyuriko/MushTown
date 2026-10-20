@@ -26,7 +26,7 @@ public class ProgressionTests
     [TestMethod]
     public void PanelRange_BeginnerIs5to29()
     {
-        Assert.AreEqual((5, 29), Progression.PanelRange(4, 4, 32));
+        Assert.AreEqual((5, 29), Progression.PanelRange(4, 4, Progression.WeaponAtk));
     }
 
     [TestMethod]

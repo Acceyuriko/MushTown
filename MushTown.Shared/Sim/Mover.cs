@@ -42,7 +42,7 @@ public sealed class PlayerMover : Component
     public bool ClimbMoving; // climb pose only animates while sliding
     public bool FacingRight; // raw sprites face left; the Client mirrors when this is set
     public bool WasInPortal; // Up held across frames only travels on walk-in, never standing still
-    public string Action = "stand2"; // art key the Client draws (and the net maps to a code)
+    public string Action = "stand1"; // art key the Client draws (and the net maps to a code)
 
     public MapData Map = null!; // current map, set by the Client on load and switch
     public PlayerInput Input; // this frame's snapshot, set by the Client before the step
@@ -201,9 +201,9 @@ public sealed class PlayerMover : Component
                 FellOut = true;
         }
 
-        Action = Input.Locked ? "swingP1"
+        Action = Input.Locked ? "swingO1"
             : Climb != null ? (Climb.Ladder ? "ladder" : "rope")
-            : Ground == null ? "jump" : Input.Down ? "prone" : dir != 0 && moved ? "walk2" : "stand2";
+            : Ground == null ? "jump" : Input.Down ? "prone" : dir != 0 && moved ? "walk1" : "stand1";
     }
 
     // Held Up/Down near a ladder or rope grabs on, centered on its x.

@@ -5,7 +5,9 @@ namespace MushTown.Shared;
 // W10 plays a fixed warrior line: auto stat points on level-up (M4).
 public static class Progression
 {
-    // Beginner polearm 01442000, its WZ incPAD (real attack arrives with W17 equips).
+    // Starting weapon attack. v1 placeholder: 32 keeps the damage range the
+    // tests and the early mobs are tuned for (5..29). The one-handed Sword
+    // 01302000 has WZ incPAD 15; the real attack number lands with W17.
     public const int WeaponAtk = 32;
 
     // EXP to climb from this level to the next. Linear v1 curve: levels 1-10
@@ -17,9 +19,9 @@ public static class Progression
     public static int MaxHp(int level) => 50 + 30 * (level - 1);
     public static int MaxMp(int level) => 5 + 5 * (level - 1);
 
-    // Polearm weapon multiplier. bwiki's weapon table page is gone (template
+    // Melee weapon multiplier. bwiki's weapon table page is gone (template
     // 404), so 4.6 is a v1 guess, kept visible here until verified.
-    private const double PolearmMult = 4.6;
+    private const double WeaponMult = 4.6;
 
     // Melee base mastery: bwiki 熟练度 floor 20% (no beginner skill raises it).
     private const double MeleeMastery = 0.20;
@@ -28,7 +30,7 @@ public static class Progression
     // rolls inside this range; the stat panel shows it.
     public static (int min, int max) PanelRange(int str, int dex, int weaponAtk)
     {
-        int max = (int)(PolearmMult * (str * 4 + dex) * weaponAtk / 100);
+        int max = (int)(WeaponMult * (str * 4 + dex) * weaponAtk / 100);
         return ((int)(max * MeleeMastery), max);
     }
 

@@ -6,9 +6,26 @@ namespace MushTown.Client;
 // Setup screen: name the new hero, then confirm.
 public partial class MushTownGame
 {
-    private static Rectangle NameFieldRect() => new(660, 258, 304, 40);
-    private static Rectangle ConfirmBtnRect() => new(660, 320, 166, 43);
-    private static Rectangle SetupCancelRect() => new(846, 320, 167, 43);
+    // Every number of this page lives in layouts/setup-layout.json: the board
+    // place, the boxes inside it, the text sizes. The offsets are relative to
+    // the board (the top card plus the lower card under it); the doll's feet
+    // are an absolute screen spot. The official CustomizeChar/12200 ones are
+    // the name box 27,90 and the buttons 12,231 and 186,231. className is the
+    // box the class-name art centres in, and the art keeps its own size.
+    private static Rectangle PanelRect() =>
+        new(SetupLayout.Panel.X, SetupLayout.Panel.Y, SetupLayout.CardSize.W, SetupLayout.CardSize.H);
+    private static Rectangle PanelBotRect() =>
+        new(SetupLayout.Panel.X + SetupLayout.CardBot.X, SetupLayout.Panel.Y + SetupLayout.CardBot.Y,
+            SetupLayout.CardBotSize.W, SetupLayout.CardBotSize.H);
+    private static Rectangle NameFieldRect() =>
+        new(SetupLayout.Panel.X + SetupLayout.NameField.X, SetupLayout.Panel.Y + SetupLayout.NameField.Y,
+            SetupLayout.NameFieldSize.W, SetupLayout.NameFieldSize.H);
+    private static Rectangle ConfirmBtnRect() =>
+        new(SetupLayout.Panel.X + SetupLayout.Confirm.X, SetupLayout.Panel.Y + SetupLayout.Confirm.Y,
+            SetupLayout.ConfirmSize.W, SetupLayout.ConfirmSize.H);
+    private static Rectangle SetupCancelRect() =>
+        new(SetupLayout.Panel.X + SetupLayout.Cancel.X, SetupLayout.Panel.Y + SetupLayout.Cancel.Y,
+            SetupLayout.CancelSize.W, SetupLayout.CancelSize.H);
 
     private void MenuTextInput(char c)
     {
@@ -29,24 +46,65 @@ public partial class MushTownGame
         var preview = new GameObject { NoHit = true };
         preview.Add(new Invoke(_ => DrawSetupAvatar()));
         _menuScene.Add(preview);
-        var labels = new GameObject { NoHit = true };
-        labels.Add(new Text("Hero", 660, 200, Ink));
-        labels.Add(new Text("Name", 660, 232, Ink));
-        _menuScene.Add(labels);
-        var name = new GameObject();
-        name.Add(new Rect(NameFieldRect()));
-        name.Add(new Button { OnClick = () => _focus = "name" }); // the name field is input, not a button: silent
-        name.Add(new UiBox(() => _name, "1-12: A-Z a-z 0-9 _ -", () => _focus == "name", Ink, Hint));
-        _menuScene.Add(name);
+        var panel = new GameObject { NoHit = true };
+        panel.Add(new Rect(PanelRect()));
+        panel.Add(new Picture("ui/setup_panel.png"));
+        _menuScene.Add(panel);
+        var panelBot = new GameObject { NoHit = true };
+        panelBot.Add(new Rect(PanelBotRect()));
+        panelBot.Add(new Picture("ui/setup_panel_bot.png"));
+        _menuScene.Add(panelBot);
+        // The picked class name sits where the layout puts it: the art keeps
+        // its own size and centres in the className box (the Job row).
+        var job = Picked;
+        LoadTexture(job.Name);
+        var jtex = _textures[job.Name];
+        var jobO = new GameObject { NoHit = true };
+        jobO.Add(new Rect(new Rectangle(
+            SetupLayout.Panel.X + SetupLayout.ClassName.X + (SetupLayout.ClassNameSize.W - jtex.Width) / 2,
+            SetupLayout.Panel.Y + SetupLayout.ClassName.Y + (SetupLayout.ClassNameSize.H - jtex.Height) / 2,
+            jtex.Width, jtex.Height)));
+        jobO.Add(new Picture(job.Name, 0, 0) { Tint = new Color(SetupLayout.ClassTint.R, SetupLayout.ClassTint.G, SetupLayout.ClassTint.B) });
+        _menuScene.Add(jobO);
+        var field = new GameObject();
+        field.Add(new Rect(NameFieldRect()));
+        field.Add(new Button { OnClick = () => _focus = "name" }); // the name field is input, not a button: silent
+        field.Add(new Invoke(DrawNameField));
+        _menuScene.Add(field);
         var confirm = MenuButton(ConfirmBtnRect(), "setup:confirm", () => DoCreate(), ButtonKind.Click);
-        confirm.Add(new ImgButton("ui/btn_confirm.png"));
+        confirm.Add(new Image("ui/setup_ok"));
         _menuScene.Add(confirm);
         var cancel = MenuButton(SetupCancelRect(), "setup:cancel", () => SetupToJob(), ButtonKind.Click);
-        cancel.Add(new ImgButton("ui/btn_cancel.png"));
+        cancel.Add(new Image("ui/setup_cancel"));
         _menuScene.Add(cancel);
         var err = new GameObject { NoHit = true };
-        err.Add(new CenterText(() => _error, 817, 375, ErrRed));
+        err.Add(new Invoke(DrawSetupError));
         _menuScene.Add(err);
+    }
+
+    // Typed name over the official box, with a caret while the field has focus.
+    private void DrawNameField(UiGfx gfx)
+    {
+        var r = NameFieldRect();
+        var tex = gfx.Ui.GetSetupName(_name == "" ? "1-12: A-Z a-z 0-9 _ -" : _name);
+        int tx = r.X + SetupLayout.NameText.X;
+        int ty = r.Y + (r.Height - tex.Height) / 2 + SetupLayout.NameText.Y;
+        gfx.Sb.Draw(tex, new Vector2(tx, ty), _name == "" ? Hint : Ink);
+        if (_focus == "name")
+        {
+            int cx = _name == "" ? tx + SetupLayout.CaretGap : tx + tex.Width + SetupLayout.CaretGap;
+            int cy = r.Y + (r.Height - SetupLayout.Caret.H) / 2;
+            gfx.Sb.Draw(gfx.Pixel, new Rectangle(cx, cy, SetupLayout.Caret.W, SetupLayout.Caret.H), Ink);
+        }
+    }
+
+    // Error line under the card, centred on the layout anchor.
+    private void DrawSetupError(UiGfx gfx)
+    {
+        if (_error == "") return;
+        var tex = gfx.Ui.GetSetupError(_error);
+        gfx.Sb.Draw(tex, new Vector2(SetupLayout.Panel.X + SetupLayout.Error.X - tex.Width / 2,
+            SetupLayout.Panel.Y + SetupLayout.Error.Y), ErrRed);
     }
 
     private void SetupToJob()
@@ -104,7 +162,7 @@ public partial class MushTownGame
         int camX = _camera.X, camY = _camera.Y;
         _camera.X = 0;
         _camera.Y = 0;
-        DrawAvatar(450, 735, "stand2", 0, false);
+        DrawAvatar(SetupLayout.Avatar.X, SetupLayout.Avatar.Y, "stand1", 0, true);
         _camera.X = camX;
         _camera.Y = camY;
     }

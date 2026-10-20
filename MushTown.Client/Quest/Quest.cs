@@ -196,7 +196,7 @@ public partial class MushTownGame
         _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
         ResetMotion();
         _mover.FacingRight = true;
-        _mover.Action = "stand2";
+        _mover.Action = "stand1";
         _frame = 0;
         _talkNpc = npc.NpcId;
         _talkQuest = 0;

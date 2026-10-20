@@ -9,6 +9,10 @@ namespace MushTown.Exporter;
 // Usage: export [DataDir] [OutDir]
 public static partial class Export
 {
+    // Dev helper: bake one action with a chosen hair into outDir (hair picker).
+    internal static bool BakeCharacter(WzRoot baseRoot, WzRoot chara, string outDir, string action, string hairImg) =>
+        ExportCharacter(baseRoot, chara, outDir, action, hair: hairImg);
+
     public static void Run(string dataDir, string outDir)
     {
         var baseRoot = WzRoot.LoadBase(dataDir);
