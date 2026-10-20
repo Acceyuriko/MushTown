@@ -228,8 +228,10 @@ public partial class MushTownGame : Game
             if (!_charas.ContainsKey(_shotAction))
                 throw new InvalidDataException($"unknown action: {_shotAction}");
             // Job screens pose the spine clip, not the char: --frame is the clip frame there.
-            if (_shotScreen is not ("job" or "job2") && _shotFrame >= _charas[_shotAction].Frames.Count)
-                throw new InvalidDataException($"action {_shotAction} has no frame {_shotFrame}");
+            // The setup page always draws the stand1 doll, whatever --action says.
+            string shotChar = _shotScreen == "setup" ? "stand1" : _shotAction;
+            if (_shotScreen is not ("job" or "job2") && _shotFrame >= _charas[shotChar].Frames.Count)
+                throw new InvalidDataException($"action {shotChar} has no frame {_shotFrame}");
             _mover.Action = _shotAction;
             _frame = _shotFrame;
             _mover.FacingRight = _shotFacingRight;

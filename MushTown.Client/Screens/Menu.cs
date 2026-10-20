@@ -588,7 +588,7 @@ public partial class MushTownGame
             case Screen.Server: UpdateServer(click, enter, esc, gx, gy, r); break;
             case Screen.Chars: UpdateChars(click, enter, esc, gx, gy, dtMs); break;
             case Screen.Job: UpdateJob(click, enter, esc, gx, gy, dtMs); break;
-            case Screen.Setup: UpdateSetup(click, enter, esc, gx, gy); break;
+            case Screen.Setup: UpdateSetup(click, enter, esc, gx, gy, dtMs); break;
         }
     }
 

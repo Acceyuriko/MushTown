@@ -6,6 +6,10 @@ namespace MushTown.Client;
 // Setup screen: name the new hero, then confirm.
 public partial class MushTownGame
 {
+    // The doll on the card plays the stand animation (the WZ stand1 frames).
+    private int _setupFrame;
+    private float _setupTimer;
+
     // Every number of this page lives in layouts/setup-layout.json: the board
     // place, the boxes inside it, the text sizes. The offsets are relative to
     // the board (the top card plus the lower card under it); the doll's feet
@@ -38,6 +42,9 @@ public partial class MushTownGame
 
     private void BuildSetupScene()
     {
+        // Shots never run Update, so the doll gets its frame from --frame there.
+        _setupFrame = _shotPath != null ? _shotFrame : 0;
+        _setupTimer = 0;
         _menuScene = new Scene();
         var bg = new GameObject { NoHit = true };
         bg.Add(new Rect(new Rectangle(0, 0, GameWidth, GameHeight)));
@@ -115,8 +122,10 @@ public partial class MushTownGame
         _scenes.Show(_menuScene);
     }
 
-    private void UpdateSetup(bool click, bool enter, bool esc, int gx, int gy)
+    private void UpdateSetup(bool click, bool enter, bool esc, int gx, int gy, float dtMs)
     {
+        // the doll on the card plays the stand1 frames, like the in-game character
+        (_setupFrame, _setupTimer) = SceneMath.AdvanceFrame(_setupFrame, _setupTimer, dtMs, _delays["stand1"]);
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (esc) { SetupToJob(); return; }
         GameObject? took = click ? ClickTree(_scenes.Current, gx, gy) : null;
@@ -162,7 +171,7 @@ public partial class MushTownGame
         int camX = _camera.X, camY = _camera.Y;
         _camera.X = 0;
         _camera.Y = 0;
-        DrawAvatar(SetupLayout.Avatar.X, SetupLayout.Avatar.Y, "stand1", 0, true);
+        DrawAvatar(SetupLayout.Avatar.X, SetupLayout.Avatar.Y, "stand1", _setupFrame, true);
         _camera.X = camX;
         _camera.Y = camY;
     }
