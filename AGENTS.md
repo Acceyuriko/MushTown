@@ -45,3 +45,7 @@ dotnet run --project MushTown.Client -- --join <ip>           # 加入主机
 dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk1] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab 0] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]  # 截图后退出（验收用，frame 从 0 数，--hit 摆拍打怪，--skill 摆拍技能，--skilltab 选技能页，--drop 摆拍掉落，--wear 穿满 demo 装备，--aiticks 跑 n 步 AI，quest 摆拍任务窗+追踪，talk+--talk 摆拍 NPC 对话，settings 摆拍音量窗，shop+--talk 摆拍商店，job/job2+--job 摆拍指定职业，--frame 非0时覆盖脊柱冻结帧，创建角色页用 --frame 摆小人待机帧）
 git clone --recurse-submodules <仓库>                       # 克隆要带子模块
 ```
+
+## 截图裁剪
+
+裁剪截图按 `.agents/skills/crop/SKILL.md` 做。
