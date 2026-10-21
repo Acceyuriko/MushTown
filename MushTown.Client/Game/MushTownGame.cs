@@ -41,6 +41,7 @@ public partial class MushTownGame : Game
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
+    private RenderTarget2D _blur = null!; // the screen at 1/4 size: the frosted glass source
 
     private MapData _map = null!;
     private int _mapId;
@@ -336,7 +337,11 @@ public partial class MushTownGame : Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
-        _scene = new RenderTarget2D(GraphicsDevice, GameWidth, GameHeight);
+        // PreserveContents: the blur copy leaves the scene for a moment, and a
+        // plain render target is wiped every time it is bound again
+        _scene = new RenderTarget2D(GraphicsDevice, GameWidth, GameHeight, false,
+            SurfaceFormat.Color, DepthFormat.Depth16, 0, RenderTargetUsage.PreserveContents);
+        _blur = new RenderTarget2D(GraphicsDevice, GameWidth / BlurBackdrop.Scale, GameHeight / BlurBackdrop.Scale);
 
         LoadMapTextures();
         foreach (var chara in _charas.Values)
@@ -346,6 +351,7 @@ public partial class MushTownGame : Game
             foreach (var frame in gear.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
+        _gfx.Blur = _blur; // the frosted glass source for the MENU window
         bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "menu";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
@@ -790,6 +796,7 @@ public partial class MushTownGame : Game
             DrawMenu();
         if (_screen == Screen.Game)
         {
+            if (_menuWindow.Show) UpdateBlur(); // the frosted glass source, before the windows draw
             _spriteBatch.Begin(blendState: BlendState.NonPremultiplied);
             if (_shotPath == null)
             {
@@ -819,6 +826,17 @@ public partial class MushTownGame : Game
         GraphicsDevice.SetRenderTarget(null);
         SaveShot(target, _shotPath);
         Exit();
+    }
+
+    // A copy of the screen at 1/4 size: the MENU window draws it back up
+    // over its own rect, and the upscale is the blur.
+    private void UpdateBlur()
+    {
+        GraphicsDevice.SetRenderTarget(_blur);
+        _spriteBatch.Begin(samplerState: SamplerState.LinearClamp);
+        _spriteBatch.Draw(_scene, new Rectangle(0, 0, _blur.Width, _blur.Height), Color.White);
+        _spriteBatch.End();
+        GraphicsDevice.SetRenderTarget(_scene);
     }
 
     // Scales the 1366x768 game image up to fill the window, keeping the aspect ratio.

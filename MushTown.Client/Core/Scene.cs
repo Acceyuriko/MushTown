@@ -14,6 +14,7 @@ public sealed class UiGfx
     public required UiText Ui { get; init; }
     public required Func<string, Texture2D> Tex { get; init; }
     public required Texture2D Pixel { get; init; }
+    public Texture2D? Blur; // the screen at 1/4 size: the frosted glass source
     public bool Pressed;
     public GameObject? Hovered;
     public Button? HoverButton;
