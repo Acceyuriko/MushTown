@@ -1,5 +1,5 @@
 {
-  "_help": "The small guide window (UIContentsGuide.img/Minimum): the GUIDE popup with one card. The numbers are the official spots: the WZ nodes carry the position as the image origin, so the spot is the origin without the minus. x/y = the top-left of the window in 1366x768 game pixels (the window is 135x105, the art size, so the size stays in the code). titleH = the height of the strip that drags the window. cardX/cardY = the spot of the card picture. maxX/maxY = the spot of the green plus (it opens the big guide window), closeX/closeY = the spot of the X. leftX/rightX = the spot of the two arrows, arrowY = their top, arrowHoverDx/arrowHoverDy = the move of the lit arrow (the WZ puts it 2 pixels up and left). dotX/dotY = the spot of the big dot, dotW/dotH = its size, dotSmallDx/dotSmallDy = where the small dot sits.",
+  "_help": "The small guide window (UIContentsGuide.img/Minimum): the GUIDE popup with one card. The numbers are the official spots: the WZ nodes carry the position as the image origin, so the spot is the origin without the minus. x/y = the top-left of the window in 1366x768 game pixels (the window is 135x105, the visible size of the art: the png is 135x115 but the last 10 rows are transparent, so the size stays in the code). titleH = the height of the strip that drags the window. cardX/cardY = the spot of the card picture. maxX/maxY = the spot of the green plus (it opens the big guide window), closeX/closeY = the spot of the X. leftX/rightX = the spot of the two arrows, arrowY = their top, arrowHoverDx/arrowHoverDy = the move of the lit arrow (the WZ puts it 2 pixels up and left). dotX/dotY = the first dot spot, dot2Dx/dot2Dy = the second one (the two dots swap places when the card changes).",
   "x": 0,
   "y": 165,
   "titleH": 16,
@@ -15,9 +15,9 @@
   "arrowHoverDx": -2,
   "arrowHoverDy": -2,
   "dotX": -1,
-  "dotY": 90,
+  "dotY": 91,
   "dotW": 6,
   "dotH": 6,
-  "dotSmallDx": 2,
-  "dotSmallDy": 1
+  "dot2Dx": 2,
+  "dot2Dy": -1
 }

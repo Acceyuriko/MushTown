@@ -71,19 +71,20 @@ public sealed class GuideCardWindow : UiWindow
     private GameObject Arrow(string name, int card)
     {
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get(name + "X", 10), Pos.Y + _lay.Get("arrowY", 45), 13, 21)));
+        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get(name + "X", name == "left" ? 10 : 116), Pos.Y + _lay.Get("arrowY", 45), 13, 21)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _card = card });
         o.Add(new GuideArrowArt(name, _lay.Get("arrowHoverDx", -2), _lay.Get("arrowHoverDy", -2)));
         return o;
     }
 
-    // The dots under the card: the open one is the big dot.
+    // The dots under the card: the open card gets the white circle, the
+    // other one the gray square. The two spots are the WZ ones.
     private GameObject Dots()
     {
         var o = new GameObject { NoHit = true };
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("dotX", -1), Pos.Y + _lay.Get("dotY", 90),
+        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("dotX", -1), Pos.Y + _lay.Get("dotY", 91),
             _lay.Get("dotW", 6), _lay.Get("dotH", 6))));
-        o.Add(new GuideDotArt(() => _card, _lay.Get("dotSmallDx", 2), _lay.Get("dotSmallDy", 1)));
+        o.Add(new GuideDotArt(() => _card, _lay.Get("dot2Dx", 2), _lay.Get("dot2Dy", -1)));
         return o;
     }
 
@@ -118,9 +119,10 @@ public sealed class GuideArrowArt : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         bool over = gfx.Hovered == Owner;
+        bool lit = over && !gfx.Pressed; // the WZ moves only the mouse over art
         string state = over ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
         var r = Owner.Get<Rect>()!.Box;
-        int dx = over ? _hoverDx : 0, dy = over ? _hoverDy : 0;
+        int dx = lit ? _hoverDx : 0, dy = lit ? _hoverDy : 0;
         gfx.Sb.Draw(gfx.Tex($"ui/guide_small_{_name}{state}"), new Vector2(r.X + dx, r.Y + dy), Color.White);
     }
 }
@@ -141,18 +143,27 @@ public sealed class GuideCardArt : Component, IDrawable
     }
 }
 
-// The two dots of the small guide window: the open card has the big dot.
+// The two dots of the small guide window: the open card gets the white
+// circle, the other card the gray square. The two spots are the WZ ones.
 public sealed class GuideDotArt : Component, IDrawable
 {
     private readonly Func<int> _card;
-    private readonly int _smallDx, _smallDy;
-    public GuideDotArt(Func<int> card, int smallDx, int smallDy) { _card = card; _smallDx = smallDx; _smallDy = smallDy; }
+    private readonly int _dx, _dy;
+    public GuideDotArt(Func<int> card, int dx, int dy) { _card = card; _dx = dx; _dy = dy; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
-        bool open = _card() == 0;
-        var dot = gfx.Tex(open ? "ui/guide_small_dot1.png" : "ui/guide_small_dot0.png");
-        int dx = open ? 0 : _smallDx, dy = open ? 0 : _smallDy;
-        gfx.Sb.Draw(dot, new Vector2(r.X + dx, r.Y + dy), Color.White);
+        var circle = gfx.Tex("ui/guide_small_dot1.png");
+        var square = gfx.Tex("ui/guide_small_dot0.png");
+        if (_card() == 0)
+        {
+            gfx.Sb.Draw(circle, new Vector2(r.X, r.Y), Color.White);
+            gfx.Sb.Draw(square, new Vector2(r.X + _dx, r.Y + _dy), Color.White);
+        }
+        else
+        {
+            gfx.Sb.Draw(square, new Vector2(r.X, r.Y), Color.White);
+            gfx.Sb.Draw(circle, new Vector2(r.X + _dx, r.Y + _dy), Color.White);
+        }
     }
 }
