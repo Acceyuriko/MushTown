@@ -162,7 +162,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide" => Screen.Game,
+                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide" or "guidecard" => Screen.Game,
                 _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
@@ -178,6 +178,7 @@ public partial class MushTownGame
             if (shotScreen == "keysqs") KeyWindow?.OpenQuickSlots();
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
+            if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);
             if (shotScreen == "chars2") _page = 1; // empty page: the demo fills page 1 only
             if (shotScreen == "job2") { _jobPage = 1; _jobPick = 14; } // second card page: proves paging draws other classes
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels

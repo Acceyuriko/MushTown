@@ -75,6 +75,7 @@ public partial class MushTownGame : Game
     private NetClient? _net;
     private ChatWindow _chatWindow = null!; // the chat is always on screen
     private GuideWindow _guideWindow = null!; // the contents guide window
+    private GuideCardWindow _guideCardWindow = null!; // the small guide popup
     private readonly Dictionary<int, PeerArt> _remotes = new();
     private readonly PlateArt _heroPlate = new(); // the hero's tag rides the player object (SyncHeroPlate fills it)
 
@@ -138,6 +139,7 @@ public partial class MushTownGame : Game
         new WorldMapWindow(this);
         new KeyConfigWindow(this);
         _guideWindow = new GuideWindow(this);
+        _guideCardWindow = new GuideCardWindow(this);
         _menuWindow = new MenuWindow(this);
         TryReloadLayout();
 #if DEBUG
@@ -378,7 +380,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide" or "guidecard";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't

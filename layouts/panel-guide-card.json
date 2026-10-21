@@ -1,0 +1,17 @@
+{
+  "_help": "The small guide window (UIContentsGuide.img/Minimum): the GUIDE popup with one card. x/y = the top-left of the window in 1366x768 game pixels (the window is 135x115, the art size, so the size stays in the code). titleH = the height of the strip that drags the window. cardX/cardY = the spot of the card picture. maxX/maxY = the spot of the green plus (it opens the big guide window), closeX/closeY = the spot of the X. leftX/rightX = the spot of the two arrows, arrowY = their top. dotX/dotY = the spot of the first dot (the dots show which card is open).",
+  "x": 0,
+  "y": 165,
+  "titleH": 16,
+  "cardX": 25,
+  "cardY": 18,
+  "maxX": 107,
+  "maxY": 3,
+  "closeX": 120,
+  "closeY": 3,
+  "leftX": 24,
+  "rightX": 34,
+  "arrowY": 88,
+  "dotX": 48,
+  "dotY": 91
+}

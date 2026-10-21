@@ -33,7 +33,7 @@ public partial class MushTownGame
             case Feature.WorldMap: ShowWindow(HotkeyAction.WorldMap); break;
             case Feature.Keys: OpenKeyWindow(); break;
             case Feature.Settings: OpenSettings(); break;
-            case Feature.Guide: ShowWindow(HotkeyAction.Guide); break;
+            case Feature.Guide: ShowWindow(HotkeyAction.GuideCard); break;
             case Feature.Quit: ExitGame(); break;
         }
     }

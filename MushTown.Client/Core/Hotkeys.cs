@@ -17,6 +17,7 @@ public enum HotkeyAction
     Menu,      // no key: the HUD menu button opens the MENU window
     Chat,      // no key: the chat input is clicked
     Guide,     // no key: the MENU window opens the guide
+    GuideCard, // no key: the MENU window opens the small guide
 }
 
 public partial class MushTownGame
