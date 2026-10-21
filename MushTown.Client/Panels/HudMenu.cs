@@ -71,6 +71,7 @@ public sealed class MenuWindow : UiWindow
                 LoadItemArt($"ui/menu_item_c{c}r{r}");
         foreach (var (stem, _) in BottomButtons) LoadItemArt($"ui/{stem}");
         LoadItemArt("ui/menu_close");
+        MenuKeyBadge.LoadBadges(_game);
 
         Scene = new Scene();
         var root = new GameObject();
@@ -146,15 +147,16 @@ public sealed class MenuWindow : UiWindow
     // How many menu items the column has (the layout file wins).
     private int RowsOf(int col) => _lay.Get($"col{col}Rows", ColumnRows[col]);
 
-    // The key cap badge at the right of a row: the key the player bound to
-    // that action. A row without a key gets no badge.
+    // The key badge at the right of a row: the official cyan square with
+    // the key the player bound to that action. A row without a key gets
+    // no badge.
     private void AddBadge(GameObject row, int x, int y, Feature action)
     {
         var key = KeyOf(action);
         if (key == null) return;
         var badge = new GameObject { NoHit = true }; // the badge sits on the row: the row keeps the hover light
-        badge.Add(new Rect(new Rectangle(Pos.X + x + _lay.Get("badgeX", 114), Pos.Y + y + _lay.Get("badgeY", 12), 16, 16)));
-        badge.Add(new KeyBadge(() => _game.HotkeyKey(key.Value)));
+        badge.Add(new Rect(new Rectangle(Pos.X + x + _lay.Get("badgeX", 115), Pos.Y + y + _lay.Get("badgeY", 12), 16, 16)));
+        badge.Add(new MenuKeyBadge(() => _game.HotkeyKey(key.Value)));
         row.AddChild(badge);
     }
 

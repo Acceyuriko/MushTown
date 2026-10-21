@@ -603,3 +603,76 @@ public sealed class KeyBadge : Component, IDrawable
         gfx.Sb.Draw(cap, new Vector2(x, r.Y + (r.Height - cap.Height) / 2), Color.White);
     }
 }
+
+// The badge at the right of a MENU row: the official cyan square with the
+// letter of the key (UI/UITotalMenu.img/main/key/<code>, 16x16). The code
+// is the official key code, not the ASCII value of the key.
+public sealed class MenuKeyBadge : Component, IDrawable
+{
+    private readonly Func<string> _key;
+    public MenuKeyBadge(Func<string> key) { _key = key; }
+    public void Draw(UiGfx gfx)
+    {
+        string art = Art(_key());
+        if (art == "") return;
+        gfx.Sb.Draw(gfx.Tex(art), Owner.Get<Rect>()!.Box, Color.White);
+    }
+
+    // The badge art of a key name ("" when the key has no badge).
+    public static string Art(string keyName)
+    {
+        string first = keyName.Split('+', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        int code = Codes.GetValueOrDefault(first, 0);
+        return code == 0 ? "" : $"ui/menu_key_{code}.png";
+    }
+
+    // Load every badge (the player can bind any key).
+    public static void LoadBadges(MushTownGame game)
+    {
+        foreach (int code in Codes.Values) game.LoadTexture($"ui/menu_key_{code}.png");
+    }
+
+    // The official key code of a key name (the badge table of the WZ).
+    private static readonly Dictionary<string, int> Codes = BuildCodes();
+
+    private static Dictionary<string, int> BuildCodes()
+    {
+        var map = new Dictionary<string, int>
+        {
+            ["Escape"] = 1,
+            ["OemMinus"] = 12,
+            ["OemPlus"] = 13,
+            ["OemOpenBrackets"] = 26,
+            ["OemCloseBrackets"] = 27,
+            ["LeftControl"] = 29,
+            ["OemSemicolon"] = 39,
+            ["OemQuotes"] = 40,
+            ["OemTilde"] = 41,
+            ["LeftShift"] = 42,
+            ["Up"] = 43,
+            ["OemComma"] = 51,
+            ["OemPeriod"] = 52,
+            ["LeftAlt"] = 56,
+            ["Enter"] = 57,
+            ["Scroll"] = 70,
+            ["Home"] = 71,
+            ["PageUp"] = 73,
+            ["End"] = 79,
+            ["PageDown"] = 81,
+            ["Insert"] = 82,
+            ["Delete"] = 83,
+            ["F11"] = 87,
+            ["F12"] = 88,
+        };
+        string digits = "1234567890";
+        for (int i = 0; i < 10; i++) map["D" + digits[i]] = 2 + i;
+        string top = "QWERTYUIOP";
+        for (int i = 0; i < 10; i++) map[top[i].ToString()] = 16 + i;
+        string home = "ASDFGHJKL";
+        for (int i = 0; i < 9; i++) map[home[i].ToString()] = 30 + i;
+        string bottom = "ZXCVBNM";
+        for (int i = 0; i < 7; i++) map[bottom[i].ToString()] = 44 + i;
+        for (int i = 0; i < 10; i++) map["F" + (i + 1)] = 59 + i;
+        return map;
+    }
+}

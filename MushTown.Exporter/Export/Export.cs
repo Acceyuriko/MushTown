@@ -1,4 +1,5 @@
 using MushTown.Shared;
+using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
 
@@ -26,7 +27,7 @@ public static partial class Export
             "quest" => ExportQuestUi(ui, outDir),
             "map" => ExportMapUi(ui, WzRoot.LoadCategory(ExporterPaths.DataDir, "Map"), WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir),
             "keys" => ExportKeyUi(ui, outDir),
-            "menu" => ExportMenuUi(ui, outDir),
+            "menu" => ExportMenuUi(ui, outDir) && ExportMenuKeyBadges(ui, outDir),
             "quickmenu" => ExportQuickMenuUi(ui, outDir),
             "chat" => ExportChatUi(ui, outDir),
             "shop" => ExportShopUi(ui, outDir),
@@ -169,7 +170,7 @@ public static partial class Export
         // The game panels: one export step per panel.
         if (!ExportInventoryUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, outDir)
             || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir)
-            || !ExportMenuUi(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir)
+            || !ExportMenuUi(ui, outDir) || !ExportMenuKeyBadges(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir)
             || !ExportShopUi(ui, outDir) || !ExportBuffUi(ui, outDir) || !ExportHotkeyUi(ui, outDir))
         {
             Environment.ExitCode = 1;
@@ -192,5 +193,28 @@ public static partial class Export
         foreach (string f in Directory.GetFiles(Path.Combine("art", "fonts"), "*.ttf"))
             File.Copy(f, Path.Combine(outDir, "fonts", Path.GetFileName(f)), true);
         Console.WriteLine("export done -> " + Path.GetFullPath(outDir));
+    }
+
+    // The key badges of the MENU window: the official cyan squares
+    // (UI/UITotalMenu.img/main/key/<code>). The file name uses the
+    // official key code, not the ASCII value of the key.
+    public static bool ExportMenuKeyBadges(WzRoot ui, string outDir)
+    {
+        string dir = Path.Combine(outDir, "ui");
+        var badges = ui.Find("UITotalMenu.img/main/key");
+        if (badges == null)
+        {
+            Console.WriteLine("UITotalMenu: no key badges");
+            return false;
+        }
+        int count = 0;
+        foreach (Wz_Node node in badges.Nodes)
+        {
+            if (!UiPng.Save(ui, $"UITotalMenu.img/main/key/{node.Text}", Path.Combine(dir, $"menu_key_{node.Text}.png")))
+                return false;
+            count++;
+        }
+        Console.WriteLine($"menu key badges: {count}");
+        return true;
     }
 }
