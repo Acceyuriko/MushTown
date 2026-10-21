@@ -96,6 +96,7 @@ public sealed class MenuWindow : UiWindow
                 {
                     item.Add(new Button { LegacyId = $"menu{c}r{r}", Kind = ButtonKind.Click, OnClick = () => Open(action) });
                     item.Add(new Image(stem));
+                    AddBadge(item, x, y, action);
                 }
                 root.AddChild(item);
             }
@@ -115,6 +116,7 @@ public sealed class MenuWindow : UiWindow
             {
                 o.Add(new Button { LegacyId = $"menub{i}", Kind = ButtonKind.Click, OnClick = () => Open(action) });
                 o.Add(new Image($"ui/{stem}"));
+                AddBadge(o, x, botY, action);
             }
             root.AddChild(o);
         }
@@ -137,6 +139,30 @@ public sealed class MenuWindow : UiWindow
 
     // How many menu items the column has (the layout file wins).
     private int RowsOf(int col) => _lay.Get($"col{col}Rows", ColumnRows[col]);
+
+    // The key cap badge at the right of a row: the key the player bound to
+    // that action. A row without a key gets no badge.
+    private void AddBadge(GameObject row, int x, int y, Feature action)
+    {
+        var key = KeyOf(action);
+        if (key == null) return;
+        var badge = new GameObject();
+        badge.Add(new Rect(new Rectangle(Pos.X + x + _lay.Get("badgeX", 114), Pos.Y + y + _lay.Get("badgeY", 12), 16, 16)));
+        badge.Add(new KeyBadge(() => _game.HotkeyKey(key.Value)));
+        row.AddChild(badge);
+    }
+
+    // The hotkey of a menu row (the badge shows the bound key).
+    private static HotkeyAction? KeyOf(Feature action) => action switch
+    {
+        Feature.Stat => HotkeyAction.Stat,
+        Feature.Inventory => HotkeyAction.Inventory,
+        Feature.Skill => HotkeyAction.Skill,
+        Feature.Quest => HotkeyAction.Quest,
+        Feature.WorldMap => HotkeyAction.WorldMap,
+        Feature.Settings => HotkeyAction.Settings,
+        _ => null,
+    };
 
     // Load the four states of one button art.
     private void LoadItemArt(string stem)
@@ -179,6 +205,12 @@ public sealed class MenuArt : Component, IDrawable
         // the strip: the same art, but thin enough to see the game through it
         gfx.Sb.Draw(tex, new Rectangle(r.X + sx, r.Y + sy, sw, sh), new Rectangle(sx, sy, sw, sh),
             new Color(255, 255, 255, _lay.Get("stripAlpha", 102)));
+        // the channel name in the pill at the top right (the official
+        // vector:info spot: the middle of the pill)
+        string world = MapUi.Data.Channel.World;
+        string name = $"{char.ToUpperInvariant(world[0])}{world[1..]}-Channel{ChannelBar.CurrentChannel + 1}";
+        var text = gfx.Ui.GetSmall(name);
+        gfx.Sb.Draw(text, new Vector2(r.X + _lay.Get("chInfoX", 894) - text.Width / 2, r.Y + _lay.Get("chInfoY", 16)), Color.White);
     }
 }
 

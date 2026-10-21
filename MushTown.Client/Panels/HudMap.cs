@@ -177,7 +177,7 @@ public sealed class WorldMapWindow : UiWindow
 // plays on one channel, so the list shows them all and marks the one in use.
 public static class ChannelBar
 {
-    private const int CurrentChannel = 0; // the game plays on the first channel
+    public const int CurrentChannel = 0; // the game plays on the first channel
 
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-map.json"));
 

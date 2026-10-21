@@ -577,3 +577,19 @@ public sealed class TalkBody : Component, IDrawable
         }
     }
 }
+
+// The key cap badge at the right of a menu row: the official 16x16 cap
+// art of the key the player bound to that action. The cap follows the
+// binding, so it changes when the player changes the key.
+public sealed class KeyBadge : Component, IDrawable
+{
+    private readonly Func<string> _key;
+    public KeyBadge(Func<string> key) { _key = key; }
+    public void Draw(UiGfx gfx)
+    {
+        string art = KeyConfigWindow.CapArt(_key());
+        if (art == "") return;
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Tex(art), new Vector2(r.X, r.Y), Color.White);
+    }
+}
