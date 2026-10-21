@@ -74,6 +74,7 @@ public partial class MushTownGame : Game
     private GameServer? _server;
     private NetClient? _net;
     private ChatWindow _chatWindow = null!; // the chat is always on screen
+    private GuideWindow _guideWindow = null!; // the contents guide window
     private readonly Dictionary<int, PeerArt> _remotes = new();
     private readonly PlateArt _heroPlate = new(); // the hero's tag rides the player object (SyncHeroPlate fills it)
 
@@ -128,7 +129,7 @@ public partial class MushTownGame : Game
         new MinimapWindow(this); // the new windows keep themselves in the list
         new WorldMapWindow(this);
         new KeyConfigWindow(this);
-        new GuideWindow(this);
+        _guideWindow = new GuideWindow(this);
         _menuWindow = new MenuWindow(this);
         // The chat sends the line to the server. Without a server (single
         // player) the line stays in the chat.
@@ -260,6 +261,10 @@ public partial class MushTownGame : Game
             // a shot never types, so a shot named *balloon* shows a sample line
             if (Path.GetFileNameWithoutExtension(_shotPath)!.Contains("balloon"))
                 ShowBalloon("Hi! I am going to Southperry now, see you soon!");
+            // a shot named *guideboss* or *guidespecial* opens that guide tab
+            string shotName = Path.GetFileNameWithoutExtension(_shotPath)!;
+            if (shotName.Contains("guideboss")) _guideWindow.SetTab(1);
+            if (shotName.Contains("guidespecial")) _guideWindow.SetTab(2);
         }
 
         InitializeMenu(_shotScreen);

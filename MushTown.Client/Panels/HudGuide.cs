@@ -16,6 +16,9 @@ public sealed class GuideWindow : UiWindow
 
     private int _tab; // 0 = field, 1 = boss, 2 = special
 
+    // Open another tab of the window (the shot mode uses it).
+    public void SetTab(int tab) => _tab = tab;
+
     // The sample entries of the lists: the game has no new content yet.
     private static readonly string[] FieldNames = { "New Field", "New Quest", "New Field", "New Quest" };
     private static readonly string[] BossNames = { "New Boss", "New Boss", "New Boss" };
@@ -45,7 +48,7 @@ public sealed class GuideWindow : UiWindow
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Picture("ui/guide_bg.png"));
-        root.Add(new Invoke(Draw));
+        root.Add(new Invoke(gfx => Draw(gfx, Rect())));
         for (int i = 0; i < 3; i++) root.AddChild(Tab(i));
         root.AddChild(CloseButton());
         root.AddChild(DisabledButton("min", _lay.Get("minX", 603), _lay.Get("minY", 4)));
@@ -88,12 +91,11 @@ public sealed class GuideWindow : UiWindow
     }
 
     // The content of the open tab.
-    private void Draw(UiGfx gfx)
+    private void Draw(UiGfx gfx, Rectangle r)
     {
-        var r = Rect();
         if (_tab == 0) DrawField(gfx, r);
-        else if (_tab == 1) DrawList(gfx, r, "ui/guide_boss.png", BossNames);
-        else DrawList(gfx, r, "ui/guide_special.png", SpecialNames);
+        else if (_tab == 1) DrawBoss(gfx, r);
+        else DrawSpecial(gfx, r);
     }
 
     // The field tab: the list background and the new content icons.
@@ -109,14 +111,27 @@ public sealed class GuideWindow : UiWindow
         }
     }
 
-    // The boss and special tabs: the list background and the names.
-    private void DrawList(UiGfx gfx, Rectangle r, string bg, string[] names)
+    // The boss tab: the list background and the boss names in the slots.
+    private void DrawBoss(UiGfx gfx, Rectangle r)
     {
-        gfx.Sb.Draw(gfx.Tex(bg), new Vector2(r.X + _lay.Get("listX", 18), r.Y + _lay.Get("listY", 53)), Color.White);
-        for (int i = 0; i < names.Length; i++)
+        gfx.Sb.Draw(gfx.Tex("ui/guide_boss.png"), new Vector2(r.X + _lay.Get("listX", 10), r.Y + _lay.Get("listY", 102)), Color.White);
+        for (int i = 0; i < BossNames.Length; i++)
         {
-            int y = r.Y + _lay.Get("listY", 53) + 20 + i * _lay.Get("listLineH", 16);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(names[i]), new Vector2(r.X + _lay.Get("listX", 18) + 20, y), Color.White);
+            int x = r.X + _lay.Get("bossNameX", 45);
+            int y = r.Y + _lay.Get("bossNameY", 142) + i * _lay.Get("bossNameStep", 90);
+            gfx.Sb.Draw(gfx.Ui.GetSmall(BossNames[i]), new Vector2(x, y), Color.White);
+        }
+    }
+
+    // The special tab: the list background and the names in the columns.
+    private void DrawSpecial(UiGfx gfx, Rectangle r)
+    {
+        gfx.Sb.Draw(gfx.Tex("ui/guide_special.png"), new Vector2(r.X + _lay.Get("listX", 10), r.Y + _lay.Get("listY", 102)), Color.White);
+        for (int i = 0; i < SpecialNames.Length; i++)
+        {
+            int x = r.X + _lay.Get("specialNameX", 40) + i * _lay.Get("specialNameStepX", 143);
+            int y = r.Y + _lay.Get("specialNameY", 177);
+            gfx.Sb.Draw(gfx.Ui.GetSmall(SpecialNames[i]), new Vector2(x, y), Color.White);
         }
     }
 }
