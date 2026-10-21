@@ -128,6 +128,7 @@ public partial class MushTownGame : Game
         new MinimapWindow(this); // the new windows keep themselves in the list
         new WorldMapWindow(this);
         new KeyConfigWindow(this);
+        new GuideWindow(this);
         _menuWindow = new MenuWindow(this);
         // The chat sends the line to the server. Without a server (single
         // player) the line stays in the chat.
@@ -371,7 +372,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't

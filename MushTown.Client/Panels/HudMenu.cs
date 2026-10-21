@@ -33,6 +33,7 @@ public sealed class MenuWindow : UiWindow
         (2, 0, Feature.Skill),     // Skills
         (3, 1, Feature.Quest),     // Quests
         (3, 3, Feature.WorldMap),  // World Map
+        (6, 2, Feature.Guide),     // Guides
     };
 
     // The bottom row: the button art stem and what it opens.

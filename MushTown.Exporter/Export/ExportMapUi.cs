@@ -15,6 +15,23 @@ public static partial class Export
         // The minimap panel: the dark frame the map sits in.
         if (!UiPng.Save(ui, "UI", "Minimap.img/Mini/Backgrnd/0", Path.Combine(dir, "mini_bg.png"))) return false;
 
+        // The small buttons of the minimap frame (UIMap.img/MiniMap): the row
+        // at the top (the house, the open book, the pin, the person, the
+        // funnel) and the zoom pair (the minus and the plus).
+        var miniButtons = new (string Node, string Name)[]
+        {
+            ("BtTown", "town"),
+            ("BtMap", "map"),
+            ("BtNavigation", "navi"),
+            ("BtNpc", "npc"),
+            ("BtFilter", "filter"),
+            ("button:min", "zoomout"),
+            ("button:max", "zoomin"),
+        };
+        foreach (var (node, name) in miniButtons)
+            foreach (var (state, suffix) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p") })
+                if (!UiPng.Save(ui, "UI", $"UIMap.img/MiniMap/{node}/{state}/0", Path.Combine(dir, $"mini_btn_{name}{suffix}.png"))) return false;
+
         // The X button of the world map window and the world map window frame.
         foreach (var (state, name) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p") })
             if (!UiPng.Save(ui, "UI", $"UIMap.img/WorldMap/button:close/{state}/0", Path.Combine(dir, $"map_x{name}.png"))) return false;

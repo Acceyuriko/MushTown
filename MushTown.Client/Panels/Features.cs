@@ -13,6 +13,7 @@ internal enum Feature
     WorldMap,   // World Map
     Keys,       // Key Bindings
     Settings,   // Settings
+    Guide,      // Guides (the contents guide window)
     Quit,       // Exit Game
 }
 
@@ -32,6 +33,7 @@ public partial class MushTownGame
             case Feature.WorldMap: ShowWindow(HotkeyAction.WorldMap); break;
             case Feature.Keys: OpenKeyWindow(); break;
             case Feature.Settings: OpenSettings(); break;
+            case Feature.Guide: ShowWindow(HotkeyAction.Guide); break;
             case Feature.Quit: ExitGame(); break;
         }
     }
