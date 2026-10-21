@@ -1,5 +1,5 @@
 {
-  "_help": "Chat window (official UI/StatusBar3.img/chat art). Game pixels in 1366x768. x,y = the window top-left. The tab row sits on top, the log frame under it, the input line at the bottom. logPadX/logPadY = the gap from the frame edge to the text. lineH = the height of one log line. border = the corner size of the nine piece frame. capW = the width of the left and right cap of the input bar. btnW/btnGap = the input buttons on the right of the input line.",
+  "_help": "Chat window (official UI/StatusBar3.img/chat art). Game pixels in 1366x768. x,y = the window top-left. The tab row sits on top, the log frame under it, the input line at the bottom. logPadX/logPadY = the gap from the frame edge to the text. lineH = the height of one log line. border = the corner size of the nine piece frame. capW = the width of the left and right cap of the input bar. btnW/btnGap = the input buttons on the right of the input line (the settings button, the three official window buttons and the minimise button). minW/minH = the size of the minimised chat.",
   "x": 6,
   "y": 566,
   "w": 315,
@@ -19,5 +19,7 @@
   "border": 8,
   "capW": 7,
   "btnW": 24,
-  "btnGap": 1
+  "btnGap": 1,
+  "minW": 60,
+  "minH": 20
 }

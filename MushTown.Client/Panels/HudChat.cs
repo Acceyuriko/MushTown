@@ -5,8 +5,9 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // The chat window: the official MapleStory chat (UI/StatusBar3.img/chat).
-// The log frame, the filter tabs and the input line are official art; the
-// log text uses the game font. The window is on the screen all the time.
+// The log frame, the filter tabs, the scroll bar, the window buttons and
+// the input line are official art; the log text uses the game font. The
+// window is on the screen all the time.
 public sealed class ChatWindow : UiWindow
 {
     // The filter tabs, in the order they sit in the window. The official
@@ -24,6 +25,18 @@ public sealed class ChatWindow : UiWindow
     // Only the settings button has a function in this game: the other
     // official buttons (whisper, link, command, emoticon) are not drawn.
     private static readonly string[] BtnStems = { "chat_btn_set" };
+    // The official window buttons of the chat. Only the minimise works in
+    // this game, so the other three are art without a click. The width and
+    // the height are the art sizes.
+    private static readonly (string Stem, int W, int H)[] WinArtBtns =
+    {
+        ("chat_btaddtab", 25, 20),
+        ("chat_btmax", 15, 15),
+        ("chat_btoutchat", 26, 20),
+    };
+    private const string MinBtnStem = "chat_btmin";
+    private const int MinBtnW = 26, MinBtnH = 20; // the art size
+    private const int ScrollW = 5; // the width of the scroll bar art
 
     // Every number of this window lives in layouts/panel-chat.json.
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-chat.json"));
@@ -34,12 +47,17 @@ public sealed class ChatWindow : UiWindow
     private readonly MushTownGame _game;
     private readonly Action<string> _send;
     private readonly List<Line> _lines = new();
+    private readonly List<Line> _visible = new(); // the lines of the tab in use
     private readonly HashSet<Keys> _down = new(); // the keys that were down last frame
     private readonly GameObject[] _tabObjs = new GameObject[TabStems.Length];
     private Tab _tab = Tab.All;
     private string _input = "";
     private bool _focused;
     private bool _mouseDown; // the mouse button was down last frame
+    private bool _minimised; // the chat is folded into a small box
+    private int _scroll; // the lines the log is scrolled up from the newest
+    private int _wheel; // the wheel value of the last frame
+    private GameObject? _minBox; // the minimised box (the hover changes its art)
 
     // The chat has no key of its own: the input line is clicked.
     public ChatWindow(MushTownGame game, Action<string> send) : base(HotkeyAction.Chat)
@@ -55,22 +73,53 @@ public sealed class ChatWindow : UiWindow
     // The chat is never closed by the game: Esc leaves the input instead.
     public override void OnClosed() => Show = true;
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 315), _lay.Get("h", 150));
+    // The minimised chat is a small box at the same spot.
+    public override Rectangle Rect() => _minimised
+        ? new Rectangle(Pos.X, Pos.Y, _lay.Get("minW", 60), _lay.Get("minH", 20))
+        : new Rectangle(Pos.X, Pos.Y, _lay.Get("w", 315), _lay.Get("h", 150));
     public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, 0); // the chat has no title bar
     public override Point LayoutPos() => new(_lay.Get("x", 6), _lay.Get("y", 566));
 
     // The log frame: the official nine piece slice under the tabs.
     private Rectangle LogRect() => new(Pos.X, Pos.Y + _lay.Get("logY", 22), _lay.Get("w", 315), _lay.Get("logH", 100));
 
+    // The scroll bar of the log: on the right of the log, inside the frame.
+    private Rectangle ScrollRect()
+    {
+        var log = LogRect();
+        int b = _lay.Get("border", 8);
+        return new Rectangle(log.Right - b - ScrollW, log.Y + b, ScrollW, log.Height - 2 * b);
+    }
+
     // The input line: the official bar, the buttons to the right of it.
-    private int BarW() => _lay.Get("w", 315) - BtnStems.Length * (_lay.Get("btnW", 24) + _lay.Get("btnGap", 1));
+    private int ButtonsW()
+    {
+        int w = _lay.Get("btnW", 24); // the settings button
+        foreach (var (_, bw, _) in WinArtBtns) w += bw + _lay.Get("btnGap", 1);
+        return w + MinBtnW + _lay.Get("btnGap", 1);
+    }
+    private int BarW() => _lay.Get("w", 315) - ButtonsW();
     private Rectangle InputRect() => new(Pos.X, Pos.Y + _lay.Get("inputY", 125), BarW(), _lay.Get("inputH", 25));
-    private Rectangle BtnRect(int i) => new(Pos.X + BarW() + i * (_lay.Get("btnW", 24) + _lay.Get("btnGap", 1)),
-        Pos.Y + _lay.Get("inputY", 125), _lay.Get("btnW", 24), _lay.Get("inputH", 25));
+    private Rectangle SettingsRect() => new(Pos.X + BarW(), Pos.Y + _lay.Get("inputY", 125), _lay.Get("btnW", 24), _lay.Get("inputH", 25));
+
+    // The window buttons follow the settings button, the minimise last.
+    private Rectangle WinArtRect(int i)
+    {
+        int x = SettingsRect().Right + _lay.Get("btnGap", 1);
+        for (int k = 0; k < i; k++) x += WinArtBtns[k].W + _lay.Get("btnGap", 1);
+        return new(x, Pos.Y + _lay.Get("inputY", 125) + (_lay.Get("inputH", 25) - WinArtBtns[i].H) / 2, WinArtBtns[i].W, WinArtBtns[i].H);
+    }
+    private Rectangle MinBtnRect() => new(WinArtRect(WinArtBtns.Length - 1).Right + _lay.Get("btnGap", 1),
+        Pos.Y + _lay.Get("inputY", 125) + (_lay.Get("inputH", 25) - MinBtnH) / 2, MinBtnW, MinBtnH);
 
     // One filter tab.
     private Rectangle TabRect(int i) => new(Pos.X + i * (_lay.Get("tabW", 54) + _lay.Get("tabGap", 3)), Pos.Y + _lay.Get("tabY", 0),
         _lay.Get("tabW", 54), _lay.Get("tabH", 20));
+
+    // The empty tab slot: the official plain tab, the same size as the
+    // text tabs. It stands for the tabs this game does not have.
+    private Rectangle EmptyTabRect() => new(Pos.X + TabStems.Length * (_lay.Get("tabW", 54) + _lay.Get("tabGap", 3)),
+        Pos.Y + _lay.Get("tabY", 0), _lay.Get("tabW", 54), _lay.Get("tabH", 20));
 
     // True while the input has the focus: the game gives the keys to the chat.
     public bool Focused => _focused;
@@ -162,16 +211,36 @@ public sealed class ChatWindow : UiWindow
     public override void Build()
     {
         foreach (string piece in FramePieces) _game.LoadTexture($"ui/chat_frame_{piece}.png");
+        foreach (string stem in new[] { "chat_frame_min", "chat_frame_min1" })
+            foreach (string piece in FramePieces) _game.LoadTexture($"ui/{stem}_{piece}.png");
         foreach (string stem in TabStems)
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
+        _game.LoadTexture("ui/chat_tab_n.png");
         foreach (string piece in new[] { "w", "c", "e" }) _game.LoadTexture($"ui/chat_input_{piece}.png");
         foreach (string stem in BtnStems)
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
+        foreach (string stem in new[] { "chat_btaddtab", "chat_btmax", "chat_btoutchat", MinBtnStem })
+            foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
+        foreach (string stem in new[] { "chat_scroll", "chat_scroll_off" })
+            foreach (string piece in new[] { "base_t", "base_c", "base_b" }) _game.LoadTexture($"ui/{stem}_{piece}.png");
+        foreach (string piece in new[] { "thumb0", "thumb1", "thumb2" }) _game.LoadTexture($"ui/chat_scroll_{piece}.png");
 
         Scene = new Scene();
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Invoke(Draw));
+
+        if (_minimised)
+        {
+            // the minimised chat: a click brings the chat back
+            var box = new GameObject();
+            box.Add(new Rect(Rect()));
+            box.Add(new Button { Kind = ButtonKind.Click, OnClick = Restore });
+            _minBox = box;
+            root.AddChild(box);
+            Scene.Add(root);
+            return;
+        }
 
         // the filter tabs: the click picks the tab
         for (int i = 0; i < TabStems.Length; i++)
@@ -184,11 +253,24 @@ public sealed class ChatWindow : UiWindow
             root.AddChild(tab);
         }
 
+        // the empty tab slot: the official plain tab
+        var empty = new GameObject();
+        empty.Add(new Rect(EmptyTabRect()));
+        empty.Add(new Picture("ui/chat_tab_n.png"));
+        root.AddChild(empty);
+
         // the log: a click leaves the input
         var log = new GameObject();
         log.Add(new Rect(LogRect()));
         log.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _focused = false });
         root.AddChild(log);
+
+        // the scroll bar of the log
+        var scroll = new GameObject();
+        scroll.Add(new Rect(ScrollRect()));
+        scroll.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => _focused = false });
+        scroll.Add(new ScrollBar(() => ScrollPos(), () => MaxScroll() > 0));
+        root.AddChild(scroll);
 
         // the input line: a click focuses it
         var input = new GameObject();
@@ -200,10 +282,26 @@ public sealed class ChatWindow : UiWindow
         // The other official buttons (whisper, link, command, emoticon) have
         // no function in this game yet, so they are not drawn.
         var set = new GameObject();
-        set.Add(new Rect(BtnRect(BtnStems.Length - 1)));
+        set.Add(new Rect(SettingsRect()));
         set.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _game.OpenSettings() });
-        set.Add(new Image($"ui/{BtnStems[^1]}"));
+        set.Add(new Image($"ui/{BtnStems[0]}"));
         root.AddChild(set);
+
+        // the three official window buttons without a function: art only
+        for (int i = 0; i < WinArtBtns.Length; i++)
+        {
+            var b = new GameObject();
+            b.Add(new Rect(WinArtRect(i)));
+            b.Add(new Picture($"ui/{WinArtBtns[i].Stem}_n.png"));
+            root.AddChild(b);
+        }
+
+        // the minimise button: the chat folds into a small box
+        var min = new GameObject();
+        min.Add(new Rect(MinBtnRect()));
+        min.Add(new Button { Kind = ButtonKind.Click, OnClick = Minimise });
+        min.Add(new Image($"ui/{MinBtnStem}"));
+        root.AddChild(min);
 
         Scene.Add(root);
     }
@@ -211,6 +309,13 @@ public sealed class ChatWindow : UiWindow
     // The whole chat: the frame, the tabs, the log and the input line.
     private void Draw(UiGfx gfx)
     {
+        ReadWheel();
+        FillVisible();
+        if (_minimised)
+        {
+            DrawMinimised(gfx);
+            return;
+        }
         DrawFrame(gfx, LogRect());
         DrawTabs(gfx);
         DrawLog(gfx);
@@ -219,6 +324,14 @@ public sealed class ChatWindow : UiWindow
 
     // The official nine piece frame: the corners stay, the edges stretch.
     private void DrawFrame(UiGfx gfx, Rectangle r) => NineSlice.Draw(gfx, "chat_frame", r);
+
+    // The minimised chat: the official small frame. The mouse over it
+    // shows the plainer variant of the same frame.
+    private void DrawMinimised(UiGfx gfx)
+    {
+        bool over = gfx.Hovered == _minBox;
+        NineSlice.Draw(gfx, over ? "chat_frame_min1" : "chat_frame_min", Rect());
+    }
 
     // The filter tabs: All and Etc. carry their text in the official art.
     // The tab that is not in use is dim.
@@ -234,18 +347,20 @@ public sealed class ChatWindow : UiWindow
         }
     }
 
-    // The log lines of the tab in use, the newest at the bottom.
+    // The log lines of the tab in use. The scroll says how far the log is
+    // scrolled up from the newest line.
     private void DrawLog(UiGfx gfx)
     {
         var box = LogRect();
         int x = box.X + _lay.Get("logPadX", 10);
         int y = box.Y + _lay.Get("logPadY", 9);
         int lineH = _lay.Get("lineH", 14);
-        var lines = VisibleLines();
-        int first = Math.Max(0, lines.Count - (box.Height - 2 * _lay.Get("border", 8)) / lineH);
-        for (int i = first; i < lines.Count; i++)
+        int rows = LogRows();
+        _scroll = Math.Clamp(_scroll, 0, Math.Max(0, _visible.Count - rows));
+        int first = Math.Max(0, _visible.Count - rows - _scroll);
+        for (int i = first; i < Math.Min(_visible.Count, first + rows); i++)
         {
-            var line = lines[i];
+            var line = _visible[i];
             int ty = y + (i - first) * lineH;
             if (line.Name == "")
                 gfx.Sb.Draw(gfx.Ui.GetSmall(line.Text), new Vector2(x, ty), new Color(255, 220, 120));
@@ -275,11 +390,52 @@ public sealed class ChatWindow : UiWindow
 
     // The lines the tab in use shows: All shows everything, the other tabs
     // show the lines of their own kind.
-    private List<Line> VisibleLines()
+    private void FillVisible()
     {
-        var result = new List<Line>();
+        _visible.Clear();
         foreach (var line in _lines)
-            if (_tab == Tab.All || line.Tab == _tab) result.Add(line);
-        return result;
+            if (_tab == Tab.All || line.Tab == _tab) _visible.Add(line);
+    }
+
+    // The lines that fit in the log.
+    private int LogRows() => (LogRect().Height - 2 * _lay.Get("border", 8)) / _lay.Get("lineH", 14);
+
+    // How far the log can be scrolled up: the lines that do not fit.
+    private int MaxScroll() => Math.Max(0, _visible.Count - LogRows());
+
+    // The thumb of the scroll bar: 0 at the top of the track, 1 at the
+    // bottom. The newest line sits at the bottom, so it starts at 1.
+    private float ScrollPos()
+    {
+        int max = MaxScroll();
+        return max == 0 ? 1f : 1f - _scroll / (float)max;
+    }
+
+    // The mouse wheel scrolls the log. The chat is on the screen all the
+    // time, so the wheel is read where the chat draws.
+    private void ReadWheel()
+    {
+        var ms = Mouse.GetState();
+        int delta = ms.ScrollWheelValue - _wheel;
+        _wheel = ms.ScrollWheelValue;
+        if (delta == 0 || _minimised) return;
+        var (gx, gy) = _game.MouseGamePos(ms);
+        if (!LogRect().Contains(gx, gy)) return;
+        _scroll = Math.Clamp(_scroll + delta / 120, 0, MaxScroll());
+    }
+
+    // The minimise button folds the chat into a small box; a click on the
+    // box brings the chat back.
+    private void Minimise()
+    {
+        _minimised = true;
+        _focused = false;
+        Built = false; // the game rebuilds the scene on the next frame
+    }
+
+    private void Restore()
+    {
+        _minimised = false;
+        Built = false;
     }
 }

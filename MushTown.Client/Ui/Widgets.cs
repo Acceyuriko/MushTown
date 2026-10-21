@@ -721,19 +721,19 @@ public sealed class MenuKeyBadge : Component, IDrawable
 public sealed class ScrollBar : Component, IDrawable
 {
     private readonly Func<float> _position;
-    private readonly bool _enabled; // the disabled bar has no thumb
-    public ScrollBar(Func<float> position, bool enabled) { _position = position; _enabled = enabled; }
+    private readonly Func<bool> _enabled; // the disabled bar has no thumb
+    public ScrollBar(Func<float> position, Func<bool> enabled) { _position = position; _enabled = enabled; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
-        string stem = _enabled ? "ui/chat_scroll" : "ui/chat_scroll_off";
+        string stem = _enabled() ? "ui/chat_scroll" : "ui/chat_scroll_off";
         var top = gfx.Tex(stem + "_base_t.png");
         var mid = gfx.Tex(stem + "_base_c.png");
         var bot = gfx.Tex(stem + "_base_b.png");
         gfx.Sb.Draw(top, new Vector2(r.X, r.Y), Color.White);
         gfx.Sb.Draw(mid, new Rectangle(r.X, r.Y + top.Height, r.Width, r.Height - top.Height - bot.Height), Color.White);
         gfx.Sb.Draw(bot, new Vector2(r.X, r.Bottom - bot.Height), Color.White);
-        if (!_enabled) return;
+        if (!_enabled()) return;
         string thumb = gfx.Hovered == Owner ? gfx.Pressed ? "ui/chat_scroll_thumb2.png" : "ui/chat_scroll_thumb1.png" : "ui/chat_scroll_thumb0.png";
         var t = gfx.Tex(thumb);
         int y = r.Y + (int)((r.Height - t.Height) * _position());
