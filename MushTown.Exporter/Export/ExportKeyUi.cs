@@ -22,6 +22,14 @@ public static partial class Export
         public List<KeySpot> Keys { get; set; } = new();
     }
 
+    // assets/ui/keys_filter.json: the filter names and the category of
+    // every action icon.
+    private sealed class FilterFile
+    {
+        public List<string> Filters { get; set; } = new();
+        public Dictionary<int, int> Categories { get; set; } = new();
+    }
+
     public static bool ExportKeyUi(WzRoot ui, string outDir)
     {
         string dir = Path.Combine(outDir, "ui");
@@ -41,9 +49,28 @@ public static partial class Export
             ("StatusBar3.img/KeyConfig/button:presetPage1", "keys_pg1"),
             ("StatusBar3.img/KeyConfig/button:presetPage2", "keys_pg2"),
             ("StatusBar3.img/KeyConfig/button:presetPage3", "keys_pg3"),
+            ("StatusBar3.img/KeyConfig/button:skill", "keys_skill"),
+            ("StatusBar3.img/KeyConfig/button:keySetting", "keys_qslot"),
+            ("StatusBar3.img/KeyConfig/button:unionKeySetting", "keys_combo"),
         })
             foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
                 if (!UiPng.Save(ui, $"{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
+
+        // the filter dropdown: the combo box is three pieces (left, middle, right)
+        foreach (var (state, suffix) in new[] { ("normal", "n"), ("pressed", "p") })
+            for (int piece = 0; piece < 3; piece++)
+                if (!UiPng.Save(ui, $"Basic.img/ComboBox25/{state}/{piece}", Path.Combine(dir, $"keys_cbox_{suffix}{piece}.png"))) return false;
+
+        // the quick slots page: the second page of the key window
+        if (!UiPng.Save(ui, "StatusBar3.img/CustomDefaultKeyConfig/backgrnd", Path.Combine(dir, "keys_qs_bg.png"))) return false;
+        foreach (var (node, name) in new[]
+        {
+            ("StatusBar3.img/CustomDefaultKeyConfig/button:presetSave", "keys_qssave"),
+            ("StatusBar3.img/CustomDefaultKeyConfig/button:presetUndo", "keys_qscancel"),
+        })
+            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
+                if (!UiPng.Save(ui, $"{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
+        if (!UiPng.Save(ui, "StatusBar3.img/CustomDefaultKeyConfig/button:close/normal/0", Path.Combine(dir, "keys_qsclose.png"))) return false;
 
         // the action icons: the grid cells under the keyboard show them
         var icons = ui.Find("StatusBar3.img/KeyConfig/icon");
@@ -53,12 +80,21 @@ public static partial class Export
             return false;
         }
         int iconCount = 0;
+        var filterFile = new FilterFile();
         foreach (Wz_Node child in icons.Nodes)
         {
             if (!int.TryParse(child.Text, out int iconId)) continue;
             if (!UiPng.Save(ui, $"StatusBar3.img/KeyConfig/icon/{iconId}", Path.Combine(dir, $"keys_icon_{iconId}.png"))) return false;
+            filterFile.Categories[iconId] = Int(child, "category");
             iconCount++;
         }
+
+        // the filter names: the official combo box items
+        var filterItems = ui.Find("StatusBar3.img/KeyConfig/combo:filter/contents/filter");
+        if (filterItems != null)
+            foreach (Wz_Node child in filterItems.Nodes)
+                filterFile.Filters.Add(child.Nodes["string"]?.GetValueEx<string>("") ?? "");
+        WriteJson(Path.Combine(dir, "keys_filter.json"), filterFile);
 
         // the key caps and the key positions (the cap id is the PC scancode)
         var pos = ui.Find("StatusBar3.img/KeyConfig/keyPos");

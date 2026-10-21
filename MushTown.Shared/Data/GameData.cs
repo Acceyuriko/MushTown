@@ -396,9 +396,18 @@ public sealed class CharaPart
 // The map window data the exporter wrote: assets/ui/mapui.json.
 public sealed class MapUiData
 {
-    public List<string> Frame { get; set; } = new();
     public WorldUiData World { get; set; } = new();
+    public ChannelUiData Channel { get; set; } = new();
     public List<MapNameUi> Maps { get; set; } = new();
+}
+
+// The channel bar (UIWindow.img/Channel): the panel art, the world name
+// and the number of channels.
+public sealed class ChannelUiData
+{
+    public string Image { get; set; } = "";
+    public string World { get; set; } = "";
+    public int Channels { get; set; }
 }
 
 // The world map art and the regions on it (Map/WorldMap/WorldMap.img).

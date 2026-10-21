@@ -74,7 +74,9 @@ public partial class MushTownGame
     {
         UpdateHudHover(gx, gy); // every frame (clicks return early below)
         var hotkey = FreshHotkey(kb);
-        if (hotkey != null && _talkNpc == 0)
+        // The key window is modal: while it is open, only its own key works.
+        bool keyWindowOpen = WindowFor(HotkeyAction.KeyConfig)?.Show == true;
+        if (hotkey != null && _talkNpc == 0 && (hotkey.Value == HotkeyAction.KeyConfig || !keyWindowOpen))
         {
             _menuWindow.Close(); // a key opens a panel: the MENU window would cover it
             bool old = true; // the old panels click here; the new windows click themselves
@@ -85,6 +87,7 @@ public partial class MushTownGame
                 case HotkeyAction.Skill: _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; break;
                 case HotkeyAction.Quest: _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) _topPanel = 3; break; // the modal freezes panels
                 case HotkeyAction.Settings: if (_showSettings) CloseSettings(); else OpenSettings(); break;
+                case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // the minimap is always on screen
                 default: old = false; ToggleWindow(hotkey.Value); break; // the new windows draw above the older panels
             }
             if (old) PlaySfx("click");
@@ -288,14 +291,13 @@ public partial class MushTownGame
         qslot.AddChild(gloss);
         _gameScene.Add(qslot);
         var tracker = new GameObject { NoHit = true };
-        tracker.Add(new Tracker(TrackerLines));
+        tracker.Add(new Tracker(TrackerLines, Layout.Tracker.X, Layout.Tracker.Y));
         _gameScene.Add(tracker);
         var bossBar = new GameObject { NoHit = true };
         bossBar.Add(new BossBar(BossBarW, FindBoss));
         _gameScene.Add(bossBar);
-        var minimap = new GameObject { NoHit = true };
-        minimap.Add(new Minimap(() => _map, () => _mover.X, () => _mover.Y));
-        _gameScene.Add(minimap);
+        _gameScene.Add(ChannelBar.Build(this)); // the channel bar: bottom right, above the quick slots
+        _gameScene.Add(BuildQuickMenu()); // the quick menu icons: right of the two blue buttons, topmost so the clicks land there
         SyncPanelScenes(); // shots skip Update: without this the panels draw empty there (first Update no-ops, positions match)
     }
 
@@ -414,7 +416,7 @@ public partial class MushTownGame
     private void DrawQuickslotCap(UiGfx gfx, Rectangle s, HotkeyAction action, string fallback)
     {
         string cap = KeyConfigWindow.CapArt(HotkeyKey(action));
-        var tex = gfx.Tex(cap != "" ? cap : fallback);
+        var tex = gfx.Tex(cap != "" ? cap : "ui/" + fallback);
         gfx.Sb.Draw(tex, new Vector2(s.X + 2, s.Y + 2), Color.White);
     }
 

@@ -43,7 +43,7 @@ internal static class MapUi
     }
 }
 
-// The parts both map windows have: the title strip that drags the window
+// The parts the map windows have: the title strip that drags the window
 // and the X that closes it.
 internal static class MapWindowParts
 {
@@ -67,23 +67,26 @@ internal static class MapWindowParts
     }
 }
 
-// The minimap window: the map around the player, big.
+// The minimap window: the official panel (Minimap.img/Mini) with the map
+// of the current map, the player and the portals.
 public sealed class MinimapWindow : UiWindow
 {
     private readonly MushTownGame _game;
-    public MinimapWindow(MushTownGame game) : base(HotkeyAction.Minimap) { _game = game; }
+    public MinimapWindow(MushTownGame game) : base(HotkeyAction.Minimap) { _game = game; Show = true; } // the minimap is always on screen
+
+    // Esc does not close the minimap: it is always on screen.
+    public override void OnClosed() => Show = true;
 
     // Every number of this window lives in layouts/panel-map.json.
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-map.json"));
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 420), _lay.Get("h", 320));
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("insetT", 70));
-    public override Point LayoutPos() => new(_lay.Get("x", 470), _lay.Get("y", 40));
+    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 180), _lay.Get("h", 180));
+    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("insetT", 48));
+    public override Point LayoutPos() => new(_lay.Get("x", 0), _lay.Get("y", 0));
 
     public override void Build()
     {
-        foreach (string file in MapUi.Data.Frame) _game.LoadTexture("ui/" + file);
-        foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture("ui/map_x" + state);
+        _game.LoadTexture("ui/mini_bg.png");
         _game.LoadTexture(_game.GameMap.MiniMap.Image);
 
         Scene = new Scene();
@@ -91,55 +94,30 @@ public sealed class MinimapWindow : UiWindow
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Invoke(Draw));
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
-        root.AddChild(MapWindowParts.Close(this, new Rectangle(Pos.X + _lay.Get("closeX", 396), Pos.Y + _lay.Get("closeY", 8), 11, 11)));
         Scene.Add(root);
     }
 
-    // The map in the well, the dots, and the official frame around it.
+    // The official panel, the map in it, the dots and the names.
     private void Draw(UiGfx gfx)
     {
         var r = Rect();
-        int left = _lay.Get("insetL", 7), top = _lay.Get("insetT", 70);
-        int right = _lay.Get("insetR", 7), bottom = _lay.Get("insetB", 10);
+        int left = _lay.Get("insetL", 8), top = _lay.Get("insetT", 48);
+        int right = _lay.Get("insetR", 8), bottom = _lay.Get("insetB", 8);
         var well = new Rectangle(r.X + left, r.Y + top, r.Width - left - right, r.Height - top - bottom);
 
+        gfx.Sb.Draw(gfx.Tex("ui/mini_bg.png"), r, Color.White);
         var map = _game.GameMap;
         var tex = gfx.Tex(map.MiniMap.Image);
         float s = Math.Min((float)well.Width / tex.Width, (float)well.Height / tex.Height);
         int mw = (int)(tex.Width * s), mh = (int)(tex.Height * s);
         int mx = well.X + (well.Width - mw) / 2, my = well.Y + (well.Height - mh) / 2;
-
-        // The white fill of the well goes under the map, the frame slices
-        // over it. The json lists the pieces in this order: the fill
-        // first, then nw, n, ne, w, e, sw, s, se.
-        var files = MapUi.Data.Frame;
-        gfx.Sb.Draw(gfx.Tex("ui/" + files[0]), well, Color.White);
         gfx.Sb.Draw(tex, new Rectangle(mx, my, mw, mh), Color.White);
         MapDots.Draw(gfx, map, _game.PlayerX, _game.PlayerY, mx, my, mw, mh);
-        for (int i = 1; i < files.Count; i++)
-        {
-            var box = i switch
-            {
-                1 => new Rectangle(r.X, r.Y, 44, 76),                                 // nw
-                2 => new Rectangle(r.X + 44, r.Y, r.Width - 59, 70),                  // n
-                3 => new Rectangle(r.X + r.Width - 15, r.Y, 15, 76),                 // ne
-                4 => new Rectangle(r.X, r.Y + 76, 9, r.Height - 92),                  // w
-                5 => new Rectangle(r.X + r.Width - 9, r.Y + 76, 9, r.Height - 92),    // e
-                6 => new Rectangle(r.X, r.Y + r.Height - 16, 15, 16),                // sw
-                7 => new Rectangle(r.X + 15, r.Y + r.Height - 10, r.Width - 30, 10), // s
-                _ => new Rectangle(r.X + r.Width - 15, r.Y + r.Height - 16, 15, 16), // se
-            };
-            gfx.Sb.Draw(gfx.Tex("ui/" + files[i]), box, Color.White);
-        }
 
-        // The header: a small map picture in the frame's own white square,
-        // then the street name and the map name (WZ vectors).
-        float ps = Math.Min(36f / tex.Width, 36f / tex.Height);
-        int pw = (int)(tex.Width * ps), ph = (int)(tex.Height * ps);
-        gfx.Sb.Draw(tex, new Rectangle(r.X + 7 + (36 - pw) / 2, r.Y + 30 + (36 - ph) / 2, pw, ph), Color.White);
+        // The street name and the map name (the official names).
         var name = MapUi.Name(map.MapId);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(name.Street), new Vector2(r.X + _lay.Get("streetX", 50), r.Y + _lay.Get("streetY", 30)), new Color(212, 225, 229));
-        gfx.Sb.Draw(gfx.Ui.GetSmall(name.Name), new Vector2(r.X + _lay.Get("nameX", 50), r.Y + _lay.Get("nameY", 48)), Color.White);
+        gfx.Sb.Draw(gfx.Ui.GetSmall(name.Street), new Vector2(r.X + _lay.Get("streetX", 10), r.Y + _lay.Get("streetY", 12)), new Color(212, 225, 229));
+        gfx.Sb.Draw(gfx.Ui.GetSmall(name.Name), new Vector2(r.X + _lay.Get("nameX", 10), r.Y + _lay.Get("nameY", 30)), Color.White);
     }
 }
 
@@ -190,6 +168,57 @@ public sealed class WorldMapWindow : UiWindow
             var name = MapUi.Name(mapId);
             gfx.Sb.Draw(gfx.Ui.GetSmall(current.Title), new Vector2(r.X + _lay.Get("infoX", 14), r.Y + _lay.Get("infoY", 40)), Color.White);
             gfx.Sb.Draw(gfx.Ui.GetSmall(name.Name), new Vector2(r.X + _lay.Get("infoX", 14), r.Y + _lay.Get("infoY", 40) + 16), new Color(212, 225, 229));
+        }
+    }
+}
+
+// The channel bar (HUD, bottom right): the official CHANGE CHANNEL panel
+// with the world name, the channel count and the channel list. The game
+// plays on one channel, so the list shows them all and marks the one in use.
+public static class ChannelBar
+{
+    private static int _channel; // the channel in use
+
+    private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-map.json"));
+
+    // The bar box: the art is 436x67, the layout file gives the spot.
+    public static Rectangle Rect() => new(_lay.Get("chX", 930), _lay.Get("chY", 616), 436, 67);
+
+    // One channel slot in the list strip.
+    private static Rectangle Slot(int i) => new(Rect().X + 14 + i * 13, Rect().Y + 54, 11, 12);
+
+    // The bar tree: the panel art, the list and the buttons. The game
+    // adds it to the HUD scene (MushTown.Client/Panels/HudBar.cs).
+    public static GameObject Build(MushTownGame game)
+    {
+        game.LoadTexture(MapUi.Data.Channel.Image);
+        var root = new GameObject();
+        root.Add(new Rect(Rect()));
+        root.Add(new Picture(MapUi.Data.Channel.Image));
+        root.Add(new Invoke(Draw));
+        for (int i = 0; i < MapUi.Data.Channel.Channels; i++)
+        {
+            int n = i; // the loop variable is shared: copy it for the lambda
+            var slot = new GameObject();
+            slot.Add(new Rect(Slot(i)));
+            slot.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _channel = n });
+            root.AddChild(slot);
+        }
+        return root;
+    }
+
+    // The world name, the channel count and the channel list.
+    private static void Draw(UiGfx gfx)
+    {
+        var r = Rect();
+        var channel = MapUi.Data.Channel;
+        gfx.Sb.Draw(gfx.Ui.GetSmall(channel.World.ToUpperInvariant() + " WORLD"), new Vector2(r.X + 14, r.Y + 30), new Color(255, 200, 90));
+        gfx.Sb.Draw(gfx.Ui.GetSmall($"[{_channel}/{channel.Channels}]"), new Vector2(r.X + 356, r.Y + 30), Color.White);
+        for (int i = 0; i < channel.Channels; i++)
+        {
+            var s = Slot(i);
+            if (i == _channel) gfx.Sb.Draw(gfx.Pixel, s, new Color(255, 220, 0));
+            else gfx.Sb.Draw(gfx.Pixel, new Rectangle(s.X + 4, s.Y, 2, s.Height), new Color(68, 136, 187));
         }
     }
 }

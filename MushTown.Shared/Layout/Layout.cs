@@ -16,6 +16,7 @@ public static class Layout
     public static (int X, int Y) MenuBtn = (266, 724);
     public static (int X, int Y) CharBtn = (304, 724);
     public static (int X, int Y) Qslot = (810, 691);
+    public static (int X, int Y) Tracker = (1358, 44); // the quest lines are right aligned: X is the right edge
 
     public static void Load(string path)
     {
@@ -28,6 +29,7 @@ public static class Layout
         var menuBtn = GetPoint(root, "menuBtn", MenuBtn);
         var charBtn = GetPoint(root, "charBtn", CharBtn);
         var qslot = GetPoint(root, "qslot", Qslot);
-        Shop = shop; Plate = plate; HpMp = hpmp; MenuBtn = menuBtn; CharBtn = charBtn; Qslot = qslot;
+        var tracker = GetPoint(root, "tracker", Tracker);
+        Shop = shop; Plate = plate; HpMp = hpmp; MenuBtn = menuBtn; CharBtn = charBtn; Qslot = qslot; Tracker = tracker;
     }
 }

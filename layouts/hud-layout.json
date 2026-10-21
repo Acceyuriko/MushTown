@@ -1,5 +1,5 @@
 {
-  "_help": "HUD widget top-left positions in 1366x768 space. Sizes stay in code (they must match the art). The game windows (inventory, stat, skill, quest, settings) have their own file: layouts/panel-<name>.json. Keys may be omitted (keeps current value). DEBUG builds reload this file live on save; the file wins over dragged panels.",
+  "_help": "HUD widget top-left positions in 1366x768 space. Sizes stay in code (they must match the art). The game windows (inventory, stat, skill, quest, settings) have their own file: layouts/panel-<name>.json. tracker = the quest lines: X is the right edge, Y is the top. Keys may be omitted (keeps current value). DEBUG builds reload this file live on save; the file wins over dragged panels.",
   "charBtn": [
     304,
     724
@@ -19,5 +19,9 @@
   "qslot": [
     810,
     691
+  ],
+  "tracker": [
+    1358,
+    44
   ]
 }

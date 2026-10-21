@@ -2,34 +2,26 @@ using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
 
-// The map window art: the big minimap frame (UIMap.img/MiniMap/MaxMap),
-// the world map window (UIMap.img/WorldMap) and the world map itself
-// (Map/WorldMap/WorldMap.img). The file names must match the client
-// (MushTown.Client/Panels/HudMap.cs).
+// The map window art: the minimap panel (Minimap.img/Mini), the world map
+// window (UIMap.img/WorldMap), the world map itself (Map/WorldMap/WorldMap.img)
+// and the channel bar (UIWindow.img/Channel). The file names must match the
+// client (MushTown.Client/Panels/HudMap.cs).
 public static partial class Export
 {
     public static bool ExportMapUi(WzRoot ui, WzRoot map, WzRoot str, string outDir)
     {
         string dir = Path.Combine(outDir, "ui");
 
-        // The big minimap frame: nine slices. The white fill (c) comes
-        // first: the client draws it under the map, the rest over it.
-        string[] frame = { "c", "nw", "n", "ne", "w", "e", "sw", "s", "se" };
-        var frameFiles = new List<string>();
-        foreach (string piece in frame)
-        {
-            string file = $"mm_{piece}.png";
-            if (!UiPng.Save(ui, "UI", $"UIMap.img/MiniMap/MaxMap/{piece}", Path.Combine(dir, file))) return false;
-            frameFiles.Add(file);
-        }
+        // The minimap panel: the dark frame the map sits in.
+        if (!UiPng.Save(ui, "UI", "Minimap.img/Mini/Backgrnd/0", Path.Combine(dir, "mini_bg.png"))) return false;
 
-        // The X button (both windows use it): the normal, hover and
-        // pressed states, the names the Image widget wants.
+        // The X button of the world map window and the world map window frame.
         foreach (var (state, name) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p") })
             if (!UiPng.Save(ui, "UI", $"UIMap.img/WorldMap/button:close/{state}/0", Path.Combine(dir, $"map_x{name}.png"))) return false;
-
-        // The world map window frame.
         if (!UiPng.Save(ui, "UI", "UIMap.img/WorldMap/backgrnd", Path.Combine(dir, "wm_frame.png"))) return false;
+
+        // The channel bar: the CHANGE CHANNEL panel.
+        if (!UiPng.Save(ui, "UI", "UIWindow.img/Channel/t", Path.Combine(dir, "ch_t.png"))) return false;
 
         // The world map art and the region marks (Map/WorldMap/WorldMap.img).
         // The Base tree keeps the "Map/" folder in the path, a Map.wz root
@@ -68,6 +60,7 @@ public static partial class Export
             return false;
         }
         var names = new List<object>();
+        string worldName = "";
         foreach (int id in ExportList.Load("maps"))
         {
             string name = "", street = "";
@@ -77,18 +70,27 @@ public static partial class Export
                 if (entry == null) continue;
                 name = entry.Nodes["mapName"]?.Value as string ?? "";
                 street = entry.Nodes["streetName"]?.Value as string ?? "";
+                worldName = world2.Text; // the world folder our maps live in
                 break;
             }
             names.Add(new { Id = id, Name = name, Street = street });
         }
 
+        // The channel rows of the channel panel (CH1..CH30).
+        var channelRows = ui.Find("UIWindow.img/Channel/ch");
+        if (channelRows == null)
+        {
+            Console.WriteLine("channel list not found: UIWindow.img/Channel/ch");
+            return false;
+        }
+
         WriteJson(Path.Combine(dir, "mapui.json"), new
         {
-            Frame = frameFiles,
             World = new { Image = "ui/wm_world.png", Regions = regions },
+            Channel = new { Image = "ui/ch_t.png", World = worldName, Channels = channelRows.Nodes.Count },
             Maps = names,
         });
-        Console.WriteLine($"map ui: {frameFiles.Count} frame pieces, {regions.Count} regions, {names.Count} map names");
+        Console.WriteLine($"map ui: {regions.Count} regions, {names.Count} map names, {channelRows.Nodes.Count} channels");
         return true;
     }
 }

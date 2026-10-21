@@ -185,20 +185,23 @@ public sealed class BarNumber : Component, IDrawable
     }
 }
 
-// Quest tracker lines (matches DrawTracker).
+// Quest tracker lines (matches DrawTracker). The lines are right aligned:
+// the right edge comes from the layout file.
 public sealed class Tracker : Component, IDrawable
 {
     private readonly Func<List<string>> _lines;
-    public Tracker(Func<List<string>> lines) => _lines = lines;
+    private readonly int _right, _top;
+    public Tracker(Func<List<string>> lines, int right, int top) { _lines = lines; _right = right; _top = top; }
     public void Draw(UiGfx gfx)
     {
-        int y = 10;
+        int y = _top;
         var lines = _lines();
         for (int i = 0; i < lines.Count; i++) // name/detail pairs: even lines are gold names
         {
             var t = gfx.Ui.GetSmall(lines[i]);
-            gfx.Sb.Draw(gfx.Pixel, new Rectangle(6, y - 2, t.Width + 8, 16), new Color(0, 0, 0, 120));
-            gfx.Sb.Draw(t, new Vector2(10, y), i % 2 == 0 ? new Color(255, 220, 0) : Color.White);
+            int x = _right - t.Width;
+            gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 4, y - 2, t.Width + 8, 16), new Color(0, 0, 0, 120));
+            gfx.Sb.Draw(t, new Vector2(x, y), i % 2 == 0 ? new Color(255, 220, 0) : Color.White);
             y += 16;
         }
     }
@@ -223,27 +226,8 @@ public sealed class BossBar : Component, IDrawable
     }
 }
 
-// Minimap (matches DrawMinimap).
-public sealed class Minimap : Component, IDrawable
-{
-    private readonly Func<MapData> _map;
-    private readonly Func<float> _px, _py;
-    public Minimap(Func<MapData> map, Func<float> px, Func<float> py) { _map = map; _px = px; _py = py; }
-    public void Draw(UiGfx gfx)
-    {
-        var map = _map();
-        var tex = gfx.Tex(map.MiniMap.Image);
-        float s = Math.Min(220f / tex.Width, 160f / tex.Height);
-        int w = (int)(tex.Width * s), h = (int)(tex.Height * s);
-        int x = MushTownGame.GameWidth - 8 - w, y = 8;
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 2, y - 2, w + 4, h + 4), new Color(0, 0, 0, 160));
-        gfx.Sb.Draw(tex, new Rectangle(x, y, w, h), Color.White);
-        MapDots.Draw(gfx, map, _px(), _py(), x, y, w, h);
-    }
-}
-
-// The map dots: the portals (blue) and the player (yellow). The HUD
-// minimap and the big map window draw the same dots.
+// The map dots: the portals (blue) and the player (yellow). The minimap
+// window and the big map window draw the same dots.
 public static class MapDots
 {
     public static void Draw(UiGfx gfx, MapData map, float playerX, float playerY, int x, int y, int w, int h)
