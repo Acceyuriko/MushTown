@@ -56,8 +56,8 @@ public sealed class GuideWindow : UiWindow
         for (int i = 0; i < 3; i++) root.AddChild(Tab(i));
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(CloseButton()); // the X sits on the title strip: it must be hit first
-        root.AddChild(DisabledButton("min", _lay.Get("minX", 603), _lay.Get("minY", 4)));
-        root.AddChild(DisabledButton("help", _lay.Get("helpX", 589), _lay.Get("helpY", 3)));
+        root.AddChild(DisabledButton("min", _lay.Get("minX", 603), _lay.Get("minY", 4), 13, 12));
+        root.AddChild(DisabledButton("help", _lay.Get("helpX", 589), _lay.Get("helpY", 3), 8, 11));
         Scene.Add(root);
     }
 
@@ -85,11 +85,11 @@ public sealed class GuideWindow : UiWindow
     }
 
     // A button the game cannot use yet: the official greyed art, so it is
-    // not a button at all.
-    private GameObject DisabledButton(string name, int x, int y)
+    // not a button at all. The rect keeps the size of the art.
+    private GameObject DisabledButton(string name, int x, int y, int w, int h)
     {
         var o = new GameObject { NoHit = true };
-        o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 13, 13)));
+        o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, w, h)));
         o.Add(new Picture($"ui/guide_{name}_d.png", 0, 0)); // the art keeps its own size
         return o;
     }

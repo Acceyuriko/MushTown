@@ -309,8 +309,8 @@ public sealed class ChatWindow : UiWindow
     // The whole chat: the frame, the tabs, the log and the input line.
     private void Draw(UiGfx gfx)
     {
+        FillVisible(); // the line list comes first: the wheel needs the new scroll range
         ReadWheel();
-        FillVisible();
         if (_minimised)
         {
             DrawMinimised(gfx);
@@ -368,7 +368,7 @@ public sealed class ChatWindow : UiWindow
             {
                 var name = gfx.Ui.GetSmall(line.Name);
                 gfx.Sb.Draw(name, new Vector2(x, ty), new Color(120, 190, 255));
-                gfx.Sb.Draw(gfx.Ui.GetSmall(line.Text), new Vector2(x + name.Width + 6, ty), Color.White);
+                gfx.Sb.Draw(gfx.Ui.GetSmall(line.Text), new Vector2(x + name.Width + _lay.Get("nameGap", 6), ty), Color.White);
             }
         }
     }
@@ -385,7 +385,8 @@ public sealed class ChatWindow : UiWindow
         var t = gfx.Ui.GetSmall(_input);
         int tx = bar.X + _lay.Get("inputPadX", 8);
         gfx.Sb.Draw(t, new Vector2(tx, bar.Y + (bar.Height - t.Height) / 2), Color.White);
-        if (_focused) gfx.Sb.Draw(gfx.Pixel, new Rectangle(tx + t.Width + 1, bar.Y + 6, 1, 12), Color.White);
+        if (_focused) gfx.Sb.Draw(gfx.Pixel, new Rectangle(tx + t.Width + _lay.Get("caretDx", 1), bar.Y + _lay.Get("caretDy", 6),
+            _lay.Get("caretW", 1), _lay.Get("caretH", 12)), Color.White);
     }
 
     // The lines the tab in use shows: All shows everything, the other tabs

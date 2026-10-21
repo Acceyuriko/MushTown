@@ -16,7 +16,7 @@ public enum HotkeyAction
     KeyConfig, // no key by default: the options window opens it
     Menu,      // no key: the HUD menu button opens the MENU window
     Chat,      // no key: the chat input is clicked
-    Guide,     // no key: the MENU window opens the guide
+    Guide,     // no key: the green plus of the small guide opens the big guide
     GuideCard, // no key: the MENU window opens the small guide
 }
 

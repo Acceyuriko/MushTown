@@ -250,22 +250,6 @@ public sealed class BossBar : Component, IDrawable
     }
 }
 
-// The map dots: the portals (blue) and the player (yellow). The minimap
-// window and the big map window draw the same dots.
-public static class MapDots
-{
-    public static void Draw(UiGfx gfx, MapData map, float playerX, float playerY, int x, int y, int w, int h)
-    {
-        foreach (var p in map.Portals)
-        {
-            var (dx, dy) = map.MiniMap.ToDot(p.X, p.Y, w, h);
-            gfx.Sb.Draw(gfx.Pixel, new Rectangle(x + dx - 1, y + dy - 1, 3, 3), new Color(80, 160, 255));
-        }
-        var (ux, uy) = map.MiniMap.ToDot(playerX, playerY, w, h);
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(x + ux - 1, y + uy - 1, 3, 3), new Color(255, 220, 0));
-    }
-}
-
 // An item cell: a Button that reports kind + index to ClickSlot
 // instead of acting directly. Silent: the grab cursor alone
 // answers hovers (LegacyId stays "").

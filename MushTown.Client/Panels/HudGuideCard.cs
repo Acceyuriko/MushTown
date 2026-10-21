@@ -42,9 +42,9 @@ public sealed class GuideCardWindow : UiWindow
         root.AddChild(Arrow("left", 0));
         root.AddChild(Arrow("right", 1));
         root.AddChild(Dots());
-        root.AddChild(MaxButton());
-        root.AddChild(CloseButton());
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
+        root.AddChild(MaxButton()); // the plus and the X sit on the title strip: they must be hit first
+        root.AddChild(CloseButton());
         Scene.Add(root);
     }
 
@@ -71,7 +71,7 @@ public sealed class GuideCardWindow : UiWindow
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(Pos.X + _lay.Get(name + "X", 24), Pos.Y + _lay.Get("arrowY", 88), 9, 16)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _card = card });
-        o.Add(new Image($"ui/guide_small_{name}"));
+        o.Add(new GuideArrowArt(name));
         return o;
     }
 
@@ -79,8 +79,9 @@ public sealed class GuideCardWindow : UiWindow
     private GameObject Dots()
     {
         var o = new GameObject { NoHit = true };
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("dotX", 48), Pos.Y + _lay.Get("dotY", 91), 12, 6)));
-        o.Add(new GuideDotArt(() => _card));
+        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("dotX", 32), Pos.Y + _lay.Get("dotY", 100),
+            _lay.Get("dotW", 12), _lay.Get("dotH", 6))));
+        o.Add(new GuideDotArt(() => _card, _lay.Get("dotPitch", 7)));
         return o;
     }
 
@@ -105,6 +106,20 @@ public sealed class GuideCardWindow : UiWindow
     }
 }
 
+// The arrow of the small guide window: the official art at its own size
+// (the hover art of this WZ is bigger than the normal one).
+public sealed class GuideArrowArt : Component, IDrawable
+{
+    private readonly string _name;
+    public GuideArrowArt(string name) { _name = name; }
+    public void Draw(UiGfx gfx)
+    {
+        string state = gfx.Hovered == Owner ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
+        var r = Owner.Get<Rect>()!.Box;
+        gfx.Sb.Draw(gfx.Tex($"ui/guide_small_{_name}{state}"), new Vector2(r.X, r.Y), Color.White);
+    }
+}
+
 // The card of the small guide window: the official card picture.
 public sealed class GuideCardArt : Component, IDrawable
 {
@@ -114,8 +129,10 @@ public sealed class GuideCardArt : Component, IDrawable
     {
         var r = Owner.Get<Rect>()!.Box;
         // the main quest card has a pressed picture, the job card has not
-        string key = _card() == 0 ? "ui/guide_small_mainquest" : "ui/guide_small_job";
-        gfx.Sb.Draw(gfx.Tex(gfx.Pressed && _card() == 0 ? key + "_p.png" : key + ".png"), new Vector2(r.X, r.Y), Color.White);
+        bool main = _card() == 0;
+        string key = main ? "ui/guide_small_mainquest" : "ui/guide_small_job";
+        string art = main && gfx.Hovered == Owner && gfx.Pressed ? key + "_p.png" : key + ".png";
+        gfx.Sb.Draw(gfx.Tex(art), new Vector2(r.X, r.Y), Color.White);
     }
 }
 
@@ -123,14 +140,15 @@ public sealed class GuideCardArt : Component, IDrawable
 public sealed class GuideDotArt : Component, IDrawable
 {
     private readonly Func<int> _card;
-    public GuideDotArt(Func<int> card) { _card = card; }
+    private readonly int _pitch;
+    public GuideDotArt(Func<int> card, int pitch) { _card = card; _pitch = pitch; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         for (int i = 0; i < 2; i++)
         {
             var dot = gfx.Tex(i == _card() ? "ui/guide_small_dot1.png" : "ui/guide_small_dot0.png");
-            gfx.Sb.Draw(dot, new Vector2(r.X + i * 7, r.Y), Color.White);
+            gfx.Sb.Draw(dot, new Vector2(r.X + i * _pitch, r.Y), Color.White);
         }
     }
 }
