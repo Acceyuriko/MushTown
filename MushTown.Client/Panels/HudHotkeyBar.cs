@@ -34,7 +34,7 @@ public static class HotkeyBar
             var c = Cells[i];
             var o = new GameObject();
             o.Add(new Rect(CellRect(i)));
-            o.Add(new Button { Kind = ButtonKind.Click, HoverFill = true, OnClick = () => game.OpenFeature(c.Feature) });
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => game.OpenFeature(c.Feature) });
             o.Add(new HotkeyCell(() => game.HotkeyKey(c.Action), c.Action));
             game.LoadTexture($"ui/keys_icon_{KeyConfigWindow.IconOf(c.Action)}.png");
             root.AddChild(o);
@@ -44,7 +44,7 @@ public static class HotkeyBar
 
     // One cell box.
     private static Rectangle CellRect(int i) => new(
-        _lay.Get("x", 860) + i * _lay.Get("pitch", 35),
+        _lay.Get("x", 715) + i * _lay.Get("pitch", 35),
         _lay.Get("y", 645),
         _lay.Get("cellW", 35), _lay.Get("cellH", 33));
 }
@@ -63,9 +63,9 @@ public sealed class HotkeyCell : Component, IDrawable
         var r = Owner.Get<Rect>()!.Box;
         // the cell frame: the first cell of the official quick slot strip
         gfx.Sb.Draw(gfx.Tex("ui/hotkey_cells.png"), r, new Rectangle(0, 0, 35, 33), Color.White);
-        // the official action icon in the cell
+        // the official action icon in the cell, at its own size
         var icon = gfx.Tex($"ui/keys_icon_{KeyConfigWindow.IconOf(_action)}.png");
-        gfx.Sb.Draw(icon, new Rectangle(r.X + 1, r.Y + 1, 32, 32), Color.White);
+        gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
         // the key cap of the key the player bound to the action
         string key = _key();
         string cap = KeyConfigWindow.CapArt(key);
@@ -80,6 +80,9 @@ public sealed class HotkeyCell : Component, IDrawable
         {
             DrawInCell(gfx, key, r, r.Y + HotkeyBar._lay.Get("capDy", -13));
         }
+        // the hover light: the cell art would hide the overlay of the button
+        if (gfx.Hovered == Owner)
+            gfx.Sb.Draw(gfx.Pixel, r, new Color(255, 255, 255, 30));
     }
 
     // The text in the cell: centred, and a long text shrinks to fit the cell
