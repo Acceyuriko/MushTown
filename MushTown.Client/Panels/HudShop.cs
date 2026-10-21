@@ -73,10 +73,10 @@ public partial class MushTownGame
         int price = def.Price;
         if (Shop.Buy(chara, id, price, def))
         {
-            GameLog($"bought {def.Name} for {price:#,##0} mesos");
+            LogEvent($"bought {def.Name} for {price:#,##0} mesos");
             PlaySfx("shopbuy");
         }
-        else GameLog($"not enough mesos for {def.Name} ({price:#,##0})");
+        else LogEvent($"not enough mesos for {def.Name} ({price:#,##0})");
     }
 
     // Click a bag row: sell one at half price (rows show owned only, so it lands).
@@ -87,7 +87,7 @@ public partial class MushTownGame
         var def = _items[id];
         if (Shop.Sell(chara, id, def))
         {
-            GameLog($"sold {def.Name} for {Shop.SellPrice(def.Price):#,##0} mesos");
+            LogEvent($"sold {def.Name} for {Shop.SellPrice(def.Price):#,##0} mesos");
             PlaySfx("click");
         }
     }

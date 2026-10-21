@@ -49,7 +49,7 @@ public partial class MushTownGame
         if (kind == DropKind.Mesos)
         {
             chara.Mesos += id;
-            GameLog($"picked up {id} mesos");
+            LogEvent($"picked up {id} mesos");
         }
         else // the server only drops known ids
         {
@@ -58,7 +58,7 @@ public partial class MushTownGame
                 : chara.Use ??= new Dictionary<int, int>();
             bag.TryGetValue(id, out int have);
             bag[id] = have + count;
-            GameLog($"picked up {_items[id].Name} x{count}");
+            LogEvent($"picked up {_items[id].Name} x{count}");
         }
     }
 }

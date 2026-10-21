@@ -155,7 +155,7 @@ public partial class MushTownGame
         ResetMotion();
         SnapCamera();
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0; // death teleports: no reload on the same map, so end talk here
-        GameLog("you died");
+        LogEvent("you died");
     }
 
     // DEF% from every source: worn gear, Iron Body while live, Guardian
@@ -387,7 +387,7 @@ public partial class MushTownGame
         int ups = Progression.ApplyExp(chara, exp, OwnHpPct());
         if (ups > 0)
         {
-            GameLog($"level up! now Lv.{chara.Level} (STR {chara.Str} DEX {chara.Dex})");
+            LogEvent($"level up! now Lv.{chara.Level} (STR {chara.Str} DEX {chara.Dex})");
             PlaySfx("levelup");
             PushBuild();
             PushQuestSync();

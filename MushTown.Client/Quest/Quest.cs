@@ -249,7 +249,7 @@ public partial class MushTownGame
     // A fresh accept lands: log line, dialog closes.
     private void ApplyQuestAccepted(int quest)
     {
-        GameLog($"accepted: {_quests[quest].Name}");
+        LogEvent($"accepted: {_quests[quest].Name}");
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
     }
 
@@ -258,7 +258,7 @@ public partial class MushTownGame
     {
         var q = _quests[quest];
         var rewards = q.RewardLines(id => _items[id].Name);
-        GameLog(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
+        LogEvent(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
         GainExp(_questLog.TurnIn(chara, quest)); // payout lands before the EXP, like before
         PlaySfx("questclear");
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;

@@ -168,6 +168,14 @@ public partial class MushTownGame : Game
             HideWindowEarly(); // headless shots: hide before first paint (load takes seconds)
     }
 
+    // A game event for the player: it goes to the log file and to the chat
+    // window (the Etc. tab).
+    internal void LogEvent(string line)
+    {
+        GameLog(line);
+        _chatWindow.AddSystem(line);
+    }
+
     // Hides every window of this process, every 25ms, until exit. One
     // mechanism: MainWindowHandle lags creation by ~1s, and hiding once
     // (Initialize/Update) still leaves the black window up through load.
@@ -695,8 +703,7 @@ public partial class MushTownGame : Game
                     plate.Plate = n.Plate;
                 }
             }
-            while (_net.TryTakeChat(out var chat)) _chatWindow.AddLine(chat.Name, chat.Text);
-            // Quest events drain before mob hits: a level-up inside ApplyHit
+            while (_net.TryTakeChat(out var chat)) _chatWindow.AddLine(chat.Name, chat.Text);            // Quest events drain before mob hits: a level-up inside ApplyHit
             // re-syncs, and the sync must carry the counters this frame's
             // kills pushed (not wipe them on the server's copy).
             while (_net.TryTakeQuest(out var q))
