@@ -122,7 +122,7 @@ public partial class MushTownGame
         if (_dragShop.HasValue)
         {
             if (!held) _dragShop = null;
-            else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW);
+            else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW, ShopH);
         }
         SyncPanelScenes(); // drags + tab flips move the baked Rects (hover ran first, so it lags one frame, like legacy)
         DragWindows(held, gx, gy); // the new windows move by their title
@@ -219,8 +219,9 @@ public partial class MushTownGame
     }
 
     // Panels stay reachable: 80px on screen sideways, title never above the top.
-    private static Point ClampPanel(Point p, int w) =>
-        new(Math.Clamp(p.X, -w + 80, 1366 - 80), Math.Clamp(p.Y, 0, 768 - 40));
+    // A panel taller than the screen (the shop) keeps its whole body on screen.
+    private static Point ClampPanel(Point p, int w, int h = 40) =>
+        new(Math.Clamp(p.X, -w + 80, 1366 - 80), Math.Clamp(p.Y, 0, 768 - h));
 
     private Texture2D TexByKey(string key) => _textures[key]; // full keys ("ui/..."): all screens share one lookup
 
@@ -384,7 +385,7 @@ public partial class MushTownGame
 
     private Point _questPos = new(0, 0); // quest window opens centered-ish, drags after
     private Point _settingsPos = SettingsLayoutPos(); // settings window opens centered-ish, drags after
-    private Point _shopPos = new(Layout.Shop.X, Layout.Shop.Y); // shop window opens centered-ish, drags after
+    private Point _shopPos = new(0, 0); // the shop window opens at the spot in panel-shop.json, drags after
 
     private void DrawHud(int gx, int gy, bool pressed)
     {

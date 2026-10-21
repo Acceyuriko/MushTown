@@ -1,5 +1,5 @@
 {
-  "_help": "The shop window (official MapleStory art, UINpcShop.img/Shop). x/y = the window top-left in 1366x768 game pixels. w/h = the window size (the art is 380x681). The rest is window-local, measured on the official art: titleX = the middle of the shop name, titleY = its top. tabX/tabY = the NPC name tab, tabStep = the step between the tab pieces, tabNameX = the middle of the name on the tab. listX/listY = the first item row, rowPitch = the step between the rows, rowW/rowH = the row box (the row art is 336x45), iconX/iconY = the item icon, nameX/nameY = the item name, priceX/priceY = the price. mesoX/mesoY = the mesos number (its right end) in the bottom bar. closeX/closeY = the X button. dragH = the height of the drag strip at the top. Keys may be omitted (keeps the default).",
+  "_help": "The shop window (official MapleStory art, UINpcShop.img/Shop). x/y = the window top-left in 1366x768 game pixels. w/h = the window size (the art is 380x681). The rest is window-local, measured on the official art: titleX = the middle of the shop name, titleY = its top. tabX/tabY = the first tab piece, tabStep = the step between the tab pieces, tabW/tabH = the tab box, tabTextX = the middle of the name on the tab. listX/listY = the first item row, rowPitch = the step between the rows, rowW/rowH = the row box (the row art is 336x45), iconX/iconY = the item icon, nameX/nameY = the item name, priceX/priceY = the price. mesoX/mesoY = the mesos number (its right end) in the bottom bar. closeX/closeY = the X button. dragH = the height of the drag strip at the top. Keys may be omitted (keeps the default).",
   "x": 493,
   "y": 43,
   "w": 380,
@@ -9,7 +9,9 @@
   "tabX": 11,
   "tabY": 103,
   "tabStep": 72,
-  "tabNameX": 46,
+  "tabW": 70,
+  "tabH": 30,
+  "tabTextX": 35,
   "listX": 20,
   "listY": 141,
   "rowPitch": 50,

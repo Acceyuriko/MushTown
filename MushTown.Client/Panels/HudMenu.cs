@@ -146,7 +146,7 @@ public sealed class MenuWindow : UiWindow
     {
         var key = KeyOf(action);
         if (key == null) return;
-        var badge = new GameObject();
+        var badge = new GameObject { NoHit = true }; // the badge sits on the row: the row keeps the hover light
         badge.Add(new Rect(new Rectangle(Pos.X + x + _lay.Get("badgeX", 114), Pos.Y + y + _lay.Get("badgeY", 12), 16, 16)));
         badge.Add(new KeyBadge(() => _game.HotkeyKey(key.Value)));
         row.AddChild(badge);
@@ -208,7 +208,7 @@ public sealed class MenuArt : Component, IDrawable
         // the channel name in the pill at the top right (the official
         // vector:info spot: the middle of the pill)
         string world = MapUi.Data.Channel.World;
-        string name = $"{char.ToUpperInvariant(world[0])}{world[1..]}-Channel{ChannelBar.CurrentChannel + 1}";
+        string name = world.Length == 0 ? "" : $"{char.ToUpperInvariant(world[0])}{world[1..]}-Channel{ChannelBar.CurrentChannel + 1}";
         var text = gfx.Ui.GetSmall(name);
         gfx.Sb.Draw(text, new Vector2(r.X + _lay.Get("chInfoX", 894) - text.Width / 2, r.Y + _lay.Get("chInfoY", 16)), Color.White);
     }

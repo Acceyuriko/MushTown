@@ -24,16 +24,26 @@ public class ShopTests
     public void Buy_Ok_ChargesAndBags()
     {
         var hero = Hero(10);
-        Assert.IsTrue(Shop.Buy(hero, ItemData.RedPotion, 3));
+        Assert.IsTrue(Shop.Buy(hero, ItemData.RedPotion, 3, Def(ItemData.RedPotion, 3)));
         Assert.AreEqual(7, hero.Mesos);
         Assert.AreEqual(1, hero.Use![ItemData.RedPotion]);
+    }
+
+    [TestMethod]
+    public void Buy_Equip_GoesToTheEquipBag()
+    {
+        var hero = Hero(100);
+        Assert.IsTrue(Shop.Buy(hero, ItemData.Mop, 50, Def(ItemData.Mop, 50, "Wp")));
+        Assert.AreEqual(50, hero.Mesos);
+        Assert.AreEqual(1, hero.EquipBag![ItemData.Mop]);
+        Assert.IsNull(hero.Use);
     }
 
     [TestMethod]
     public void Buy_Broke_ChangesNothing()
     {
         var hero = Hero(2);
-        Assert.IsFalse(Shop.Buy(hero, ItemData.RedPotion, 3));
+        Assert.IsFalse(Shop.Buy(hero, ItemData.RedPotion, 3, Def(ItemData.RedPotion, 3)));
         Assert.AreEqual(2, hero.Mesos);
         Assert.IsNull(hero.Use);
     }

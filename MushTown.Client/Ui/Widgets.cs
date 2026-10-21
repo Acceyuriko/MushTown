@@ -528,23 +528,6 @@ public sealed class FlatButton : Component, IDrawable
     }
 }
 
-// One shop row: icon centered in a 32px cell, name + price at +52
-// (matches DrawShopIcon + the row text). Strings bake at build: the
-// sync gate rebuilds when stock or sell rows change.
-public sealed class ShopRow : Component, IDrawable
-{
-    private readonly string _image, _line1, _line2;
-    public ShopRow(string image, string line1, string line2) { _image = image; _line1 = line1; _line2 = line2; }
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Box;
-        var icon = gfx.Tex(_image);
-        gfx.Sb.Draw(icon, new Vector2(r.X + 12 + (32 - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(_line1), new Vector2(r.X + 52, r.Y + 4), Color.White);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(_line2), new Vector2(r.X + 52, r.Y + 20), new Color(130, 140, 150));
-    }
-}
-
 // Live text in a live color (quest rows answer to select/done, talk
 // entries to offer/ready; both change without a scene rebuild).
 public sealed class LiveTint : Component, IDrawable
@@ -578,9 +561,9 @@ public sealed class TalkBody : Component, IDrawable
     }
 }
 
-// The key cap badge at the right of a menu row: the official 16x16 cap
-// art of the key the player bound to that action. The cap follows the
-// binding, so it changes when the player changes the key.
+// The key cap badge at the right of a menu row: the official cap art of
+// the key the player bound to that action. The cap follows the binding,
+// so it changes when the player changes the key.
 public sealed class KeyBadge : Component, IDrawable
 {
     private readonly Func<string> _key;
@@ -590,6 +573,9 @@ public sealed class KeyBadge : Component, IDrawable
         string art = KeyConfigWindow.CapArt(_key());
         if (art == "") return;
         var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Tex(art), new Vector2(r.X, r.Y), Color.White);
+        var cap = gfx.Tex(art);
+        int x = r.X + (r.Width - cap.Width) / 2;
+        if (cap.Width > r.Width) x = r.Right - cap.Width; // a wide cap grows to the left, out of the button
+        gfx.Sb.Draw(cap, new Vector2(x, r.Y + (r.Height - cap.Height) / 2), Color.White);
     }
 }

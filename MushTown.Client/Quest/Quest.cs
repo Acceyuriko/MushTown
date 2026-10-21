@@ -217,6 +217,7 @@ public partial class MushTownGame
     private void OpenShop(int npc)
     {
         _shopStock = _shops[npc].Stock;
+        _shopTab = 0; // the shop opens on the buy tab
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         _showShop = true;
         _topPanel = 5;

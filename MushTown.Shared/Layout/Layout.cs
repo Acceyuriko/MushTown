@@ -10,7 +10,6 @@ namespace MushTown.Shared;
 // file may list only what you tweak.
 public static class Layout
 {
-    public static (int X, int Y) Shop = (513, 200);
     public static (int X, int Y) Plate = (0, 723);
     public static (int X, int Y) HpMp = (584, 715);
     public static (int X, int Y) MenuBtn = (266, 724);
@@ -23,13 +22,12 @@ public static class Layout
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         var root = doc.RootElement;
         // All or nothing: a bad value throws before any field changes.
-        var shop = GetPoint(root, "shop", Shop);
         var plate = GetPoint(root, "plate", Plate);
         var hpmp = GetPoint(root, "hpmp", HpMp);
         var menuBtn = GetPoint(root, "menuBtn", MenuBtn);
         var charBtn = GetPoint(root, "charBtn", CharBtn);
         var qslot = GetPoint(root, "qslot", Qslot);
         var tracker = GetPoint(root, "tracker", Tracker);
-        Shop = shop; Plate = plate; HpMp = hpmp; MenuBtn = menuBtn; CharBtn = charBtn; Qslot = qslot; Tracker = tracker;
+        Plate = plate; HpMp = hpmp; MenuBtn = menuBtn; CharBtn = charBtn; Qslot = qslot; Tracker = tracker;
     }
 }

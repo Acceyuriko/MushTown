@@ -71,7 +71,7 @@ public partial class MushTownGame
         if (chara == null) return; // CLI sessions carry no wallet
         var def = _items[id];
         int price = def.Price;
-        if (Shop.Buy(chara, id, price))
+        if (Shop.Buy(chara, id, price, def))
         {
             GameLog($"bought {def.Name} for {price:#,##0} mesos");
             PlaySfx("shopbuy");
@@ -120,15 +120,17 @@ public partial class MushTownGame
     }
 
     // One tab of the strip: the official tab piece, the label and the click
-    // that picks the list.
+    // that picks the list. The official art has one tab look, so the tab
+    // in use is the one with the bright text.
     private GameObject ShopTab(int index, string label)
     {
         int x = _shopLay.Get("tabX", 11) + index * _shopLay.Get("tabStep", 72);
         int y = _shopLay.Get("tabY", 103);
         var o = PanelButton(new Rectangle(_shopPos.X + x, _shopPos.Y + y,
-                _shopLay.Get("tabW", 72), _shopLay.Get("tabH", 30)),
+                _shopLay.Get("tabW", 70), _shopLay.Get("tabH", 30)),
             "shoptab" + index, () => _shopTab = index);
-        o.Add(new Label(label, _shopLay.Get("tabNameX", 46) - _ui.GetSmall(label).Width / 2, 4) { Tint = Color.White });
+        int dx = _shopLay.Get("tabTextX", 35) - _ui.GetSmall(label).Width / 2;
+        o.Add(new Label(label, dx, 4) { Tint = _shopTab == index ? Color.White : new Color(190, 220, 235) });
         return o;
     }
 
@@ -158,10 +160,9 @@ public partial class MushTownGame
             if (_shopStock.Count == 0) body.AddChild(ShopEmptyRow(row++));
             foreach (int id in _shopStock)
             {
-                if (row >= ShopRowCount) break;
-                int s = row; // for-loop variables capture shared: copy per slot
+                if (row >= ShopRowCount) { GameLog($"the shop has {_shopStock.Count} items, the list shows {ShopRowCount}"); break; }
                 var def = _items[id];
-                body.AddChild(ShopRow(row++, def.Image, def.Name, $"{def.Price:#,##0}", "buy" + s, () => BuyFromShop(id)));
+                body.AddChild(ShopRow(row++, def.Image, def.Name, $"{def.Price:#,##0}", "buy" + row, () => BuyFromShop(id)));
             }
         }
         else
@@ -169,10 +170,9 @@ public partial class MushTownGame
             if (sells.Count == 0) body.AddChild(ShopEmptyRow(row++));
             foreach (var (id, count) in sells)
             {
-                if (row >= ShopRowCount) break;
-                int s = row; // for-loop variables capture shared: copy per slot
+                if (row >= ShopRowCount) { GameLog($"the bag has {sells.Count} items, the list shows {ShopRowCount}"); break; }
                 var def = _items[id];
-                body.AddChild(ShopRow(row++, def.Image, $"{def.Name} x{count}", $"Sell {Shop.SellPrice(def.Price):#,##0}", "sell" + s, () => SellToShop(id)));
+                body.AddChild(ShopRow(row++, def.Image, $"{def.Name} x{count}", $"Sell {Shop.SellPrice(def.Price):#,##0} ea", "sell" + row, () => SellToShop(id)));
             }
         }
         // the drag strip at the top and the X
