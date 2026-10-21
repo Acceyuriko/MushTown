@@ -567,21 +567,61 @@ public sealed class LiveTint : Component, IDrawable
     }
 }
 
-// Talk body lines at +16, step 16 (reads the Hud wrap cache).
+// Talk body lines: the text of the dialogue box (reads the Hud wrap cache).
 public sealed class TalkBody : Component, IDrawable
 {
     private readonly Func<List<string>> _lines;
-    private readonly int _dy;
-    public TalkBody(Func<List<string>> lines, int dy) { _lines = lines; _dy = dy; }
+    private readonly int _dx, _dy, _step;
+    public TalkBody(Func<List<string>> lines, int dx, int dy, int step) { _lines = lines; _dx = dx; _dy = dy; _step = step; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         int y = r.Y + _dy;
         foreach (string line in _lines())
         {
-            gfx.Sb.Draw(gfx.Ui.GetSmall(line), new Vector2(r.X + 16, y), Color.White);
-            y += 16;
+            gfx.Sb.Draw(gfx.Ui.GetSmall(line), new Vector2(r.X + _dx, y), Color.Black);
+            y += _step;
         }
+    }
+}
+
+// The NPC dialogue box (UI/UIWindow2.img/UtilDlgEx): the top piece with
+// the name tab, the middle piece that repeats for every line and the
+// bottom piece with the blue button bar.
+public sealed class TalkFrame : Component, IDrawable
+{
+    public void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        var top = gfx.Tex("ui/talk_dlg_top.png");
+        var mid = gfx.Tex("ui/talk_dlg_mid.png");
+        var bottom = gfx.Tex("ui/talk_dlg_bottom.png");
+        gfx.Sb.Draw(top, new Vector2(r.X, r.Y), Color.White);
+        int y = r.Y + top.Height;
+        int bottomY = r.Bottom - bottom.Height;
+        while (y < bottomY)
+        {
+            gfx.Sb.Draw(mid, new Vector2(r.X, y), Color.White);
+            y += mid.Height;
+        }
+        gfx.Sb.Draw(bottom, new Vector2(r.X, bottomY), Color.White);
+    }
+}
+
+// One dialogue button: the official blank button art (UtilDlgEx
+// BtOK/BtClose/BtYes/BtNo) with the label written on it.
+public sealed class TalkButton : Component, IDrawable
+{
+    private readonly string _stem, _label, _id;
+    private readonly Func<string> _hover;
+    public TalkButton(string stem, string label, string id, Func<string> hover) { _stem = stem; _label = label; _id = id; _hover = hover; }
+    public void Draw(UiGfx gfx)
+    {
+        var b = Owner.Get<Rect>()!.Box;
+        string state = gfx.Pressed ? "_p.png" : _hover() == _id ? "_h.png" : "_n.png";
+        gfx.Sb.Draw(gfx.Tex($"ui/{_stem}{state}"), new Vector2(b.X, b.Y), Color.White);
+        var t = gfx.Ui.GetSmall(_label);
+        gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 2), Color.Black);
     }
 }
 
@@ -671,5 +711,32 @@ public sealed class MenuKeyBadge : Component, IDrawable
         for (int i = 0; i < 7; i++) map[bottom[i].ToString()] = 44 + i;
         for (int i = 0; i < 10; i++) map["F" + (i + 1)] = 59 + i;
         return map;
+    }
+}
+
+// The scroll bar of the chat log (UI/StatusBar3.img/chat/ingame/view/
+// scroll): the track (base_t/base_c/base_b) and the thumb. The up and the
+// down arrow art of this WZ is empty, so there is nothing to draw there.
+// The position is 0 at the top of the track and 1 at the bottom.
+public sealed class ScrollBar : Component, IDrawable
+{
+    private readonly Func<float> _position;
+    private readonly bool _enabled; // the disabled bar has no thumb
+    public ScrollBar(Func<float> position, bool enabled) { _position = position; _enabled = enabled; }
+    public void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Box;
+        string stem = _enabled ? "ui/chat_scroll" : "ui/chat_scroll_off";
+        var top = gfx.Tex(stem + "_base_t.png");
+        var mid = gfx.Tex(stem + "_base_c.png");
+        var bot = gfx.Tex(stem + "_base_b.png");
+        gfx.Sb.Draw(top, new Vector2(r.X, r.Y), Color.White);
+        gfx.Sb.Draw(mid, new Rectangle(r.X, r.Y + top.Height, r.Width, r.Height - top.Height - bot.Height), Color.White);
+        gfx.Sb.Draw(bot, new Vector2(r.X, r.Bottom - bot.Height), Color.White);
+        if (!_enabled) return;
+        string thumb = gfx.Hovered == Owner ? gfx.Pressed ? "ui/chat_scroll_thumb2.png" : "ui/chat_scroll_thumb1.png" : "ui/chat_scroll_thumb0.png";
+        var t = gfx.Tex(thumb);
+        int y = r.Y + (int)((r.Height - t.Height) * _position());
+        gfx.Sb.Draw(t, new Vector2(r.X, y), Color.White);
     }
 }

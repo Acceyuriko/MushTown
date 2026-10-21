@@ -11,11 +11,16 @@ public partial class MushTownGame
     private const int QuestDetailW = 305; // Quest/backgrnd2
     private const int QuestW = QuestListW + QuestDetailW;
     private const int QuestBodyH = 396;   // both panels are 396 tall
-    private const int TalkW = 440; // talk panel: body + quest entries + buttons
-    private const int TalkBtnW = 90, TalkBtnH = 24;
+    private const int TalkW = 519;       // the dialogue box art is 519 wide
+    private const int TalkTopH = 28;     // the top piece of the box
+    private const int TalkBottomH = 44;  // the bottom piece (the button bar)
+    private const int TalkBtnH = 16;     // the button art is 16 tall
 
     // Every number of this window lives in layouts/panel-quest.json.
     private static readonly PanelLayout _questLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-quest.json"));
+
+    // The dialogue box numbers live in layouts/panel-talk.json.
+    private static readonly PanelLayout _talkLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-talk.json"));
 
     // The quest art (the exporter writes these names).
     private static readonly string[] QuestFiles = new[]
@@ -25,6 +30,16 @@ public partial class MushTownGame
         "quest_icon0.png", "quest_icon1.png",
         "quest_basic.png", "quest_prob.png", "quest_reward.png",
         "quest_gauge.png", "quest_gauge_fill.png",
+    };
+
+    // The dialogue box art (UI/UIWindow2.img/UtilDlgEx) and its buttons.
+    private static readonly string[] TalkFiles = new[]
+    {
+        "talk_dlg_top.png", "talk_dlg_mid.png", "talk_dlg_bottom.png",
+        "talk_dlg_btok_n.png", "talk_dlg_btok_h.png", "talk_dlg_btok_p.png",
+        "talk_dlg_btclose_n.png", "talk_dlg_btclose_h.png", "talk_dlg_btclose_p.png",
+        "talk_dlg_btyes_n.png", "talk_dlg_btyes_h.png", "talk_dlg_btyes_p.png",
+        "talk_dlg_btno_n.png", "talk_dlg_btno_h.png", "talk_dlg_btno_p.png",
     };
 
     private bool _questDragged; // the player dragged the window: the file spot does not win
@@ -264,14 +279,18 @@ public partial class MushTownGame
             : chara.Quests.Where(id => _quests.ContainsKey(id)).OrderBy(id => id).ToList();
     }
 
+    // The talk panel (modal): the official dialogue box, the NPC name on
+    // the top tab, one page of text, the quest entries under it and the
+    // buttons in the blue bar at the bottom. The height follows the text.
     private void BuildTalkScene()
     {
+        foreach (string f in TalkFiles) LoadTexture("ui/" + f);
         _talkScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(TalkRect())); // no Button: talk swallows every click, like the legacy guard
-        body.Add(new TitleBar(_npcs[_talkNpc].Name));
-        body.Add(new Fill(new Color(62, 96, 118), 16));
-        body.Add(new TalkBody(() => TalkLines(), 16 + 8));
+        body.Add(new TalkFrame());
+        body.Add(new Label(_npcs[_talkNpc].Name, _talkLay.Get("nameDx", 8), _talkLay.Get("nameDy", 0)) { Tint = new Color(60, 60, 60) });
+        body.Add(new TalkBody(() => TalkLines(), _talkLay.Get("textDx", 16), _talkLay.Get("textDy", 28), _talkLay.Get("lineStep", 13)));
         if (_talkQuest == 0)
         {
             var entries = TalkEntries(_talkNpc);
@@ -285,7 +304,7 @@ public partial class MushTownGame
                 {
                     var c = _save?.Slots[_slot];
                     bool ready = !offer && c != null && _questLog.State(q).IsComplete(c);
-                    var ink = offer || ready ? new Color(255, 220, 0) : new Color(130, 140, 150);
+                    var ink = offer || ready ? new Color(150, 90, 0) : new Color(60, 60, 60);
                     string mark = offer ? "! " : ready ? "? " : "";
                     return (mark + _quests[q].Name, ink);
                 }, 0, 0));
@@ -294,7 +313,7 @@ public partial class MushTownGame
             if (NpcHasShop(_talkNpc))
             {
                 var sb = PanelButton(TalkEntryRect(entries.Count), "talkshop", () => OpenShop(_talkNpc), ButtonKind.Click);
-                sb.Add(new Label("Shop", 0, 0) { Tint = new Color(255, 220, 0) });
+                sb.Add(new Label("Shop", 0, 0) { Tint = new Color(150, 90, 0) });
                 body.AddChild(sb);
             }
         }
@@ -303,20 +322,36 @@ public partial class MushTownGame
         {
             int r = i; // for-loop variables capture shared: copy per row
             var bb = PanelButton(TalkBtnRect(r, buttons.Count), "talkbtn" + r, () => TalkAction(buttons[r]), ButtonKind.Click);
-            bb.Add(new FlatButton(buttons[r], "talkbtn" + r, () => _hoverId));
+            bb.Add(new TalkButton(TalkBtnArt(buttons[r]), buttons[r], "talkbtn" + r, () => _hoverId));
             body.AddChild(bb);
         }
         _talkScene.Add(body);
     }
 
-    // Talk panel (modal): NPC name on top, one page of body, quest entries in
-    // menu mode, buttons at the bottom. Height follows the content.
+    // The official dialogue buttons: the art is blank, the label is ours.
+    private static string TalkBtnArt(string label) => label switch
+    {
+        "Accept" => "talk_dlg_btyes",
+        "Complete" => "talk_dlg_btclose",
+        "Next" => "talk_dlg_btok",
+        _ => "talk_dlg_btno",
+    };
+
+    // The button width follows the official art (40, 91 and 57 wide).
+    private static int TalkBtnWidth(string label) => label switch
+    {
+        "Complete" => 91,
+        "Next" => 40,
+        _ => 57,
+    };
+
+    // The dialogue box: the top piece, the text rows and the bottom piece.
     private Rectangle TalkRect()
     {
-        int lines = TalkLines().Count + (_talkQuest == 0 ? TalkEntries(_talkNpc).Count : 0)
+        int rows = TalkLines().Count + (_talkQuest == 0 ? TalkEntries(_talkNpc).Count : 0)
             + (_talkQuest == 0 && NpcHasShop(_talkNpc) ? 1 : 0); // the Shop row in menu mode
-        int h = 16 + 8 + lines * 16 + 8 + TalkBtnH + 10;
-        return new Rectangle((1366 - TalkW) / 2, 340 - h / 2, TalkW, h);
+        int h = TalkTopH + rows * _talkLay.Get("lineStep", 13) + TalkBottomH;
+        return new Rectangle((MushTownGame.GameWidth - TalkW) / 2, _talkLay.Get("centerY", 340) - h / 2, TalkW, h);
     }
 
     private List<string> TalkLines()
@@ -350,13 +385,21 @@ public partial class MushTownGame
     private Rectangle TalkBtnRect(int i, int n)
     {
         var r = TalkRect();
-        int total = n * TalkBtnW + (n - 1) * 8;
-        return new Rectangle(r.X + (TalkW - total) / 2 + i * (TalkBtnW + 8), r.Bottom - TalkBtnH - 8, TalkBtnW, TalkBtnH);
+        var buttons = TalkButtons();
+        int gap = _talkLay.Get("btnGap", 8);
+        int total = 0;
+        for (int k = 0; k < n; k++) total += TalkBtnWidth(buttons[k]) + gap;
+        total -= gap;
+        int x = r.X + (r.Width - total) / 2;
+        for (int k = 0; k < i; k++) x += TalkBtnWidth(buttons[k]) + gap;
+        return new Rectangle(x, r.Bottom - TalkBtnH - _talkLay.Get("btnY", 10), TalkBtnWidth(buttons[i]), TalkBtnH);
     }
 
     private Rectangle TalkEntryRect(int i)
     {
         var r = TalkRect();
-        return new Rectangle(r.X + 16, r.Y + 16 + 8 + TalkLines().Count * 16 + i * 16, TalkW - 32, 16);
+        int step = _talkLay.Get("lineStep", 13);
+        int y = r.Y + _talkLay.Get("textDy", 28) + TalkLines().Count * step + i * step;
+        return new Rectangle(r.X + _talkLay.Get("textDx", 16), y, TalkW - 32, step);
     }
 }

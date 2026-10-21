@@ -1,0 +1,12 @@
+{
+  "_help": "The NPC dialogue window (UI/UIWindow2.img/UtilDlgEx): the box is the official art, 519 wide (the width stays in the code because the art must fit). nameDx/nameDy = the spot of the NPC name on the top tab. textDx/textDy = the spot of the first text line, lineStep = the height of one line (the middle piece of the box). btnY = how far above the bottom of the box the buttons sit (inside the blue bar), btnGap = the gap between the buttons. centerY = the middle of the screen where the box sits.",
+  "w": 519,
+  "nameDx": 14,
+  "nameDy": 2,
+  "textDx": 16,
+  "textDy": 28,
+  "lineStep": 13,
+  "btnY": 10,
+  "btnGap": 8,
+  "centerY": 340
+}
