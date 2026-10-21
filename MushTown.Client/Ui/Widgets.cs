@@ -28,6 +28,30 @@ public sealed class Panel : Component, IDrawable
     }
 }
 
+// The official nine piece frame: the corners stay, the edges and the center
+// stretch. The art names the pieces (ui/<stem>_nw.png and so on) and the
+// corner piece gives the border size.
+public static class NineSlice
+{
+    public static void Draw(UiGfx gfx, string stem, Rectangle r)
+    {
+        var nw = gfx.Tex("ui/" + stem + "_nw.png"); var ne = gfx.Tex("ui/" + stem + "_ne.png");
+        var sw = gfx.Tex("ui/" + stem + "_sw.png"); var se = gfx.Tex("ui/" + stem + "_se.png");
+        var n = gfx.Tex("ui/" + stem + "_n.png"); var s = gfx.Tex("ui/" + stem + "_s.png");
+        var w = gfx.Tex("ui/" + stem + "_w.png"); var e = gfx.Tex("ui/" + stem + "_e.png");
+        var c = gfx.Tex("ui/" + stem + "_c.png");
+        gfx.Sb.Draw(nw, new Vector2(r.X, r.Y), Color.White);
+        gfx.Sb.Draw(ne, new Vector2(r.Right - ne.Width, r.Y), Color.White);
+        gfx.Sb.Draw(sw, new Vector2(r.X, r.Bottom - sw.Height), Color.White);
+        gfx.Sb.Draw(se, new Vector2(r.Right - se.Width, r.Bottom - se.Height), Color.White);
+        gfx.Sb.Draw(n, new Rectangle(r.X + nw.Width, r.Y, r.Width - nw.Width - ne.Width, n.Height), Color.White);
+        gfx.Sb.Draw(s, new Rectangle(r.X + sw.Width, r.Bottom - s.Height, r.Width - sw.Width - se.Width, s.Height), Color.White);
+        gfx.Sb.Draw(w, new Rectangle(r.X, r.Y + nw.Height, w.Width, r.Height - nw.Height - sw.Height), Color.White);
+        gfx.Sb.Draw(e, new Rectangle(r.Right - e.Width, r.Y + ne.Height, e.Width, r.Height - ne.Height - se.Height), Color.White);
+        gfx.Sb.Draw(c, new Rectangle(r.X + w.Width, r.Y + n.Height, r.Width - w.Width - e.Width, r.Height - n.Height - s.Height), Color.White);
+    }
+}
+
 // Clickable rect: hit via Rect, action via OnClick. The Scene resolves
 // the hovered Button and plays the hover sfx (LegacyId bridges the old
 // _hoverId world; gone at the W5 cleanup).

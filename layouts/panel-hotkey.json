@@ -1,11 +1,10 @@
 {
-  "_help": "The hotkey bar (HUD, bottom right): one cell per game action. x/y = the top-left of the first cell in 1366x768 game pixels. cellW/cellH = the cell box (the official cell art is 35x33), pitch = the distance between two cells. capDx/capDy = the key cap in the cell, nameDy = the action name under the cap. DEBUG builds reload this file live on save.",
+  "_help": "The hotkey bar (HUD, bottom right): one cell per game action. x/y = the top-left of the first cell in 1366x768 game pixels. cellW/cellH = the cell box (the official strip is 557x67: 16 cells of a 32x32 frame with a 3px gap, so one cell is cut from (0,0,35,33) and the pitch is 35), pitch = the distance between two cells. capDy = the key cap in the cell (the cap is centred in the cell), nameDy = the action name under the cap. DEBUG builds reload this file live on save.",
   "x": 1156,
   "y": 581,
   "cellW": 35,
   "cellH": 33,
   "pitch": 35,
-  "capDx": 2,
   "capDy": 2,
   "nameDy": 18
 }

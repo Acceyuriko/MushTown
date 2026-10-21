@@ -215,19 +215,7 @@ public sealed class ChatWindow : UiWindow
     }
 
     // The official nine piece frame: the corners stay, the edges stretch.
-    private void DrawFrame(UiGfx gfx, Rectangle r)
-    {
-        int b = _lay.Get("border", 8); // the corner size
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_nw.png"), new Vector2(r.X, r.Y), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_n.png"), new Rectangle(r.X + b, r.Y, r.Width - 2 * b, b), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_ne.png"), new Vector2(r.Right - b, r.Y), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_w.png"), new Rectangle(r.X, r.Y + b, b, r.Height - 2 * b), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_c.png"), new Rectangle(r.X + b, r.Y + b, r.Width - 2 * b, r.Height - 2 * b), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_e.png"), new Rectangle(r.Right - b, r.Y + b, b, r.Height - 2 * b), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_sw.png"), new Vector2(r.X, r.Bottom - b), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_s.png"), new Rectangle(r.X + b, r.Bottom - b, r.Width - 2 * b, b), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_frame_se.png"), new Vector2(r.Right - b, r.Bottom - b), Color.White);
-    }
+    private void DrawFrame(UiGfx gfx, Rectangle r) => NineSlice.Draw(gfx, "chat_frame", r);
 
     // The filter tabs: All and Etc. carry their text in the official art.
     // The tab that is not in use is dim.
