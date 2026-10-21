@@ -292,9 +292,7 @@ public partial class MushTownGame
         gloss.Add(new Picture("ui/hud_qslotcover.png")); // gloss stretched onto the cells: bottom flush with EXP top
         qslot.AddChild(gloss);
         _gameScene.Add(qslot);
-        var tracker = new GameObject { NoHit = true };
-        tracker.Add(new Tracker(TrackerLines, Layout.Tracker.X, Layout.Tracker.Y));
-        _gameScene.Add(tracker);
+        _gameScene.Add(BuildQuestHelper()); // the quest helper bar: the count, the buttons, the quest list
         _gameScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
         var bossBar = new GameObject { NoHit = true };
         bossBar.Add(new BossBar(BossBarW, FindBoss));

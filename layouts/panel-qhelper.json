@@ -1,0 +1,7 @@
+{
+  "_help": "The quest helper bar at the top right of the HUD (under the buff bar): the official bar of UI/Quest.img/Helper with the count of the quests. right = the right edge of the bar, top = the top edge. listRight = the right edge of the quest lines under the bar (they are right aligned), listTop = the top of the first line. The bar art is 222x28 and the count digits 6x5, those sizes stay in the code.",
+  "right": 1362,
+  "top": 44,
+  "listRight": 1358,
+  "listTop": 74
+}
