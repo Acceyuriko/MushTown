@@ -256,6 +256,9 @@ public partial class MushTownGame : Game
             _mover.Action = _shotAction;
             _frame = _shotFrame;
             _mover.FacingRight = _shotFacingRight;
+            // a shot never types, so a shot named *balloon* shows a sample line
+            if (Path.GetFileNameWithoutExtension(_shotPath).Contains("balloon"))
+                ShowBalloon("Hi! I am going to Southperry now, see you soon!");
         }
 
         InitializeMenu(_shotScreen);

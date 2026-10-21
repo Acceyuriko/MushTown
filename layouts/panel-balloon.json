@@ -1,5 +1,5 @@
 {
-  "_help": "The speech bubble over the player (official MapleStory art, UI/ChatBalloon.img/0). Game pixels in 1366x768. w = the bubble width. maxLines = how many lines of the message the bubble shows (a longer message is cut short). lineH = the height of one line. padX/padY = the gap between the text and the bubble border. lifeMs = how long the bubble stays on the screen. aboveFeet = how many pixels above the feet the bubble bottom sits. tailDx = how far left of the feet the tail tip lands (the tail points at the head).",
+  "_help": "The speech bubble over the player (official MapleStory art, UI/ChatBalloon.img/0). Game pixels in 1366x768. w = the bubble width. maxLines = how many lines of the message the bubble shows (a longer message is cut short). lineH = the height of one line. padX/padY = the gap between the text and the bubble border. lifeMs = how long the bubble stays on the screen. aboveFeet = how many pixels above the feet the bubble bottom sits. arrowUp = how many pixels the tail tip reaches up into the bubble border.",
   "w": 130,
   "maxLines": 3,
   "lineH": 15,
@@ -7,5 +7,5 @@
   "padY": 6,
   "lifeMs": 4000,
   "aboveFeet": 74,
-  "tailDx": -5
+  "arrowUp": 2
 }

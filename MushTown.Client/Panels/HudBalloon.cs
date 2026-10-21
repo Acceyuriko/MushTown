@@ -18,6 +18,11 @@ public partial class MushTownGame
     private string _balloonText = "";
     private double _balloonUntil;
 
+    // The lines of the message. They are made once per message, not every
+    // frame: the wrap and the text art are the slow parts.
+    private string _balloonWrapped = "";
+    private List<string> _balloonLines = new();
+
     // The player sent a message: the bubble shows it for a few seconds.
     internal void ShowBalloon(string text)
     {
@@ -39,20 +44,25 @@ public partial class MushTownGame
         string text = BubbleText();
         if (text == "") return;
 
-        int w = _balloonLay.Get("w", 150);
+        int w = _balloonLay.Get("w", 130);
         int maxLines = _balloonLay.Get("maxLines", 3);
         int lineH = _balloonLay.Get("lineH", 15);
         int padX = _balloonLay.Get("padX", 8);
         int padY = _balloonLay.Get("padY", 6);
         int inner = w - 2 * (BalloonBorder + padX);
 
-        var lines = BubbleLines(gfx, text, inner, maxLines);
+        if (text != _balloonWrapped) // the lines change only when the message does
+        {
+            _balloonWrapped = text;
+            _balloonLines = BubbleLines(gfx, text, inner, maxLines);
+        }
+        var lines = _balloonLines;
         int h = 2 * (BalloonBorder + padY) + lines.Count * lineH;
 
         // the bubble hangs over the head of the character
         int feetX = (int)Math.Floor(_mover.X) - _camera.X;
         int feetY = (int)Math.Floor(_mover.Y) - _camera.Y;
-        int bottom = feetY - _balloonLay.Get("aboveFeet", 80);
+        int bottom = feetY - _balloonLay.Get("aboveFeet", 74);
         int x = Math.Clamp(feetX - w / 2, 4, GameWidth - w - 4); // it stays on the screen
         int y = Math.Max(bottom - h, 4);
 
@@ -72,17 +82,12 @@ public partial class MushTownGame
         }
     }
 
-    // The message the bubble shows: the one the player sent. A shot never
-    // types, so a shot named *balloon* shows a sample line instead.
+    // The message the bubble shows: the one the player sent.
     private string BubbleText()
     {
-        if (_balloonText != "")
-        {
-            if (_timeMs <= _balloonUntil) return _balloonText;
-            _balloonText = ""; // the bubble is gone
-        }
-        if (_shotPath != null && Path.GetFileNameWithoutExtension(_shotPath).Contains("balloon"))
-            return "Hi! I am going to Southperry now, see you soon!";
+        if (_balloonText == "") return "";
+        if (_timeMs <= _balloonUntil) return _balloonText;
+        _balloonText = ""; // the bubble is gone
         return "";
     }
 
