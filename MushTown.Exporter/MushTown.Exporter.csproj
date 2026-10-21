@@ -6,7 +6,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="NLayer" Version="3.0.0" />
+    <!-- The Windows MP3 decoder (Media Foundation): the managed one (NLayer)
+         mis-decodes these WZ tracks. This tool only runs on Windows and is
+         not shipped; NAudio is MIT licensed. -->
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
   </ItemGroup>
 
   <ItemGroup>

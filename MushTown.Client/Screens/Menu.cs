@@ -690,6 +690,7 @@ public partial class MushTownGame
         _screen = Screen.Game;
         BuildGameScene();
         _scenes.Show(_gameScene);
+        PlayScreenBgm(); // the map's own track takes over from the login theme
     }
 
     private void ToChars()
@@ -725,6 +726,7 @@ public partial class MushTownGame
         _screen = Screen.Chars;
         BuildCharsScene();
         _scenes.Show(_menuScene);
+        PlayScreenBgm(); // back to the login theme
     }
 
     private void SaveChara()

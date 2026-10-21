@@ -61,6 +61,9 @@ public partial class MushTownGame : Game
     private readonly GameObject _world = new();
     private GameObject _mapObj = new(); // rebuilt per map load: portal + NPC children
     private readonly PlayerMover _mover = new();
+    // The audio object: the music player is its component.
+    private readonly GameObject _audio = new();
+    private readonly BgmPlayer _bgm;
     private FootholdItem _spawnGround = null!;
     private string _shownAction = "stand1"; // last action the frames advanced on (resets the frame on change)
     private int _frame;
@@ -121,6 +124,8 @@ public partial class MushTownGame : Game
         _shotAiticks = shotAiticks;
         _shotWear = shotWear;
         _assetsDir = FindAssetsDir();
+        _bgm = new BgmPlayer(Path.Combine(_assetsDir, "sound"), _shotPath != null);
+        _audio.Add(_bgm);
         string dir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "layouts");
         _layoutPath = Path.Combine(dir, "hud-layout.json");
         _menuLayoutPath = Path.Combine(dir, "menu-layout.json");
@@ -168,6 +173,7 @@ public partial class MushTownGame : Game
         var cam = new GameObject();
         cam.Add(_camera);
         _world.AddChild(cam);
+        _world.AddChild(_audio); // the music player component
         Exiting += (_, _) => { SaveChara(); _net?.Dispose(); _server?.Dispose(); };
         if (_shotPath != null && OperatingSystem.IsWindows())
             HideWindowEarly(); // headless shots: hide before first paint (load takes seconds)
@@ -271,7 +277,8 @@ public partial class MushTownGame : Game
         }
 
         InitializeMenu(_shotScreen);
-        LoadAudio(); // sounds last: needs the save dir (settings) and the map (BGM)
+        LoadAudio(); // sounds last: needs the save dir (settings)
+        PlayScreenBgm(); // the login theme over the menus, the map track in the game
         base.Initialize();
     }
 
@@ -343,7 +350,6 @@ public partial class MushTownGame : Game
         }
         _world.AddChild(_mapObj);
         EndTalkAndCheckNpcs(); // NPCs are static per map (talk ends with the map)
-        PlayBgm(); // same track across a switch keeps playing
     }
 
     // Stand on this map's spawn ground.
@@ -792,6 +798,7 @@ public partial class MushTownGame : Game
         {
             LoadMapData(tm);
             LoadMapTextures();
+            PlayScreenBgm(); // the new map has its own track
             ClearPeers(); // peers stay on the old map; their live states refill this one
             if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
             else { ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them

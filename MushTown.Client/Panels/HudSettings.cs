@@ -23,7 +23,7 @@ public partial class MushTownGame
         _showSettings = true;
         _dragSettings = null;
         _topPanel = 4;
-        _bgmAtOpen = _bgmVol;
+        _bgmAtOpen = _bgm.Volume;
         _sfxAtOpen = _sfxVol;
     }
 
@@ -131,7 +131,7 @@ public partial class MushTownGame
     // Set a volume (the slider click or Cancel).
     private void SetVolume(bool bgm, int value)
     {
-        int current = bgm ? _bgmVol : _sfxVol;
+        int current = bgm ? _bgm.Volume : _sfxVol;
         int delta = Math.Clamp(value, 0, 100) - current;
         if (delta != 0) BumpVolume(bgm, delta);
     }
@@ -139,7 +139,7 @@ public partial class MushTownGame
     // The slider knob at the current volume.
     private void DrawVolumeKnob(UiGfx gfx, bool bgm, int trackX, int trackY, int trackW)
     {
-        int volume = bgm ? _bgmVol : _sfxVol;
+        int volume = bgm ? _bgm.Volume : _sfxVol;
         var r = SettingsRect();
         int x = r.X + trackX + (volume * (trackW - SliderKnobW)) / 100;
         int y = r.Y + trackY + _settingsLay.Get("knobDy", -9);

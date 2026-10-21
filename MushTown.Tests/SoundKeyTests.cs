@@ -22,6 +22,13 @@ public sealed class SoundKeyTests
     }
 
     [TestMethod]
+    public void FromBgm_CanHitTheLoginKey()
+    {
+        // the exporter refuses this: the login theme owns the file
+        Assert.AreEqual(SoundKey.Login, SoundKey.FromBgm("Bgm/Login"));
+    }
+
+    [TestMethod]
     public void MobDie_Routes()
     {
         Assert.AreEqual("die_boss", SoundKey.MobDie(100004, true));

@@ -12,6 +12,10 @@ public static class SoundKey
         "shopbuy", "questclear", "buff",
     };
 
+    // The theme over the login flow (the menus before the game starts).
+    // The exporter writes Sound/BgmUI.img/Title under this key.
+    public const string Login = "bgm_login";
+
     // Map BGM: the WZ info/bgm looks like "Bgm58/The Beginnig of The
     // Adventure". "" means malformed (the exporter rejects it).
     public static string FromBgm(string bgm)

@@ -58,7 +58,7 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
-        if (!SoundExport.Run(baseRoot, maps, outDir))
+        if (!SoundExport.Run(baseRoot, maps.Values.Select(m => m.Info.Bgm), outDir))
         {
             Environment.ExitCode = 1;
             return;

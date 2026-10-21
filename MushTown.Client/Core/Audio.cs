@@ -4,16 +4,13 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Sound: short WAV effects plus one looped music track per map. Volumes
-// live in data/settings.json (0-100 each); a missing or broken file falls
-// back to the defaults (prefs must never block boot).
+// Sound: short WAV effects plus the music (the BgmPlayer component owns
+// the track). Volumes live in data/settings.json (0-100 each); a missing
+// or broken file falls back to the defaults (prefs must never block boot).
 public partial class MushTownGame
 {
     private readonly Dictionary<string, SoundEffect> _sfx = new();
-    private SoundEffect? _bgmEffect;
-    private SoundEffectInstance? _bgm;
-    private string _playingBgm = "";
-    private int _bgmVol = 80, _sfxVol = 80;
+    private int _sfxVol = 80;
     private string _settingsPath = "";
 
     private void LoadAudio()
@@ -21,10 +18,7 @@ public partial class MushTownGame
         _settingsPath = Path.Combine(Path.GetDirectoryName(_savesPath)!, "settings.json");
         LoadSettings();
         foreach (string key in SoundKey.Sfx)
-            _sfx[key] = LoadWav(Path.Combine(_assetsDir, "sound", key + ".wav"));
-        // Initialize loads the map first, so the boot track plays already (shots
-        // stay silent: no track); retune it to the saved volume.
-        if (_bgm != null) _bgm.Volume = _bgmVol / 100f;
+            _sfx[key] = Wav.Load(Path.Combine(_assetsDir, "sound", key + ".wav"));
     }
 
     private void LoadSettings()
@@ -33,7 +27,7 @@ public partial class MushTownGame
         {
             var json = JsonSerializer.Deserialize<Settings>(File.ReadAllText(_settingsPath));
             if (json == null) return;
-            _bgmVol = Math.Clamp(json.Bgm, 0, 100);
+            _bgm.Volume = json.Bgm;
             _sfxVol = Math.Clamp(json.Sfx, 0, 100);
             LoadHotkeys(json.Keys);
             LoadHotkeyPresets(json.Presets);
@@ -44,7 +38,7 @@ public partial class MushTownGame
     private void SaveSettings()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); // fresh checkouts have no data/ yet (SaveStore.Save does the same)
-        File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgmVol, Sfx = _sfxVol, Keys = SaveHotkeys(), Presets = SaveHotkeyPresets() }));
+        File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgm.Volume, Sfx = _sfxVol, Keys = SaveHotkeys(), Presets = SaveHotkeyPresets() }));
     }
 
     private sealed class Settings
@@ -55,50 +49,29 @@ public partial class MushTownGame
         public List<Dictionary<string, string>>? Presets { get; set; } // the three saved binding sets
     }
 
-    // Our own 44-byte header (SoundExport.ToWav writes it): channels at 22,
-    // rate at 24, PCM16 after. A missing file throws loud, like every asset.
-    private static SoundEffect LoadWav(string path)
+    // The track for the screen: the login theme over the menus, the map's
+    // own track in the game.
+    private void PlayScreenBgm()
     {
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"missing exported wav: {Path.GetFullPath(path)}", path);
-        byte[] wav = File.ReadAllBytes(path);
-        int channels = BitConverter.ToInt16(wav, 22);
-        int rate = BitConverter.ToInt32(wav, 24);
-        return new SoundEffect(wav[44..], rate, (AudioChannels)channels);
-    }
-
-    // The map's track, looped. Same track across a switch keeps playing.
-    private void PlayBgm()
-    {
-        string key = SoundKey.FromBgm(_map.Info.Bgm);
+        bool inGame = _screen == Screen.Game;
+        string key = inGame ? SoundKey.FromBgm(_map.Info.Bgm) : SoundKey.Login;
         if (key == "")
             throw new InvalidDataException($"map {_mapId} has a bad bgm '{_map.Info.Bgm}'");
-        if (key == _playingBgm) return;
-        _playingBgm = key;
-        _bgm?.Stop();
-        _bgm?.Dispose();
-        _bgmEffect?.Dispose(); // the instance does not own its buffer: drop it too
-        GameLog($"bgm: {_map.Info.Bgm}");
-        if (_shotPath != null) return; // shots pose silent: no music blast
-        _bgmEffect = LoadWav(Path.Combine(_assetsDir, "sound", key + ".wav"));
-        _bgm = _bgmEffect.CreateInstance();
-        _bgm.IsLooped = true;
-        _bgm.Volume = _bgmVol / 100f;
-        _bgm.Play();
+        if (!_bgm.Play(key)) return;
+        GameLog($"bgm: {(inGame ? _map.Info.Bgm : "Sound/BgmUI.img/Title")}");
     }
 
     private void PlaySfx(string key)
     {
-        if (_shotPath != null) return; // shots pose silent: no sfx blast (bgm already guarded in PlayBgm)
+        if (_shotPath != null) return; // shots pose silent: no sfx blast (the music is guarded in the player)
         _sfx[key].Play(_sfxVol / 100f, 0f, 0f);
     }
 
     // The options window slider sets the volume; the change saves right away.
     private void BumpVolume(bool bgm, int d)
     {
-        if (bgm) _bgmVol = Math.Clamp(_bgmVol + d, 0, 100);
+        if (bgm) _bgm.Volume = _bgm.Volume + d;
         else _sfxVol = Math.Clamp(_sfxVol + d, 0, 100);
-        _bgm!.Volume = _bgmVol / 100f; // the settings window needs a map: its track plays
         SaveSettings();
     }
 

@@ -11,6 +11,7 @@ using MushTown.Exporter;
 //   spinebake [id|all]                       bake ClassSelect rigs to assets/spine/
 //   uipng    [Category] <node-path> <out.png>   save one canvas as png
 //   export   [DataDir] [OutDir]               export map + character assets
+//   sound    [OutDir]                        export only the sounds
 //   panel    <name> [OutDir]                  export one panel's art (inventory|stat|skill|quest|map|keys|menu|quickmenu|chat|shop|buff|hotkey|guide)
 //   questscan <npcid> [<npcid>...]       list quests starting/ending at these NPCs
 //   pick item <folder> <prefix>          list Character part ids with names
@@ -27,6 +28,10 @@ switch (cmd)
 
     case "export":
         Export.Run(Arg(1, ExporterPaths.DataDir), Arg(2, ExporterPaths.OutDir));
+        return;
+
+    case "sound":
+        Environment.ExitCode = Export.ExportSounds(WzRoot.LoadBase(ExporterPaths.DataDir), Arg(1, ExporterPaths.OutDir)) ? 0 : 1;
         return;
 
     case "dump":
@@ -146,7 +151,7 @@ switch (cmd)
 
     default:
         Console.WriteLine($"unknown command: {cmd}");
-        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | cat <Category> <path> | raw <Category> <path> <out> | spine <skel-file> [bone] | spinebake [id|all] | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir] | questscan <npcid> [<npcid>...] | pick item <folder> <prefix> | pick hair <out.png> <id,id,...>");
+        Console.WriteLine("usage: smoke [DataDir] | dump <path> [depth] | catdump <Category> <path> [depth] | find <name> | cat <Category> <path> | raw <Category> <path> <out> | spine <skel-file> [bone] | spinebake [id|all] | uipng [Category] <node-path> <out.png> | export [DataDir] [OutDir] | sound [OutDir] | questscan <npcid> [<npcid>...] | pick item <folder> <prefix> | pick hair <out.png> <id,id,...>");
         Environment.ExitCode = 1;
         return;
 }

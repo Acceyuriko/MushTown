@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using MushTown.Shared;
 using WzComparerR2.WzLib;
 
@@ -109,34 +110,52 @@ public static partial class Export
         return true;
     }
 
-    private static MapData? ExportMap(WzRoot root, int mapId, string outDir, HashSet<string> saved)
+    // The map's image and its info node. Prints the problem and returns
+    // false when the map or the info node is missing.
+    private static bool MapNodes(WzRoot root, int mapId, [NotNullWhen(true)] out Wz_Node? scene, [NotNullWhen(true)] out Wz_Node? info)
     {
-        var scene = FindMapImg(root, mapId);
+        scene = FindMapImg(root, mapId);
         if (scene == null)
         {
             Console.WriteLine($"map {mapId} not found");
-            return null;
+            info = null;
+            return false;
         }
+        info = scene.Nodes["info"];
+        if (info == null)
+        {
+            Console.WriteLine($"map {mapId}: info node not found");
+            return false;
+        }
+        return true;
+    }
+
+    // The map's track (info/bgm). Prints the problem and returns "" when the
+    // string is missing.
+    private static string MapBgm(Wz_Node info, int mapId)
+    {
+        string bgm = Str(info, "bgm");
+        if (bgm == "")
+        {
+            Console.WriteLine($"map {mapId}: info/bgm missing");
+            return "";
+        }
+        return bgm;
+    }
+
+    private static MapData? ExportMap(WzRoot root, int mapId, string outDir, HashSet<string> saved)
+    {
+        if (!MapNodes(root, mapId, out var scene, out var info)) return null;
 
         var map = new MapData { MapId = mapId };
 
         // info
-        var info = scene.Nodes["info"];
-        if (info == null)
-        {
-            Console.WriteLine($"map {mapId}: info node not found");
-            return null;
-        }
         map.Info.VrLeft = Int(info, "VRLeft");
         map.Info.VrTop = Int(info, "VRTop");
         map.Info.VrRight = Int(info, "VRRight");
         map.Info.VrBottom = Int(info, "VRBottom");
-        map.Info.Bgm = Str(info, "bgm");
-        if (map.Info.Bgm == "")
-        {
-            Console.WriteLine($"map {mapId}: info/bgm missing");
-            return null;
-        }
+        map.Info.Bgm = MapBgm(info, mapId);
+        if (map.Info.Bgm == "") return null;
 
         // miniMap: the canvas plus the world rect it covers
         var mm = scene.Nodes["miniMap"];

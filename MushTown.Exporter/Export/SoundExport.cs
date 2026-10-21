@@ -1,12 +1,14 @@
+using System.Runtime.InteropServices;
 using MushTown.Shared;
-using NLayer;
+using NAudio.Wave;
 using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
 
-// Writes assets/sound/*.wav: short effects (fixed table) plus one music
-// track per map BGM (deduplicated). The WZ keeps MP3, which MonoGame
-// DesktopGL cannot play, so NLayer decodes to PCM WAV at export time.
+// Writes assets/sound/*.wav: short effects (fixed table), one music track
+// per map BGM (deduplicated) and the login theme. The WZ keeps MP3, which
+// MonoGame DesktopGL cannot play, so the Windows Media Foundation decoder
+// turns it into PCM WAV at export time.
 public static class SoundExport
 {
     // (file key, path under Sound\). Mob Die sources match the Mobs art
@@ -30,22 +32,46 @@ public static class SoundExport
         ("questclear", @"Game.img\QuestClear"),
         ("buff", @"Game.img\Buff"),
     };
-    public static bool Run(WzRoot root, Dictionary<int, MapData> maps, string outDir)
+
+    // The theme over the login flow: Sound\BgmUI.img\Title.
+    private const string LoginPath = @"BgmUI.img\Title";
+
+    public static bool Run(WzRoot root, IEnumerable<string> bgms, string outDir)
     {
         Directory.CreateDirectory(Path.Combine(outDir, "sound"));
         foreach ((string key, string path) in Sfx)
             if (!Save(root, path, Path.Combine(outDir, "sound", key + ".wav"), true)) return false;
-        foreach (string bgm in maps.Values.Select(m => m.Info.Bgm).Distinct().OrderBy(b => b))
+        var tracks = new Dictionary<string, string>(); // file key -> the WZ track
+        foreach (string bgm in bgms.Distinct().OrderBy(b => b))
         {
-            var parts = bgm.Split('/');
             string key = SoundKey.FromBgm(bgm);
-            if (parts.Length != 2 || key == "")
+            if (key == "")
             {
                 Console.WriteLine($"map bgm '{bgm}' is malformed");
                 return false;
             }
-            if (!Save(root, $@"{parts[0]}.img\{parts[1]}", Path.Combine(outDir, "sound", key + ".wav"), false)) return false;
+            if (key == SoundKey.Login)
+            {
+                Console.WriteLine($"map bgm '{bgm}' wants the file '{key}.wav', the login theme has it");
+                return false;
+            }
+            var parts = bgm.Split('/');
+            string path = $@"{parts[0]}.img\{parts[1]}";
+            if (tracks.TryGetValue(key, out string? other))
+            {
+                if (!string.Equals(other, path, StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine($"the tracks '{other}' and '{path}' both want the file '{key}.wav'");
+                    return false;
+                }
+                continue; // the same song written two ways: one file
+            }
+            tracks[key] = path;
         }
+        foreach ((string key, string path) in tracks)
+            if (!Save(root, path, Path.Combine(outDir, "sound", key + ".wav"), false)) return false;
+        // The menus before the game start play the login theme.
+        if (!Save(root, LoginPath, Path.Combine(outDir, "sound", SoundKey.Login + ".wav"), false)) return false;
         return true;
     }
 
@@ -69,24 +95,47 @@ public static class SoundExport
             Console.WriteLine($"sound {path} has no data");
             return false;
         }
-        byte[] wav = ToWav(mp3, trim);
+        byte[] wav;
+        try
+        {
+            wav = ToWav(mp3, trim);
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or InvalidDataException) // the decoder failed on this file
+        {
+            Console.WriteLine($"sound {path} cannot be decoded: {ex.Message}");
+            return false;
+        }
         File.WriteAllBytes(file, wav);
         Console.WriteLine($"sound {Path.GetFileName(file)} {wav.Length / 1024}KB");
         return true;
     }
 
-    // NLayer hands back signed 16-bit PCM at the MP3's own rate/channels;
-    // the 44-byte header makes it a WAV the client plays as-is.
+    // The Windows Media Foundation decoder turns the MP3 into PCM. The
+    // managed NLayer decoder was wrong on these files: it lost the bit
+    // reservoir and filled parts of a track with noise.
     private static byte[] ToWav(byte[] mp3, bool trim)
     {
-        using var input = new MemoryStream(mp3);
-        using var mpeg = new MpegFile(input);
-        using var pcm = new MemoryStream();
-        byte[] buf = new byte[64 * 1024];
-        int n;
-        while ((n = mpeg.ReadSamplesInt16(buf, 0, buf.Length)) > 0) pcm.Write(buf, 0, n);
-        byte[] data = pcm.ToArray();
-        if (trim) data = TrimLeadingSilence(data, mpeg.Channels);
+        string tmp = Path.Combine(Path.GetTempPath(), $"mushtown-{Guid.NewGuid():N}.mp3");
+        try
+        {
+            File.WriteAllBytes(tmp, mp3);
+            using var reader = new MediaFoundationReader(tmp);
+            using var pcm = new MemoryStream();
+            reader.CopyTo(pcm);
+            byte[] data = pcm.ToArray();
+            if (trim) data = TrimLeadingSilence(data, reader.WaveFormat.Channels);
+            return Wav(data, reader.WaveFormat.SampleRate, reader.WaveFormat.Channels);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
+    // Our own 44-byte header: the client reads the channels and the rate
+    // from it and plays the rest as PCM16.
+    private static byte[] Wav(byte[] data, int rate, int channels)
+    {
         using var wav = new MemoryStream();
         using (var w = new BinaryWriter(wav, System.Text.Encoding.UTF8, leaveOpen: true))
         {
@@ -96,10 +145,10 @@ public static class SoundExport
             w.Write(new byte[] { 0x66, 0x6d, 0x74, 0x20 }); // "fmt "
             w.Write(16);
             w.Write((short)1); // PCM
-            w.Write((short)mpeg.Channels);
-            w.Write(mpeg.SampleRate);
-            w.Write(mpeg.SampleRate * mpeg.Channels * 2);
-            w.Write((short)(mpeg.Channels * 2));
+            w.Write((short)channels);
+            w.Write(rate);
+            w.Write(rate * channels * 2);
+            w.Write((short)(channels * 2));
             w.Write((short)16);
             w.Write(new byte[] { 0x64, 0x61, 0x74, 0x61 }); // "data"
             w.Write(data.Length);
@@ -108,9 +157,10 @@ public static class SoundExport
         return wav.ToArray();
     }
 
-    // MP3 encoder padding decodes to ~60ms of near-silence up front. One-shot
-    // effects feel late with it (hover especially), so trim leading frames
-    // under -44dB. Music keeps its bytes (loop timing stays untouched).
+    // MP3 encoder padding decodes to ~25ms of near-silence up front (1105
+    // samples). One-shot effects feel late with it (hover especially), so
+    // trim leading frames under -44dB. Music keeps its bytes (loop timing
+    // stays untouched).
     private static byte[] TrimLeadingSilence(byte[] data, int channels)
     {
         int frame = channels * 2, at = 0;
