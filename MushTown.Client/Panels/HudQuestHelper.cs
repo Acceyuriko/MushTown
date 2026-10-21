@@ -80,7 +80,14 @@ public partial class MushTownGame
         {
             _qhArt.Get<Rect>()!.Box = hidden ? Rectangle.Empty : QuestHelperBarRect();
             if (_qhClose != null) _qhClose.Enabled = !hidden;
-            if (_qhChevron != null) _qhChevron.Enabled = !hidden;
+            if (_qhChevron != null)
+            {
+                _qhChevron.Enabled = !hidden;
+                // the up and the down chevron sit one pixel apart in the WZ
+                var bar = QuestHelperBarRect();
+                int dy = _qhListOpen ? HelperChevronDy : HelperChevronDownDy;
+                _qhChevron.Get<Rect>()!.Box = new Rectangle(bar.X + HelperChevronDx, bar.Y + dy, HelperButtonSize, HelperButtonSize);
+            }
         }
         if (_qhList != null) _qhList.Enabled = !hidden && _qhListOpen;
         return (count, hidden, _qhListOpen);
