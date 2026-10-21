@@ -24,15 +24,15 @@ public static partial class Export
             if (!UiPng.Save(ui, node, Path.Combine(dir, file)))
                 return false;
 
-        // the content icons of the field list (the first rows of the grid)
-        for (int i = 0; i < 12; i++)
+        // the content icons of the field list (the four slots of the row)
+        for (int i = 0; i < 4; i++)
             if (!UiPng.Save(ui, $"UIContentsGuide.img/BtField/{i}/normal/0", Path.Combine(dir, $"guide_item_{i}.png")))
                 return false;
 
-        // the tab of the window: three pieces (left, middle, right)
+        // the three tabs of the window: field, boss and special
         foreach (var (state, name) in new[] { ("normal", "guide_tab"), ("selected", "guide_tabsel") })
-            for (int piece = 0; piece < 3; piece++)
-                if (!UiPng.Save(ui, $"UIContentsGuide.img/Maximum/tab:mainTab/{state}/{piece}", Path.Combine(dir, $"{name}_{piece}.png")))
+            for (int tab = 0; tab < 3; tab++)
+                if (!UiPng.Save(ui, $"UIContentsGuide.img/Maximum/tab:mainTab/{state}/{tab}", Path.Combine(dir, $"{name}_{tab}.png")))
                     return false;
 
         // the three buttons: minimize, close, help

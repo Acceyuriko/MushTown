@@ -460,20 +460,6 @@ public static class Border
     }
 }
 
-// Panel title strip: stretched hilong plus the lime caption (stat,
-// skill, quest, settings, shop share it). Reads the Owner body rect.
-public sealed class TitleBar : Component, IDrawable
-{
-    private readonly string _title;
-    public TitleBar(string title) { _title = title; }
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Tex("ui/hud_stathilong.png"), new Rectangle(r.X, r.Y, r.Width, 16), Color.White);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(_title), new Vector2(r.X + 8, r.Y + 2), new Color(200, 220, 0));
-    }
-}
-
 // Right-aligned live text at a body offset (meso coin total, stat
 // combat power). The bake picks the font (Meso vs Small).
 public sealed class RightLabel : Component, IDrawable
@@ -531,24 +517,6 @@ public sealed class Fill : Component, IDrawable
     {
         var r = Owner.Get<Rect>()!.Box;
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y + _top, r.Width, r.Height - _top), _color);
-    }
-}
-
-// Hover-aware flat button (was DrawShopButton + the talk buttons).
-// Reads the legacy hover id, not gfx.HoverButton: a front panel wins
-// the hover loop and the scenes behind keep stale hover state, so
-// the per-scene value would light covered buttons (legacy-exact).
-public sealed class FlatButton : Component, IDrawable
-{
-    private readonly string _label, _id;
-    private readonly Func<string> _hover;
-    public FlatButton(string label, string id, Func<string> hover) { _label = label; _id = id; _hover = hover; }
-    public void Draw(UiGfx gfx)
-    {
-        var b = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Pixel, b, _hover() == _id ? new Color(52, 88, 110) : new Color(30, 50, 66));
-        var t = gfx.Ui.GetSmall(_label);
-        gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 5), Color.White);
     }
 }
 
@@ -614,14 +582,15 @@ public sealed class TalkButton : Component, IDrawable
 {
     private readonly string _stem, _label, _id;
     private readonly Func<string> _hover;
-    public TalkButton(string stem, string label, string id, Func<string> hover) { _stem = stem; _label = label; _id = id; _hover = hover; }
+    private readonly int _dy;
+    public TalkButton(string stem, string label, string id, Func<string> hover, int dy) { _stem = stem; _label = label; _id = id; _hover = hover; _dy = dy; }
     public void Draw(UiGfx gfx)
     {
         var b = Owner.Get<Rect>()!.Box;
         string state = gfx.Pressed ? "_p.png" : _hover() == _id ? "_h.png" : "_n.png";
         gfx.Sb.Draw(gfx.Tex($"ui/{_stem}{state}"), new Vector2(b.X, b.Y), Color.White);
         var t = gfx.Ui.GetSmall(_label);
-        gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + 2), Color.Black);
+        gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + _dy), Color.Black);
     }
 }
 
@@ -718,11 +687,12 @@ public sealed class MenuKeyBadge : Component, IDrawable
 // scroll): the track (base_t/base_c/base_b) and the thumb. The up and the
 // down arrow art of this WZ is empty, so there is nothing to draw there.
 // The position is 0 at the top of the track and 1 at the bottom.
-public sealed class ScrollBar : Component, IDrawable
+// The art names are the chat ones: the component lives with the chat.
+public sealed class ChatScrollBar : Component, IDrawable
 {
     private readonly Func<float> _position;
     private readonly Func<bool> _enabled; // the disabled bar has no thumb
-    public ScrollBar(Func<float> position, Func<bool> enabled) { _position = position; _enabled = enabled; }
+    public ChatScrollBar(Func<float> position, Func<bool> enabled) { _position = position; _enabled = enabled; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;

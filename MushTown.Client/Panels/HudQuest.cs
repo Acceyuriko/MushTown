@@ -289,8 +289,8 @@ public partial class MushTownGame
         var body = new GameObject();
         body.Add(new Rect(TalkRect())); // no Button: talk swallows every click, like the legacy guard
         body.Add(new TalkFrame());
-        body.Add(new Label(_npcs[_talkNpc].Name, _talkLay.Get("nameDx", 8), _talkLay.Get("nameDy", 0)) { Tint = new Color(60, 60, 60) });
-        body.Add(new TalkBody(() => TalkLines(), _talkLay.Get("textDx", 16), _talkLay.Get("textDy", 28), _talkLay.Get("lineStep", 13)));
+        body.Add(new Label(_npcs[_talkNpc].Name, _talkLay.Get("nameDx", 14), _talkLay.Get("nameDy", 5)) { Tint = new Color(60, 60, 60) });
+        body.Add(new TalkBody(() => TalkLines(), _talkLay.Get("textDx", 295), _talkLay.Get("textDy", 28), _talkLay.Get("lineStep", 13)));
         if (_talkQuest == 0)
         {
             var entries = TalkEntries(_talkNpc);
@@ -322,7 +322,7 @@ public partial class MushTownGame
         {
             int r = i; // for-loop variables capture shared: copy per row
             var bb = PanelButton(TalkBtnRect(r, buttons.Count), "talkbtn" + r, () => TalkAction(buttons[r]), ButtonKind.Click);
-            bb.Add(new TalkButton(TalkBtnArt(buttons[r]), buttons[r], "talkbtn" + r, () => _hoverId));
+            bb.Add(new TalkButton(TalkBtnArt(buttons[r]), buttons[r], "talkbtn" + r, () => _hoverId, _talkLay.Get("btnTextDy", 2)));
             body.AddChild(bb);
         }
         _talkScene.Add(body);
@@ -365,7 +365,7 @@ public partial class MushTownGame
         if (key != _talkKey)
         {
             _talkKey = key;
-            _talkLines = _ui.Wrap(QText(TalkPages()[_talkPage]), TalkW - 32);
+            _talkLines = _ui.Wrap(QText(TalkPages()[_talkPage]), _talkLay.Get("textW", 208));
         }
         return _talkLines;
     }
@@ -400,6 +400,6 @@ public partial class MushTownGame
         var r = TalkRect();
         int step = _talkLay.Get("lineStep", 13);
         int y = r.Y + _talkLay.Get("textDy", 28) + TalkLines().Count * step + i * step;
-        return new Rectangle(r.X + _talkLay.Get("textDx", 16), y, TalkW - 32, step);
+        return new Rectangle(r.X + _talkLay.Get("entryDx", 16), y, _talkLay.Get("entryW", 240), step);
     }
 }

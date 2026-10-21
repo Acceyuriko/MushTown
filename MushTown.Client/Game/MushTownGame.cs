@@ -126,11 +126,7 @@ public partial class MushTownGame : Game
         _charLayoutPath = Path.Combine(dir, "charselect-layout.json");
         _jobLayoutPath = Path.Combine(dir, "jobselect-layout.json");
         _setupLayoutPath = Path.Combine(dir, "setup-layout.json");
-        new MinimapWindow(this); // the new windows keep themselves in the list
-        new WorldMapWindow(this);
-        new KeyConfigWindow(this);
-        _guideWindow = new GuideWindow(this);
-        _menuWindow = new MenuWindow(this);
+        // The chat is the first window: the other windows open on top of it.
         // The chat sends the line to the server. Without a server (single
         // player) the line stays in the chat.
         _chatWindow = new ChatWindow(this, text =>
@@ -138,6 +134,11 @@ public partial class MushTownGame : Game
             if (_net != null && _net.Connected) { _net.SendChat(text); return; }
             _chatWindow.AddLine(_save?.Slots[_slot]?.Name ?? "Me", text);
         });
+        new MinimapWindow(this); // the new windows keep themselves in the list
+        new WorldMapWindow(this);
+        new KeyConfigWindow(this);
+        _guideWindow = new GuideWindow(this);
+        _menuWindow = new MenuWindow(this);
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.

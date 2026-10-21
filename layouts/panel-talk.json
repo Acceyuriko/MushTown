@@ -1,12 +1,15 @@
 {
-  "_help": "The NPC dialogue window (UI/UIWindow2.img/UtilDlgEx): the box is the official art, 519 wide (the width stays in the code because the art must fit). nameDx/nameDy = the spot of the NPC name on the top tab. textDx/textDy = the spot of the first text line, lineStep = the height of one line (the middle piece of the box). btnY = how far above the bottom of the box the buttons sit (inside the blue bar), btnGap = the gap between the buttons. centerY = the middle of the screen where the box sits.",
-  "w": 519,
+  "_help": "The NPC dialogue window (UI/UIWindow2.img/UtilDlgEx): the box is the official art, 519 wide (the width stays in the code because the art must fit). The box has two columns: the left one holds the quest entries, the right one the text of the NPC. nameDx/nameDy = the spot of the NPC name on the top tab. textDx/textDy = the spot of the first text line, textW = how wide the text may be, lineStep = the height of one line (the middle piece of the box). entryDx/entryW = the spot and the width of a quest entry. btnY = how far above the bottom of the box the buttons sit (inside the blue bar), btnGap = the gap between the buttons. centerY = the middle of the screen where the box sits.",
   "nameDx": 14,
-  "nameDy": 2,
-  "textDx": 16,
+  "nameDy": 5,
+  "textDx": 295,
   "textDy": 28,
+  "textW": 208,
   "lineStep": 13,
+  "entryDx": 16,
+  "entryW": 240,
   "btnY": 10,
   "btnGap": 8,
+  "btnTextDy": 2,
   "centerY": 340
 }

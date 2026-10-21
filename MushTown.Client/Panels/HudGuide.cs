@@ -24,7 +24,10 @@ public sealed class GuideWindow : UiWindow
     private static readonly string[] BossNames = { "New Boss", "New Boss", "New Boss" };
     private static readonly string[] SpecialNames = { "New Story", "New Growth", "New Contest" };
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 642), _lay.Get("h", 627));
+    // The art sizes of the guide window (the official frame is 642x627).
+    private const int GuideW = 642, GuideH = 627;
+
+    public override Rectangle Rect() => new(Pos.X, Pos.Y, GuideW, GuideH);
     public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("titleH", 60));
     public override Point LayoutPos() => new(_lay.Get("x", 362), _lay.Get("y", 70));
 
@@ -40,9 +43,10 @@ public sealed class GuideWindow : UiWindow
             _game.LoadTexture($"ui/guide_tab_{i}.png");
             _game.LoadTexture($"ui/guide_tabsel_{i}.png");
         }
-        foreach (string b in new[] { "min", "close", "help" })
-            foreach (string s in new[] { "_n", "_h", "_p", "_d" })
-                _game.LoadTexture($"ui/guide_{b}{s}.png");
+        foreach (string s in new[] { "_n", "_h", "_p" })
+            _game.LoadTexture($"ui/guide_close{s}.png");
+        foreach (string b in new[] { "min", "help" })
+            _game.LoadTexture($"ui/guide_{b}_d.png");
 
         Scene = new Scene();
         var root = new GameObject();
@@ -50,10 +54,10 @@ public sealed class GuideWindow : UiWindow
         root.Add(new Picture("ui/guide_bg.png"));
         root.Add(new Invoke(gfx => Draw(gfx, Rect())));
         for (int i = 0; i < 3; i++) root.AddChild(Tab(i));
-        root.AddChild(CloseButton());
+        root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
+        root.AddChild(CloseButton()); // the X sits on the title strip: it must be hit first
         root.AddChild(DisabledButton("min", _lay.Get("minX", 603), _lay.Get("minY", 4)));
         root.AddChild(DisabledButton("help", _lay.Get("helpX", 589), _lay.Get("helpY", 3)));
-        root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         Scene.Add(root);
     }
 
@@ -102,12 +106,13 @@ public sealed class GuideWindow : UiWindow
     private void DrawField(UiGfx gfx, Rectangle r)
     {
         gfx.Sb.Draw(gfx.Tex("ui/guide_field.png"), new Vector2(r.X + _lay.Get("fieldX", 19), r.Y + _lay.Get("fieldY", 105)), Color.White);
+        int[] xs = { _lay.Get("item0X", 127), _lay.Get("item1X", 236), _lay.Get("item2X", 323), _lay.Get("item3X", 410) };
         for (int i = 0; i < FieldNames.Length; i++)
         {
-            int x = r.X + _lay.Get($"item{i}X", 127 + i * 87);
-            int y = r.Y + _lay.Get("itemY", 130);
+            int x = r.X + xs[i];
+            int y = r.Y + _lay.Get("itemY", 114);
             gfx.Sb.Draw(gfx.Tex($"ui/guide_item_{i}.png"), new Vector2(x, y), Color.White);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(FieldNames[i]), new Vector2(x, y + _lay.Get("nameDy", 66)), Color.White);
+            gfx.Sb.Draw(gfx.Ui.GetSmall(FieldNames[i]), new Vector2(x, y + _lay.Get("nameDy", 64)), Color.White);
         }
     }
 

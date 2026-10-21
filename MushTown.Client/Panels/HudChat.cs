@@ -269,7 +269,7 @@ public sealed class ChatWindow : UiWindow
         var scroll = new GameObject();
         scroll.Add(new Rect(ScrollRect()));
         scroll.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => _focused = false });
-        scroll.Add(new ScrollBar(() => ScrollPos(), () => MaxScroll() > 0));
+        scroll.Add(new ChatScrollBar(() => ScrollPos(), () => MaxScroll() > 0));
         root.AddChild(scroll);
 
         // the input line: a click focuses it
@@ -334,7 +334,8 @@ public sealed class ChatWindow : UiWindow
     }
 
     // The filter tabs: All and Etc. carry their text in the official art.
-    // The tab that is not in use is dim.
+    // The official art has no "selected" look (the checked state of this WZ
+    // is the same file as the normal one), so the art is never recolored.
     private void DrawTabs(UiGfx gfx)
     {
         for (int i = 0; i < TabStems.Length; i++)
@@ -342,8 +343,7 @@ public sealed class ChatWindow : UiWindow
             var r = TabRect(i);
             bool over = gfx.Hovered == _tabObjs[i];
             string state = over ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
-            var tint = _tab == (Tab)i ? Color.White : new Color(140, 145, 155);
-            gfx.Sb.Draw(gfx.Tex($"ui/{TabStems[i]}{state}"), new Vector2(r.X, r.Y), tint);
+            gfx.Sb.Draw(gfx.Tex($"ui/{TabStems[i]}{state}"), new Vector2(r.X, r.Y), Color.White);
         }
     }
 
