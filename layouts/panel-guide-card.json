@@ -1,5 +1,5 @@
 {
-  "_help": "The small guide window (UIContentsGuide.img/Minimum): the GUIDE popup with one card. The numbers are the official spots: the WZ nodes carry the position as the image origin, so the spot is the origin without the minus. x/y = the top-left of the window in 1366x768 game pixels (the window is 135x105, the visible size of the art: the png is 135x115 but the last 10 rows are transparent, so the size stays in the code). titleH = the height of the strip that drags the window. cardX/cardY = the spot of the card picture. maxX/maxY = the spot of the green plus (it opens the big guide window), closeX/closeY = the spot of the X. leftX/rightX = the spot of the two arrows, arrowY = their top, arrowHoverDx/arrowHoverDy = the move of the lit arrow (the WZ puts it 2 pixels up and left). dotX/dotY = the first dot spot, dot2Dx/dot2Dy = the second one (the two dots swap places when the card changes).",
+  "_help": "The small guide window (UIContentsGuide.img/Minimum): the GUIDE popup with one card. The numbers are the official spots: the WZ nodes carry the position as the image origin, so the spot is the origin without the minus. x/y = the top-left of the window in 1366x768 game pixels (the window is 135x105, the visible size of the art: the png is 135x115 but the last 10 rows are transparent, so the size stays in the code). titleH = the height of the strip that drags the window. cardX/cardY = the spot of the card picture. maxX/maxY = the spot of the green plus (it opens the big guide window), closeX/closeY = the spot of the X. leftX/rightX = the spot of the two arrows, arrowY = their top, arrowHoverDx/arrowHoverDy = the move of the lit arrow (the WZ puts it 2 pixels up and left). dotX/dotY = the first dot spot, dot2Dx/dot2Dy = the second one (the two dots swap places when the card changes). The WZ origin is the anchor of the art, so the art sits at minus the origin: Dot/0 (the gray square) = (1,91), Dot/1 (the white circle) = (-1,90).",
   "x": 0,
   "y": 165,
   "titleH": 16,
@@ -14,10 +14,10 @@
   "arrowY": 45,
   "arrowHoverDx": -2,
   "arrowHoverDy": -2,
-  "dotX": -1,
+  "dotX": 1,
   "dotY": 91,
   "dotW": 6,
   "dotH": 6,
-  "dot2Dx": 2,
+  "dot2Dx": -2,
   "dot2Dy": -1
 }
