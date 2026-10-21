@@ -86,7 +86,7 @@ public sealed class GuideWindow : UiWindow
     {
         var o = new GameObject { NoHit = true };
         o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 13, 13)));
-        o.Add(new Picture($"ui/guide_{name}_d.png"));
+        o.Add(new Picture($"ui/guide_{name}_d.png", 0, 0)); // the art keeps its own size
         return o;
     }
 
