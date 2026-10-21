@@ -1,0 +1,11 @@
+{
+  "_help": "The buff bar at the top right of the HUD: the official favoriteBuff frame (UI/StatusBar3.img/BuffSetting) around the live buff icons. right = the right edge of the bar (the bar grows to the left, the quest tracker sits under it), top = the top edge. iconSize = the skill icon box (32x32), iconPitch = the space between two icons (the official buffIconSpace is 39), pad = the frame thickness (the official corner piece is 5x5). timeRight/timeBottom = the space between the time left and the icon edge.",
+  "right": 1362,
+  "top": 0,
+  "maxWidth": 240,
+  "iconSize": 32,
+  "iconPitch": 39,
+  "pad": 5,
+  "timeRight": 1,
+  "timeBottom": 1
+}

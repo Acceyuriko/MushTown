@@ -35,7 +35,7 @@ dotnet run --project MushTown.Exporter -- raw <分类> <路径> <输出>  # 保�
 dotnet run --project MushTown.Exporter -- spine <skel 文件> [bone]  # 看 .skel 的骨骼、槽位、时间轴
 dotnet run --project MushTown.Exporter -- spinebake [id|all]  # 烘焙职业 Spine 到 assets/spine/（缺 id=全烘焙）
 dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录]  # 导出 assets/
-dotnet run --project MushTown.Exporter -- panel <inventory|stat|skill|quest|map|keys|menu|quickmenu|chat|shop> [输出目录]  # 只导出一个面板的美术
+dotnet run --project MushTown.Exporter -- panel <inventory|stat|skill|quest|map|keys|menu|quickmenu|chat|shop|buff> [输出目录]  # 只导出一个面板的美术
 dotnet run --project MushTown.Exporter -- find <节点名>      # 按名字定位 WZ 节点
 dotnet run --project MushTown.Exporter -- questscan <npcid> [<npcid>...]  # 列出起止于这些 NPC 的任务
 dotnet run --project MushTown.Exporter -- pick item <分类目录> <前缀>  # 列出该目录下的 img id + 名字 + 动作

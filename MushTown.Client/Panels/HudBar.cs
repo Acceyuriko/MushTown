@@ -295,6 +295,7 @@ public partial class MushTownGame
         var tracker = new GameObject { NoHit = true };
         tracker.Add(new Tracker(TrackerLines, Layout.Tracker.X, Layout.Tracker.Y));
         _gameScene.Add(tracker);
+        _gameScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
         var bossBar = new GameObject { NoHit = true };
         bossBar.Add(new BossBar(BossBarW, FindBoss));
         _gameScene.Add(bossBar);
