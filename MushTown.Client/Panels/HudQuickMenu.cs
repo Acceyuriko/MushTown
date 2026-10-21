@@ -13,7 +13,7 @@ public partial class MushTownGame
     private static readonly PanelLayout _qmLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-quickmenu.json"));
 
     // The icons the game has: the official icon number and what it opens.
-    internal static readonly (int Icon, Feature Action)[] QuickIcons =
+    private static readonly (int Icon, Feature Action)[] QuickIcons =
     {
         (0, Feature.Stat),      // Character Info
         (4, Feature.Equip),     // Equipment
@@ -32,11 +32,13 @@ public partial class MushTownGame
     // The row: one object per icon (the hit rect, the button, the official
     // art). The Image component picks the hover and press art by itself.
     private GameObject BuildQuickMenu() =>
-        BuildQuickIcons(_qmLay.Get("x", 284), _qmLay.Get("y", 729), _qmLay.Get("size", 30), _qmLay.Get("gap", 3));
+        BuildQuickIcons(_qmLay.Get("x", 284), _qmLay.Get("y", 729), _qmLay.Get("size", 30), _qmLay.Get("gap", 3), OpenFeature);
 
     // The quick menu icons at a spot: the HUD row and the strip inside the
     // MENU window show the same icons (the official shows them twice too).
-    internal GameObject BuildQuickIcons(int x, int y, int size, int gap)
+    // The open action is different in the two places: the HUD row opens the
+    // window, the strip in the MENU window closes the MENU window first.
+    internal GameObject BuildQuickIcons(int x, int y, int size, int gap, Action<Feature> open)
     {
         var row = new GameObject();
         for (int i = 0; i < QuickIcons.Length; i++)
@@ -46,7 +48,7 @@ public partial class MushTownGame
                 LoadTexture($"ui/quickmenu_{icon}{state}");
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(x + i * (size + gap), y, size, size)));
-            o.Add(new Button { LegacyId = $"quickmenu{icon}", Kind = ButtonKind.Click, OnClick = () => OpenFeature(action) });
+            o.Add(new Button { LegacyId = $"quickmenu{icon}", Kind = ButtonKind.Click, OnClick = () => open(action) });
             o.Add(new Image($"ui/quickmenu_{icon}"));
             row.AddChild(o);
         }
