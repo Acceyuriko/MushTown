@@ -126,6 +126,7 @@ public partial class MushTownGame : Game
         new MinimapWindow(this); // the new windows keep themselves in the list
         new WorldMapWindow(this);
         new KeyConfigWindow(this);
+        _menuWindow = new MenuWindow(this);
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
@@ -345,7 +346,7 @@ public partial class MushTownGame : Game
             foreach (var frame in gear.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "menu";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -353,7 +354,7 @@ public partial class MushTownGame : Game
             SetupShotMobs();
             SyncHeroPlate(); // staging is done (wear/buff/quest all staged the demo); shots skip Update
             SyncPanelScenes(); // staging (accept/open) runs after the scene build and shots skip Update
-            SyncWindows(); // the new windows (minimap, world map, key settings) build here
+            SyncWindows(); // the new windows (minimap, world map, key settings, MENU) build here
         }
     }
 
@@ -396,17 +397,17 @@ public partial class MushTownGame : Game
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
-            if (_submenu.Enabled || _showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop)
+            if (UiWindow.List.Any(w => w.Show)) // the new windows draw on top: Esc closes them first
             {
-                _submenu.Enabled = false; _showInv = false; _showStat = false; _showSkill = false;
-                _showQuest = false; _showSettings = false; _showShop = false;
-                _dragInv = _dragStat = _dragSkill = _dragQuest = _dragSettings = _dragShop = null; // hiding mid-drag drops the grab
+                foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
                 PlaySfx("click");
                 base.Update(gameTime); return;
             }
-            if (UiWindow.List.Any(w => w.Show)) // Esc closes the new windows too
+            if (_showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop)
             {
-                foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
+                _showInv = false; _showStat = false; _showSkill = false;
+                _showQuest = false; _showSettings = false; _showShop = false;
+                _dragInv = _dragStat = _dragSkill = _dragQuest = _dragSettings = _dragShop = null; // hiding mid-drag drops the grab
                 PlaySfx("click");
                 base.Update(gameTime); return;
             }
@@ -855,7 +856,6 @@ public partial class MushTownGame : Game
             _talkNpc = n.NpcId;
             _talkQuest = 0;
             _talkPage = 0;
-            _submenu.Enabled = false;
             PlaySfx("click");
             return;
         }

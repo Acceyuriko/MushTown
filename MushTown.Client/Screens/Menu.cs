@@ -162,7 +162,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" => Screen.Game,
+                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "menu" => Screen.Game,
                 _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
@@ -175,6 +175,7 @@ public partial class MushTownGame
             if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
             if (shotScreen == "worldmap") ShowWindow(HotkeyAction.WorldMap);
             if (shotScreen == "keys") ShowWindow(HotkeyAction.KeyConfig);
+            if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "chars2") _page = 1; // empty page: the demo fills page 1 only
             if (shotScreen == "job2") { _jobPage = 1; _jobPick = 14; } // second card page: proves paging draws other classes
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
@@ -392,7 +393,6 @@ public partial class MushTownGame
         SyncCursor(); // _cursorH starts 0, so this first call always builds
         _gfx = new UiGfx { Sb = _spriteBatch, Ui = _ui, Tex = TexByKey, Pixel = _pixel };
         BuildScreenScene();
-        if (_shotScreen == "hud") _submenu.Enabled = true; // shot setup needs the built tree
         if (_shotScreen == "delete") _csDeleteModal.Enabled = true;
         _contentLoaded = true;
     }
@@ -621,7 +621,7 @@ public partial class MushTownGame
 
     // Menu screens rebuild on every entry (rows/slots follow live data);
     // layout reload reuses the same switch. A rebuild resets open-state
-    // (submenu, modal), same as the panel positions.
+    // (MENU window, modal), same as the panel positions.
     private void BuildScreenScene()
     {
         switch (_screen)

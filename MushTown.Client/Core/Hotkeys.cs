@@ -14,6 +14,7 @@ public enum HotkeyAction
     WorldMap,
     Settings,
     KeyConfig, // no key by default: the options window opens it
+    Menu,      // no key: the HUD menu button opens the MENU window
 }
 
 public partial class MushTownGame

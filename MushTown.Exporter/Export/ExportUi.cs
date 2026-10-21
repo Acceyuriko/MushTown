@@ -189,11 +189,7 @@ public static partial class Export
         {
             files.Add(($"{sb3}/mainBar/menu/button:Character/{state}/0", $"hud_btn_char_{suffix}.png"));
             files.Add(($"{sb3}/mainBar/menu/button:Menu/{state}/0", $"hud_btn_menu_{suffix}.png"));
-            files.Add(($"{sb3}/mainBar/submenu/character/button:character/{state}/0", $"hud_sub_char_{suffix}.png"));
-            files.Add(($"{sb3}/mainBar/submenu/character/button:Item/{state}/0", $"hud_sub_item_{suffix}.png"));
         }
-        for (int i = 0; i <= 2; i++)
-            files.Add(($"{sb3}/mainBar/submenu/backgrnd/{i}", $"hud_sub_bg{i}.png"));
         foreach ((string node, string file) in files)
         {
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))

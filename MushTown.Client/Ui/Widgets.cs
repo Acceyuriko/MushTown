@@ -267,7 +267,7 @@ public sealed class Slot : Button
     public int Index;
 }
 
-// Baked small text at a rect offset (matches the submenu text rows).
+// Baked small text at a rect offset (matches the HUD label rows).
 public sealed class Label : Component, IDrawable
 {
     private readonly string _text;

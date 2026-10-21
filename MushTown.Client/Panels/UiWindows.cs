@@ -73,13 +73,17 @@ public partial class MushTownGame
     // The hover goes to the same window.
     private bool HoverWindows(int gx, int gy)
     {
+        bool hit = false;
         for (int i = UiWindow.List.Count - 1; i >= 0; i--)
         {
             var w = UiWindow.List[i];
-            if (!w.Show || !w.Rect().Contains(gx, gy)) continue;
+            if (!w.Show) continue;
+            // The top window that has the point takes the hover. Every other
+            // open window drops its old hover, or it keeps a lit row.
+            if (!w.Rect().Contains(gx, gy) || hit) { w.Scene.ClearHover(); continue; }
             SfxOnHover(w.Scene.Hover(gx, gy));
-            return true;
+            hit = true;
         }
-        return false;
+        return hit;
     }
 }

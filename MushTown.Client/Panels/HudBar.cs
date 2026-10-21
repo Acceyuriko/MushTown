@@ -20,9 +20,6 @@ public partial class MushTownGame
         "hud_expback.png", "hud_expcover.png", "hud_expgauge.png",
         "hud_btn_char_n.png", "hud_btn_char_h.png", "hud_btn_char_p.png",
         "hud_btn_menu_n.png", "hud_btn_menu_h.png", "hud_btn_menu_p.png",
-        "hud_sub_char_n.png", "hud_sub_char_h.png", "hud_sub_char_p.png",
-        "hud_sub_item_n.png", "hud_sub_item_h.png", "hud_sub_item_p.png",
-        "hud_sub_bg0.png", "hud_sub_bg1.png", "hud_sub_bg2.png",
         "hud_qslot.png", "hud_qslotcover.png",
         "hud_key_ctrl.png", "hud_key_alt.png", "hud_key_i.png", "hud_key_c.png",
         "hud_coin.png", "hud_stathilong.png", "hud_statx.png",
@@ -42,7 +39,7 @@ public partial class MushTownGame
     private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
     private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
     private readonly SceneManager _scenes = new();
-    private Scene _gameScene = null!; // HUD furniture + exp + submenu + buttons + plate + bars + tracker + boss bar + minimap
+    private Scene _gameScene = null!; // HUD furniture + exp + buttons + plate + bars + tracker + boss bar + minimap
     private Scene _invScene = new(), _statScene = new(), _skillScene = new();
     private readonly CarryHand _hand = new(); // game-level: panel rebuilds swap scenes, the held piece survives
     private Scene _questScene = new(), _settingsScene = new(), _shopScene = new(), _talkScene = new();
@@ -54,7 +51,6 @@ public partial class MushTownGame
     private List<(int id, int count)> _shopBuiltSells = new();
     private int _talkBuiltNpc, _talkBuiltQuest, _talkBuiltPage;
     private string _talkBuiltButtons = "", _talkBuiltEntries = "";
-    private GameObject _submenu = null!; // root; Enabled is the open flag
     private UiGfx _gfx = null!;
     private bool _contentLoaded; // the scene build needs textures (popup height reads them)
     private readonly Dictionary<int, ShopData> _shops = new(); // keeper stocks (LoadShops)
@@ -80,6 +76,7 @@ public partial class MushTownGame
         var hotkey = FreshHotkey(kb);
         if (hotkey != null && _talkNpc == 0)
         {
+            _menuWindow.Close(); // a key opens a panel: the MENU window would cover it
             bool old = true; // the old panels click here; the new windows click themselves
             switch (hotkey.Value)
             {
@@ -159,13 +156,13 @@ public partial class MushTownGame
                 return;
             }
         }
-        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // menu/char/submenu/furniture all live in the tree now
+        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // menu/char/furniture all live in the tree now
     }
 
     private void UpdateHudClick(int gx, int gy)
     {
         if (_talkNpc != 0) { ClickTree(_talkScene, gx, gy); return; } // modal: talk swallows every click
-        if (ClickWindows(gx, gy)) { _submenu.Enabled = false; return; } // the new windows sit on top
+        if (ClickWindows(gx, gy)) return; // the new windows sit on top
         bool onInv = _showInv && HitRect(InvRect(), gx, gy);
         bool onStat = _showStat && HitRect(StatRect(), gx, gy);
         bool onSkill = _showSkill && HitRect(SkillRect(), gx, gy);
@@ -201,7 +198,7 @@ public partial class MushTownGame
         // Panels draw on top, so a panel click never reaches the bottom bar behind it.
         if (onInv || onStat || onSkill || onQuest || onSettings || onShop)
         {
-            _submenu.Enabled = false;
+            _menuWindow.Close();
             if (onInv) ClickTree(_invScene, gx, gy); // X > title > content, same order as the legacy chain
             else if (onStat) ClickTree(_statScene, gx, gy);
             else if (onSkill) ClickTree(_skillScene, gx, gy);
@@ -210,9 +207,11 @@ public partial class MushTownGame
             else if (onShop) ClickTree(_shopScene, gx, gy);
             return;
         }
-        if (ClickTree(_scenes.Current, gx, gy) != null) { } // menu/char/submenu/furniture all live in the tree now
-        else if (_submenu.Enabled) _submenu.Enabled = false; // outside click closes (no panel behind to fall through to)
-        else NpcClick(gx, gy); // no UI took it: the world gets the click
+        var hudHit = ClickTree(_scenes.Current, gx, gy); // menu/char/furniture all live in the tree now
+        // Any click outside the menu closes it. The HUD menu button toggles it
+        // by itself, so it is the one click that must not close the menu here.
+        if (_menuWindow.Show && _scenes.Current?.ClickButton?.LegacyId != "menu") _menuWindow.Close();
+        else if (hudHit == null) NpcClick(gx, gy); // no UI took it: the world gets the click
     }
 
     // Panels stay reachable: 80px on screen sideways, title never above the top.
@@ -221,10 +220,10 @@ public partial class MushTownGame
 
     private Texture2D TexByKey(string key) => _textures[key]; // full keys ("ui/..."): all screens share one lookup
 
-    // The game scene holds HUD furniture, exp, submenu, buttons, plate,
-    // bars, tracker, boss bar, and minimap.
+    // The game scene holds HUD furniture, exp, buttons, plate, bars,
+    // tracker, boss bar, and minimap.
     // Built after textures load, rebuilt on layout reload (a rebuild
-    // resets the submenu to closed, same as the panel positions above).
+    // resets the panel positions above).
     private void BuildGameScene()
     {
         _gameScene = new Scene();
@@ -240,25 +239,16 @@ public partial class MushTownGame
         exp.Add(new Rect(ExpRect()));
         exp.Add(new Bar("ui/hud_expback.png", "ui/hud_expgauge.png", "ui/hud_expcover.png", ExpFill));
         _gameScene.Add(exp); // legacy draws exp first: same pixels, owned by the tree now
-        _submenu = new GameObject();
-        _submenu.Add(new Rect(SubPopupRect()));
-        _submenu.Add(new Panel("ui/hud_sub_bg0.png", "ui/hud_sub_bg1.png", "ui/hud_sub_bg2.png"));
-        AddSubArtRow(0, "ui/hud_sub_char", () => { _showStat = true; _submenu.Enabled = false; _topPanel = 1; });
-        AddSubArtRow(1, "ui/hud_sub_item", () => { _showInv = true; _submenu.Enabled = false; _topPanel = 0; });
-        AddSubTextRow(2, "Quest", () => { _showQuest = true; _submenu.Enabled = false; _topPanel = 3; });
-        AddSubTextRow(3, "Settings", () => { OpenSettings(); _submenu.Enabled = false; });
-        AddSubTextRow(4, "Exit", () => { _submenu.Enabled = false; if (_save != null) ToChars(); else Exit(); });
-        _gameScene.Add(_submenu);
         var charBtn = new GameObject();
         charBtn.Add(new Rect(CharBtnRect()));
         charBtn.Add(new Image("ui/hud_btn_char")); // art rides the button now (was DrawHudButton); keep art a Component, never a child (Image matches Hovered == Owner)
-        charBtn.Add(new Button { LegacyId = "char", Kind = ButtonKind.Click, OnClick = () => { _showStat = !_showStat; _submenu.Enabled = false; if (_showStat) _topPanel = 1; } });
+        charBtn.Add(new Button { LegacyId = "char", Kind = ButtonKind.Click, OnClick = () => { _showStat = !_showStat; _menuWindow.Close(); if (_showStat) _topPanel = 1; } });
         _gameScene.Add(charBtn);
         var menuBtn = new GameObject();
         menuBtn.Add(new Rect(MenuBtnRect()));
         menuBtn.Add(new Image("ui/hud_btn_menu")); // art rides the button now (was DrawHudButton)
-        menuBtn.Add(new Button { LegacyId = "menu", Kind = ButtonKind.Click, OnClick = () => _submenu.Enabled = !_submenu.Enabled });
-        _gameScene.Add(menuBtn); // topmost hit: legacy checks menu/char before the submenu and furniture (art roots added after are NoHit)
+        menuBtn.Add(new Button { LegacyId = "menu", Kind = ButtonKind.Click, OnClick = () => _menuWindow.Toggle() });
+        _gameScene.Add(menuBtn); // topmost hit: legacy checks menu/char before the furniture (art roots added after are NoHit)
         var plate = new GameObject { NoHit = true }; // art-only roots below: the furniture keeps swallowing plate/HP/quickslot/exp; tracker/boss/minimap pass clicks through like before
         plate.Add(new Rect(PlateRect()));
         plate.Add(new Picture("ui/hud_plate.png"));
@@ -389,49 +379,6 @@ public partial class MushTownGame
         return hit;
     }
 
-    private void AddSubArtRow(int i, string stem, Action onClick)
-    {
-        var row = new GameObject();
-        row.Add(new Rect(SubRowRect(i)));
-        row.Add(new Button { LegacyId = "sub" + i, Kind = ButtonKind.Click, OnClick = onClick });
-        var art = new GameObject();
-        art.Add(new Rect(SubRowRect(i)));
-        art.Add(new Image(stem));
-        row.AddChild(art);
-        _submenu.AddChild(row);
-    }
-
-    private void AddSubTextRow(int i, string text, Action onClick)
-    {
-        var row = new GameObject();
-        row.Add(new Rect(SubRowRect(i)));
-        row.Add(new Button { LegacyId = "sub" + i, Kind = ButtonKind.Click, HoverFill = true, OnClick = onClick });
-        var label = new GameObject();
-        label.Add(new Rect(SubRowRect(i)));
-        label.Add(new Label(text, 8, 6));
-        row.AddChild(label);
-        _submenu.AddChild(row);
-    }
-
-    // Submenu popup: 3-slice bg sized by its own caps, five 109x26 rows inside.
-    private const int SubPopupW = 121;
-    private const int SubRows = 5; // stat, inventory, quest, settings, exit
-    private Rectangle SubPopupRect()
-    {
-        int top = Tex("hud_sub_bg0.png").Height;
-        int bottom = Tex("hud_sub_bg2.png").Height;
-        int h = top + SubRows * 26 + (SubRows + 1) * 4 + bottom;
-        int x = MenuBtnRect().X + (MenuBtnRect().Width - SubPopupW) / 2;
-        return new Rectangle(x, MenuBtnRect().Y - 4 - h, SubPopupW, h);
-    }
-
-    private Rectangle SubRowRect(int i)
-    {
-        var p = SubPopupRect();
-        int y = p.Y + Tex("hud_sub_bg0.png").Height + 4 + i * (26 + 4);
-        return new Rectangle(p.X + 6, y, 109, 26);
-    }
-
     private Point _questPos = new(0, 0); // quest window opens centered-ish, drags after
     private Point _settingsPos = SettingsLayoutPos(); // settings window opens centered-ish, drags after
     private Point _shopPos = new(Layout.Shop.X, Layout.Shop.Y); // shop window opens centered-ish, drags after
@@ -439,7 +386,7 @@ public partial class MushTownGame
     private void DrawHud(int gx, int gy, bool pressed)
     {
         _gfx.Pressed = pressed;
-        _scenes.Current?.Draw(_gfx); // HUD art lives in the tree now (exp, buttons, submenu, plate, HP/MP, quickslot, tracker, boss bar, minimap); panels and talk draw above it
+        _scenes.Current?.Draw(_gfx); // HUD art lives in the tree now (exp, buttons, plate, HP/MP, quickslot, tracker, boss bar, minimap); panels and talk draw above it
         // The front panel draws last (on top); the back five keep inv < stat < skill < quest < settings < shop.
         if (_topPanel == 0) { if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showInv) _invScene.Draw(_gfx); }
         else if (_topPanel == 1) { if (_showInv) _invScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); }
@@ -447,7 +394,7 @@ public partial class MushTownGame
         else if (_topPanel == 3) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); }
         else if (_topPanel == 4) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); }
         else { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); }
-        DrawWindows(); // the new windows (minimap, world map, key settings) draw above the older panels
+        DrawWindows(); // the new windows (minimap, world map, key settings, MENU) draw above the older panels
         if (_talkNpc != 0) _talkScene.Draw(_gfx); // modal: above everything
         if (!_hand.Empty) // the held piece rides the cursor (take-1: no count to show)
         {
