@@ -84,7 +84,10 @@ public sealed class BuffBarArt : Component, IDrawable
             int tx = ix + size - t.Width - lay.Get("timeRight", 1);
             int ty = box.Y + pad + size - t.Height - lay.Get("timeBottom", 1);
             int sh = lay.Get("shadow", 1);
-            gfx.Sb.Draw(t, new Vector2(tx + sh, ty + sh), new Color(0, 0, 0, 200));
+            gfx.Sb.Draw(t, new Vector2(tx - sh, ty), new Color(0, 0, 0, 200));
+            gfx.Sb.Draw(t, new Vector2(tx + sh, ty), new Color(0, 0, 0, 200));
+            gfx.Sb.Draw(t, new Vector2(tx, ty - sh), new Color(0, 0, 0, 200));
+            gfx.Sb.Draw(t, new Vector2(tx, ty + sh), new Color(0, 0, 0, 200));
             gfx.Sb.Draw(t, new Vector2(tx, ty), Color.White);
         }
     }

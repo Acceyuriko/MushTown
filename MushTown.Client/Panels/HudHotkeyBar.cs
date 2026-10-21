@@ -74,11 +74,23 @@ public sealed class HotkeyCell : Component, IDrawable
         }
         else if (key != "") // a key with no cap art: the name tells what it is
         {
-            var t = gfx.Ui.GetSmall(key);
-            gfx.Sb.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, r.Y + HotkeyBar._lay.Get("capDy", 2)), Color.White);
+            DrawInCell(gfx, key, r, r.Y + HotkeyBar._lay.Get("capDy", 2));
         }
         // the name of the action under the cap
-        var n = gfx.Ui.GetSmall(_name);
-        gfx.Sb.Draw(n, new Vector2(r.X + (r.Width - n.Width) / 2, r.Y + HotkeyBar._lay.Get("nameDy", 18)), Color.White);
+        DrawInCell(gfx, _name, r, r.Y + HotkeyBar._lay.Get("nameDy", 18));
+    }
+
+    // The text in the cell: centred, and a long text shrinks to fit the cell
+    // (a key name without cap art is wider than the cell).
+    private static void DrawInCell(UiGfx gfx, string text, Rectangle r, int y)
+    {
+        var t = gfx.Ui.GetSmall(text);
+        if (t.Width <= r.Width)
+        {
+            gfx.Sb.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, y), Color.White);
+            return;
+        }
+        int h = Math.Max(1, t.Height * r.Width / t.Width);
+        gfx.Sb.Draw(t, new Rectangle(r.X, y, r.Width, h), Color.White);
     }
 }
