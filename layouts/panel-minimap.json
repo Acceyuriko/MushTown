@@ -1,0 +1,17 @@
+{
+  "_help": "The minimap window box in 1366x768 space. x,y,w,h is the window. rowX,rowY,rowPitch place the five buttons on the top bar (the house, the book, the pin, the person, the funnel). zoomX,zoomY,zoomPitch place the zoom pair (the minus and the plus). nameX,nameY is the map name and streetX,streetY the street name, both from the top left of the map area.",
+  "x": 0,
+  "y": 0,
+  "w": 185,
+  "h": 160,
+  "rowX": 61,
+  "rowY": 4,
+  "rowPitch": 22,
+  "zoomX": 15,
+  "zoomY": 4,
+  "zoomPitch": 22,
+  "nameX": 8,
+  "nameY": 22,
+  "streetX": 8,
+  "streetY": 6
+}

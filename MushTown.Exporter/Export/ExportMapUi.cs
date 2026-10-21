@@ -2,7 +2,7 @@ using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
 
-// The map window art: the minimap panel (Minimap.img/Mini), the world map
+// The map window art: the minimap window (UIMap.img/MiniMap), the world map
 // window (UIMap.img/WorldMap), the world map itself (Map/WorldMap/WorldMap.img)
 // and the channel bar (UIWindow.img/Channel). The file names must match the
 // client (MushTown.Client/Panels/HudMap.cs).
@@ -12,12 +12,14 @@ public static partial class Export
     {
         string dir = Path.Combine(outDir, "ui");
 
-        // The minimap panel: the dark frame the map sits in.
-        if (!UiPng.Save(ui, "UI", "Minimap.img/Mini/Backgrnd/0", Path.Combine(dir, "mini_bg.png"))) return false;
+        // The minimap frame: the nine official slices (UIMap.img/MiniMap/MinMap).
+        foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se", "c" })
+            if (!UiPng.Save(ui, "UI", $"UIMap.img/MiniMap/MinMap/{piece}", Path.Combine(dir, $"mini_frame_{piece}.png"))) return false;
 
         // The small buttons of the minimap frame (UIMap.img/MiniMap): the row
         // at the top (the house, the open book, the pin, the person, the
-        // funnel) and the zoom pair (the minus and the plus).
+        // funnel) and the zoom pair (the minus and the plus). The disabled
+        // state is the art for the buttons that have no job yet.
         var miniButtons = new (string Node, string Name)[]
         {
             ("BtTown", "town"),
@@ -29,7 +31,7 @@ public static partial class Export
             ("button:max", "zoomin"),
         };
         foreach (var (node, name) in miniButtons)
-            foreach (var (state, suffix) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p") })
+            foreach (var (state, suffix) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p"), ("disabled", "_d") })
                 if (!UiPng.Save(ui, "UI", $"UIMap.img/MiniMap/{node}/{state}/0", Path.Combine(dir, $"mini_btn_{name}{suffix}.png"))) return false;
 
         // The X button of the world map window and the world map window frame.

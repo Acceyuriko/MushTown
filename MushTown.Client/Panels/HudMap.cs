@@ -67,57 +67,148 @@ internal static class MapWindowParts
     }
 }
 
-// The minimap window: the official panel (Minimap.img/Mini) with the map
-// of the current map, the player and the portals.
+// The nine piece frame of the minimap window (the official
+// UIMap.img/MiniMap/MinMap). The pieces keep their size, the edges and the
+// center stretch.
+public sealed class MinimapFrame : Component, IDrawable
+{
+    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, "mini_frame", Owner.Get<Rect>()!.Box);
+}
+
+// The minimap window: the official v1.2 frame with the map of the current
+// map, the player, the portals, the row of five buttons and the zoom pair.
 public sealed class MinimapWindow : UiWindow
 {
     private readonly MushTownGame _game;
+    private int _zoom = 1; // the zoom level of the map art (1 = the whole map)
+
+    // The frame sizes come from the art: the side border is 9 wide, the top
+    // bar 30 tall and the bottom bar 10 tall. The buttons are 21x21.
+    private const int BorderX = 9, TopH = 30, BottomH = 10, BtnSize = 21;
+    private const int MaxZoom = 4;
+
     public MinimapWindow(MushTownGame game) : base(HotkeyAction.Minimap) { _game = game; Show = true; } // the minimap is always on screen
 
     // Esc does not close the minimap: it is always on screen.
     public override void OnClosed() => Show = true;
 
-    // Every number of this window lives in layouts/panel-map.json.
-    private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-map.json"));
+    // Every number of this window lives in layouts/panel-minimap.json.
+    private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-minimap.json"));
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 180), _lay.Get("h", 180));
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("insetT", 48));
+    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 185), _lay.Get("h", 160));
+    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, TopH);
     public override Point LayoutPos() => new(_lay.Get("x", 0), _lay.Get("y", 0));
+
+    // The map area inside the frame.
+    private Rectangle Well() => new(Pos.X + BorderX, Pos.Y + TopH,
+        Rect().Width - BorderX * 2, Rect().Height - TopH - BottomH);
 
     public override void Build()
     {
-        _game.LoadTexture("ui/mini_bg.png");
+        foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se", "c" })
+            _game.LoadTexture($"ui/mini_frame_{piece}.png");
+        foreach (string name in new[] { "town", "map", "navi", "npc", "filter", "zoomout", "zoomin" })
+            foreach (string state in new[] { "_n.png", "_h.png", "_p.png", "_d.png" })
+                _game.LoadTexture($"ui/mini_btn_{name}{state}");
         _game.LoadTexture(_game.GameMap.MiniMap.Image);
 
         Scene = new Scene();
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
-        root.Add(new Invoke(Draw));
+        root.Add(new Invoke(Draw));  // the map, the dots and the names
+        root.Add(new MinimapFrame()); // the frame on top of the map
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
+        AddRow(root);
+        AddZoom(root);
         Scene.Add(root);
     }
 
-    // The official panel, the map in it, the dots and the names.
+    // The row of five buttons on the top bar: the house, the book, the
+    // pin, the person and the funnel. The book opens the world map. The
+    // other four have no job yet, so they show the official disabled art
+    // and cannot be clicked.
+    private void AddRow(GameObject root)
+    {
+        string[] names = { "town", "map", "navi", "npc", "filter" };
+        for (int i = 0; i < names.Length; i++)
+        {
+            var b = new GameObject();
+            b.Add(new Rect(new Rectangle(Pos.X + _lay.Get("rowX", 61) + i * _lay.Get("rowPitch", 22),
+                Pos.Y + _lay.Get("rowY", 4), BtnSize, BtnSize)));
+            if (names[i] == "map")
+            {
+                b.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _game.ShowWindow(HotkeyAction.WorldMap) });
+                b.Add(new Image("ui/mini_btn_map"));
+            }
+            else b.Add(new Picture($"ui/mini_btn_{names[i]}_d.png"));
+            root.AddChild(b);
+        }
+    }
+
+    // The zoom pair on the top bar: the minus and the plus.
+    private void AddZoom(GameObject root)
+    {
+        int x = Pos.X + _lay.Get("zoomX", 15), y = Pos.Y + _lay.Get("zoomY", 4);
+        int pitch = _lay.Get("zoomPitch", 22);
+        var minus = new GameObject();
+        minus.Add(new Rect(new Rectangle(x, y, BtnSize, BtnSize)));
+        minus.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _zoom = Math.Max(1, _zoom - 1) });
+        minus.Add(new Image("ui/mini_btn_zoomout"));
+        root.AddChild(minus);
+        var plus = new GameObject();
+        plus.Add(new Rect(new Rectangle(x + pitch, y, BtnSize, BtnSize)));
+        plus.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _zoom = Math.Min(MaxZoom, _zoom + 1) });
+        plus.Add(new Image("ui/mini_btn_zoomin"));
+        root.AddChild(plus);
+    }
+
+    // The part of the map art we show: the whole art at zoom 1, a window
+    // around the player when zoomed in.
+    private Rectangle Source(int artW, int artH)
+    {
+        int w = Math.Max(1, artW / _zoom), h = Math.Max(1, artH / _zoom);
+        var mini = _game.GameMap.MiniMap;
+        int px = (int)((_game.PlayerX + mini.CenterX) / (float)mini.Width * artW);
+        int py = (int)((_game.PlayerY + mini.CenterY) / (float)mini.Height * artH);
+        return new Rectangle(Math.Clamp(px - w / 2, 0, artW - w), Math.Clamp(py - h / 2, 0, artH - h), w, h);
+    }
+
+    // The map art in the well, the dots and the names.
     private void Draw(UiGfx gfx)
     {
-        var r = Rect();
-        int left = _lay.Get("insetL", 8), top = _lay.Get("insetT", 48);
-        int right = _lay.Get("insetR", 8), bottom = _lay.Get("insetB", 8);
-        var well = new Rectangle(r.X + left, r.Y + top, r.Width - left - right, r.Height - top - bottom);
-
-        gfx.Sb.Draw(gfx.Tex("ui/mini_bg.png"), r, Color.White);
+        var well = Well();
         var map = _game.GameMap;
         var tex = gfx.Tex(map.MiniMap.Image);
-        float s = Math.Min((float)well.Width / tex.Width, (float)well.Height / tex.Height);
-        int mw = (int)(tex.Width * s), mh = (int)(tex.Height * s);
-        int mx = well.X + (well.Width - mw) / 2, my = well.Y + (well.Height - mh) / 2;
-        gfx.Sb.Draw(tex, new Rectangle(mx, my, mw, mh), Color.White);
-        MapDots.Draw(gfx, map, _game.PlayerX, _game.PlayerY, mx, my, mw, mh);
+        var src = Source(tex.Width, tex.Height);
+        float s = Math.Min((float)well.Width / src.Width, (float)well.Height / src.Height);
+        var dest = new Rectangle(well.X + (int)((well.Width - src.Width * s) / 2),
+            well.Y + (int)((well.Height - src.Height * s) / 2), (int)(src.Width * s), (int)(src.Height * s));
+        gfx.Sb.Draw(tex, dest, src, Color.White);
 
-        // The street name and the map name (the official names).
+        // A dot on the map: the world point to a pixel in the shown art.
+        void Dot(float wx, float wy, Color ink)
+        {
+            var (ax, ay) = map.MiniMap.ToDot(wx, wy, tex.Width, tex.Height);
+            if (ax < src.X || ay < src.Y || ax >= src.Right || ay >= src.Bottom) return; // outside the shown part
+            int x = dest.X + (int)((ax - src.X) * s), y = dest.Y + (int)((ay - src.Y) * s);
+            gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 1, y - 1, 3, 3), ink);
+        }
+        foreach (var p in map.Portals) Dot(p.X, p.Y, new Color(80, 160, 255));
+        Dot(_game.PlayerX, _game.PlayerY, new Color(255, 220, 0));
+
+        // The street name and the map name (the official names) over the map.
         var name = MapUi.Name(map.MapId);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(name.Street), new Vector2(r.X + _lay.Get("streetX", 10), r.Y + _lay.Get("streetY", 12)), new Color(212, 225, 229));
-        gfx.Sb.Draw(gfx.Ui.GetSmall(name.Name), new Vector2(r.X + _lay.Get("nameX", 10), r.Y + _lay.Get("nameY", 30)), Color.White);
+        Text(gfx, name.Street, well.X + _lay.Get("streetX", 8), well.Y + _lay.Get("streetY", 6), new Color(212, 225, 229));
+        Text(gfx, name.Name, well.X + _lay.Get("nameX", 8), well.Y + _lay.Get("nameY", 22), Color.White);
+    }
+
+    // The name text with a dark shadow, so it reads over the map art.
+    private static void Text(UiGfx gfx, string text, int x, int y, Color ink)
+    {
+        if (text == "") return;
+        var t = gfx.Ui.GetSmall(text);
+        gfx.Sb.Draw(t, new Vector2(x + 1, y + 1), new Color(0, 0, 0, 160));
+        gfx.Sb.Draw(t, new Vector2(x, y), ink);
     }
 }
 
