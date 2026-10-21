@@ -3,6 +3,11 @@
 只写全局约定（~/.dsh/AGENTS.md）之外、本项目特有的规则。
 大头细节在 `.dsh/memory.md`，完整计划在 `plans/`，动手前先读。
 
+## Skill
+
+- `.agents/skills/wz-find/`（SKILL.md + findsize.ps1 + sheet.ps1）：在 WZ 里找官方美术和数据。**说"官方没有这个"之前必须先看这个 skill**：按名字找、按图片尺寸找、把候选图拼成一张大表看、以及用 origin 读出零件的官方坐标。WZ 数据在 `E:\游戏\maplestory\appdata\Data`。
+- `.agents/skills/crop/`：裁剪截图（游戏像素 vs 文件像素）。
+
 ## 工作节奏
 
 - 按周切块：一次只做一周（约 10 小时），范围以 `plans/` 里的周表为准。
