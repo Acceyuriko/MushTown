@@ -94,7 +94,7 @@ public partial class MushTownGame
         body.Add(new Picture("ui/stat_label_mp.png", bx + 231, by + 52)); // MP
         body.Add(new Picture("ui/stat_label_attack.png", bx + 11, by + 136)); // the attack stats
         body.Add(new Picture("ui/stat_label_utility.png", bx + 12, by + 329)); // mesos and exp
-        body.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => "0", bx + _statLay.Get("cpX", 437), by + _statLay.Get("cpY", 9), Color.White)); // combat power, at the right end of the bar
+        body.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => CombatPower().ToString("#,##0"), bx + _statLay.Get("cpX", 437), by + _statLay.Get("cpY", 9), Color.White)); // combat power, at the right end of the bar
         var rows = StatRows();
         for (int i = 0; i < rows.Count; i++)
         {
@@ -265,6 +265,16 @@ public partial class MushTownGame
         var b = OwnBuild();
         var (lo, hi) = Progression.PanelRange(b.Str, b.Dex, b.WeaponAtk);
         return $"{lo}~{hi}";
+    }
+
+    // The combat power: our own number, not the official one (the official
+    // formula is not in the WZ). It grows with the level, the attack and the
+    // main stats, so the gear and the skills move it.
+    private int CombatPower()
+    {
+        var b = OwnBuild();
+        int level = _save?.Slots[_slot]?.Level ?? 1;
+        return level * 100 + b.WeaponAtk * 4 + b.Str + b.Dex;
     }
 }
 
