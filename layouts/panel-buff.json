@@ -1,5 +1,5 @@
 {
-  "_help": "The buff bar at the top right of the HUD: the official favoriteBuff frame (UI/StatusBar3.img/BuffSetting) around the live buff icons. right = the right edge of the bar (the bar grows to the left, the quest tracker sits under it), top = the top edge. iconPitch = the space between two icons (the official buffIconSpace is 39), maxCount = how many buffs the bar holds (the official maxCount is 10). timeRight/timeBottom = the space between the time left and the icon edge, shadow = the shadow offset of the time text. The icon size (32) and the frame border (5) are art sizes, they stay in the code.",
+  "_help": "The buff bar at the top right of the HUD: the official favoriteBuff frame (UI/StatusBar3.img/BuffSetting) around the live buff icons. right = the right edge of the bar (the bar grows to the left, the quest helper bar sits under it), top = the top edge. iconPitch = the space between two icons (the official buffIconSpace is 39), maxCount = how many buffs the bar holds (the official maxCount is 10). timeRight/timeBottom = the space between the time left and the icon edge, shadow = the shadow offset of the time text. The icon size (32) and the frame border (5) are art sizes, they stay in the code.",
   "right": 1362,
   "top": 0,
   "iconPitch": 39,

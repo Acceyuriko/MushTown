@@ -22,16 +22,19 @@ public partial class MushTownGame
     public const int HelperNumX3 = 106;
     public const int HelperNumTop = 12;
     public const int HelperCloseDx = 201, HelperCloseDy = 8; // the WZ origin of the X button
-    public const int HelperChevronDx = 184, HelperChevronDy = 8; // the WZ origin of the chevron
+    public const int HelperChevronDx = 184, HelperChevronDy = 8; // the WZ origin of the up chevron
+    public const int HelperChevronDownDy = 7; // the WZ origin of the down chevron
 
     private bool _qhHidden; // the X hid the bar
     private bool _qhListOpen = true; // the chevron shows the quest list
     private int _qhCount; // the quests of the last frame
-    private GameObject? _qhBar; // the bar with its buttons and the quest list
+    private GameObject? _qhArt; // the bar art: it never catches a click
+    private GameObject? _qhClose; // the X button
+    private GameObject? _qhChevron; // the chevron button
     private GameObject? _qhList; // the quest lines under the bar
 
-    // The art of the quest helper: the bar, the ten count digits, and the
-    // two buttons in their three states.
+    // The art of the quest helper: the bar (closed and open), the ten count
+    // digits, and the two buttons in their three states.
     private static readonly string[] HelperFiles = HelperArtFiles();
 
     // The bar and the quest list under it. The HUD chain puts it in the
@@ -40,14 +43,18 @@ public partial class MushTownGame
     {
         foreach (string f in HelperFiles) LoadTexture("ui/" + f);
         var bar = new GameObject();
-        bar.Add(new Rect(QuestHelperBarRect()));
-        bar.Add(new QuestHelperBarArt(QuestHelperState));
-        bar.AddChild(HelperButton(HelperCloseDx, HelperCloseDy, HideQuestHelper, QuestHelperCloseArt));
-        bar.AddChild(HelperButton(HelperChevronDx, HelperChevronDy, ToggleQuestHelperList, QuestHelperChevronArt));
+        var art = new GameObject { NoHit = true }; // the bar art: only the buttons take clicks
+        art.Add(new Rect(QuestHelperBarRect()));
+        art.Add(new QuestHelperBarArt(QuestHelperState));
+        bar.AddChild(art);
+        _qhClose = HelperButton(HelperCloseDx, HelperCloseDy, HideQuestHelper, QuestHelperCloseArt);
+        _qhChevron = HelperButton(HelperChevronDx, HelperChevronDy, ToggleQuestHelperList, QuestHelperChevronArt);
+        bar.AddChild(_qhClose);
+        bar.AddChild(_qhChevron);
         var list = new GameObject { NoHit = true }; // the lines only: no clicks on them
         list.Add(new Tracker(TrackerLines, _qhLay.Get("listRight", 1358), _qhLay.Get("listTop", 74)));
         bar.AddChild(list);
-        _qhBar = bar;
+        _qhArt = art;
         _qhList = list;
         return bar;
     }
@@ -60,20 +67,23 @@ public partial class MushTownGame
         return new Rectangle(right - HelperBarW, top, HelperBarW, HelperBarH);
     }
 
-    // The state of the quest helper: the quests in the list and the
-    // hidden flag. A new quest brings a hidden bar back.
-    private (int Count, bool Hidden) QuestHelperState()
+    // The state of the quest helper: the quests in the list, the hidden flag
+    // and the list open. A new quest brings a hidden bar back. The bar stays
+    // away when there is no quest at all (that is what the official does).
+    private (int Count, bool Hidden, bool ListOpen) QuestHelperState()
     {
         int count = QuestRows().Count;
         if (count > _qhCount) _qhHidden = false; // a new quest: the bar comes back
         _qhCount = count;
-        if (_qhBar != null)
+        bool hidden = _qhHidden || count == 0;
+        if (_qhArt != null)
         {
-            _qhBar.Get<Rect>()!.Box = _qhHidden ? Rectangle.Empty : QuestHelperBarRect();
-            foreach (var ch in _qhBar.Children) ch.Enabled = !_qhHidden;
+            _qhArt.Get<Rect>()!.Box = hidden ? Rectangle.Empty : QuestHelperBarRect();
+            if (_qhClose != null) _qhClose.Enabled = !hidden;
+            if (_qhChevron != null) _qhChevron.Enabled = !hidden;
         }
-        if (_qhList != null) _qhList.Enabled = !_qhHidden && _qhListOpen;
-        return (count, _qhHidden);
+        if (_qhList != null) _qhList.Enabled = !hidden && _qhListOpen;
+        return (count, hidden, _qhListOpen);
     }
 
     // One button of the quest helper: the X or the chevron. The art sits
@@ -107,11 +117,11 @@ public partial class MushTownGame
         return hover ? (press ? "ui/qhelper_open_p.png" : "ui/qhelper_open_h.png") : "ui/qhelper_open_n.png";
     }
 
-    // The file names of the art: the bar, the ten count digits, and the
+    // The file names of the art: the two bars, the ten count digits, and the
     // two buttons in their three states.
     private static string[] HelperArtFiles()
     {
-        var files = new List<string> { "qhelper_top.png" };
+        var files = new List<string> { "qhelper_top.png", "qhelper_topopen.png" };
         for (int d = 0; d < 10; d++) files.Add($"qhelper_num_{d}.png");
         files.AddRange(new[]
         {
@@ -124,17 +134,18 @@ public partial class MushTownGame
 }
 
 // The bar of the quest helper: the official bar art with the count of
-// the quests in the list (the official qNum digits).
+// the quests in the list (the official qNum digits). The open bar is the
+// art the official shows while the quest list is open.
 public sealed class QuestHelperBarArt : Component, IDrawable
 {
-    private readonly Func<(int Count, bool Hidden)> _state;
-    public QuestHelperBarArt(Func<(int Count, bool Hidden)> state) { _state = state; }
+    private readonly Func<(int Count, bool Hidden, bool ListOpen)> _state;
+    public QuestHelperBarArt(Func<(int Count, bool Hidden, bool ListOpen)> state) { _state = state; }
     public void Draw(UiGfx gfx)
     {
-        var (count, hidden) = _state();
+        var (count, hidden, listOpen) = _state();
         if (hidden) return;
         var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Tex("ui/qhelper_top.png"), new Vector2(r.X, r.Y), Color.White);
+        gfx.Sb.Draw(gfx.Tex(listOpen ? "ui/qhelper_topopen.png" : "ui/qhelper_top.png"), new Vector2(r.X, r.Y), Color.White);
         string text = count.ToString();
         int x = r.X + NumSpot(text.Length);
         foreach (char ch in text)

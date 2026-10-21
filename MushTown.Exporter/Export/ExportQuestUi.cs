@@ -45,8 +45,6 @@ public static partial class Export
         {
             ("Quest.img/Helper/canvas:topClosed", "qhelper_top.png"),
             ("Quest.img/Helper/canvas:topOpened", "qhelper_topopen.png"),
-            ("Quest.img/Helper/canvas:mid", "qhelper_mid.png"),
-            ("Quest.img/Helper/canvas:bottom", "qhelper_bottom.png"),
         };
         foreach (var (node, file) in files)
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))
