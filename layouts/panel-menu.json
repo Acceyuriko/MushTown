@@ -1,5 +1,5 @@
 {
-  "_help": "The MENU window (UI/UITotalMenu.img/main art). x/y = the window spot in 1366x768 game pixels, w/h = the window size (it must match the art). titleH = the strip above the tabs that drags the window. col0X..col6X = the seven column spots (the blue tabs), col0Rows..col6Rows = how many menu items the column has. row0Y..row8Y = the item row spots. bot0X..bot6X/botY = the bottom row of seven buttons (their WZ origins are the negative of these spots). closeX/closeY = the X button. stripX/stripY/stripW/stripH = the quick menu strip inside the art (it is drawn translucent, like the glass), stripAlpha = how much of it stays. badgeX/badgeY = the key cap badge at the right of a row. chInfoX/chInfoY = the channel name in the pill at the top right.",
+  "_help": "The MENU window (UI/UITotalMenu.img/main art). x/y = the window spot in 1366x768 game pixels, w/h = the window size (it must match the art). titleH = the strip above the tabs that drags the window. col0X..col6X = the seven column spots (the blue tabs), col0Rows..col6Rows = how many menu items the column has. row0Y..row8Y = the item row spots. bot0X..bot6X/botY = the bottom row of seven buttons (their WZ origins are the negative of these spots). closeX/closeY = the X button. stripX/stripY/stripW/stripH = the quick menu strip inside the art (it is drawn translucent, like the glass), stripAlpha = how much of it stays. qsSlotX/qsSlotY = the first icon slot of that strip (the art has ten), qsSlotPitch = the step between the slots, qsIconSize = the icon size in a slot. badgeX/badgeY = the key cap badge at the right of a row. chInfoX/chInfoY = the channel name in the pill at the top right.",
   "x": 172,
   "y": 18,
   "w": 1022,
@@ -43,6 +43,10 @@
   "stripW": 504,
   "stripH": 87,
   "stripAlpha": 102,
+  "qsSlotX": 277,
+  "qsSlotY": 647,
+  "qsSlotPitch": 42,
+  "qsIconSize": 30,
   "badgeX": 114,
   "badgeY": 12,
   "chInfoX": 894,

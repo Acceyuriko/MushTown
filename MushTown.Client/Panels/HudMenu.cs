@@ -78,6 +78,12 @@ public sealed class MenuWindow : UiWindow
         root.Add(new BlurBackdrop()); // the frosted glass: the screen at 1/4 size
         root.Add(new MenuArt()); // the 40% white panel, the tabs and the quick menu strip
 
+        // the quick menu strip: the same icons as the HUD row, in the slots
+        // that the official art has.
+        int qsSize = _lay.Get("qsIconSize", 30);
+        root.AddChild(_game.BuildQuickIcons(Pos.X + _lay.Get("qsSlotX", 274), Pos.Y + _lay.Get("qsSlotY", 626),
+            qsSize, _lay.Get("qsSlotPitch", 40) - qsSize));
+
         // the menu items: seven columns under the seven tabs
         for (int c = 0; c < ColumnRows.Length; c++)
         {
