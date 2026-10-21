@@ -1,0 +1,7 @@
+{
+  "_help": "The quick menu icon row at the bottom left of the HUD (the official UI/UITotalMenu.img/quickMenu/menu icons, right of the two blue buttons). x/y = the first icon's top-left in 1366x768 game pixels, size = the drawn icon box (the art is 30x30), gap = the space between two icons.",
+  "x": 341,
+  "y": 729,
+  "size": 25,
+  "gap": 2
+}

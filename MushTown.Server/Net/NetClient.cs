@@ -18,6 +18,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<DropEvent> _dropEvents = new();
     private readonly ConcurrentQueue<NameEvent> _nameEvents = new();
     private readonly ConcurrentQueue<QuestEvent> _questEvents = new();
+    private readonly ConcurrentQueue<ChatEvent> _chatEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -178,6 +179,14 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.QuestComplete, w => w.Write(quest)));
     }
 
+    // One chat line: only the text goes out. The server adds the player id
+    // and the name and relays the line to every client.
+    public void SendChat(string text)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.Chat, w => w.Write(text)));
+    }
+
     private void SendFrame(byte[] frame)
     {
         try
@@ -207,6 +216,8 @@ public sealed class NetClient : IDisposable
     public bool TryTakeName(out NameEvent e) => _nameEvents.TryDequeue(out e);
 
     public bool TryTakeQuest(out QuestEvent e) => _questEvents.TryDequeue(out e);
+
+    public bool TryTakeChat(out ChatEvent e) => _chatEvents.TryDequeue(out e);
 
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
@@ -285,6 +296,19 @@ public sealed class NetClient : IDisposable
                 using var ms = new MemoryStream(p, 1, p.Length - 1);
                 using var r = new BinaryReader(ms);
                 _nameEvents.Enqueue(new NameEvent(r.ReadInt32(), r.ReadString(), r.ReadInt32()));
+            }
+            catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
+            {
+                _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
+            }
+        }
+        else if (p[0] == Net.Chat)
+        {
+            try
+            {
+                using var ms = new MemoryStream(p, 1, p.Length - 1);
+                using var r = new BinaryReader(ms);
+                _chatEvents.Enqueue(new ChatEvent(r.ReadInt32(), r.ReadString(), r.ReadString()));
             }
             catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
             {

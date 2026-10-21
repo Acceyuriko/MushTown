@@ -73,6 +73,7 @@ public partial class MushTownGame : Game
     // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
     private GameServer? _server;
     private NetClient? _net;
+    private ChatWindow _chatWindow = null!; // the chat is always on screen
     private readonly Dictionary<int, PeerArt> _remotes = new();
     private readonly PlateArt _heroPlate = new(); // the hero's tag rides the player object (SyncHeroPlate fills it)
 
@@ -128,6 +129,7 @@ public partial class MushTownGame : Game
         new WorldMapWindow(this);
         new KeyConfigWindow(this);
         _menuWindow = new MenuWindow(this);
+        _chatWindow = new ChatWindow(this, text => { if (_net != null && _net.Connected) _net.SendChat(text); });
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
@@ -398,12 +400,13 @@ public partial class MushTownGame : Game
         }
 
         var kb = Keyboard.GetState();
+        if (_chatWindow.Focused) { _chatWindow.UpdateKeys(kb); kb = new KeyboardState(); } // the chat input eats the keys
         if (kb.IsKeyDown(Keys.Escape))
         {
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
-            if (UiWindow.List.Any(w => w.Show)) // the new windows draw on top: Esc closes them first
+            if (UiWindow.List.Any(w => w.Show && w != _chatWindow)) // the new windows draw on top: Esc closes them first
             {
                 foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
                 PlaySfx("click");
@@ -685,6 +688,7 @@ public partial class MushTownGame : Game
                     plate.Plate = n.Plate;
                 }
             }
+            while (_net.TryTakeChat(out var chat)) _chatWindow.AddLine(chat.Name, chat.Text);
             // Quest events drain before mob hits: a level-up inside ApplyHit
             // re-syncs, and the sync must carry the counters this frame's
             // kills pushed (not wipe them on the server's copy).

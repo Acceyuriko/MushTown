@@ -11,7 +11,7 @@ using MushTown.Exporter;
 //   spinebake [id|all]                       bake ClassSelect rigs to assets/spine/
 //   uipng    [Category] <node-path> <out.png>   save one canvas as png
 //   export   [DataDir] [OutDir]               export map + character assets
-//   panel    <name> [OutDir]                  export one panel's art (inventory|stat|skill|quest|map|keys|menu)
+//   panel    <name> [OutDir]                  export one panel's art (inventory|stat|skill|quest|map|keys|menu|quickmenu|chat)
 //   questscan <npcid> [<npcid>...]       list quests starting/ending at these NPCs
 //   pick item <folder> <prefix>          list Character part ids with names
 //   pick hair <out.png> <id,id,...>       contact sheet of the doll per hair
@@ -108,7 +108,7 @@ switch (cmd)
     case "panel":
         if (args.Length < 2)
         {
-            Console.WriteLine("usage: panel <inventory|stat|skill|quest|map|keys|menu> [OutDir]");
+            Console.WriteLine("usage: panel <inventory|stat|skill|quest|map|keys|menu|quickmenu|chat> [OutDir]");
             Environment.ExitCode = 1;
             return;
         }

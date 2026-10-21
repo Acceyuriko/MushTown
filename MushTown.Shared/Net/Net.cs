@@ -26,6 +26,7 @@ public static class Net
     public const byte QuestComplete = 19; // client -> server: int quest (turn-in intent; server confirms with QuestOk)
     public const byte QuestOk = 20;  // server -> client: int quest, byte completed (the intent passed on the server's copy)
     public const byte QuestKill = 21; // server -> client: int quest, int index, int count (authoritative counter)
+    public const byte Chat = 22; // client -> server: string text; the server relays int id, string name, string text
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -125,6 +126,10 @@ public readonly record struct DropEvent(
 // One quest event from the server: a confirmed intent (Kill false, Quest +
 // Completed set) or an authoritative kill counter (Kill true, Quest/Index/Count).
 public readonly record struct QuestEvent(bool Kill, int Quest, int Index, int Count, bool Completed);
+
+// One chat line from the server: who said what (the sender id, the sender
+// name and the text). The server adds the id and the name to every line.
+public readonly record struct ChatEvent(int Id, string Name, string Text);
 
 // Accumulates raw TCP bytes and yields whole payloads (header eaten).
 // TCP splits and merges at will, so one Feed can yield zero, one, or more.

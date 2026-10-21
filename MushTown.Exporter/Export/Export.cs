@@ -27,6 +27,8 @@ public static partial class Export
             "map" => ExportMapUi(ui, WzRoot.LoadCategory(ExporterPaths.DataDir, "Map"), WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir),
             "keys" => ExportKeyUi(ui, outDir),
             "menu" => ExportMenuUi(ui, outDir),
+            "quickmenu" => ExportQuickMenuUi(ui, outDir),
+            "chat" => ExportChatUi(ui, outDir),
             _ => false,
         };
     }
@@ -164,7 +166,7 @@ public static partial class Export
         // The game panels: one export step per panel.
         if (!ExportInventoryUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, outDir)
             || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir)
-            || !ExportMenuUi(ui, outDir))
+            || !ExportMenuUi(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir))
         {
             Environment.ExitCode = 1;
             return;

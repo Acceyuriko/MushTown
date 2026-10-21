@@ -1,0 +1,21 @@
+{
+  "_help": "Chat window (official UI/StatusBar3.img/chat art). Game pixels in 1366x768. x,y = the window top-left. The tab row sits on top, the log frame under it, the input line at the bottom. logPadX/logPadY = the gap from the frame edge to the text. lineH = the height of one log line. btnW/btnGap = the five input buttons on the right of the input line.",
+  "x": 6,
+  "y": 566,
+  "w": 315,
+  "h": 150,
+  "tabY": 0,
+  "tabW": 54,
+  "tabH": 20,
+  "tabGap": 3,
+  "logY": 22,
+  "logH": 100,
+  "logPadX": 10,
+  "logPadY": 9,
+  "lineH": 14,
+  "inputY": 125,
+  "inputH": 25,
+  "inputPadX": 8,
+  "btnW": 24,
+  "btnGap": 1
+}

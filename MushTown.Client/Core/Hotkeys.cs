@@ -15,6 +15,7 @@ public enum HotkeyAction
     Settings,
     KeyConfig, // no key by default: the options window opens it
     Menu,      // no key: the HUD menu button opens the MENU window
+    Chat,      // no key: the chat input is clicked
 }
 
 public partial class MushTownGame
@@ -40,15 +41,19 @@ public partial class MushTownGame
 
     // The action whose key went down this frame (null when none did).
     // One key can only open one panel: the first action in the list wins.
+    // A combo binding ("I+K") fires on either key.
     private HotkeyAction? FreshHotkey(KeyboardState kb)
     {
         HotkeyAction? hit = null;
         _hotkeysNow.Clear();
         foreach (var (action, key) in _hotkeys)
         {
-            if (!Enum.TryParse<Keys>(key, out var k) || !kb.IsKeyDown(k)) continue;
-            _hotkeysNow.Add(key);
-            if (!_hotkeysDown.Contains(key) && hit == null) hit = action;
+            foreach (var part in key.Split('+', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!Enum.TryParse<Keys>(part, out var k) || !kb.IsKeyDown(k)) continue;
+                _hotkeysNow.Add(part);
+                if (!_hotkeysDown.Contains(part) && hit == null) hit = action;
+            }
         }
         _hotkeysDown.Clear();
         foreach (var key in _hotkeysNow) _hotkeysDown.Add(key);
@@ -61,7 +66,8 @@ public partial class MushTownGame
     {
         _hotkeysDown.Clear();
         foreach (var (action, key) in _hotkeys)
-            if (Enum.TryParse<Keys>(key, out var k) && kb.IsKeyDown(k)) _hotkeysDown.Add(key);
+            foreach (var part in key.Split('+', StringSplitOptions.RemoveEmptyEntries))
+                if (Enum.TryParse<Keys>(part, out var k) && kb.IsKeyDown(k)) _hotkeysDown.Add(part);
     }
 
     // Apply the whole binding map at once and save it once. The key
@@ -111,16 +117,21 @@ public partial class MushTownGame
     public string HotkeyKey(HotkeyAction action) => _hotkeys.GetValueOrDefault(action) ?? "";
 
     // Load the saved bindings (a missing file keeps the defaults).
+    // A binding is one key ("I") or a combo of two ("I+K").
     private void LoadHotkeys(Dictionary<string, string>? saved)
     {
         if (saved == null) return;
         foreach (var (action, key) in saved)
             if (Enum.TryParse<HotkeyAction>(action, out var a))
             {
-                if (key != "" && !Enum.TryParse<Keys>(key, out _)) continue;
+                if (!IsKeyName(key)) continue;
                 _hotkeys[a] = key;
             }
     }
+
+    // A key name, or a combo of key names joined by "+".
+    private static bool IsKeyName(string key) =>
+        key == "" || key.Split('+', StringSplitOptions.RemoveEmptyEntries).All(p => Enum.TryParse<Keys>(p, out _));
 
     // The bindings for the settings file. Every action is written, an
     // action without a key gets an empty value.

@@ -201,14 +201,19 @@ public sealed class GameServer : IDisposable
         _log($"client {id} left");
     }
 
-    // Clients send State, Attack, Build, SkillCast, Pickup, Name, and the
-    // quest trio (Sync/Accept/Complete); anything else means a foreign client.
+    // Clients send State, Attack, Build, SkillCast, Pickup, Name, Chat, and
+    // the quest trio (Sync/Accept/Complete); anything else means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
         if (payload[0] == Net.Name)
         {
             OnName(id, payload);
+            return;
+        }
+        if (payload[0] == Net.Chat)
+        {
+            OnChat(id, payload);
             return;
         }
         if (payload[0] == Net.QuestSync)
@@ -291,6 +296,33 @@ public sealed class GameServer : IDisposable
             w.Write(name);
             w.Write(plate);
         });
+
+    // One chat line: the client sends only the text, the server adds the
+    // sender id and the sender name and relays the line to every client
+    // (the sender too: it sees its own line like the others do).
+    private void OnChat(int id, byte[] payload)
+    {
+        string text;
+        try
+        {
+            using var ms = new MemoryStream(payload, 1, payload.Length - 1);
+            using var r = new BinaryReader(ms);
+            text = r.ReadString();
+        }
+        catch (Exception ex) when (ex is IOException or FormatException)
+        {
+            throw new InvalidDataException($"bad chat from {id} ({ex.Message})");
+        }
+        string name;
+        lock (_mobLock)
+            name = _names.TryGetValue(id, out var n) ? n.name : "";
+        Broadcast(Net.Encode(Net.Chat, w =>
+        {
+            w.Write(id);
+            w.Write(name);
+            w.Write(text);
+        }));
+    }
 
     // A client's quest state: level plus taken/done ids plus kill counters.
     // Adopted as the authoritative copy (it is the player's save); from here
