@@ -63,7 +63,40 @@ public static partial class Export
         foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p"), ("disabled", "d") })
             if (!UiPng.Save(ui, $"UITotalMenu.img/main/button:close/{state}/0", Path.Combine(dir, $"menu_close_{suffix}.png"))) return false;
 
+        if (!ExportMenuKeyBadges(ui, dir)) return false;
+
         Console.WriteLine($"menu ui: {colCount} columns");
         return true;
+    }
+
+    // The key badges of the MENU window: the official cyan squares
+    // (UI/UITotalMenu.img/main/key/<code>). The file name uses the
+    // official key code, not the ASCII value of the key. The codes go into
+    // menu_keys.json, so the client knows which badges have art.
+    private static bool ExportMenuKeyBadges(WzRoot ui, string dir)
+    {
+        var badges = ui.Find("UITotalMenu.img/main/key");
+        if (badges == null)
+        {
+            Console.WriteLine("UITotalMenu: no key badges");
+            return false;
+        }
+        var file = new MenuKeyFile();
+        foreach (Wz_Node node in badges.Nodes)
+        {
+            if (!UiPng.Save(ui, $"UITotalMenu.img/main/key/{node.Text}", Path.Combine(dir, $"menu_key_{node.Text}.png")))
+                return false;
+            if (int.TryParse(node.Text, out int code)) file.Codes.Add(code);
+        }
+        file.Codes.Sort();
+        WriteJson(Path.Combine(dir, "menu_keys.json"), file);
+        Console.WriteLine($"menu key badges: {file.Codes.Count}");
+        return true;
+    }
+
+    // assets/ui/menu_keys.json: the key codes that have a badge.
+    private sealed class MenuKeyFile
+    {
+        public List<int> Codes { get; set; } = new();
     }
 }

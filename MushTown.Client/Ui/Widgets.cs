@@ -604,14 +604,27 @@ public sealed class MenuKeyBadge : Component, IDrawable
     {
         string first = keyName.Split('+', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
         int code = Codes.GetValueOrDefault(first, 0);
-        return code == 0 ? "" : $"ui/menu_key_{code}.png";
+        if (code == 0 || !Badges.Codes.Contains(code)) return "";
+        return $"ui/menu_key_{code}.png";
     }
 
     // Load every badge (the player can bind any key).
     public static void LoadBadges(MushTownGame game)
     {
-        foreach (int code in Codes.Values) game.LoadTexture($"ui/menu_key_{code}.png");
+        foreach (int code in Badges.Codes) game.LoadTexture($"ui/menu_key_{code}.png");
     }
+
+    // assets/ui/menu_keys.json: the key codes that have a badge. The list
+    // comes from the exporter, so a MapleStory version without a badge does
+    // not break the game.
+    public sealed class BadgeFile
+    {
+        public List<int> Codes { get; set; } = new();
+    }
+
+    private static BadgeFile? _badgeFile;
+    private static BadgeFile Badges => _badgeFile ??= MushTownGame.LoadJson<BadgeFile>(
+        Path.Combine(Path.GetDirectoryName(MushTownGame.LayoutsDir)!, "assets", "ui", "menu_keys.json"));
 
     // The official key code of a key name (the badge table of the WZ).
     private static readonly Dictionary<string, int> Codes = BuildCodes();
@@ -626,14 +639,17 @@ public sealed class MenuKeyBadge : Component, IDrawable
             ["OemOpenBrackets"] = 26,
             ["OemCloseBrackets"] = 27,
             ["LeftControl"] = 29,
+            ["RightControl"] = 29,
             ["OemSemicolon"] = 39,
             ["OemQuotes"] = 40,
             ["OemTilde"] = 41,
             ["LeftShift"] = 42,
+            ["RightShift"] = 42,
             ["Up"] = 43,
             ["OemComma"] = 51,
             ["OemPeriod"] = 52,
             ["LeftAlt"] = 56,
+            ["RightAlt"] = 56,
             ["Enter"] = 57,
             ["Scroll"] = 70,
             ["Home"] = 71,
