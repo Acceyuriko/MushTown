@@ -31,6 +31,7 @@ public static partial class Export
             "chat" => ExportChatUi(ui, outDir),
             "shop" => ExportShopUi(ui, outDir),
             "buff" => ExportBuffUi(ui, outDir),
+            "hotkey" => ExportHotkeyUi(ui, outDir),
             _ => false,
         };
     }
@@ -169,7 +170,7 @@ public static partial class Export
         if (!ExportInventoryUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, outDir)
             || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir)
             || !ExportMenuUi(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir)
-            || !ExportShopUi(ui, outDir) || !ExportBuffUi(ui, outDir))
+            || !ExportShopUi(ui, outDir) || !ExportBuffUi(ui, outDir) || !ExportHotkeyUi(ui, outDir))
         {
             Environment.ExitCode = 1;
             return;
