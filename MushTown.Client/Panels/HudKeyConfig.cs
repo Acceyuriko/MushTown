@@ -667,7 +667,7 @@ public sealed class KeyConfigWindow : UiWindow
     }
 
     // The official icon of an action.
-    private static int IconOf(HotkeyAction action)
+    internal static int IconOf(HotkeyAction action)
     {
         foreach (var a in Actions)
             if (a.Action == action) return a.Icon;

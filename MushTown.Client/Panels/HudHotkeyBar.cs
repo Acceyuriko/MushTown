@@ -4,24 +4,24 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // The hotkey bar (HUD, bottom right): one cell per game action. The cell
-// shows the official key cap of the key the action has now and the name of
-// the action. Clicking a cell opens the feature. The bar sits above the
-// channel bar; every number lives in layouts/panel-hotkey.json.
+// holds the official action icon and the key cap of the key the action has
+// now sits above it. Clicking a cell opens the feature. The bar sits above
+// the quick slot bar; every number lives in layouts/panel-hotkey.json.
 public static class HotkeyBar
 {
     internal static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-hotkey.json"));
 
-    // The actions the game has: the action, the feature it opens and the
-    // name under the key cap. A new action in the key window needs a line
-    // here too (the key window keeps its own list with the official icons).
-    private static readonly (HotkeyAction Action, Feature Feature, string Name)[] Cells =
+    // The actions the game has: the action and the feature it opens. A new
+    // action in the key window needs a line here too (the key window keeps
+    // its own list with the official icons).
+    private static readonly (HotkeyAction Action, Feature Feature)[] Cells =
     {
-        (HotkeyAction.Inventory, Feature.Inventory, "Items"),
-        (HotkeyAction.Stat, Feature.Stat, "Stat"),
-        (HotkeyAction.Skill, Feature.Skill, "Skill"),
-        (HotkeyAction.Quest, Feature.Quest, "Quest"),
-        (HotkeyAction.WorldMap, Feature.WorldMap, "Map"),
-        (HotkeyAction.Settings, Feature.Settings, "Setup"),
+        (HotkeyAction.Inventory, Feature.Inventory),
+        (HotkeyAction.Stat, Feature.Stat),
+        (HotkeyAction.Skill, Feature.Skill),
+        (HotkeyAction.Quest, Feature.Quest),
+        (HotkeyAction.WorldMap, Feature.WorldMap),
+        (HotkeyAction.Settings, Feature.Settings),
     };
 
     // The bar tree: the game adds it to the HUD scene (HudBar.cs).
@@ -35,7 +35,8 @@ public static class HotkeyBar
             var o = new GameObject();
             o.Add(new Rect(CellRect(i)));
             o.Add(new Button { Kind = ButtonKind.Click, HoverFill = true, OnClick = () => game.OpenFeature(c.Feature) });
-            o.Add(new HotkeyCell(() => game.HotkeyKey(c.Action), c.Name));
+            o.Add(new HotkeyCell(() => game.HotkeyKey(c.Action), c.Action));
+            game.LoadTexture($"ui/keys_icon_{KeyConfigWindow.IconOf(c.Action)}.png");
             root.AddChild(o);
         }
         return root;
@@ -43,25 +44,28 @@ public static class HotkeyBar
 
     // One cell box.
     private static Rectangle CellRect(int i) => new(
-        _lay.Get("x", 1156) + i * _lay.Get("pitch", 35),
-        _lay.Get("y", 581),
+        _lay.Get("x", 860) + i * _lay.Get("pitch", 35),
+        _lay.Get("y", 645),
         _lay.Get("cellW", 35), _lay.Get("cellH", 33));
 }
 
-// One hotkey cell: the official cell frame, the key cap of the key the
-// action has now and the name of the action. The cap is read every draw,
-// so a new binding shows up right away.
+// One hotkey cell: the official action icon in the cell and the key cap of
+// the key the player bound to the action above it. The cap is read every
+// draw, so a new binding shows up right away.
 public sealed class HotkeyCell : Component, IDrawable
 {
     private readonly Func<string> _key;
-    private readonly string _name;
-    public HotkeyCell(Func<string> key, string name) { _key = key; _name = name; }
+    private readonly HotkeyAction _action;
+    public HotkeyCell(Func<string> key, HotkeyAction action) { _key = key; _action = action; }
 
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
         // the cell frame: the first cell of the official quick slot strip
         gfx.Sb.Draw(gfx.Tex("ui/hotkey_cells.png"), r, new Rectangle(0, 0, 35, 33), Color.White);
+        // the official action icon in the cell
+        var icon = gfx.Tex($"ui/keys_icon_{KeyConfigWindow.IconOf(_action)}.png");
+        gfx.Sb.Draw(icon, new Rectangle(r.X + 1, r.Y + 1, 32, 32), Color.White);
         // the key cap of the key the player bound to the action
         string key = _key();
         string cap = KeyConfigWindow.CapArt(key);
@@ -70,14 +74,12 @@ public sealed class HotkeyCell : Component, IDrawable
             var tex = gfx.Tex(cap);
             int x = r.X + (r.Width - tex.Width) / 2;
             if (tex.Width > r.Width) x = r.Right - tex.Width; // a wide cap grows to the left
-            gfx.Sb.Draw(tex, new Vector2(x, r.Y + HotkeyBar._lay.Get("capDy", 2)), Color.White);
+            gfx.Sb.Draw(tex, new Vector2(x, r.Y + HotkeyBar._lay.Get("capDy", -13)), Color.White);
         }
-        else if (key != "") // a key with no cap art: the name tells what it is
+        else if (key != "") // a key with no cap art: the key name tells what it is
         {
-            DrawInCell(gfx, key, r, r.Y + HotkeyBar._lay.Get("capDy", 2));
+            DrawInCell(gfx, key, r, r.Y + HotkeyBar._lay.Get("capDy", -13));
         }
-        // the name of the action under the cap
-        DrawInCell(gfx, _name, r, r.Y + HotkeyBar._lay.Get("nameDy", 18));
     }
 
     // The text in the cell: centred, and a long text shrinks to fit the cell
