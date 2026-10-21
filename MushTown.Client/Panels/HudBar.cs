@@ -390,6 +390,7 @@ public partial class MushTownGame
     private void DrawHud(int gx, int gy, bool pressed)
     {
         _gfx.Pressed = pressed;
+        DrawBalloon(_gfx); // the speech bubble over the character
         _scenes.Current?.Draw(_gfx); // HUD art lives in the tree now (exp, buttons, plate, HP/MP, quickslot, tracker, boss bar, minimap); panels and talk draw above it
         // The front panel draws last (on top); the back five keep inv < stat < skill < quest < settings < shop.
         if (_topPanel == 0) { if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showInv) _invScene.Draw(_gfx); }

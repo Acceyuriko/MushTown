@@ -352,6 +352,7 @@ public partial class MushTownGame
             _textures["menu/" + f] = Texture2D.FromStream(GraphicsDevice, stream);
         }
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
+        LoadBalloonArt(); // the speech bubble over the character
         _jobs = LoadJson<JobListData>(Path.Combine(_assetsDir, "ui", "jobs.json")).Jobs; // class roster
         if (_jobs.Count == 0) throw new InvalidDataException("jobs.json has no classes: re-export");
         if (_shotJob != 0) // --job <id>: the shot poses that class instead of the page default

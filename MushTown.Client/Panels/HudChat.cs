@@ -118,13 +118,16 @@ public sealed class ChatWindow : UiWindow
     }
 
     // Enter: the line goes out, the input is cleared and the focus leaves
-    // the input (the player is back in the game).
+    // the input (the player is back in the game). The bubble over the
+    // character shows the same line for a few seconds.
     private void Send()
     {
         string text = _input.Trim();
         _input = "";
         _focused = false;
-        if (text != "") _send(text);
+        if (text == "") return;
+        _send(text);
+        _game.ShowBalloon(text);
     }
 
     // The typed character for a key (letters, digits, space, the usual marks).

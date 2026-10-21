@@ -37,7 +37,13 @@ public static partial class Export
         foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
             if (!UiPng.Save(ui, $"{chat}/input/button:setting/{state}/0", Path.Combine(dir, $"chat_btn_set_{suffix}.png"))) return false;
 
-        Console.WriteLine("chat ui: frame, 2 tabs, input bar, 1 button");
+        // the speech balloon (UI/ChatBalloon.img/0): nine pieces for the bubble
+        // and the tail under it
+        foreach (string piece in new[] { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se" })
+            if (!UiPng.Save(ui, $"ChatBalloon.img/0/{piece}", Path.Combine(dir, $"balloon_{piece}.png"))) return false;
+        if (!UiPng.Save(ui, "ChatBalloon.img/0/arrow", Path.Combine(dir, "balloon_arrow.png"))) return false;
+
+        Console.WriteLine("chat ui: frame, 2 tabs, input bar, 1 button, speech balloon");
         return true;
     }
 }
