@@ -29,6 +29,7 @@ public static partial class Export
             "menu" => ExportMenuUi(ui, outDir),
             "quickmenu" => ExportQuickMenuUi(ui, outDir),
             "chat" => ExportChatUi(ui, outDir),
+            "shop" => ExportShopUi(ui, outDir),
             _ => false,
         };
     }
@@ -166,7 +167,8 @@ public static partial class Export
         // The game panels: one export step per panel.
         if (!ExportInventoryUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, outDir)
             || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir)
-            || !ExportMenuUi(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir))
+            || !ExportMenuUi(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir)
+            || !ExportShopUi(ui, outDir))
         {
             Environment.ExitCode = 1;
             return;

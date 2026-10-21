@@ -927,6 +927,7 @@ public partial class MushTownGame : Game
         _questPos = new Point(0, 0); _questDragged = false; // the quest window takes its spot from its own file again
         _skillPos = new Point(0, 0); _skillDragged = false; // the skill window takes its spot from its own file again
         _settingsPos = SettingsLayoutPos();
+        _shopPos = new Point(0, 0); _shopPlaced = false; // the shop window takes its spot from its own file again
         _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
         foreach (var w in UiWindow.List) { w.Pos = w.LayoutPos(); w.Built = false; w.Drag = null; } // the new windows go back to the file spot
         if (_contentLoaded) BuildScreenScene(); // ctor reload skips: no textures yet

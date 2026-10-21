@@ -3,11 +3,30 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The shop window: the keeper's stock to buy, the bag to sell.
+// The shop window: the official MapleStory art (UINpcShop.img/Shop). The
+// frame has ten item rows baked in. The keeper's stock to buy comes first,
+// the bag to sell under it.
 public partial class MushTownGame
 {
-    private const int ShopW = 340; // shop window: buy rows + sell rows (height follows the bag)
-    private const int ShopRowH = 40;
+    // Every number of this window lives in layouts/panel-shop.json.
+    private static readonly PanelLayout _shopLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-shop.json"));
+
+    private bool _shopPlaced; // the window took the spot from the layout file
+    private int _shopTab;      // 0 = buy from the keeper, 1 = sell to the keeper
+
+    // The official list: ten rows in the frame art.
+    private const int ShopRowCount = 10;
+
+    // The window width: the drag clamp in the HUD chain uses this.
+    private int ShopW => _shopLay.Get("w", 380);
+    private int ShopH => _shopLay.Get("h", 681);
+    private Rectangle ShopRect() => new(_shopPos.X, _shopPos.Y, ShopW, ShopH);
+
+    // The official ink: the title is pale, the item text is black on the
+    // light rows.
+    private static readonly Color ShopTitleInk = new(190, 203, 217);
+    private static readonly Color ShopNameInk = new(20, 20, 20);
+    private static readonly Color ShopPriceInk = new(70, 70, 70);
 
     // Sell rows: owned potions first, then owned equips (both in tab order).
     // Draw and clicks share this list, so row i is always row i.
@@ -23,32 +42,27 @@ public partial class MushTownGame
         return rows;
     }
 
-    // Shop rects: mesos line 20, Buy header 18 + stock rows, Sell header 18
-    // + bag rows (an empty bag keeps one row for the "empty" line).
-    private Rectangle ShopRect()
+    // One row of the official list: the item list starts at listX/listY.
+    private Rectangle ShopRowRect(int i) => new(
+            _shopPos.X + _shopLay.Get("listX", 20),
+            _shopPos.Y + _shopLay.Get("listY", 141) + i * _shopLay.Get("rowPitch", 50),
+            _shopLay.Get("rowW", 336), _shopLay.Get("rowH", 45));
+
+    // The keeper: the stock list belongs to one shop entry.
+    private int ShopNpc()
     {
-        int sells = Math.Max(1, ShopSellRows().Count);
-        int body = 20 + 18 + _shopStock.Count * ShopRowH + 18 + sells * ShopRowH + 10;
-        return new Rectangle(_shopPos.X, _shopPos.Y, ShopW, 16 + body);
+        foreach (var (npc, shop) in _shops)
+            if (ReferenceEquals(shop.Stock, _shopStock)) return npc;
+        return 0;
     }
 
-    private Rectangle ShopTitleRect() => new(_shopPos.X, _shopPos.Y, ShopW, 16);
-
-    private Rectangle ShopXRect()
+    // The window opens at the spot in the layout file; the drag moves it.
+    private void ShopPlaceFirst()
     {
-        var r = ShopRect();
-        return new Rectangle(r.X + r.Width - 11 - 4, r.Y + 2, 11, 11);
+        if (_shopPlaced) return;
+        _shopPlaced = true;
+        _shopPos = new Point(_shopLay.Get("x", 493), _shopLay.Get("y", 43));
     }
-
-    private int ShopBuyTop() => _shopPos.Y + 16 + 20 + 18;
-
-    private int ShopSellTop() => ShopBuyTop() + _shopStock.Count * ShopRowH + 18;
-
-    private Rectangle ShopBuyRect(int i) =>
-        new(_shopPos.X + ShopW - 80, ShopBuyTop() + i * ShopRowH + 7, 68, 26);
-
-    private Rectangle ShopSellRect(int i) =>
-        new(_shopPos.X + ShopW - 80, ShopSellTop() + i * ShopRowH + 7, 68, 26);
 
     // Click a stock row: buy one at WZ price (a broke wallet logs and skips).
     private void BuyFromShop(int id)
@@ -78,48 +92,95 @@ public partial class MushTownGame
         }
     }
 
+    // The shop art: loaded once, then the texture cache answers.
+    private void LoadShopArt()
+    {
+        LoadTexture("ui/shop_backgrnd.png");
+        for (int i = 0; i < 2; i++) LoadTexture($"ui/shop_tab{i}.png");
+        foreach (string s in new[] { "n", "h", "p" }) LoadTexture($"ui/shop_x_{s}.png");
+    }
+
+    // One item row: the icon, the name, the price. The click buys or sells.
+    private GameObject ShopRow(int row, string image, string name, string price, string id, Action onClick)
+    {
+        var o = PanelButton(ShopRowRect(row), id, onClick);
+        o.Add(new Picture(image, _shopLay.Get("iconX", 7), _shopLay.Get("iconY", 7)));
+        o.Add(new Label(name, _shopLay.Get("nameX", 56), _shopLay.Get("nameY", 6)) { Tint = ShopNameInk });
+        o.Add(new Label(price, _shopLay.Get("priceX", 72), _shopLay.Get("priceY", 24)) { Tint = ShopPriceInk });
+        return o;
+    }
+
+    // An empty list says so (the official art has no text for it).
+    private GameObject ShopEmptyRow(int row)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(ShopRowRect(row)));
+        o.Add(new Label("No item", _shopLay.Get("nameX", 56), _shopLay.Get("nameY", 6)) { Tint = ShopNameInk });
+        return o;
+    }
+
+    // One tab of the strip: the official tab piece, the label and the click
+    // that picks the list.
+    private GameObject ShopTab(int index, string label)
+    {
+        int x = _shopLay.Get("tabX", 11) + index * _shopLay.Get("tabStep", 72);
+        int y = _shopLay.Get("tabY", 103);
+        var o = PanelButton(new Rectangle(_shopPos.X + x, _shopPos.Y + y,
+                _shopLay.Get("tabW", 72), _shopLay.Get("tabH", 30)),
+            "shoptab" + index, () => _shopTab = index);
+        o.Add(new Label(label, _shopLay.Get("tabNameX", 46) - _ui.GetSmall(label).Width / 2, 4) { Tint = Color.White });
+        return o;
+    }
+
     private void BuildShopScene(List<(int id, int count)> sells)
     {
+        LoadShopArt();
+        ShopPlaceFirst();
         _shopScene = new Scene();
         var body = new GameObject();
         body.Add(new Rect(ShopRect())); // no Button: the body swallows, like the legacy fallthrough
-        body.Add(new TitleBar("SHOP"));
-        body.Add(new Fill(new Color(62, 96, 118), 16));
-        body.Add(new LiveLabel(() => $"Mesos: {(_save?.Slots[_slot]?.Mesos ?? 0):#,##0}", 12, 16 + 4, new Color(255, 220, 0)));
-        body.Add(new Label("Buy", 12, 16 + 22));
-        var r = ShopRect();
-        for (int i = 0; i < _shopStock.Count; i++)
+        body.Add(new Picture("ui/shop_backgrnd.png")); // the official frame, the rows are baked in
+        string title = NpcName(ShopNpc());
+        body.Add(new LiveLabel(() => title, _shopLay.Get("titleX", 190) - _ui.GetMid(title).Width / 2, _shopLay.Get("titleY", 52), ShopTitleInk, LabelFont.Mid));
+        // the tab bar: the official tab pieces, one per kind of list
+        for (int i = 0; i < 2; i++)
+            body.Add(new Picture($"ui/shop_tab{i}.png", _shopLay.Get("tabX", 11) + i * _shopLay.Get("tabStep", 72), _shopLay.Get("tabY", 103)));
+        body.AddChild(ShopTab(0, "Buy"));
+        body.AddChild(ShopTab(1, "Sell"));
+        // the mesos line in the bottom bar
+        body.Add(new RightLabel((ui, s) => ui.GetMeso(s),
+            () => $"Mesos: {(_save?.Slots[_slot]?.Mesos ?? 0):#,##0}",
+            _shopLay.Get("mesoX", 356), _shopLay.Get("mesoY", 650), ShopTitleInk));
+        // the rows: the keeper's stock on the buy tab, the bag on the sell tab
+        int row = 0;
+        if (_shopTab == 0)
         {
-            int s = i; // for-loop variables capture shared: copy per slot
-            int id = _shopStock[s];
-            var def = _items[id];
-            var holder = new GameObject { NoHit = true };
-            holder.Add(new Rect(new Rectangle(r.X, ShopBuyTop() + s * ShopRowH, ShopW, ShopRowH)));
-            holder.Add(new ShopRow(def.Image, def.Name, $"{def.Price:#,##0}"));
-            body.AddChild(holder);
-            var buy = PanelButton(ShopBuyRect(s), "buy" + s, () => BuyFromShop(_shopStock[s]));
-            buy.Add(new FlatButton("Buy", "buy" + s, () => _hoverId));
-            body.AddChild(buy);
+            if (_shopStock.Count == 0) body.AddChild(ShopEmptyRow(row++));
+            foreach (int id in _shopStock)
+            {
+                if (row >= ShopRowCount) break;
+                int s = row; // for-loop variables capture shared: copy per slot
+                var def = _items[id];
+                body.AddChild(ShopRow(row++, def.Image, def.Name, $"{def.Price:#,##0}", "buy" + s, () => BuyFromShop(id)));
+            }
         }
-        body.Add(new Label("Sell", 12, ShopSellTop() - r.Y - 16));
-        if (sells.Count == 0)
-            body.Add(new Label("Your bag is empty.", 12, ShopSellTop() - r.Y + 12) { Tint = new Color(130, 140, 150) });
-        for (int i = 0; i < sells.Count; i++)
+        else
         {
-            int s = i; // for-loop variables capture shared: copy per slot
-            int id = sells[s].id;
-            var holder = new GameObject { NoHit = true };
-            holder.Add(new Rect(new Rectangle(r.X, ShopSellTop() + s * ShopRowH, ShopW, ShopRowH)));
-            holder.Add(new ShopRow(_items[id].Image, $"{_items[id].Name} x{sells[s].count}", $"{Shop.SellPrice(_items[id].Price):#,##0}"));
-            body.AddChild(holder);
-            var sell = PanelButton(ShopSellRect(s), "sell" + s, () => SellToShop(sells[s].id));
-            sell.Add(new FlatButton("Sell", "sell" + s, () => _hoverId));
-            body.AddChild(sell);
+            if (sells.Count == 0) body.AddChild(ShopEmptyRow(row++));
+            foreach (var (id, count) in sells)
+            {
+                if (row >= ShopRowCount) break;
+                int s = row; // for-loop variables capture shared: copy per slot
+                var def = _items[id];
+                body.AddChild(ShopRow(row++, def.Image, $"{def.Name} x{count}", $"Sell {Shop.SellPrice(def.Price):#,##0}", "sell" + s, () => SellToShop(id)));
+            }
         }
-        body.AddChild(PanelButton(ShopTitleRect(), "", () => _dragShop = _shopScene.LastClick - _shopPos)); // silent, like legacy
-        var x = PanelButton(ShopXRect(), "x5", () => _showShop = false, ButtonKind.Click);
-        x.Add(new Picture("ui/hud_statx.png"));
-        body.AddChild(x);
+        // the drag strip at the top and the X
+        body.AddChild(PanelButton(new Rectangle(_shopPos.X, _shopPos.Y, ShopW, _shopLay.Get("dragH", 30)),
+            "", () => _dragShop = _shopScene.LastClick - _shopPos)); // silent, like legacy
+        body.AddChild(ArtButton(new Rectangle(_shopPos.X + _shopLay.Get("closeX", 349), _shopPos.Y + _shopLay.Get("closeY", 2),
+                _shopLay.Get("closeW", 27), _shopLay.Get("closeH", 27)),
+            "ui/shop_x", () => _showShop = false));
         _shopScene.Add(body);
     }
 }
