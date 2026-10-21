@@ -19,7 +19,7 @@ internal enum Feature
 public partial class MushTownGame
 {
     // Open the feature. The caller closes its own window first (the MENU
-    // window does, the quick menu does not).
+    // window does, the quick menu row on the HUD does not).
     internal void OpenFeature(Feature feature)
     {
         switch (feature)

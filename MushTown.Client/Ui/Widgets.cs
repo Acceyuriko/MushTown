@@ -617,7 +617,7 @@ public sealed class MenuKeyBadge : Component, IDrawable
     // assets/ui/menu_keys.json: the key codes that have a badge. The list
     // comes from the exporter, so a MapleStory version without a badge does
     // not break the game.
-    public sealed class BadgeFile
+    private sealed class BadgeFile
     {
         public List<int> Codes { get; set; } = new();
     }

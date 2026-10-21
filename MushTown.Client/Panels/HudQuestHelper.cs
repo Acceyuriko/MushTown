@@ -22,8 +22,8 @@ public partial class MushTownGame
     public const int HelperNumX3 = 106;
     public const int HelperNumTop = 12;
     public const int HelperCloseDx = 201, HelperCloseDy = 8; // the WZ origin of the X button
-    public const int HelperChevronDx = 184, HelperChevronDy = 8; // the WZ origin of the up chevron
-    public const int HelperChevronDownDy = 7; // the WZ origin of the down chevron
+    public const int HelperChevronDx = 184, HelperChevronDownDy = 8; // the WZ origin of the down chevron
+    public const int HelperChevronUpDy = 7; // the WZ origin of the up chevron
 
     private bool _qhHidden; // the X hid the bar
     private bool _qhListOpen = true; // the chevron shows the quest list
@@ -48,7 +48,7 @@ public partial class MushTownGame
         art.Add(new QuestHelperBarArt(QuestHelperState));
         bar.AddChild(art);
         _qhClose = HelperButton(HelperCloseDx, HelperCloseDy, HideQuestHelper, QuestHelperCloseArt);
-        _qhChevron = HelperButton(HelperChevronDx, HelperChevronDy, ToggleQuestHelperList, QuestHelperChevronArt);
+        _qhChevron = HelperButton(HelperChevronDx, HelperChevronDownDy, ToggleQuestHelperList, QuestHelperChevronArt);
         bar.AddChild(_qhClose);
         bar.AddChild(_qhChevron);
         var list = new GameObject { NoHit = true }; // the lines only: no clicks on them
@@ -72,7 +72,7 @@ public partial class MushTownGame
     // away when there is no quest at all (that is what the official does).
     private (int Count, bool Hidden, bool ListOpen) QuestHelperState()
     {
-        int count = QuestRows().Count;
+        int count = TrackerLines().Count / 2; // two lines per quest: the name and the detail
         if (count > _qhCount) _qhHidden = false; // a new quest: the bar comes back
         _qhCount = count;
         bool hidden = _qhHidden || count == 0;
@@ -85,7 +85,7 @@ public partial class MushTownGame
                 _qhChevron.Enabled = !hidden;
                 // the up and the down chevron sit one pixel apart in the WZ
                 var bar = QuestHelperBarRect();
-                int dy = _qhListOpen ? HelperChevronDy : HelperChevronDownDy;
+                int dy = _qhListOpen ? HelperChevronUpDy : HelperChevronDownDy;
                 _qhChevron.Get<Rect>()!.Box = new Rectangle(bar.X + HelperChevronDx, bar.Y + dy, HelperButtonSize, HelperButtonSize);
             }
         }

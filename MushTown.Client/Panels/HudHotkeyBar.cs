@@ -34,8 +34,9 @@ public static class HotkeyBar
             var c = Cells[i];
             var o = new GameObject();
             o.Add(new Rect(CellRect(i)));
-            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => game.OpenFeature(c.Feature) });
             o.Add(new HotkeyCell(() => game.HotkeyKey(c.Action), c.Action));
+            // the button comes last: its hover light draws over the cell art
+            o.Add(new Button { Kind = ButtonKind.Click, HoverFill = true, OnClick = () => game.OpenFeature(c.Feature) });
             game.LoadTexture($"ui/keys_icon_{KeyConfigWindow.IconOf(c.Action)}.png");
             root.AddChild(o);
         }
@@ -80,9 +81,6 @@ public sealed class HotkeyCell : Component, IDrawable
         {
             DrawInCell(gfx, key, r, r.Y + HotkeyBar._lay.Get("capDy", -13));
         }
-        // the hover light: the cell art would hide the overlay of the button
-        if (gfx.Hovered == Owner)
-            gfx.Sb.Draw(gfx.Pixel, r, new Color(255, 255, 255, 30));
     }
 
     // The text in the cell: centred, and a long text shrinks to fit the cell
