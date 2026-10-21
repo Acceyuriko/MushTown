@@ -5,11 +5,12 @@ namespace MushTown.Client;
 
 // The small guide window (UIContentsGuide.img/Minimum): the GUIDE popup
 // with one card. The green plus opens the big guide window, the arrows
-// switch between the cards and the dots show which card is open. Every
-// number lives in layouts/panel-guide-card.json.
+// switch between the cards and the dots show which card is open. The
+// spots are the official ones: the WZ nodes carry them as the image
+// origin. Every number lives in layouts/panel-guide-card.json.
 public sealed class GuideCardWindow : UiWindow
 {
-    private const int W = 135, H = 115; // the official frame size
+    private const int W = 135, H = 105; // the official frame size
 
     private readonly MushTownGame _game;
     private int _card; // 0 = main quest, 1 = job advance
@@ -53,7 +54,7 @@ public sealed class GuideCardWindow : UiWindow
     private GameObject Card()
     {
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("cardX", 25), Pos.Y + _lay.Get("cardY", 18), 84, 67)));
+        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("cardX", 25), Pos.Y + _lay.Get("cardY", 22), 84, 67)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = OpenCard });
         o.Add(new GuideCardArt(() => _card));
         return o;
@@ -65,13 +66,14 @@ public sealed class GuideCardWindow : UiWindow
         else _game.OpenStatWindow(0);
     }
 
-    // The arrow that switches to the card on its side.
+    // The arrow that switches to the card on its side. The box is the size
+    // of the lit arrow, so the whole lit arrow can be clicked.
     private GameObject Arrow(string name, int card)
     {
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get(name + "X", 24), Pos.Y + _lay.Get("arrowY", 88), 9, 16)));
+        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get(name + "X", 10), Pos.Y + _lay.Get("arrowY", 45), 13, 21)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _card = card });
-        o.Add(new GuideArrowArt(name));
+        o.Add(new GuideArrowArt(name, _lay.Get("arrowHoverDx", -2), _lay.Get("arrowHoverDy", -2)));
         return o;
     }
 
@@ -79,9 +81,9 @@ public sealed class GuideCardWindow : UiWindow
     private GameObject Dots()
     {
         var o = new GameObject { NoHit = true };
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("dotX", 32), Pos.Y + _lay.Get("dotY", 100),
-            _lay.Get("dotW", 12), _lay.Get("dotH", 6))));
-        o.Add(new GuideDotArt(() => _card, _lay.Get("dotPitch", 7)));
+        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("dotX", -1), Pos.Y + _lay.Get("dotY", 90),
+            _lay.Get("dotW", 6), _lay.Get("dotH", 6))));
+        o.Add(new GuideDotArt(() => _card, _lay.Get("dotSmallDx", 2), _lay.Get("dotSmallDy", 1)));
         return o;
     }
 
@@ -89,7 +91,7 @@ public sealed class GuideCardWindow : UiWindow
     private GameObject MaxButton()
     {
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("maxX", 107), Pos.Y + _lay.Get("maxY", 3), 11, 11)));
+        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("maxX", 104), Pos.Y + _lay.Get("maxY", 5), 11, 11)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _game.ShowWindow(HotkeyAction.Guide) });
         o.Add(new Image("ui/guide_small_max"));
         return o;
@@ -99,7 +101,7 @@ public sealed class GuideCardWindow : UiWindow
     private GameObject CloseButton()
     {
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("closeX", 120), Pos.Y + _lay.Get("closeY", 3), 13, 13)));
+        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("closeX", 116), Pos.Y + _lay.Get("closeY", 4), 13, 13)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Show = false });
         o.Add(new Image("ui/guide_small_close"));
         return o;
@@ -107,16 +109,19 @@ public sealed class GuideCardWindow : UiWindow
 }
 
 // The arrow of the small guide window: the official art at its own size
-// (the hover art of this WZ is bigger than the normal one).
+// (the lit art is bigger and the WZ moves it up and to the left).
 public sealed class GuideArrowArt : Component, IDrawable
 {
     private readonly string _name;
-    public GuideArrowArt(string name) { _name = name; }
+    private readonly int _hoverDx, _hoverDy;
+    public GuideArrowArt(string name, int hoverDx, int hoverDy) { _name = name; _hoverDx = hoverDx; _hoverDy = hoverDy; }
     public void Draw(UiGfx gfx)
     {
-        string state = gfx.Hovered == Owner ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
+        bool over = gfx.Hovered == Owner;
+        string state = over ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
         var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Tex($"ui/guide_small_{_name}{state}"), new Vector2(r.X, r.Y), Color.White);
+        int dx = over ? _hoverDx : 0, dy = over ? _hoverDy : 0;
+        gfx.Sb.Draw(gfx.Tex($"ui/guide_small_{_name}{state}"), new Vector2(r.X + dx, r.Y + dy), Color.White);
     }
 }
 
@@ -140,15 +145,14 @@ public sealed class GuideCardArt : Component, IDrawable
 public sealed class GuideDotArt : Component, IDrawable
 {
     private readonly Func<int> _card;
-    private readonly int _pitch;
-    public GuideDotArt(Func<int> card, int pitch) { _card = card; _pitch = pitch; }
+    private readonly int _smallDx, _smallDy;
+    public GuideDotArt(Func<int> card, int smallDx, int smallDy) { _card = card; _smallDx = smallDx; _smallDy = smallDy; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
-        for (int i = 0; i < 2; i++)
-        {
-            var dot = gfx.Tex(i == _card() ? "ui/guide_small_dot1.png" : "ui/guide_small_dot0.png");
-            gfx.Sb.Draw(dot, new Vector2(r.X + i * _pitch, r.Y), Color.White);
-        }
+        bool open = _card() == 0;
+        var dot = gfx.Tex(open ? "ui/guide_small_dot1.png" : "ui/guide_small_dot0.png");
+        int dx = open ? 0 : _smallDx, dy = open ? 0 : _smallDy;
+        gfx.Sb.Draw(dot, new Vector2(r.X + dx, r.Y + dy), Color.White);
     }
 }
