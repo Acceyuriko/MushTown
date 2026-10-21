@@ -36,11 +36,13 @@ public sealed class WzRoot
     public Wz_Node? Find(string path) =>
         Structure.WzNode.FindNodeByPath(true, path.Split('/', '\\'));
 
-    public IEnumerable<Wz_Node> FindAll(string name) => FindAll(Structure.WzNode, name);
+    public IEnumerable<Wz_Node> FindAll(string name, bool partial = false) => FindAll(Structure.WzNode, name, partial);
 
     // Pre-order search by node name, for trees not wrapped in a WzRoot.
-    public static IEnumerable<Wz_Node> FindAll(Wz_Node node, string name) =>
-        Walk(node).Where(n => n.Text == name);
+    public static IEnumerable<Wz_Node> FindAll(Wz_Node node, string name, bool partial = false) =>
+        Walk(node).Where(n => partial
+            ? n.Text.Contains(name, StringComparison.OrdinalIgnoreCase)
+            : n.Text == name);
 
     // Every descendant of node, top-down. Used by FindAll.
     public static IEnumerable<Wz_Node> Walk(Wz_Node node)
@@ -48,7 +50,16 @@ public sealed class WzRoot
         foreach (Wz_Node child in node.Nodes)
         {
             yield return child;
-            foreach (Wz_Node sub in Walk(child)) yield return sub;
+            // the names inside a .img only exist after the image is parsed
+            if (child.Value is Wz_Image img)
+            {
+                img.TryExtract();
+                foreach (Wz_Node sub in Walk(img.Node)) yield return sub;
+            }
+            else
+            {
+                foreach (Wz_Node sub in Walk(child)) yield return sub;
+            }
         }
     }
 }

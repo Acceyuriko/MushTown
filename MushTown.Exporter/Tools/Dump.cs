@@ -24,11 +24,11 @@ public static class Dump
         return true;
     }
 
-    // Prints every node under Base whose name matches, with its full path.
-    public static bool Find(WzRoot root, string name)
+    // Prints every node whose name matches, with its full path.
+    public static bool Find(WzRoot root, string name, bool partial = false)
     {
         bool found = false;
-        foreach (Wz_Node hit in root.FindAll(name))
+        foreach (Wz_Node hit in root.FindAll(name, partial))
         {
             Console.WriteLine($"{hit.FullPath} = {Describe(hit.Value)}");
             found = true;

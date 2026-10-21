@@ -48,11 +48,15 @@ switch (cmd)
     case "find":
         if (args.Length < 2)
         {
-            Console.WriteLine("usage: find <name>");
+            Console.WriteLine("usage: find <name> [category] [partial]");
             Environment.ExitCode = 1;
             return;
         }
-        Environment.ExitCode = Dump.Find(WzRoot.LoadBase(ExporterPaths.DataDir), args[1]) ? 0 : 1;
+        // the category is optional: without it the whole Base tree is searched
+        var findRoot = args.Length > 2
+            ? WzRoot.LoadCategory(ExporterPaths.DataDir, args[2])
+            : WzRoot.LoadBase(ExporterPaths.DataDir);
+        Environment.ExitCode = Dump.Find(findRoot, args[1], args.Length > 3 && args[3] == "partial") ? 0 : 1;
         return;
 
     case "cat":
