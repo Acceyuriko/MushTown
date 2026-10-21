@@ -298,8 +298,8 @@ public sealed class GameServer : IDisposable
         });
 
     // One chat line: the client sends only the text, the server adds the
-    // sender id and the sender name and relays the line to every client
-    // (the sender too: it sees its own line like the others do).
+    // sender name and relays the line to every client (the sender too: it
+    // sees its own line like the others do).
     private void OnChat(int id, byte[] payload)
     {
         string text;
@@ -316,9 +316,9 @@ public sealed class GameServer : IDisposable
         string name;
         lock (_mobLock)
             name = _names.TryGetValue(id, out var n) ? n.name : "";
+        if (name == "") name = "Player " + id; // a client that never sent a name
         Broadcast(Net.Encode(Net.Chat, w =>
         {
-            w.Write(id);
             w.Write(name);
             w.Write(text);
         }));

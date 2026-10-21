@@ -1,5 +1,5 @@
 {
-  "_help": "Minimap panel (M) and world map window (O) boxes in 1366x768 space. Minimap panel: x,y,w,h is the panel; inset* cut the map well out of the official frame; nameX/nameY is the map name, streetX/streetY the street name. World map: wx,wy,ww,wh is the window; worldX/worldY the map art inside it; titleH is the title strip height; infoX/infoY the MAP INFO text; wcloseX/wcloseY the X button. Channel bar: chX,chY is the bar spot (the art is 436x67).",
+  "_help": "Minimap panel and world map window boxes in 1366x768 space. Minimap panel: x,y,w,h is the panel; inset* cut the map well out of the official frame; nameX/nameY is the map name, streetX/streetY the street name. World map: wx,wy,ww,wh is the window; worldX/worldY the map art inside it; titleH is the title strip height; infoX/infoY the MAP INFO text; wcloseX/wcloseY the X button. Channel bar: chX,chY is the bar spot (the art is 436x67); chTextX/chTextY the world name; chCountX the channel count; chSlotX/chSlotY/chSlotPitch/chSlotW/chSlotH the channel ticks.",
   "x": 0,
   "y": 0,
   "w": 180,
@@ -24,5 +24,13 @@
   "wcloseX": 829,
   "wcloseY": 12,
   "chX": 930,
-  "chY": 616
+  "chY": 616,
+  "chTextX": 14,
+  "chTextY": 30,
+  "chCountX": 356,
+  "chSlotX": 14,
+  "chSlotY": 54,
+  "chSlotPitch": 13,
+  "chSlotW": 11,
+  "chSlotH": 12
 }

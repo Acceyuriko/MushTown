@@ -113,7 +113,7 @@ public sealed class MenuWindow : UiWindow
                 o.Add(new Picture($"ui/{stem}_d.png")); // the official disabled art
             else
             {
-                o.Add(new Button { LegacyId = $"menub{i}", Kind = ButtonKind.Click, OnClick = () => OpenBottom(action) });
+                o.Add(new Button { LegacyId = $"menub{i}", Kind = ButtonKind.Click, OnClick = () => Open(action) });
                 o.Add(new Image($"ui/{stem}"));
             }
             root.AddChild(o);
@@ -159,13 +159,6 @@ public sealed class MenuWindow : UiWindow
         Close();
         _game.OpenFeature(action);
     }
-
-    // A bottom button: the key window, the options window or the exit.
-    private void OpenBottom(Feature action)
-    {
-        Close();
-        _game.OpenFeature(action);
-    }
 }
 
 // The panel art of the MENU window: the body (the tabs, the title and the
@@ -179,8 +172,8 @@ public sealed class MenuArt : Component, IDrawable
     {
         var r = Owner.Get<Rect>()!.Box;
         var tex = gfx.Tex("ui/menu_bg.png");
-        int sx = _lay.Get("stripX", 258), sy = _lay.Get("stripY", 610);
-        int sw = _lay.Get("stripW", 504), sh = _lay.Get("stripH", 88);
+        int sx = _lay.Get("stripX", 259), sy = _lay.Get("stripY", 611);
+        int sw = _lay.Get("stripW", 504), sh = _lay.Get("stripH", 87);
         // the body: everything above the strip
         gfx.Sb.Draw(tex, new Rectangle(r.X, r.Y, r.Width, sy), new Rectangle(0, 0, r.Width, sy), Color.White);
         // the strip: the same art, but thin enough to see the game through it

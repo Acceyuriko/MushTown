@@ -48,25 +48,25 @@ public sealed class KeyConfigWindow : UiWindow
         Path.Combine(Path.GetDirectoryName(MushTownGame.LayoutsDir)!, "assets", "ui", "keys_filter.json"));
 
     // The game actions in the grid: the action and the official icon.
+    // The minimap is not here: it is always on the screen, it has no key.
     private static readonly (HotkeyAction Action, int Icon)[] Actions =
     {
         (HotkeyAction.Inventory, 1),
         (HotkeyAction.Stat, 2),
         (HotkeyAction.Skill, 3),
         (HotkeyAction.Quest, 8),
-        (HotkeyAction.Minimap, 7),
         (HotkeyAction.WorldMap, 5),
         (HotkeyAction.Settings, 46),
     };
 
     // The quick slot items: the HUD quick slot cells. The action is the
-    // hotkey the item opens, the fixed key is the one it always has.
-    private static readonly (string File, string Name, HotkeyAction? Action, string Fixed)[] QuickSlots =
+    // hotkey the item opens.
+    private static readonly (string File, HotkeyAction? Action)[] QuickSlots =
     {
-        ("hud_key_ctrl.png", "Attack", null, "Ctrl"),
-        ("hud_key_alt.png", "Jump", null, "Alt"),
-        ("hud_key_i.png", "Items", HotkeyAction.Inventory, ""),
-        ("hud_key_c.png", "Stats", HotkeyAction.Stat, ""),
+        ("hud_key_ctrl.png", null),
+        ("hud_key_alt.png", null),
+        ("hud_key_i.png", HotkeyAction.Inventory),
+        ("hud_key_c.png", HotkeyAction.Stat),
     };
 
     // The pending bindings, the action the player holds and the picked
@@ -128,6 +128,8 @@ public sealed class KeyConfigWindow : UiWindow
         _draft.Clear();
         foreach (var (action, _) in Actions) _draft[action] = _game.HotkeyKey(action);
         _held = null;
+        _quickSlots = false;
+        Pos = LayoutPos();
         _game.ShowWindow(HotkeyAction.KeyConfig);
     }
 
@@ -136,6 +138,7 @@ public sealed class KeyConfigWindow : UiWindow
     {
         Open();
         _quickSlots = true;
+        Pos = LayoutPos();
     }
 
     // Close the window: the unsaved changes and the held action go away.
@@ -434,19 +437,22 @@ public sealed class KeyConfigWindow : UiWindow
         gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
         var parts = Keys(a.Action);
         if (parts.Length < 2) return;
-        int x = r.X + 2;
+        // The two caps sit at the bottom of the cell, so they do not hide
+        // the icon of the action.
+        int x = r.X + _lay.Get("comboCapX", 2);
+        int y = r.Y + _lay.Get("comboCapY", 18);
         foreach (var part in parts)
         {
             string cap = CapArt(part);
             if (cap == "") continue;
             var tex = gfx.Tex(cap);
-            gfx.Sb.Draw(tex, new Vector2(x, r.Y + 2), Color.White);
+            gfx.Sb.Draw(tex, new Vector2(x, y), Color.White);
             x += tex.Width + 1;
         }
     }
 
     // One quick slot item: the official item art and the key it has.
-    private void DrawQuickSlot(UiGfx gfx, (string File, string Name, HotkeyAction? Action, string Fixed) q, int index)
+    private void DrawQuickSlot(UiGfx gfx, (string File, HotkeyAction? Action) q, int index)
     {
         var r = QSlotRect(index);
         var art = gfx.Tex("ui/" + q.File);
@@ -498,8 +504,17 @@ public sealed class KeyConfigWindow : UiWindow
             return;
         }
         if (_comboMode) return;
+        int cell = CellIndex(action);
+        if (cell >= 0 && CellRect(cell).Contains(gx, gy)) return; // dropped on itself
         if (Math.Abs(gx - _pickAt.X) + Math.Abs(gy - _pickAt.Y) < 8) return; // a click, not a drag
         _draft[action] = "";
+    }
+
+    // The cell of an action in the grid (-1 when the action is not there).
+    private static int CellIndex(HotkeyAction action)
+    {
+        for (int i = 0; i < Actions.Length; i++) if (Actions[i].Action == action) return i;
+        return -1;
     }
 
     // The combo key mode: the action keeps its key and gets a second one

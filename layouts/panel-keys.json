@@ -1,5 +1,5 @@
 {
-  "_help": "Key settings window (UI/StatusBar3.img/KeyConfig art). x/y = the window spot in 1366x768 game pixels, w/h = the window size (it must match the art). titleH = the title strip height. kbX/kbY = the official keyboard art (backgrnd3) spot. keyW/keyH = one key box on the official keyPos grid, keyDx/keyDy = the box offset from the official spot. grid* = the official cell grid under the keyboard (the art draws the cells, the actions sit in the first ones): gridX/gridY = the first cell, gridCols = the cells per row, cellW/cellH = the cell size, cellPitchX/cellPitchY = the cell step. custom*/copy*/apply*/pg1*/pg2*/pg3*/combo*/qslot*/reset*/skill*/cancel*/save*/close* = the buttons. filter* = the Not Added dropdown (the official combo box at the bottom right): filterX/filterY = the box spot, filterW/filterH = the box size, filterTextX/filterTextY = the text spot in the box, filterItemH = the height of one list item, filterListW = the width of the open list. qs* = the quick slots page (UI/StatusBar3.img/CustomDefaultKeyConfig): qsX/qsY/qsW/qsH = the window spot and size, qsCustomX/qsCustomY = the Custom tab (the way back), qsCell* = the quick slot cells (qsCellX/qsCellY = the first cell, qsCols = the cells per row, qsCellW/qsCellH = the cell size, qsCellPitchX/qsCellPitchY = the cell step), qsCancel*/qsSave*/qsClose* = the buttons.",
+  "_help": "Key settings window (UI/StatusBar3.img/KeyConfig art). x/y = the window spot in 1366x768 game pixels, w/h = the window size (it must match the art). titleH = the title strip height. kbX/kbY = the official keyboard art (backgrnd3) spot. keyW/keyH = one key box on the official keyPos grid, keyDx/keyDy = the box offset from the official spot. grid* = the official cell grid under the keyboard (the art draws the cells, the actions sit in the first ones): gridX/gridY = the first cell, gridCols = the cells per row, cellW/cellH = the cell size, cellPitchX/cellPitchY = the cell step. comboCapX/comboCapY = the two key caps of a combo action inside its cell. custom*/copy*/apply*/pg1*/pg2*/pg3*/combo*/qslot*/reset*/skill*/cancel*/save*/close* = the buttons. filter* = the Not Added dropdown (the official combo box at the bottom right): filterX/filterY = the box spot, filterW/filterH = the box size, filterTextX/filterTextY = the text spot in the box, filterItemH = the height of one list item, filterListW = the width of the open list. qs* = the quick slots page (UI/StatusBar3.img/CustomDefaultKeyConfig): qsX/qsY/qsW/qsH = the window spot and size, qsCustomX/qsCustomY = the Custom tab (the way back), qsCell* = the quick slot cells (qsCellX/qsCellY = the first cell, qsCols = the cells per row, qsCellW/qsCellH = the cell size, qsCellPitchX/qsCellPitchY = the cell step), qsCancel*/qsSave*/qsClose* = the buttons.",
   "x": 353,
   "y": 72,
   "w": 660,
@@ -51,7 +51,9 @@
   "filterTextX": 7,
   "filterTextY": 5,
   "filterItemH": 23,
-  "filterListW": 150,
+  "filterListW": 108,
+  "comboCapX": 2,
+  "comboCapY": 18,
   "qsX": 353,
   "qsY": 33,
   "qsW": 660,

@@ -23,7 +23,7 @@ public static partial class Export
         int index = 0;
         foreach (Wz_Node icon in menu.Nodes)
         {
-            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p"), ("disabled", "d") })
+            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
                 if (!UiPng.Save(ui, $"UITotalMenu.img/quickMenu/menu/{icon.Text}/{state}/0", Path.Combine(dir, $"quickmenu_{index}_{suffix}.png"))) return false;
             // The name proves the order is the official one: the client asks
             // for quickmenu_<official number>, so index 52 must be Key Bindings.

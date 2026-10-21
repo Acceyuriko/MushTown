@@ -27,8 +27,8 @@ public partial class MushTownGame
         [HotkeyAction.Stat] = "C",
         [HotkeyAction.Skill] = "K",
         [HotkeyAction.Quest] = "V",
-        [HotkeyAction.Minimap] = "M",
-        [HotkeyAction.WorldMap] = "O",
+        [HotkeyAction.Minimap] = "",   // the minimap is always on the screen
+        [HotkeyAction.WorldMap] = "M",
         [HotkeyAction.Settings] = "P",
         [HotkeyAction.KeyConfig] = "",
     };
@@ -87,8 +87,8 @@ public partial class MushTownGame
         [HotkeyAction.Stat] = "C",
         [HotkeyAction.Skill] = "K",
         [HotkeyAction.Quest] = "V",
-        [HotkeyAction.Minimap] = "M",
-        [HotkeyAction.WorldMap] = "O",
+        [HotkeyAction.Minimap] = "",   // the minimap is always on the screen
+        [HotkeyAction.WorldMap] = "M",
         [HotkeyAction.Settings] = "P",
         [HotkeyAction.KeyConfig] = "",
     };

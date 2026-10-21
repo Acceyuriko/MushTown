@@ -129,7 +129,13 @@ public partial class MushTownGame : Game
         new WorldMapWindow(this);
         new KeyConfigWindow(this);
         _menuWindow = new MenuWindow(this);
-        _chatWindow = new ChatWindow(this, text => { if (_net != null && _net.Connected) _net.SendChat(text); });
+        // The chat sends the line to the server. Without a server (single
+        // player) the line stays in the chat.
+        _chatWindow = new ChatWindow(this, text =>
+        {
+            if (_net != null && _net.Connected) { _net.SendChat(text); return; }
+            _chatWindow.AddLine(_save?.Slots[_slot]?.Name ?? "Me", text);
+        });
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
@@ -384,6 +390,7 @@ public partial class MushTownGame : Game
             return; // shots never update: no clicks, no saves, player prefs untouched
         }
         SyncCursor(); // a window resize rebuilds the OS cursor at the new scene zoom
+        _ui.Trim(); // the text cache gives the old textures back before the draw
 #if DEBUG
         if (_layoutDirty)
         {
@@ -920,7 +927,6 @@ public partial class MushTownGame : Game
         _questPos = new Point(0, 0); _questDragged = false; // the quest window takes its spot from its own file again
         _skillPos = new Point(0, 0); _skillDragged = false; // the skill window takes its spot from its own file again
         _settingsPos = SettingsLayoutPos();
-        _shopPos = new Point(Layout.Shop.X, Layout.Shop.Y);
         _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
         foreach (var w in UiWindow.List) { w.Pos = w.LayoutPos(); w.Built = false; w.Drag = null; } // the new windows go back to the file spot
         if (_contentLoaded) BuildScreenScene(); // ctor reload skips: no textures yet

@@ -9,8 +9,10 @@ namespace MushTown.Client;
 // log text uses the game font. The window is on the screen all the time.
 public sealed class ChatWindow : UiWindow
 {
-    // The filter tabs, in the order they sit in the window.
-    private enum Tab { All, Etc, Party, Friend }
+    // The filter tabs, in the order they sit in the window. The official
+    // chat has four tabs, but Party and Friend need a party and a whisper:
+    // the protocol has neither, so those tabs are not drawn.
+    private enum Tab { All, Etc }
 
     // One log line. The tab says where the line shows up: a normal chat
     // line is All, a system line is Etc.
@@ -18,25 +20,26 @@ public sealed class ChatWindow : UiWindow
 
     // The art the exporter writes (assets/ui/chat_*.png).
     private static readonly string[] FramePieces = { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se" };
-    private static readonly string[] TabStems = { "chat_taball", "chat_tabetc", "chat_tab", "chat_tab" };
-    private static readonly string[] TabLabels = { "All", "Etc.", "Party", "Friend" }; // All and Etc. have their text in the art
-    private static readonly string[] BtnStems = { "chat_btn_whisper", "chat_btn_link", "chat_btn_cmd", "chat_btn_emoji", "chat_btn_set" };
+    private static readonly string[] TabStems = { "chat_taball", "chat_tabetc" };
+    // Only the settings button has a function in this game: the other
+    // official buttons (whisper, link, command, emoticon) are not drawn.
+    private static readonly string[] BtnStems = { "chat_btn_set" };
 
     // Every number of this window lives in layouts/panel-chat.json.
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-chat.json"));
 
     private const int MaxInput = 100; // the typed text stops here
     private const int MaxLines = 50; // the log keeps the last lines
-    private const int Border = 8; // the frame border (the corner size of the nine piece slice)
 
     private readonly MushTownGame _game;
     private readonly Action<string> _send;
     private readonly List<Line> _lines = new();
     private readonly HashSet<Keys> _down = new(); // the keys that were down last frame
-    private readonly GameObject[] _tabObjs = new GameObject[4];
+    private readonly GameObject[] _tabObjs = new GameObject[TabStems.Length];
     private Tab _tab = Tab.All;
     private string _input = "";
     private bool _focused;
+    private bool _mouseDown; // the mouse button was down last frame
 
     // The chat has no key of its own: the input line is clicked.
     public ChatWindow(MushTownGame game, Action<string> send) : base(HotkeyAction.Chat)
@@ -59,8 +62,8 @@ public sealed class ChatWindow : UiWindow
     // The log frame: the official nine piece slice under the tabs.
     private Rectangle LogRect() => new(Pos.X, Pos.Y + _lay.Get("logY", 22), _lay.Get("w", 315), _lay.Get("logH", 100));
 
-    // The input line: the official bar, the five buttons to the right of it.
-    private int BarW() => _lay.Get("w", 315) - 5 * _lay.Get("btnW", 24) - 4 * _lay.Get("btnGap", 1);
+    // The input line: the official bar, the buttons to the right of it.
+    private int BarW() => _lay.Get("w", 315) - BtnStems.Length * (_lay.Get("btnW", 24) + _lay.Get("btnGap", 1));
     private Rectangle InputRect() => new(Pos.X, Pos.Y + _lay.Get("inputY", 125), BarW(), _lay.Get("inputH", 25));
     private Rectangle BtnRect(int i) => new(Pos.X + BarW() + i * (_lay.Get("btnW", 24) + _lay.Get("btnGap", 1)),
         Pos.Y + _lay.Get("inputY", 125), _lay.Get("btnW", 24), _lay.Get("inputH", 25));
@@ -87,9 +90,19 @@ public sealed class ChatWindow : UiWindow
     }
 
     // The keys go into the input while it has the focus: Enter sends the
-    // line, Backspace deletes, Esc leaves the input.
+    // line, Backspace deletes, Esc leaves the input. A click outside the
+    // input line leaves the input too.
     public void UpdateKeys(KeyboardState kb)
     {
+        var ms = Mouse.GetState();
+        bool click = ms.LeftButton == ButtonState.Pressed;
+        if (click && !_mouseDown)
+        {
+            var (gx, gy) = _game.MouseGamePos(ms);
+            if (!InputRect().Contains(gx, gy)) _focused = false;
+        }
+        _mouseDown = click;
+
         var now = kb.GetPressedKeys();
         foreach (var key in now)
         {
@@ -104,11 +117,13 @@ public sealed class ChatWindow : UiWindow
         foreach (var key in now) _down.Add(key);
     }
 
-    // Enter: the line goes out and the input is cleared.
+    // Enter: the line goes out, the input is cleared and the focus leaves
+    // the input (the player is back in the game).
     private void Send()
     {
         string text = _input.Trim();
         _input = "";
+        _focused = false;
         if (text != "") _send(text);
     }
 
@@ -156,7 +171,7 @@ public sealed class ChatWindow : UiWindow
         root.Add(new Invoke(Draw));
 
         // the filter tabs: the click picks the tab
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < TabStems.Length; i++)
         {
             int n = i;
             var tab = new GameObject();
@@ -202,7 +217,7 @@ public sealed class ChatWindow : UiWindow
     // The official nine piece frame: the corners stay, the edges stretch.
     private void DrawFrame(UiGfx gfx, Rectangle r)
     {
-        const int b = Border; // the corner size
+        int b = _lay.Get("border", 8); // the corner size
         gfx.Sb.Draw(gfx.Tex("ui/chat_frame_nw.png"), new Vector2(r.X, r.Y), Color.White);
         gfx.Sb.Draw(gfx.Tex("ui/chat_frame_n.png"), new Rectangle(r.X + b, r.Y, r.Width - 2 * b, b), Color.White);
         gfx.Sb.Draw(gfx.Tex("ui/chat_frame_ne.png"), new Vector2(r.Right - b, r.Y), Color.White);
@@ -214,22 +229,17 @@ public sealed class ChatWindow : UiWindow
         gfx.Sb.Draw(gfx.Tex("ui/chat_frame_se.png"), new Vector2(r.Right - b, r.Bottom - b), Color.White);
     }
 
-    // The filter tabs: All and Etc. carry their text, Party and Friend use
-    // the blank tab with a label. The tab that is not in use is dim.
+    // The filter tabs: All and Etc. carry their text in the official art.
+    // The tab that is not in use is dim.
     private void DrawTabs(UiGfx gfx)
     {
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < TabStems.Length; i++)
         {
             var r = TabRect(i);
             bool over = gfx.Hovered == _tabObjs[i];
             string state = over ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
             var tint = _tab == (Tab)i ? Color.White : new Color(140, 145, 155);
             gfx.Sb.Draw(gfx.Tex($"ui/{TabStems[i]}{state}"), new Vector2(r.X, r.Y), tint);
-            if (i >= 2) // the blank tab has no text of its own
-            {
-                var t = gfx.Ui.GetSmall(TabLabels[i]);
-                gfx.Sb.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, r.Y + (r.Height - t.Height) / 2), tint);
-            }
         }
     }
 
@@ -241,7 +251,7 @@ public sealed class ChatWindow : UiWindow
         int y = box.Y + _lay.Get("logPadY", 9);
         int lineH = _lay.Get("lineH", 14);
         var lines = VisibleLines();
-        int first = Math.Max(0, lines.Count - (box.Height - 2 * Border) / lineH);
+        int first = Math.Max(0, lines.Count - (box.Height - 2 * _lay.Get("border", 8)) / lineH);
         for (int i = first; i < lines.Count; i++)
         {
             var line = lines[i];
@@ -262,9 +272,10 @@ public sealed class ChatWindow : UiWindow
     private void DrawInput(UiGfx gfx)
     {
         var bar = InputRect();
+        int cap = _lay.Get("capW", 7); // the width of the left and right cap
         gfx.Sb.Draw(gfx.Tex("ui/chat_input_w.png"), new Vector2(bar.X, bar.Y), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_input_c.png"), new Rectangle(bar.X + 7, bar.Y, bar.Width - 14, bar.Height), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_input_e.png"), new Vector2(bar.Right - 7, bar.Y), Color.White);
+        gfx.Sb.Draw(gfx.Tex("ui/chat_input_c.png"), new Rectangle(bar.X + cap, bar.Y, bar.Width - 2 * cap, bar.Height), Color.White);
+        gfx.Sb.Draw(gfx.Tex("ui/chat_input_e.png"), new Vector2(bar.Right - cap, bar.Y), Color.White);
         var t = gfx.Ui.GetSmall(_input);
         int tx = bar.X + _lay.Get("inputPadX", 8);
         gfx.Sb.Draw(t, new Vector2(tx, bar.Y + (bar.Height - t.Height) / 2), Color.White);

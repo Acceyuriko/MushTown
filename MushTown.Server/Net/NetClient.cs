@@ -308,7 +308,7 @@ public sealed class NetClient : IDisposable
             {
                 using var ms = new MemoryStream(p, 1, p.Length - 1);
                 using var r = new BinaryReader(ms);
-                _chatEvents.Enqueue(new ChatEvent(r.ReadInt32(), r.ReadString(), r.ReadString()));
+                _chatEvents.Enqueue(new ChatEvent(r.ReadString(), r.ReadString()));
             }
             catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
             {

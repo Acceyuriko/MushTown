@@ -177,7 +177,7 @@ public sealed class WorldMapWindow : UiWindow
 // plays on one channel, so the list shows them all and marks the one in use.
 public static class ChannelBar
 {
-    private static int _channel; // the channel in use
+    private const int CurrentChannel = 0; // the game plays on the first channel
 
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-map.json"));
 
@@ -185,10 +185,12 @@ public static class ChannelBar
     public static Rectangle Rect() => new(_lay.Get("chX", 930), _lay.Get("chY", 616), 436, 67);
 
     // One channel slot in the list strip.
-    private static Rectangle Slot(int i) => new(Rect().X + 14 + i * 13, Rect().Y + 54, 11, 12);
+    private static Rectangle Slot(int i) => new(Rect().X + _lay.Get("chSlotX", 14) + i * _lay.Get("chSlotPitch", 13),
+        Rect().Y + _lay.Get("chSlotY", 54), _lay.Get("chSlotW", 11), _lay.Get("chSlotH", 12));
 
-    // The bar tree: the panel art, the list and the buttons. The game
-    // adds it to the HUD scene (MushTown.Client/Panels/HudBar.cs).
+    // The bar tree: the panel art. The game adds it to the HUD scene
+    // (MushTown.Client/Panels/HudBar.cs). The channel slots are not
+    // buttons: the game plays on one channel, so there is nothing to click.
     public static GameObject Build(MushTownGame game)
     {
         game.LoadTexture(MapUi.Data.Channel.Image);
@@ -196,14 +198,6 @@ public static class ChannelBar
         root.Add(new Rect(Rect()));
         root.Add(new Picture(MapUi.Data.Channel.Image));
         root.Add(new Invoke(Draw));
-        for (int i = 0; i < MapUi.Data.Channel.Channels; i++)
-        {
-            int n = i; // the loop variable is shared: copy it for the lambda
-            var slot = new GameObject();
-            slot.Add(new Rect(Slot(i)));
-            slot.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _channel = n });
-            root.AddChild(slot);
-        }
         return root;
     }
 
@@ -212,12 +206,13 @@ public static class ChannelBar
     {
         var r = Rect();
         var channel = MapUi.Data.Channel;
-        gfx.Sb.Draw(gfx.Ui.GetSmall(channel.World.ToUpperInvariant() + " WORLD"), new Vector2(r.X + 14, r.Y + 30), new Color(255, 200, 90));
-        gfx.Sb.Draw(gfx.Ui.GetSmall($"[{_channel}/{channel.Channels}]"), new Vector2(r.X + 356, r.Y + 30), Color.White);
+        int textY = r.Y + _lay.Get("chTextY", 30);
+        gfx.Sb.Draw(gfx.Ui.GetSmall(channel.World.ToUpperInvariant() + " WORLD"), new Vector2(r.X + _lay.Get("chTextX", 14), textY), new Color(255, 200, 90));
+        gfx.Sb.Draw(gfx.Ui.GetSmall($"[{CurrentChannel + 1}/{channel.Channels}]"), new Vector2(r.X + _lay.Get("chCountX", 356), textY), Color.White);
         for (int i = 0; i < channel.Channels; i++)
         {
             var s = Slot(i);
-            if (i == _channel) gfx.Sb.Draw(gfx.Pixel, s, new Color(255, 220, 0));
+            if (i == CurrentChannel) gfx.Sb.Draw(gfx.Pixel, s, new Color(255, 220, 0));
             else gfx.Sb.Draw(gfx.Pixel, new Rectangle(s.X + 4, s.Y, 2, s.Height), new Color(68, 136, 187));
         }
     }

@@ -46,6 +46,7 @@ public partial class MushTownGame
     private Point _invBuiltPos = new(-1, -1), _statBuiltPos = new(-1, -1), _skillBuiltPos = new(-1, -1);
     private Point _questBuiltPos = new(-1, -1), _settingsBuiltPos = new(-1, -1), _shopBuiltPos = new(-1, -1);
     private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow drags + tab flips (bag counts are static)
+    private int _shopBuiltTab = -1; // the shop tab in the drawn scene
     private List<int> _questBuiltRows = new();
     private List<int> _shopBuiltStock = new();
     private List<(int id, int count)> _shopBuiltSells = new();
@@ -342,8 +343,8 @@ public partial class MushTownGame
         if (_questPos != _questBuiltPos || !quests.SequenceEqual(_questBuiltRows)) { BuildQuestScene(quests); _questBuiltPos = _questPos; _questBuiltRows = quests; }
         if (_settingsPos != _settingsBuiltPos) { BuildSettingsScene(); _settingsBuiltPos = _settingsPos; }
         var sells = ShopSellRows();
-        if (_shopStock != null && (_shopPos != _shopBuiltPos || !ReferenceEquals(_shopStock, _shopBuiltStock) || !sells.SequenceEqual(_shopBuiltSells)))
-        { BuildShopScene(sells); _shopBuiltPos = _shopPos; _shopBuiltStock = _shopStock; _shopBuiltSells = sells; }
+        if (_shopStock != null && (_shopPos != _shopBuiltPos || !ReferenceEquals(_shopStock, _shopBuiltStock) || !sells.SequenceEqual(_shopBuiltSells) || _shopTab != _shopBuiltTab))
+        { BuildShopScene(sells); _shopBuiltPos = _shopPos; _shopBuiltStock = _shopStock; _shopBuiltSells = sells; _shopBuiltTab = _shopTab; }
         if (_talkNpc != 0) // gated: TalkButtons needs an open talk (same exposure as the legacy chain)
         {
             string buttons = string.Join(",", TalkButtons());

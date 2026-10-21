@@ -32,6 +32,8 @@ public sealed class UiText : IDisposable
     private readonly Dictionary<string, Texture2D> _cacheCancel = new();
     private readonly Dictionary<string, Texture2D> _cacheSetupName = new();
     private readonly Dictionary<string, Texture2D> _cacheSetupError = new();
+    private readonly List<Texture2D> _trash = new(); // the textures that left the cache
+    private const int CacheCap = 512; // the cache size that makes room for new strings
 
     public UiText(GraphicsDevice gd, string fontsDir)
     {
@@ -107,12 +109,26 @@ public sealed class UiText : IDisposable
 
     private Texture2D GetFrom(Dictionary<string, Texture2D> cache, Font font, string text)
     {
-        if (!cache.TryGetValue(text, out var tex))
+        if (cache.TryGetValue(text, out var tex)) return tex;
+        tex = Bake(text, font);
+        // The cache must not grow forever: the chat input makes a new string
+        // on every keystroke. The old textures go to the trash and are
+        // disposed on the next trim (not in the middle of a draw).
+        if (cache.Count >= CacheCap)
         {
-            tex = Bake(text, font);
-            cache[text] = tex;
+            foreach (var old in cache.Values) _trash.Add(old);
+            cache.Clear();
         }
+        cache[text] = tex;
         return tex;
+    }
+
+    // Dispose the textures that left the cache. The game calls this before
+    // the draw, so no texture is freed while the sprite batch holds it.
+    public void Trim()
+    {
+        foreach (var tex in _trash) tex.Dispose();
+        _trash.Clear();
     }
 
     // Word-wrap for dialog/quest bodies (small font; explicit \n splits
@@ -191,6 +207,7 @@ public sealed class UiText : IDisposable
         _cancel.Dispose();
         _setupName.Dispose();
         _setupError.Dispose();
+        Trim();
         foreach (var tex in _cache.Values) tex.Dispose();
         foreach (var tex in _cacheSmall.Values) tex.Dispose();
         foreach (var tex in _cacheMid.Values) tex.Dispose();
