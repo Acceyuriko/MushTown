@@ -18,7 +18,7 @@ public sealed class KeyConfigWindow : UiWindow
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-keys.json"));
 
     // The official key spots (assets/ui/keys.json).
-    public sealed class Spot
+    private sealed class Spot
     {
         public int Code { get; set; }
         public int X { get; set; }
@@ -26,14 +26,14 @@ public sealed class KeyConfigWindow : UiWindow
         public string Cap { get; set; } = "";
     }
 
-    public sealed class KeyFile
+    private sealed class KeyFile
     {
         public List<Spot> Keys { get; set; } = new();
     }
 
     // The filter names and the category of every action icon
     // (assets/ui/keys_filter.json).
-    public sealed class FilterFile
+    private sealed class FilterFile
     {
         public List<string> Filters { get; set; } = new();
         public Dictionary<int, int> Categories { get; set; } = new();

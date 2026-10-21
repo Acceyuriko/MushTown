@@ -22,6 +22,7 @@ public partial class MushTownGame
     // frame: the wrap and the text art are the slow parts.
     private string _balloonWrapped = "";
     private int _balloonInner;
+    private int _balloonMaxLines;
     private List<string> _balloonLines = new();
 
     // The player sent a message: the bubble shows it for a few seconds.
@@ -52,10 +53,11 @@ public partial class MushTownGame
         int padY = _balloonLay.Get("padY", 6);
         int inner = w - 2 * (BalloonBorder + padX);
 
-        if (text != _balloonWrapped || inner != _balloonInner) // the lines change only when the message or the width does
+        if (text != _balloonWrapped || inner != _balloonInner || maxLines != _balloonMaxLines) // the lines change only when the message or the size does
         {
             _balloonWrapped = text;
             _balloonInner = inner;
+            _balloonMaxLines = maxLines;
             _balloonLines = BubbleLines(gfx, text, inner, maxLines);
         }
         var lines = _balloonLines;

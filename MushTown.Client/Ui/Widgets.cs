@@ -61,7 +61,7 @@ public class Button : Component, IDrawable
 {
     public string LegacyId = "";
     public ButtonKind Kind; // Silent by default (slots, titles, furniture, gated clicks)
-    public bool HoverFill; // white-30 overlay when hovered (text rows)
+    public bool HoverFill; // white-30 overlay when hovered (the hotkey cell)
     public Action? OnClick;
     public void Press() => OnClick?.Invoke();
     public virtual void Draw(UiGfx gfx)

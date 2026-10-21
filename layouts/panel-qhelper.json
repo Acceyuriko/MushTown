@@ -1,7 +1,16 @@
 {
-  "_help": "The quest helper bar at the top right of the HUD (under the buff bar): the official bar of UI/Quest.img/Helper with the count of the quests. right = the right edge of the bar, top = the top edge. listRight = the right edge of the quest lines under the bar (they are right aligned), listTop = the top of the first line. The bar art is 222x28 and the count digits 6x5, those sizes stay in the code.",
+  "_help": "The quest helper bar at the top right of the HUD (under the buff bar): the official bar of UI/Quest.img/Helper with the count of the quests. right = the right edge of the bar, top = the top edge. listRight = the right edge of the quest lines under the bar (they are right aligned), listTop = the top of the first line. closeDx/closeDy = the spot of the X button inside the bar, chevronDx = the spot of the chevron, chevronDownDy/chevronUpDy = the height of the chevron in its two states (the WZ puts them one pixel apart). numX1/numX2/numX3 = the spot of the count in the plate of the bar (the WZ gives one for one, two and three digits), numTop = the top of the count. The bar art (222x28), the buttons (11x11) and the count digits (6x5) are art sizes, they stay in the code.",
   "right": 1362,
   "top": 44,
   "listRight": 1358,
-  "listTop": 74
+  "listTop": 74,
+  "closeDx": 201,
+  "closeDy": 8,
+  "chevronDx": 184,
+  "chevronDownDy": 8,
+  "chevronUpDy": 7,
+  "numX1": 113,
+  "numX2": 109,
+  "numX3": 106,
+  "numTop": 12
 }

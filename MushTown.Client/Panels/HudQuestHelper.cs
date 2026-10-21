@@ -13,25 +13,18 @@ public partial class MushTownGame
     internal static readonly PanelLayout _qhLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-qhelper.json"));
 
     // The art sizes of the official bar: the bar is 222x28, the buttons
-    // 11x11, the count digits 6x5. The spots come from the WZ.
+    // 11x11, the count digits 6x5. The spots come from the layout file.
     public const int HelperBarW = 222;
     public const int HelperBarH = 28;
     public const int HelperButtonSize = 11;
-    public const int HelperNumX1 = 113; // the count spot of the bar: the WZ gives one for
-    public const int HelperNumX2 = 109; // one digit (qNum vector:pos2), two (pos1), three (pos0)
-    public const int HelperNumX3 = 106;
-    public const int HelperNumTop = 12;
-    public const int HelperCloseDx = 201, HelperCloseDy = 8; // the WZ origin of the X button
-    public const int HelperChevronDx = 184, HelperChevronDownDy = 8; // the WZ origin of the down chevron
-    public const int HelperChevronUpDy = 7; // the WZ origin of the up chevron
 
     private bool _qhHidden; // the X hid the bar
     private bool _qhListOpen = true; // the chevron shows the quest list
     private int _qhCount; // the quests of the last frame
-    private GameObject? _qhArt; // the bar art: it never catches a click
-    private GameObject? _qhClose; // the X button
-    private GameObject? _qhChevron; // the chevron button
-    private GameObject? _qhList; // the quest lines under the bar
+    private GameObject _qhArt = null!; // the bar art: it never catches a click
+    private GameObject _qhClose = null!; // the X button
+    private GameObject _qhChevron = null!; // the chevron button
+    private GameObject _qhList = null!; // the quest lines under the bar
 
     // The art of the quest helper: the bar (closed and open), the ten count
     // digits, and the two buttons in their three states.
@@ -47,8 +40,8 @@ public partial class MushTownGame
         art.Add(new Rect(QuestHelperBarRect()));
         art.Add(new QuestHelperBarArt(QuestHelperState));
         bar.AddChild(art);
-        _qhClose = HelperButton(HelperCloseDx, HelperCloseDy, HideQuestHelper, QuestHelperCloseArt);
-        _qhChevron = HelperButton(HelperChevronDx, HelperChevronDownDy, ToggleQuestHelperList, QuestHelperChevronArt);
+        _qhClose = HelperButton(_qhLay.Get("closeDx", 201), _qhLay.Get("closeDy", 8), HideQuestHelper, QuestHelperCloseArt);
+        _qhChevron = HelperButton(_qhLay.Get("chevronDx", 184), ChevronDy(), ToggleQuestHelperList, QuestHelperChevronArt);
         bar.AddChild(_qhClose);
         bar.AddChild(_qhChevron);
         var list = new GameObject { NoHit = true }; // the lines only: no clicks on them
@@ -58,6 +51,10 @@ public partial class MushTownGame
         _qhList = list;
         return bar;
     }
+
+    // The height of the chevron in the bar: the WZ puts the up chevron one
+    // pixel higher than the down one.
+    private int ChevronDy() => _qhListOpen ? _qhLay.Get("chevronUpDy", 7) : _qhLay.Get("chevronDownDy", 8);
 
     // The bar box: the right edge and the top come from the layout file.
     internal Rectangle QuestHelperBarRect()
@@ -72,24 +69,17 @@ public partial class MushTownGame
     // away when there is no quest at all (that is what the official does).
     private (int Count, bool Hidden, bool ListOpen) QuestHelperState()
     {
-        int count = TrackerLines().Count / 2; // two lines per quest: the name and the detail
+        int count = QuestCount();
         if (count > _qhCount) _qhHidden = false; // a new quest: the bar comes back
         _qhCount = count;
         bool hidden = _qhHidden || count == 0;
-        if (_qhArt != null)
-        {
-            _qhArt.Get<Rect>()!.Box = hidden ? Rectangle.Empty : QuestHelperBarRect();
-            if (_qhClose != null) _qhClose.Enabled = !hidden;
-            if (_qhChevron != null)
-            {
-                _qhChevron.Enabled = !hidden;
-                // the up and the down chevron sit one pixel apart in the WZ
-                var bar = QuestHelperBarRect();
-                int dy = _qhListOpen ? HelperChevronUpDy : HelperChevronDownDy;
-                _qhChevron.Get<Rect>()!.Box = new Rectangle(bar.X + HelperChevronDx, bar.Y + dy, HelperButtonSize, HelperButtonSize);
-            }
-        }
-        if (_qhList != null) _qhList.Enabled = !hidden && _qhListOpen;
+        _qhArt.Get<Rect>()!.Box = hidden ? Rectangle.Empty : QuestHelperBarRect();
+        _qhClose.Enabled = !hidden;
+        _qhChevron.Enabled = !hidden;
+        var bar = QuestHelperBarRect();
+        _qhChevron.Get<Rect>()!.Box = new Rectangle(bar.X + _qhLay.Get("chevronDx", 184), bar.Y + ChevronDy(),
+            HelperButtonSize, HelperButtonSize);
+        _qhList.Enabled = !hidden && _qhListOpen;
         return (count, hidden, _qhListOpen);
     }
 
@@ -158,7 +148,7 @@ public sealed class QuestHelperBarArt : Component, IDrawable
         foreach (char ch in text)
         {
             var digit = gfx.Tex($"ui/qhelper_num_{ch}.png");
-            gfx.Sb.Draw(digit, new Vector2(x, r.Y + MushTownGame.HelperNumTop), Color.White);
+            gfx.Sb.Draw(digit, new Vector2(x, r.Y + MushTownGame._qhLay.Get("numTop", 12)), Color.White);
             x += digit.Width;
         }
     }
@@ -166,11 +156,14 @@ public sealed class QuestHelperBarArt : Component, IDrawable
     // The spot of the count in the plate of the bar: the WZ gives one
     // for one, two and three digits.
     private static int NumSpot(int digits) =>
-        digits == 1 ? MushTownGame.HelperNumX1 : digits == 2 ? MushTownGame.HelperNumX2 : MushTownGame.HelperNumX3;
+        digits == 1 ? MushTownGame._qhLay.Get("numX1", 113)
+            : digits == 2 ? MushTownGame._qhLay.Get("numX2", 109)
+            : MushTownGame._qhLay.Get("numX3", 106);
 }
 
 // The art of one quest helper button: the official art of the state that
-// is showing (normal, hover, pressed).
+// is showing (normal, hover, pressed). The hover art is a bit wider than
+// the button, so it is centered on the box.
 public sealed class QuestHelperButtonArt : Component, IDrawable
 {
     private readonly Func<bool, bool, string> _art;
@@ -178,6 +171,7 @@ public sealed class QuestHelperButtonArt : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
-        gfx.Sb.Draw(gfx.Tex(_art(gfx.Hovered == Owner, gfx.Pressed)), new Vector2(r.X, r.Y), Color.White);
+        var tex = gfx.Tex(_art(gfx.Hovered == Owner, gfx.Pressed));
+        gfx.Sb.Draw(tex, new Vector2(r.X + (r.Width - tex.Width) / 2, r.Y + (r.Height - tex.Height) / 2), Color.White);
     }
 }

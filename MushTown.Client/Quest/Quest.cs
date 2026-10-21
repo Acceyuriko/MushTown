@@ -286,6 +286,10 @@ public partial class MushTownGame
         else if (_questLog.Accept(chara, q.Quest)) ApplyQuestAccepted(q.Quest);
     }
 
+    // The number of quests the tracker shows. The tracker writes two lines
+    // per quest (the name and the detail), so the count is half the lines.
+    private int QuestCount() => TrackerLines().Count / 2;
+
     // Tracker lines (cached: quest state changes rarely, frames do not).
     private List<string> TrackerLines()
     {
