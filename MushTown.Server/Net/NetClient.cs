@@ -22,6 +22,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<PartyEvent> _partyEvents = new();
     private readonly ConcurrentQueue<PartyPlayersEvent> _partyPlayersEvents = new();
     private readonly ConcurrentQueue<PartyAskEvent> _partyAskEvents = new();
+    private readonly ConcurrentQueue<int> _expEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -270,6 +271,9 @@ public sealed class NetClient : IDisposable
 
     public bool TryTakePartyAsk(out PartyAskEvent e) => _partyAskEvents.TryDequeue(out e);
 
+    // The party share of a kill (the exp the server split off for us).
+    public bool TryTakeExp(out int exp) => _expEvents.TryDequeue(out exp);
+
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
         var chunk = new byte[1024];
@@ -422,6 +426,19 @@ public sealed class NetClient : IDisposable
                 // a party line is a normal chat line: the log shows it in the
                 // All tab, next to the lines of the world
                 _chatEvents.Enqueue(new ChatEvent(r.ReadString(), r.ReadString()));
+            }
+            catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
+            {
+                _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
+            }
+        }
+        else if (p[0] == Net.ExpShare)
+        {
+            try
+            {
+                using var ms = new MemoryStream(p, 1, p.Length - 1);
+                using var r = new BinaryReader(ms);
+                _expEvents.Enqueue(r.ReadInt32());
             }
             catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
             {

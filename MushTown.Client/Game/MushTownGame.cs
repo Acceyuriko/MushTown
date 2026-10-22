@@ -737,6 +737,12 @@ public partial class MushTownGame : Game
             while (_net.TryTakeParty(out var party)) SetPartyMembers(party.Members);
             while (_net.TryTakePartyPlayers(out var players)) SetPartyPlayers(players.Players);
             while (_net.TryTakePartyAsk(out var ask)) SetPartyAsk(ask);
+            // the party share of a kill: the same exp path as our own kill
+            while (_net.TryTakeExp(out int exp))
+            {
+                LogEvent($"party share +{exp} exp"); // the log line, like the other game events
+                GainExp(exp);
+            }
             // Quest events drain before mob hits: a level-up inside ApplyHit
             // re-syncs, and the sync must carry the counters this frame's
             // kills pushed (not wipe them on the server's copy).

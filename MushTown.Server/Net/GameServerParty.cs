@@ -2,9 +2,10 @@ using MushTown.Shared;
 
 namespace MushTown.Server;
 
-// The party messages: make, invite, answer, leave, chat and the invite list.
-// The server owns the party (PartyWorld); the clients only ask. The member
-// list goes to every member of the party, so all the windows agree.
+// The party messages: make, invite, answer, leave, chat and the invite list,
+// plus the kill exp split. The server owns the party (PartyWorld); the
+// clients only ask. The member list goes to every member of the party, so
+// all the windows agree.
 public sealed partial class GameServer
 {
     private readonly PartyWorld _party = new();
@@ -12,6 +13,7 @@ public sealed partial class GameServer
     // lock: two members leaving at the same time must not push their lists
     // in the wrong order (the client would keep a member who left).
     private readonly object _partyOps = new();
+    private const int LevelGate = 5; // the official gate: five levels below the killer
 
     // The player makes a party and leads it.
     private void OnPartyMake(int id)
@@ -193,5 +195,41 @@ public sealed partial class GameServer
     private int PlayerLevel(int id)
     {
         lock (_mobLock) return _questLogs.TryGetValue(id, out var q) ? q.chara.Level : 0;
+    }
+
+    // The kill exp goes to the party: every member on the same map whose
+    // level is close to the killer gets an equal share, the rest stays with
+    // the killer. A solo kill (or a party without levels yet) keeps the whole
+    // award. The recipients are picked once, so a member that leaves in the
+    // middle never eats a share. A share that cannot be sent goes back to
+    // the killer: the exp must not vanish.
+    private int ShareKillExp(int exp, int killer, int map)
+    {
+        var (party, members) = _party.PartyAndMembers(killer);
+        if (party == 0) return exp;
+        var sharing = new List<Client>();
+        lock (_mobLock)
+        {
+            if (!_questLogs.TryGetValue(killer, out var killerLog)) return exp; // no level yet
+            // the levels are the server's copy: a level-up reaches the server
+            // with the quest sync, so the floor is one round trip behind
+            int floor = killerLog.chara.Level - LevelGate;
+            foreach (int m in members)
+            {
+                if (m == killer) continue;
+                if (!_clients.TryGetValue(m, out var c)) continue; // gone already
+                if (!_pos.TryGetValue(m, out var p) || p.map != map) continue;
+                if (!_questLogs.TryGetValue(m, out var q) || q.chara.Level < floor) continue;
+                sharing.Add(c);
+            }
+        }
+        if (sharing.Count == 0) return exp;
+        int each = exp / (sharing.Count + 1);
+        if (each == 0) return exp; // too small to split
+        var frame = Net.Encode(Net.ExpShare, w => w.Write(each));
+        int sent = 0;
+        foreach (var c in sharing)
+            if (Send(c, frame)) sent++;
+        return exp - each * sent; // the rest stays with the killer
     }
 }

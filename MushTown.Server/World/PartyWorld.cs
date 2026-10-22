@@ -27,6 +27,18 @@ public sealed class PartyWorld
         lock (_lock) return _parties.TryGetValue(party, out var list) ? new List<int>(list) : new List<int>();
     }
 
+    // The party of a member and its member list, read in one go: a member
+    // that leaves between two reads must not split its exp with the list it
+    // just left.
+    public (int Party, List<int> Members) PartyAndMembers(int member)
+    {
+        lock (_lock)
+        {
+            if (!_partyOf.TryGetValue(member, out int party)) return (0, new List<int>());
+            return (party, new List<int>(_parties[party]));
+        }
+    }
+
     // A new party with one member (the leader). The caller holds the lock.
     private int NewParty(int member)
     {

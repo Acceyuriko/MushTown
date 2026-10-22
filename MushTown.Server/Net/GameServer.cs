@@ -532,9 +532,11 @@ public sealed partial class GameServer : IDisposable
 
     // One judged hit to every client (basic swings and skills share this wire shape).
     // A killing blow also ticks the attacker's quests (serverside copy) and
-    // pushes the bumped counters back to the killer only.
+    // pushes the bumped counters back to the killer only. The exp in the frame
+    // is the attacker's share: a party kill splits it (GameServerParty).
     private void BroadcastHit(MobWorld.Hit h, int attacker)
     {
+        int exp = h.HpLeft == 0 ? ShareKillExp(h.Exp, attacker, h.Map) : h.Exp;
         Broadcast(Net.Encode(Net.MobHit, w =>
         {
             w.Write(h.Uid);
@@ -542,7 +544,7 @@ public sealed partial class GameServer : IDisposable
             w.Write(h.Damage);
             w.Write(h.HpLeft);
             w.Write(attacker);
-            w.Write(h.Exp);
+            w.Write(exp);
             w.Write(h.Skill);
         }));
         if (h.HpLeft == 0)
@@ -597,17 +599,20 @@ public sealed partial class GameServer : IDisposable
     }
 
     // One send must never break the rest of a broadcast; the dead client's
-    // own read loop notices and cleans up.
-    private void Send(Client client, byte[] frame)
+    // own read loop notices and cleans up. The result says if the frame went
+    // out: a caller that owes the client something (the exp share) needs it.
+    private bool Send(Client client, byte[] frame)
     {
         try
         {
             lock (client.SendLock)
                 client.Tcp.GetStream().Write(frame);
+            return true;
         }
         catch (Exception ex)
         {
             _log($"send failed: {ex.Message}");
+            return false;
         }
     }
 

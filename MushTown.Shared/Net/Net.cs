@@ -38,6 +38,8 @@ public static class Net
     public const byte PartyList = 30;   // client -> server: the players of my map (the invite list)
     public const byte PartyPlayers = 31; // server -> client: int n + n * (int id, string name, int level)
 
+    public const byte ExpShare = 32; // server -> client: int exp (a party member's share of a kill)
+
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
     public const byte ActJump = 2;

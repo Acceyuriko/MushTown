@@ -627,6 +627,11 @@ public sealed class PartyTests
         Assert.AreEqual("the invite failed.", line.Text);
     }
 
+    // A map with one snail and a ground line under it: without the line the
+    // mob falls while the test swings and the swing misses.
+    private static void AddSnailMap(TempAssets assets, int map = 9) =>
+        assets.AddMap(map, """[{"MobId":100000,"X":0,"Cy":100}]""", """[{"X1":-300,"Y1":100,"X2":300,"Y2":100,"Layer":0}]""");
+
     // The leader makes a party and the other player joins it.
     private static void Join(NetClient leader, NetClient guest)
     {
@@ -638,6 +643,323 @@ public sealed class PartyTests
         WaitTakeParty(guest);
         WaitTakeParty(leader);
     }
+
+    // A party kill splits the exp: the teammate on the same map gets an
+    // equal share, the rest of the award stays with the killer.
+    [TestMethod]
+    public void Loopback_APartyKillSplitsTheExp()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 101);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 43);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 43);
+        b.Connect("127.0.0.1", Net.Port + 43);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        b.SendQuestSync(new CharaSlot { Name = "friend", Level = 42 });
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Join(a, b);
+
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0)); // one swing kills the mob
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.IsFalse(hit.Spawn);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(51, hit.Exp); // the killer's half plus the rest
+        Assert.AreEqual(50, WaitTakeExp(b)); // the teammate's half
+        AssertNo(() => a.TryTakeExp(out _)); // the killer gets no share frame: the exp is not made
+    }
+
+    // A member that is not the leader can kill: the party shares the exp of
+    // every member's kill.
+    [TestMethod]
+    public void Loopback_AMemberThatIsNotTheLeaderCanKill()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 100);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 47);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 47);
+        b.Connect("127.0.0.1", Net.Port + 47);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        b.SendQuestSync(new CharaSlot { Name = "friend", Level = 42 });
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Assert.IsTrue(WaitTakeMob(b).Spawn); // the mob of map 9
+        Join(a, b);
+
+        b.SendBuild(new Build(99, 99, 99, 0, 0, 0)); // the guest kills the mob
+        b.SendAttack();
+        var hit = WaitTakeMob(b);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(50, hit.Exp); // the guest's half
+        Assert.AreEqual(50, WaitTakeExp(a)); // the leader's half
+        AssertNo(() => b.TryTakeExp(out _)); // the killer gets no share frame: the exp is not made
+    }
+
+    // A party member on another map gets no share: the exp needs the same map.
+    [TestMethod]
+    public void Loopback_APartyMemberOnAnotherMapGetsNoExp()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        AddSnailMap(assets, 10);
+        assets.AddMob(100000, 40, 0, 100);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 44);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 44);
+        b.Connect("127.0.0.1", Net.Port + 44);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        b.SendQuestSync(new CharaSlot { Name = "friend", Level = 42 });
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Assert.IsTrue(WaitTakeMob(b).Spawn); // the mob of map 9
+        Join(a, b);
+
+        b.SendState(10, -50, 100, Net.ActStand, 0, true);
+        var moved = WaitTakeMob(b); // the new map's mob: the switch went through
+        Assert.IsTrue(moved.Spawn);
+        Assert.AreEqual(10, moved.Map);
+
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(100, hit.Exp); // the whole award stays with the killer
+        AssertNo(() => b.TryTakeExp(out _));
+    }
+
+    // A solo kill keeps the whole award: nothing changes without a party.
+    [TestMethod]
+    public void Loopback_ASoloKillKeepsTheWholeExp()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 100);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 45);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 45);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(100, hit.Exp);
+    }
+
+    // A member more than five levels below the killer gets no share (the
+    // official level gate).
+    [TestMethod]
+    public void Loopback_AMemberTooFarBelowGetsNoExp()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 100);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 46);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 46);
+        b.Connect("127.0.0.1", Net.Port + 46);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        b.SendQuestSync(new CharaSlot { Name = "friend", Level = 36 }); // six levels below
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Join(a, b);
+
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(100, hit.Exp); // the whole award stays with the killer
+        AssertNo(() => b.TryTakeExp(out _));
+    }
+
+    // Five levels below the killer is still inside the gate: that member
+    // gets a share.
+    [TestMethod]
+    public void Loopback_AMemberFiveLevelsBelowGetsExp()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 100);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 48);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 48);
+        b.Connect("127.0.0.1", Net.Port + 48);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        b.SendQuestSync(new CharaSlot { Name = "friend", Level = 37 }); // five levels below
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Join(a, b);
+
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(50, hit.Exp);
+        Assert.AreEqual(50, WaitTakeExp(b));
+    }
+
+    // A killer without a level (no quest sync yet) shares nothing: the whole
+    // award stays with the killer.
+    [TestMethod]
+    public void Loopback_AKillerWithNoLevelGetsTheWholeExp()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 100);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 49);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 49);
+        b.Connect("127.0.0.1", Net.Port + 49);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendQuestSync(new CharaSlot { Name = "friend", Level = 42 });
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Join(a, b);
+
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(100, hit.Exp); // the whole award stays with the killer
+        AssertNo(() => b.TryTakeExp(out _));
+    }
+
+    // A member without a level (no quest sync yet) gets no share.
+    [TestMethod]
+    public void Loopback_AMemberWithNoLevelGetsNoExp()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 100);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 50);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 50);
+        b.Connect("127.0.0.1", Net.Port + 50);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Join(a, b);
+
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(100, hit.Exp);
+        AssertNo(() => b.TryTakeExp(out _));
+    }
+
+    // An award too small to split (one exp between two) stays with the
+    // killer: nobody gets a share of zero.
+    [TestMethod]
+    public void Loopback_ASmallExpIsNotSplit()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 1);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 51);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 51);
+        b.Connect("127.0.0.1", Net.Port + 51);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        b.SendQuestSync(new CharaSlot { Name = "friend", Level = 42 });
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Join(a, b);
+
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(1, hit.Exp);
+        AssertNo(() => b.TryTakeExp(out _));
+    }
+
+    // A member that left the game does not eat a share: the killer keeps
+    // the whole award.
+    [TestMethod]
+    public void Loopback_AMemberThatLeftGetsNoShare()
+    {
+        using var assets = new TempAssets();
+        AddSnailMap(assets);
+        assets.AddMob(100000, 40, 0, 100);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 52);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 52);
+        b.Connect("127.0.0.1", Net.Port + 52);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        a.SendQuestSync(new CharaSlot { Name = "hero", Level = 42 });
+        b.SendQuestSync(new CharaSlot { Name = "friend", Level = 42 });
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        Join(a, b);
+
+        b.Dispose(); // the guest leaves the game
+        // the server pushes the fresh list when the member leaves: that is
+        // the sign the disconnect went through
+        var left = WaitTakeParty(a);
+        Assert.AreEqual(1, left.Members.Length);
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        var hit = WaitTakeMob(a);
+        Assert.AreEqual(0, hit.HpLeft);
+        Assert.AreEqual(100, hit.Exp);
+    }
+
+    private static int WaitTakeExp(NetClient client)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            if (client.TryTakeExp(out int exp)) return exp;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for an exp share");
+        throw new InvalidOperationException("unreachable");
+    }
+
+    private static MobEvent WaitTakeMob(NetClient client)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            if (client.TryTakeMob(out var e)) return e;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for a mob event");
+        throw new InvalidOperationException("unreachable");
+    }
+
     private static PartyEvent WaitTakeParty(NetClient client)
     {
         for (int i = 0; i < 500; i++)
