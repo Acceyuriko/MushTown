@@ -696,7 +696,7 @@ public partial class MushTownGame
         _zWasDown = kb.IsKeyDown(Keys.Z);
         SeedSkillKeys(kb);
         SeedHotkeys(kb);
-        _mover.WasInPortal = SceneMath.FindPortal(_map.Portals, _mover.X, _mover.Y) != null;
+        ReseedPortalState(); // the arrival spot, not the old one
         _screen = Screen.Game;
         BuildGameScene();
         _scenes.Show(_gameScene);

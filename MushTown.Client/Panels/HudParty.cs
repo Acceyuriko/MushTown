@@ -350,8 +350,4 @@ public partial class MushTownGame
         _partyAskWindow.Show = false;
         _partySearchWindow.Show = false;
     }
-
-    // The text of a line, wrapped to the width of a box. The party popup
-    // needs it: it is a window of its own, not a part of the game.
-    internal List<string> WrapText(string text, int width) => _ui.Wrap(text, width);
 }

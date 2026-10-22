@@ -22,7 +22,7 @@ internal static class MapUi
                 _data = MushTownGame.LoadJson<MapUiData>(Path.Combine(MushTownGame.AssetsDir, "ui", "mapui.json"));
                 foreach (var n in _data.Maps) _names[n.Id] = n;
                 foreach (var r in _data.World.Regions)
-                    foreach (int id in r.Maps) _regions[id] = r;
+                    foreach (int id in r.Maps) _regions[id] = r; // a map in two regions takes the last one
             }
             return _data;
         }
@@ -212,10 +212,19 @@ public sealed class MinimapWindow : UiWindow
     }
 }
 
-// The world map window: the whole world, with the regions.
+// The world map window: the whole world, with the regions. Click a region to
+// see the maps of that region, click a map to travel there.
 public sealed class WorldMapWindow : UiWindow
 {
     private readonly MushTownGame _game;
+    private WorldRegionUi? _picked; // the region the player clicked
+    private WorldRegionUi? _shown;  // the region the list was built for (the picked one, or the one we stand in)
+    // The regions with a map of ours: their dots are the live ones.
+    private readonly HashSet<WorldRegionUi> _live = new();
+    // The maps of the shown region: the official name wrapped over the
+    // lines it needs, and the spot of the first line.
+    private readonly List<(MapNameUi Map, List<string> Lines, int Y)> _rows = new();
+
     public WorldMapWindow(MushTownGame game) : base(HotkeyAction.WorldMap) { _game = game; }
 
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-map.json"));
@@ -235,30 +244,100 @@ public sealed class WorldMapWindow : UiWindow
         root.Add(new Rect(Rect()));
         root.Add(new Picture("ui/wm_frame.png"));
         root.Add(new Picture(MapUi.Data.World.Image, _lay.Get("worldX", 198), _lay.Get("worldY", 75)));
+        // the regions: a dot each, with a click box on it
+        _live.Clear();
+        var maps = new Dictionary<WorldRegionUi, List<MapNameUi>>();
+        int clickW = _lay.Get("dotClickW", 17), clickH = _lay.Get("dotClickH", 17);
+        foreach (var region in MapUi.Data.World.Regions)
+        {
+            var list = MapsOf(region);
+            if (list.Count == 0) continue; // no map of ours there: nothing to list
+            maps[region] = list;
+            _live.Add(region);
+            var spot = RegionSpot(region);
+            var o = new GameObject();
+            o.Add(new Rect(new Rectangle(spot.X - (clickW - 1) / 2, spot.Y - (clickH - 1) / 2, clickW, clickH)));
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(region) });
+            root.AddChild(o);
+        }
+        // the maps of the shown region: click one to travel there
+        _rows.Clear();
+        var here = MapUi.Region(_game.GameMap.MapId);
+        if (here != null && _picked != null && _picked != here) _picked = null; // the player left that region
+        _shown = _picked ?? here;
+        if (_shown != null && maps.TryGetValue(_shown, out var shown))
+        {
+            int listW = _lay.Get("listW", 146), listStep = _lay.Get("listStep", 20);
+            int listX = Rect().X + _lay.Get("listX", 16);
+            int y = Rect().Y + _lay.Get("listY", 75);
+            foreach (var map in shown)
+            {
+                var lines = _game.WrapText(map.Name, listW);
+                _rows.Add((map, lines, y));
+                if (map.Id != _game.GameMap.MapId) // the map we stand on: nowhere to go
+                {
+                    var o = new GameObject();
+                    o.Add(new Rect(new Rectangle(listX, y, listW, lines.Count * listStep)));
+                    o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _game.TravelTo(map.Id); Show = false; } });
+                    root.AddChild(o);
+                }
+                y += lines.Count * listStep;
+            }
+        }
         root.Add(new Invoke(Draw));
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MapWindowParts.Close(this, new Rectangle(Pos.X + _lay.Get("wcloseX", 829), Pos.Y + _lay.Get("wcloseY", 12), 11, 11)));
         Scene.Add(root);
     }
 
-    // The region marks on the world map and the current region in MAP INFO.
+    // The maps of a region that this game has. A map without an official name
+    // is skipped: an empty row would be a button with nothing to read.
+    private static List<MapNameUi> MapsOf(WorldRegionUi region)
+    {
+        var list = new List<MapNameUi>();
+        foreach (var map in MapUi.Data.Maps)
+            if (map.Name != "" && region.Maps.Contains(map.Id)) list.Add(map);
+        return list;
+    }
+
+    // Where a region's dot sits on the map art.
+    private Point RegionSpot(WorldRegionUi region) => new(
+        Rect().X + _lay.Get("worldX", 198) + region.X,
+        Rect().Y + _lay.Get("worldY", 75) + region.Y);
+
+    // The player picks a region: the map list shows its maps.
+    private void Pick(WorldRegionUi region)
+    {
+        _picked = region;
+        Dirty = true; // the list of maps changes
+    }
+
+    // The map changed: rebuild the list (the map we stand on has no button).
+    public void OnMapChanged() => Dirty = true;
+
+    // The region marks on the world map and the maps of the shown region.
     private void Draw(UiGfx gfx)
     {
         var r = Rect();
-        int wx = r.X + _lay.Get("worldX", 198), wy = r.Y + _lay.Get("worldY", 75);
         int mapId = _game.GameMap.MapId;
-        var current = MapUi.Region(mapId);
+        var here = MapUi.Region(mapId);
+        int dotW = _lay.Get("dotW", 7), dotH = _lay.Get("dotH", 7);
         foreach (var region in MapUi.Data.World.Regions)
         {
-            bool here = region == current;
-            var ink = here ? new Color(255, 220, 0) : new Color(120, 160, 200);
-            gfx.Sb.Draw(gfx.Pixel, new Rectangle(wx + region.X - 3, wy + region.Y - 3, 7, 7), ink);
+            var ink = region == here ? new Color(255, 220, 0)
+                : region == _shown ? Color.White
+                : _live.Contains(region) ? new Color(120, 160, 200) : new Color(80, 95, 110);
+            var spot = RegionSpot(region);
+            gfx.Sb.Draw(gfx.Pixel, new Rectangle(spot.X - (dotW - 1) / 2, spot.Y - (dotH - 1) / 2, dotW, dotH), ink);
         }
-        if (current != null)
+        if (_shown == null) return;
+        gfx.Sb.Draw(gfx.Ui.GetSmall(_shown.Title), new Vector2(r.X + _lay.Get("infoX", 20), r.Y + _lay.Get("infoY", 51)), Color.White);
+        int listStep = _lay.Get("listStep", 20);
+        foreach (var (map, lines, y) in _rows)
         {
-            var name = MapUi.Name(mapId);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(current.Title), new Vector2(r.X + _lay.Get("infoX", 14), r.Y + _lay.Get("infoY", 40)), Color.White);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(name.Name), new Vector2(r.X + _lay.Get("infoX", 14), r.Y + _lay.Get("infoY", 40) + 16), new Color(212, 225, 229));
+            var ink = map.Id == mapId ? new Color(255, 220, 0) : Color.White;
+            for (int i = 0; i < lines.Count; i++)
+                gfx.Sb.Draw(gfx.Ui.GetSmall(lines[i]), new Vector2(r.X + _lay.Get("listX", 16), y + i * listStep), ink);
         }
     }
 }

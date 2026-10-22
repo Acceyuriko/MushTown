@@ -9,7 +9,7 @@ The WZ files are the source of every official picture in MushTown. Before you sa
 "we do not have this", look in the WZ. Most of the time the art is there under a
 name nobody would guess.
 
-The WZ lives at `E:\游戏\maplestory\appdata\Data` (see `ExporterPaths.DataDir` in
+The WZ lives at `E:\game\maplestory\appdata\Data` (see `ExporterPaths.DataDir` in
 `MushTown.Exporter/Core/WzRoot.cs`). It holds 16 category trees: `Base`,
 `Character`, `Effect`, `Etc`, `Item`, `Map`, `Mob`, `Morph`, `Npc`, `Packs`,
 `Quest`, `Reactor`, `Skill`, `Sound`, `String`, `TamingMob`, `UI`.

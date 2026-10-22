@@ -60,15 +60,52 @@ public static partial class Export
             Console.WriteLine("world map list not found: Map/WorldMap/WorldMap.img/MapList");
             return false;
         }
+
+        // The region map of every region (MapLink): the towns of the region
+        // and the maps in every town. The world map list holds the old map
+        // ids, so the town list is the source for the newer ones.
+        var links = map.Find(prefix + "WorldMap/WorldMap.img/MapLink");
+        if (links == null)
+        {
+            Console.WriteLine("world map links not found: Map/WorldMap/WorldMap.img/MapLink");
+            return false;
+        }
+        var regionMaps = new Dictionary<string, string>();
+        foreach (Wz_Node link in links.Nodes)
+        {
+            string tip = link.Nodes["toolTip"]?.Value as string ?? "";
+            string linkMap = link.Nodes["link"]?.Nodes["linkMap"]?.Value as string ?? "";
+            if (tip != "" && linkMap != "") regionMaps[tip] = linkMap;
+        }
+
         var regions = new List<object>();
         foreach (Wz_Node child in list.Nodes)
         {
             string title = child.Nodes["title"]?.Value as string ?? "";
             var spot = child.Nodes["spot"]?.Value as Wz_Vector;
             if (title == "" || spot == null) continue; // the towns and the links have no title
+            var ids = new List<int>();
             var mapNo = child.Nodes["mapNo"];
-            var ids = mapNo == null ? new List<int>() : mapNo.Nodes.Select(n => n.GetValueEx<int>(0)).ToList();
-            regions.Add(new { Title = title, X = (origin?.X ?? 0) + spot.X, Y = (origin?.Y ?? 0) + spot.Y, Maps = ids });
+            if (mapNo != null) ids.AddRange(mapNo.Nodes.Select(n => n.GetValueEx<int>(0)));
+            // the towns of the region map: their maps are in the region too
+            if (!regionMaps.TryGetValue(title, out string? linkMap))
+            {
+                Console.WriteLine($"world map region '{title}' has no region map (MapLink)");
+                return false;
+            }
+            var towns = map.Find(prefix + "WorldMap/" + linkMap + ".img/MapList");
+            if (towns == null)
+            {
+                Console.WriteLine($"world map region map not found: Map/WorldMap/{linkMap}.img/MapList");
+                return false;
+            }
+            foreach (Wz_Node town in towns.Nodes)
+            {
+                var townMaps = town.Nodes["mapNo"];
+                if (townMaps == null) continue;
+                ids.AddRange(townMaps.Nodes.Select(n => n.GetValueEx<int>(0)));
+            }
+            regions.Add(new { Title = title, X = (origin?.X ?? 0) + spot.X, Y = (origin?.Y ?? 0) + spot.Y, Maps = ids.Distinct().ToList() });
         }
 
         // The official map names (String.wz Map.img: {world}/{map id}).

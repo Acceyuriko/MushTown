@@ -24,6 +24,7 @@ public partial class MushTownGame : Game
     private readonly string _assetsDir;
     private readonly string? _shotPath;
     private readonly int _shotMap;
+    private readonly int _shotTravel;
     private readonly string _shotAction;
     private readonly int _shotFrame;
     private readonly bool _shotFacingRight;
@@ -79,6 +80,7 @@ public partial class MushTownGame : Game
     private ChatWindow _chatWindow = null!; // the chat is always on screen
     private GuideWindow _guideWindow = null!; // the contents guide window
     private GuideCardWindow _guideCardWindow = null!; // the small guide popup
+    private WorldMapWindow _worldMapWindow = null!; // the world map window
     private readonly Dictionary<int, PeerArt> _remotes = new();
     private readonly PlateArt _heroPlate = new(); // the hero's tag rides the player object (SyncHeroPlate fills it)
 
@@ -105,10 +107,11 @@ public partial class MushTownGame : Game
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0)
     {
         _shotPath = shotPath;
         _shotMap = shotMap;
+        _shotTravel = shotTravel;
         _shotAction = shotAction;
         _shotFrame = shotFrame;
         _shotFacingRight = shotFacingRight;
@@ -148,7 +151,7 @@ public partial class MushTownGame : Game
             _chatWindow.AddLine(_save?.Slots[_slot]?.Name ?? "Me", text);
         });
         new MinimapWindow(this); // the new windows keep themselves in the list
-        new WorldMapWindow(this);
+        _worldMapWindow = new WorldMapWindow(this);
         new KeyConfigWindow(this);
         _partyWindow = new PartyWindow(this);
         _partySearchWindow = new PartySearchWindow(this);
@@ -284,6 +287,12 @@ public partial class MushTownGame : Game
             string shotName = Path.GetFileNameWithoutExtension(_shotPath)!;
             if (shotName.Contains("guideboss")) _guideWindow.SetTab(1);
             if (shotName.Contains("guidespecial")) _guideWindow.SetTab(2);
+            // the world map travel: the shot lands on the map it travelled to
+            if (_shotTravel != 0)
+            {
+                TravelTo(_shotTravel);
+                _loadBeat = 0; // shots skip Update: the black beat would never end
+            }
         }
 
         InitializeMenu(_shotScreen);
@@ -410,7 +419,7 @@ public partial class MushTownGame : Game
 
     private void LoadMapTextures()
     {
-        // textures stay cached across maps (6 maps, bounded); nothing unloads
+        // textures stay cached across maps (the map list is small, bounded); nothing unloads
         foreach (var item in _map.Backs) LoadTexture(item.Image);
         foreach (var item in _map.Tiles) LoadTexture(item.Image);
         foreach (var item in _map.Objs) LoadTexture(item.Image);
@@ -635,7 +644,6 @@ public partial class MushTownGame : Game
         if (_mover.Travel != null)
         {
             SwitchMap(_mover.Travel.Tm, _mover.Travel.Tn);
-            _mover.WasInPortal = SceneMath.FindPortal(_map.Portals, _mover.X, _mover.Y) != null; // arrival spot, not the old one
         }
 
         if (_mover.FellOut)
@@ -818,16 +826,7 @@ public partial class MushTownGame : Game
     private void SwitchMap(int tm, string tn)
     {
         PlaySfx("portal");
-        if (tm != _mapId)
-        {
-            LoadMapData(tm);
-            LoadMapTextures();
-            PlayScreenBgm(); // the new map has its own track
-            ClearPeers(); // peers stay on the old map; their live states refill this one
-            if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
-            else { ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them
-            _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
-        }
+        if (tm != _mapId) EnterMap(tm);
         var land = _map.Portals.FirstOrDefault(p => p.Pn == tn)
             ?? throw new InvalidDataException($"map {tm} has no portal '{tn}'");
         _mover.X = land.X;
@@ -837,6 +836,35 @@ public partial class MushTownGame : Game
         _mover.OnTravel();
         _fighter.AttackLock = 0;
         SnapCamera();
+        ReseedPortalState(); // the arrival spot, not the old one
+    }
+
+    // The world map: travel to another map and land on its spawn point.
+    internal void TravelTo(int mapId)
+    {
+        PlaySfx("portal");
+        EnterMap(mapId);
+        Spawn(); // the new map's spawn ground (the map data proved it exists)
+        _mover.OnTravel(); // no instant re-travel through the portal next to it
+        ReseedPortalState();
+        SnapCamera();
+    }
+
+    // The arrival spot may be a portal: the mover must not step into it again.
+    private void ReseedPortalState() =>
+        _mover.WasInPortal = SceneMath.FindPortal(_map.Portals, _mover.X, _mover.Y) != null;
+
+    // The map change: the data, the art, the mobs and the peers.
+    private void EnterMap(int mapId)
+    {
+        LoadMapData(mapId);
+        LoadMapTextures();
+        PlayScreenBgm(); // the new map has its own track
+        ClearPeers(); // peers stay on the old map; their live states refill this one
+        if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
+        else { ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them
+        _worldMapWindow.OnMapChanged(); // the list follows the player and marks the map we stand on
+        _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
     }
 
     private void SnapCamera()

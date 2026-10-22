@@ -20,7 +20,7 @@
 ## 前置条件
 
 - .NET 8 SDK
-- 本机装有 MapleStory 客户端（冒烟测试默认指向 `E:\游戏\maplestory\appdata\Data`，
+- 本机装有 MapleStory 客户端（冒烟测试默认指向 `E:\game\maplestory\appdata\Data`，
   可用命令行参数指定别的路径）
 - `git clone --recurse-submodules` 拉取子模块
 - 选人背景图自备：`assets/back/charselect.png`（版权原因不进仓库，缺了进选人屏直接报错）。
@@ -75,11 +75,11 @@ dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录] # �
 dotnet run --project MushTown.Client                                # 打开游戏窗口（存档菜单）
 dotnet run --project MushTown.Client -- --host                       # 开房（本机当主机，无存档直跳）
 dotnet run --project MushTown.Client -- --join <ip>                   # 加入主机（本机双开用 127.0.0.1）
-dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--action walk1] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop]  # 截图后退出（frame 从 0 数）
+dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--travel 2000000] [--action walk1] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop]  # 截图后退出（frame 从 0 数）
 git clone --recurse-submodules <仓库>                               # 克隆要带子模块
 ```
 
-Data路径参数只有 `smoke` 和 `export` 认（默认 `E:\游戏\maplestory\appdata\Data`）；
+Data路径参数只有 `smoke` 和 `export` 认（默认 `E:\game\maplestory\appdata\Data`）；
 `dump`/`catdump`/`find` 固定用默认路径，第二个参数已经是它们自己的参数。
 
 导出产物写到 `assets/`、存档数据写到 `data/`、日志写到 `logs/`，三者都在 `.gitignore` 里：

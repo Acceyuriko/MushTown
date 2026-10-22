@@ -4,7 +4,7 @@ namespace MushTown.Exporter;
 
 public static class ExporterPaths
 {
-    public const string DataDir = @"E:\游戏\maplestory\appdata\Data";
+    public const string DataDir = @"E:\game\maplestory\appdata\Data";
     public const string OutDir = "assets";
 }
 

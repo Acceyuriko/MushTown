@@ -32,6 +32,7 @@ public sealed class UiText : IDisposable
     private readonly Dictionary<string, Texture2D> _cacheCancel = new();
     private readonly Dictionary<string, Texture2D> _cacheSetupName = new();
     private readonly Dictionary<string, Texture2D> _cacheSetupError = new();
+    private readonly Dictionary<(string, float), List<string>> _wrapCache = new();
     private readonly List<Texture2D> _trash = new(); // the textures that left the cache
     private const int CacheCap = 512; // the cache size that makes room for new strings
 
@@ -133,7 +134,18 @@ public sealed class UiText : IDisposable
 
     // Word-wrap for dialog/quest bodies (small font; explicit \n splits
     // first, then greedy words; a word wider than the box splits by char).
-    public List<string> Wrap(string text, float maxWidth) => WrapWith(text, maxWidth, _small);
+    // The result is cached: the world map wraps every row on each rebuild and
+    // GDI+ measuring is slow.
+    public List<string> Wrap(string text, float maxWidth)
+    {
+        var key = (text, maxWidth);
+        if (!_wrapCache.TryGetValue(key, out var lines))
+        {
+            lines = WrapWith(text, maxWidth, _small);
+            _wrapCache[key] = lines;
+        }
+        return lines;
+    }
 
     private List<string> WrapWith(string text, float maxWidth, Font font)
     {
@@ -217,4 +229,11 @@ public sealed class UiText : IDisposable
         foreach (var tex in _cacheSetupName.Values) tex.Dispose();
         foreach (var tex in _cacheSetupError.Values) tex.Dispose();
     }
+}
+
+// The text of a line, wrapped to the width of a box. The party popup and the
+// world map list need it: both are windows of their own.
+public partial class MushTownGame
+{
+    internal List<string> WrapText(string text, int width) => _ui.Wrap(text, width);
 }
