@@ -462,7 +462,7 @@ public partial class MushTownGame : Game
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
             if (UiWindow.List.Any(w => w.Show && w != _chatWindow)) // the new windows draw on top: Esc closes them first
             {
-                foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
+                CloseAllWindows();
                 PlaySfx("click");
                 base.Update(gameTime); return;
             }

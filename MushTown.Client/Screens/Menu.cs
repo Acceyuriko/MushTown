@@ -726,7 +726,7 @@ public partial class MushTownGame
         _showShop = false; // NPC-bound like talk
         // In-game windows never survive the exit: a map list left open would
         // keep its wheel baseline across the character screen.
-        foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
+        CloseAllWindows();
         _talkKey = ""; _questKey = ""; _trackKey = ""; // cached #h names die with the char
         DropFx();
         _fighter.Cooldowns.Clear();
@@ -743,6 +743,13 @@ public partial class MushTownGame
         BuildCharsScene();
         _scenes.Show(_menuScene);
         PlayScreenBgm(); // back to the login theme
+    }
+
+    // Esc and the exit both close every window: the minimap and the chat log
+    // re-show themselves in OnClosed.
+    private void CloseAllWindows()
+    {
+        foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
     }
 
     private void SaveChara()
