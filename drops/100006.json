@@ -1,0 +1,22 @@
+{
+  "MobId": 100006,
+  "MesoMin": 10,
+  "MesoMax": 35,
+  "Items": [
+    {
+      "Item": 2000000,
+      "Chance": 0.1,
+      "Count": 1
+    },
+    {
+      "Item": 2000001,
+      "Chance": 0.05,
+      "Count": 1
+    },
+    {
+      "Item": 2000003,
+      "Chance": 0.05,
+      "Count": 1
+    }
+  ]
+}

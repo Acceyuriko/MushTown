@@ -287,6 +287,8 @@ public partial class MushTownGame : Game
             string shotName = Path.GetFileNameWithoutExtension(_shotPath)!;
             if (shotName.Contains("guideboss")) _guideWindow.SetTab(1);
             if (shotName.Contains("guidespecial")) _guideWindow.SetTab(2);
+            // a shot named *scroll* scrolls the map list of the world map
+            if (shotName.Contains("scroll")) _worldMapWindow.ScrollToEnd();
             // the world map travel: the shot lands on the map it travelled to
             if (_shotTravel != 0)
             {

@@ -11,8 +11,8 @@ public static class Progression
     public const int WeaponAtk = 32;
 
     // EXP to climb from this level to the next. Linear v1 curve: levels 1-10
-    // cost 1035 total, and the 23 killable mobs pay 1225, so grinding both
-    // maps always outruns the cap (until W13 respawn).
+    // cost 1035 total, and one training center pays about that much per
+    // clear, so grinding the training mobs always outruns the cap.
     public static int ExpNext(int level) => 20 * level + 15;
 
     // Vitals grow per level; a level-up refills both pools (official does too).

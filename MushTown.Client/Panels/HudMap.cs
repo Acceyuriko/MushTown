@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -222,8 +223,16 @@ public sealed class WorldMapWindow : UiWindow
     // The regions with a map of ours: their dots are the live ones.
     private readonly HashSet<WorldRegionUi> _live = new();
     // The maps of the shown region: the official name wrapped over the
-    // lines it needs, and the spot of the first line.
-    private readonly List<(MapNameUi Map, List<string> Lines, int Y)> _rows = new();
+    // lines it needs, and the spot of every line on the screen.
+    private readonly List<(MapNameUi Map, string Text, int Y)> _lines = new();
+    // The list scrolls like the official panel: the first line on screen,
+    // the lines that do not fit and the wheel that moves the list.
+    private int _scroll;
+    private int _hidden;
+    private int _wheel;      // the wheel value of the last frame
+    private bool _moved;     // the last rebuild came from the wheel
+    private bool _toEnd;     // the shot mode wants the end of the list
+    private int _rowScroll;  // the scroll the drawn rows were built with (the wheel can move _scroll mid-frame)
 
     public WorldMapWindow(MushTownGame game) : base(HotkeyAction.WorldMap) { _game = game; }
 
@@ -236,6 +245,8 @@ public sealed class WorldMapWindow : UiWindow
     public override void Build()
     {
         _game.LoadTexture("ui/wm_frame.png");
+        _game.LoadTexture("ui/wm_scroll_base.png");
+        _game.LoadTexture("ui/wm_scroll_thumb.png");
         foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture("ui/map_x" + state);
         _game.LoadTexture(MapUi.Data.World.Image);
 
@@ -261,33 +272,69 @@ public sealed class WorldMapWindow : UiWindow
             root.AddChild(o);
         }
         // the maps of the shown region: click one to travel there
-        _rows.Clear();
+        _lines.Clear();
         var here = MapUi.Region(_game.GameMap.MapId);
         if (here != null && _picked != null && _picked != here) _picked = null; // the player left that region
-        _shown = _picked ?? here;
+        var listRegion = _picked ?? here;
+        if (listRegion != _shown) _scroll = 0; // a new list starts at the top
+        _shown = listRegion;
+        _hidden = 0;
         if (_shown != null && maps.TryGetValue(_shown, out var shown))
-        {
-            int listW = _lay.Get("listW", 146), listStep = _lay.Get("listStep", 20);
-            int listX = Rect().X + _lay.Get("listX", 16);
-            int y = Rect().Y + _lay.Get("listY", 75);
-            foreach (var map in shown)
-            {
-                var lines = _game.WrapText(map.Name, listW);
-                _rows.Add((map, lines, y));
-                if (map.Id != _game.GameMap.MapId) // the map we stand on: nowhere to go
-                {
-                    var o = new GameObject();
-                    o.Add(new Rect(new Rectangle(listX, y, listW, lines.Count * listStep)));
-                    o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _game.TravelTo(map.Id); Show = false; } });
-                    root.AddChild(o);
-                }
-                y += lines.Count * listStep;
-            }
-        }
+            BuildList(root, shown);
+        // The wheel baseline: a rebuild caused by the wheel keeps it (the
+        // notches of the next frame still count), any other rebuild (the
+        // window opens, the region changes) starts fresh.
+        if (!_moved) _wheel = Mouse.GetState().ScrollWheelValue;
+        _moved = false;
         root.Add(new Invoke(Draw));
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MapWindowParts.Close(this, new Rectangle(Pos.X + _lay.Get("wcloseX", 829), Pos.Y + _lay.Get("wcloseY", 12), 11, 11)));
         Scene.Add(root);
+    }
+
+    // The map list of the shown region: every name on the lines it needs, and
+    // a click box on the part of the name that is on screen (clicking it
+    // travels there).
+    private void BuildList(GameObject root, List<MapNameUi> shown)
+    {
+        bool toEnd = _toEnd;
+        _toEnd = false;
+        var box = ListRect();
+        int listW = box.Width, listStep = _lay.Get("listStep", 20);
+        int listX = box.X, listY = box.Y;
+        int visible = box.Height / listStep;
+        // every map of the region: the name on the lines it needs
+        var names = new List<(MapNameUi Map, List<string> Lines, int Start)>();
+        int total = 0;
+        foreach (var map in shown)
+        {
+            var lines = _game.WrapText(map.Name, listW);
+            names.Add((map, lines, total));
+            total += lines.Count;
+        }
+        _hidden = Math.Max(0, total - visible);
+        _scroll = toEnd ? _hidden : Math.Clamp(_scroll, 0, _hidden);
+        _rowScroll = _scroll; // the rows and the scroll bar show this scroll
+        foreach (var (map, lines, start) in names)
+        {
+            if (start + lines.Count <= _scroll || start >= _scroll + visible) continue; // off screen
+            for (int i = 0; i < lines.Count; i++)
+            {
+                int line = start + i;
+                if (line < _scroll || line >= _scroll + visible) continue; // this line is off screen
+                _lines.Add((map, lines[i], listY + (line - _scroll) * listStep));
+            }
+            if (map.Id == _game.GameMap.MapId) continue; // the map we stand on: nowhere to go
+            var o = new GameObject();
+            // The click box is only the part of the name that is on screen:
+            // a name that is half scrolled away must not catch the clicks
+            // of the row above it.
+            int top = listY + Math.Max(0, start - _scroll) * listStep;
+            int bottom = listY + Math.Min(visible, start + lines.Count - _scroll) * listStep;
+            o.Add(new Rect(new Rectangle(listX, top, listW, bottom - top)));
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _game.TravelTo(map.Id); Show = false; } });
+            root.AddChild(o);
+        }
     }
 
     // The maps of a region that this game has. A map without an official name
@@ -312,12 +359,20 @@ public sealed class WorldMapWindow : UiWindow
         Dirty = true; // the list of maps changes
     }
 
+    // The shot mode scrolls the list to the end (the wheel is the way in the game).
+    public void ScrollToEnd()
+    {
+        _toEnd = true;
+        Dirty = true;
+    }
+
     // The map changed: rebuild the list (the map we stand on has no button).
     public void OnMapChanged() => Dirty = true;
 
     // The region marks on the world map and the maps of the shown region.
     private void Draw(UiGfx gfx)
     {
+        ReadWheel(); // the wheel scrolls the list
         var r = Rect();
         int mapId = _game.GameMap.MapId;
         var here = MapUi.Region(mapId);
@@ -332,13 +387,56 @@ public sealed class WorldMapWindow : UiWindow
         }
         if (_shown == null) return;
         gfx.Sb.Draw(gfx.Ui.GetSmall(_shown.Title), new Vector2(r.X + _lay.Get("infoX", 20), r.Y + _lay.Get("infoY", 51)), Color.White);
-        int listStep = _lay.Get("listStep", 20);
-        foreach (var (map, lines, y) in _rows)
+        var list = ListRect();
+        foreach (var (map, text, y) in _lines)
         {
             var ink = map.Id == mapId ? new Color(255, 220, 0) : Color.White;
-            for (int i = 0; i < lines.Count; i++)
-                gfx.Sb.Draw(gfx.Ui.GetSmall(lines[i]), new Vector2(r.X + _lay.Get("listX", 16), y + i * listStep), ink);
+            gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(list.X, y), ink);
         }
+        if (_hidden > 0) ScrollBar(gfx);
+    }
+
+    // The wheel scrolls the list (the official panel scrolls it too).
+    private void ReadWheel()
+    {
+        var ms = Mouse.GetState();
+        int delta = ms.ScrollWheelValue - _wheel;
+        _wheel = ms.ScrollWheelValue; // every frame, so the next delta is a step
+        if (delta == 0 || _hidden == 0) return;
+        var (gx, gy) = _game.MouseGamePos(ms);
+        if (!ListRect().Contains(gx, gy)) return;
+        int steps = delta / 120; // one notch is 120, like the chat log
+        if (steps == 0) return;
+        // The wheel up (delta > 0) shows the earlier names, so the first
+        // visible line moves up: the scroll value counts down.
+        int want = Math.Clamp(_scroll - steps * _lay.Get("wheelStep", 3), 0, _hidden);
+        if (want == _scroll) return;
+        _scroll = want;
+        _moved = true; // the next rebuild keeps the wheel baseline
+        Dirty = true; // the list moves
+    }
+
+    // The box the list sits in: the names and the rows that fit.
+    private Rectangle ListRect()
+    {
+        var r = Rect();
+        return new Rectangle(r.X + _lay.Get("listX", 16), r.Y + _lay.Get("listY", 75),
+            _lay.Get("listW", 146), _lay.Get("listH", 340));
+    }
+
+    // The official scroll bar of the list: the track and the cursor on it.
+    // The track spans the rows of the list, so it uses the list numbers.
+    // The thumb is the official art at its own size (the texture size).
+    private void ScrollBar(UiGfx gfx)
+    {
+        var box = ListRect();
+        int x = Rect().X + _lay.Get("scrollX", 165);
+        int top = box.Y;
+        int len = box.Height;
+        var thumb = gfx.Tex("ui/wm_scroll_thumb.png");
+        gfx.Sb.Draw(gfx.Tex("ui/wm_scroll_base.png"), new Rectangle(x, top, thumb.Width, len), Color.White);
+        int y = top + (len - thumb.Height) * _rowScroll / _hidden;
+        gfx.Sb.Draw(thumb, new Rectangle(x, y, thumb.Width, thumb.Height), Color.White);
     }
 }
 

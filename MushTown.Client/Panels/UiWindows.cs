@@ -19,6 +19,7 @@ public partial class MushTownGame
         var w = WindowFor(action);
         if (w == null) return;
         w.Show = !w.Show;
+        if (w.Show) w.Dirty = true; // the window opens with a fresh scene
         w.Sync();
         PlaySfx("click");
     }
@@ -30,6 +31,7 @@ public partial class MushTownGame
         var w = WindowFor(action);
         if (w == null) return;
         w.Show = true;
+        w.Dirty = true; // the window opens with a fresh scene
     }
 
     // Move a window that its title is dragging.

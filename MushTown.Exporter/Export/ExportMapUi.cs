@@ -39,6 +39,12 @@ public static partial class Export
             if (!UiPng.Save(ui, "UI", $"UIMap.img/WorldMap/button:close/{state}/0", Path.Combine(dir, $"map_x{name}.png"))) return false;
         if (!UiPng.Save(ui, "UI", "UIMap.img/WorldMap/backgrnd", Path.Combine(dir, "wm_frame.png"))) return false;
 
+        // The scroll bar of the map list (the official VScr111: the track and
+        // the cursor). The panel art has the "Cooldown" label baked in at the
+        // bottom, so a long list needs the official scroll bar.
+        if (!UiPng.Save(ui, "UI", "Basic.img/VScr111/enabled/base", Path.Combine(dir, "wm_scroll_base.png"))) return false;
+        if (!UiPng.Save(ui, "UI", "Basic.img/VScr111/enabled/thumb0", Path.Combine(dir, "wm_scroll_thumb.png"))) return false;
+
         // The channel bar: the CHANGE CHANNEL panel.
         if (!UiPng.Save(ui, "UI", "UIWindow.img/Channel/t", Path.Combine(dir, "ch_t.png"))) return false;
 

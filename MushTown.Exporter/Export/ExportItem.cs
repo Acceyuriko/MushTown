@@ -18,8 +18,8 @@ public static partial class Export
         @"Ring\01112162.img",
     };
 
-    // W10 potions: red (+50 HP) and blue (+100 MP). Heals come from the WZ
-    // spec node; icons are the info/icon canvases (_outlink to _Canvas).
+    // The potions of lists/potions.json. Heals come from the WZ spec node;
+    // icons are the info/icon canvases (_outlink to _Canvas).
     private static bool ExportPotions(WzRoot item, WzRoot str, string outDir)
     {
         foreach (int id in PotionIds)
@@ -63,11 +63,20 @@ public static partial class Export
                 Console.WriteLine($"potion {id} has a bad price {data.Price}");
                 return false;
             }
+            // A potion that restores no flat hp and no flat mp is not a
+            // potion for us: the official elixirs heal by percent (hpR/mpR),
+            // which v1 does not do.
+            if (data.Hp <= 0 && data.Mp <= 0)
+            {
+                Console.WriteLine($"potion {id} restores no flat hp and no flat mp " +
+                    $"(take it out of MushTown.Exporter/Export/lists/potions.json)");
+                return false;
+            }
             if (!UiPng.Save(item, "Item", $"Consume/0200.img/{key}/info/icon", Path.Combine(outDir, data.Image)))
                 return false;
             WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
         }
-        Console.WriteLine("potions: 2000000 2000003");
+        Console.WriteLine($"potions: {string.Join(" ", PotionIds)}");
         return true;
     }
 
