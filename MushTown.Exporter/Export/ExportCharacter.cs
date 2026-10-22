@@ -13,6 +13,11 @@ public static partial class Export
     private const string HairImg = @"Hair\00030020.img";
     private const string FaceImg = @"Face\00020000.img";
 
+    // The doll part a piece of gear replaces: a coat takes the longcoat's
+    // place, a weapon the sword's.
+    private const string BeginnerLongcoat = @"Longcoat\01050287.img";
+    private const string BeginnerSword = @"Weapon\01302000.img";
+
     // Beginner gear on top of the naked body: the modern beginner default
     // (Purple Muffler Outfit + Yellow Adventure Shoes) plus the one-handed
     // Sword the stand1/walk1/swingO1 art is baked from. The striped boxers
@@ -21,15 +26,10 @@ public static partial class Export
     private static readonly string[] CharaEquips = new[]
     {
         @"Pants\01060026.img",
-        @"Longcoat\01050287.img",
+        BeginnerLongcoat,
         @"Shoes\01072833.img",
-        @"Weapon\01302000.img",
+        BeginnerSword,
     };
-
-    // The doll part a piece of gear replaces: a coat takes the longcoat's
-    // place, a weapon the sword's.
-    private const string BeginnerLongcoat = @"Longcoat\01050287.img";
-    private const string BeginnerSword = @"Weapon\01302000.img";
 
     // img/action/frame with a uol resolved at both levels (AvatarCanvas.cs:1203-1226)
     private static Wz_Node? FindImgFrame(WzRoot looseRoot, string img, string action, int frameIdx)

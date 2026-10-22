@@ -199,12 +199,4 @@ public partial class MushTownGame
         if (act == HandAct.Wore) { PushBuild(); PushName(); PlaySfx("click"); }
         else if (act == HandAct.Moved) PlaySfx("click");
     }
-
-    // --wear poses the demo doll: wear one through the shared rule. True when worn.
-    private bool Wear(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        if (chara == null) return false; // CLI sessions carry no bag
-        return Progression.WearEquip(chara, id, _items);
-    }
 }

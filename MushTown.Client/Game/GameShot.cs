@@ -18,9 +18,9 @@ public partial class MushTownGame
         {
             _save ??= new SaveData();
             var chara = _save.Slots[_slot] ??= DemoChara();
-            // The demo bag (one item per slot: the doll wears it all)
+            // The demo bag holds one item per slot: the doll wears them all.
             foreach (int id in chara.EquipBag!.Keys.ToList())
-                if (!Wear(id)) throw new InvalidDataException($"--wear could not wear {id}");
+                Progression.WearEquip(chara, id, _items);
             BuildStatScene(); // the equip page shows the worn items: bake them in
         }
         if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))

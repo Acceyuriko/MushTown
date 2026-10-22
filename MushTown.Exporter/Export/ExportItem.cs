@@ -122,11 +122,27 @@ public static partial class Export
                 return false;
             }
             // The doll art only fits the slots the doll has: the game boots
-            // on the same slot (ItemData.Slot), so check the same node.
+            // on the same slot (ItemData.Slot), so check the same node. A
+            // piece with art must replace the part its slot names; a ring
+            // carries no art (its name tag plate does the drawing).
             string slot = Str(info, "islot");
-            if (beginner != null && !ItemData.BeginnerImgs.ContainsKey(slot))
+            if (slot == "")
             {
-                Console.WriteLine($"equip {id} has the doll slot {slot}, the doll has only {string.Join(", ", ItemData.BeginnerImgs.Keys)}");
+                Console.WriteLine($"equip {id} has no slot");
+                return false;
+            }
+            if (beginner == null)
+            {
+                if (slot != "Ri")
+                {
+                    Console.WriteLine($"equip {id} has no art (slot {slot} needs one)");
+                    return false;
+                }
+            }
+            else if (!ItemData.BeginnerImgs.TryGetValue(slot, out string? part) || part != ImgId(beginner))
+            {
+                Console.WriteLine($"equip {id} pairs {ImgId(beginner)} with slot {slot}, " +
+                    $"which replaces {ItemData.BeginnerImgs.GetValueOrDefault(slot, "nothing")}");
                 return false;
             }
             var data = new ItemData
@@ -143,11 +159,6 @@ public static partial class Export
                 NameTag = Int(info, "nameTag"),
                 HasArt = beginner != null,
             };
-            if (data.Slot == "")
-            {
-                Console.WriteLine($"equip {id} has no slot");
-                return false;
-            }
             if (data.Price <= 0 && Int(info, "cash") == 0) // cash gear carries no meso price
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
@@ -157,7 +168,7 @@ public static partial class Export
                 return false;
             WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
         }
-        Console.WriteLine($"equips: {string.Join(" ", Gears.Select(g => ImgId(g.gear)))}");
+        Console.WriteLine($"equips: {string.Join(" ", Gears.Select(g => int.Parse(ImgId(g.gear))))}");
         return true;
     }
 }
