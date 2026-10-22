@@ -30,9 +30,10 @@ public static class SoundKey
     private static string Keep(string s) =>
         new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
-    // Which death cry a mob plays. The orange mushroom (100004) and the pig
-    // (100007) have own Die nodes on their art twins, and so does the boss;
-    // every other mob's twin has none, so it falls back to the snail's.
+    // Which death cry a mob plays. The snail (100000) uses its own 0100100
+    // Die node; the orange mushroom (100004) and the pig (100007) have their
+    // own on their art twins, and so does the boss; every other mob's twin
+    // has none and falls back to the snail's.
     public static string MobDie(int mobId, bool boss) =>
         boss ? "die_boss" : mobId == 100007 ? "die_pig" : mobId == 100004 ? "die_orange" : "die_snail";
 }

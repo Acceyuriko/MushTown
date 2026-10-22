@@ -11,10 +11,11 @@ namespace MushTown.Exporter;
 // turns it into PCM WAV at export time.
 public static class SoundExport
 {
-    // (file key, path under Sound\). Mob Die sources match the Mobs art
-    // twins: the snail's carries 0100100's, the orange mushroom 1210102's,
-    // the pig 1210100's, the boss its own; the other twins have no Die node,
-    // so they fall back to the snail's.
+    // (file key, path under Sound\). The die sources match the Mobs art
+    // twins: the snail uses 0100100's Die node, the orange mushroom 1210102's,
+    // the pig 1210100's and the boss its own 6130101. The blue snail 0100101,
+    // spore 0120100, stump 0130100, red snail 0130101 and slime 0210100 have
+    // no Die node, so they fall back to the snail's.
     private static readonly (string Key, string Path)[] Sfx = new[]
     {
         ("swing_sword", @"Weapon.img\swordL\Attack"),

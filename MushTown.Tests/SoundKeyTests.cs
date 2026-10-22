@@ -33,6 +33,7 @@ public sealed class SoundKeyTests
     {
         Assert.AreEqual("die_boss", SoundKey.MobDie(100004, true));
         Assert.AreEqual("die_orange", SoundKey.MobDie(100004, false));
+        Assert.AreEqual("die_pig", SoundKey.MobDie(100007, false));
         Assert.AreEqual("die_snail", SoundKey.MobDie(100000, false));
     }
 }

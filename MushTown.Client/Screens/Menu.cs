@@ -724,6 +724,9 @@ public partial class MushTownGame
         DropNumbers();
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0; // modals never survive the exit (same map skips the reload that clears them)
         _showShop = false; // NPC-bound like talk
+        // In-game windows never survive the exit: a map list left open would
+        // keep its wheel baseline across the character screen.
+        foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
         _talkKey = ""; _questKey = ""; _trackKey = ""; // cached #h names die with the char
         DropFx();
         _fighter.Cooldowns.Clear();
