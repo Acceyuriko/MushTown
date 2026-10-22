@@ -11,6 +11,12 @@ public static partial class Export
     // rule is not id/1e8, so FindMapImg searches Map0..Map9.
     private static readonly int[] MapIds = ExportList.Load("maps");
 
+    // The margins of the official camera bounds: the x range sits 10 px
+    // inside the ground and the top 360 px above the top foothold. The
+    // bottom margin varies in the official data (the art decides it), we
+    // take 190 px.
+    private const int VrSideMargin = 10, VrTopMargin = 360, VrBottomMargin = 190;
+
     // Every portal with a real target must land on an exported map and a
     // portal name that exists there ( Tn matches the target's Pn ).
     private static bool VerifyLinks(Dictionary<int, MapData> maps)
@@ -143,6 +149,56 @@ public static partial class Export
         return bgm;
     }
 
+    // The camera bounds of the map: the official info node has them for most
+    // maps. Some maps have none at all (1000002 in our set); then the box
+    // of all the footholds plus the margins of the official maps is the
+    // bound, or the camera is pinned and the top of the art is cut off. A
+    // partial set of bounds is a broken data shape: fail loud. The four
+    // numbers are the world bounds too: the player is clamped to
+    // VrLeft..VrRight and falls out of the map at VrBottom, so they must be
+    // a real box.
+    private static bool CameraBounds(Wz_Node info, MapData map, int mapId)
+    {
+        MapInfo bounds = map.Info;
+        // The four camera bounds of the official node, in the order they are
+        // read below: left, top, right, bottom.
+        string[] vrNames = { "VRLeft", "VRTop", "VRRight", "VRBottom" };
+        int vrCount = vrNames.Count(vr => info.Nodes[vr] != null);
+        if (vrCount == 0)
+        {
+            // The spawn check of the caller proved that the list is not empty.
+            int minX = map.Footholds.Min(f => Math.Min(f.X1, f.X2));
+            int maxX = map.Footholds.Max(f => Math.Max(f.X1, f.X2));
+            int minY = map.Footholds.Min(f => Math.Min(f.Y1, f.Y2));
+            int maxY = map.Footholds.Max(f => Math.Max(f.Y1, f.Y2));
+            bounds.VrLeft = minX + VrSideMargin;
+            bounds.VrRight = maxX - VrSideMargin;
+            bounds.VrTop = minY - VrTopMargin;
+            bounds.VrBottom = maxY + VrBottomMargin;
+            Console.WriteLine($"map {mapId}: no official camera bounds, using the ground box " +
+                $"{bounds.VrLeft},{bounds.VrTop}-{bounds.VrRight},{bounds.VrBottom}");
+        }
+        else if (vrCount < 4)
+        {
+            Console.WriteLine($"map {mapId}: the official camera bounds are broken ({vrCount} of 4)");
+            return false;
+        }
+        else
+        {
+            bounds.VrLeft = Int(info, vrNames[0]);
+            bounds.VrTop = Int(info, vrNames[1]);
+            bounds.VrRight = Int(info, vrNames[2]);
+            bounds.VrBottom = Int(info, vrNames[3]);
+        }
+        if (bounds.VrRight <= bounds.VrLeft || bounds.VrBottom <= bounds.VrTop)
+        {
+            Console.WriteLine($"map {mapId}: the camera bounds are not a box " +
+                $"({bounds.VrLeft},{bounds.VrTop}-{bounds.VrRight},{bounds.VrBottom})");
+            return false;
+        }
+        return true;
+    }
+
     private static MapData? ExportMap(WzRoot root, int mapId, string outDir, HashSet<string> saved)
     {
         if (!MapNodes(root, mapId, out var scene, out var info)) return null;
@@ -150,10 +206,6 @@ public static partial class Export
         var map = new MapData { MapId = mapId };
 
         // info
-        map.Info.VrLeft = Int(info, "VRLeft");
-        map.Info.VrTop = Int(info, "VRTop");
-        map.Info.VrRight = Int(info, "VRRight");
-        map.Info.VrBottom = Int(info, "VRBottom");
         map.Info.Bgm = MapBgm(info, mapId);
         if (map.Info.Bgm == "") return null;
 
@@ -237,6 +289,8 @@ public static partial class Export
             map.Info.SpawnY = groundY.Value;
             Console.WriteLine($"map {mapId}: spawn ground y={groundY.Value}");
         }
+
+        if (!CameraBounds(info, map, mapId)) return null;
 
         // portals + ladders (cross-map Tn links are verified after all maps load)
         if (portalNode != null)
