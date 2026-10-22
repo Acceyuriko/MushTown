@@ -8,14 +8,25 @@ public static partial class Export
 {
     private static readonly int[] PotionIds = ExportList.Load("potions");
 
-    // Def + icon per wearable: art-less rings ride along (no doll pixels).
-    private static readonly string[] EquipGearPaths = new[]
+    // The gear we ship: the img path + the beginner doll part it replaces
+    // (null = the gear has no doll art, the rings carry none). One list:
+    // the item def and the doll bake both come from here.
+    private static readonly (string gear, string? beginner)[] Gears = new[]
     {
-        @"Coat\01040039.img",
-        @"Weapon\01442004.img",
-        @"Ring\01112134.img",
-        @"Ring\01112135.img",
-        @"Ring\01112162.img",
+        (@"Coat\01040039.img", BeginnerLongcoat),
+        (@"Weapon\01442004.img", BeginnerSword),
+        (@"Ring\01112134.img", null),
+        (@"Ring\01112135.img", null),
+        (@"Ring\01112162.img", null),
+        // The gear of the two shops (Sid 11000, Pan 21000).
+        (@"Weapon\01302007.img", BeginnerSword),
+        (@"Weapon\01302005.img", BeginnerSword),
+        (@"Weapon\01302004.img", BeginnerSword),
+        (@"Weapon\01302015.img", BeginnerSword),
+        (@"Coat\01040015.img", BeginnerLongcoat),
+        (@"Coat\01040007.img", BeginnerLongcoat),
+        (@"Coat\01040012.img", BeginnerLongcoat),
+        (@"Coat\01040022.img", BeginnerLongcoat),
     };
 
     // The potions of lists/potions.json. Heals come from the WZ spec node;
@@ -86,11 +97,9 @@ public static partial class Export
     // cash sit unused by design (ItemData documents the v1 gear rules).
     private static bool ExportEquips(WzRoot chara, WzRoot str, string outDir)
     {
-        var shipped = new List<int>();
-        foreach (string gear in EquipGearPaths)
+        foreach ((string gear, string? beginner) in Gears)
         {
             int id = int.Parse(ImgId(gear));
-            shipped.Add(id);
             var info = chara.Find($@"{gear}\info");
             if (info == null)
             {
@@ -112,19 +121,27 @@ public static partial class Export
                 Console.WriteLine($"equip {id} has no String name");
                 return false;
             }
+            // The doll art only fits the slots the doll has: the game boots
+            // on the same slot (ItemData.Slot), so check the same node.
+            string slot = Str(info, "islot");
+            if (beginner != null && !ItemData.BeginnerImgs.ContainsKey(slot))
+            {
+                Console.WriteLine($"equip {id} has the doll slot {slot}, the doll has only {string.Join(", ", ItemData.BeginnerImgs.Keys)}");
+                return false;
+            }
             var data = new ItemData
             {
                 ItemId = id,
                 Name = name,
                 Image = $"item/{id}.png",
-                Slot = Str(info, "islot"),
+                Slot = slot,
                 Atk = Int(info, "incPAD"),
                 Def = Int(info, "incPDD"),
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),
                 Price = Int(info, "price"),
                 NameTag = Int(info, "nameTag"),
-                HasArt = CharaGears.Any(g => ImgId(g.gear) == id.ToString("D8")),
+                HasArt = beginner != null,
             };
             if (data.Slot == "")
             {
@@ -140,7 +157,7 @@ public static partial class Export
                 return false;
             WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
         }
-        Console.WriteLine($"equips: {string.Join(" ", shipped)}");
+        Console.WriteLine($"equips: {string.Join(" ", Gears.Select(g => ImgId(g.gear)))}");
         return true;
     }
 }

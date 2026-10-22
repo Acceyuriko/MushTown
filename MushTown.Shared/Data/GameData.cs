@@ -247,6 +247,8 @@ public sealed class ItemData
     public const int BambooRing = 1112134; // Bamboo Name Tag Ring (Ri, plate 58): cash shop (later)
     public const int InkRing = 1112135; // Ink-and-Wash Painting Name Tag Ring (Ri, plate 59): cash shop (later)
     public const int IslandRing = 1112162; // Island Travel Name Tag Ring (Ri, plate 129): cash shop (later)
+    public const int LongSword = 1302007; // Long Sword (Wp, PAD 27): the shop of Sid (11000)
+    public const int LolicoArmor = 1040015; // Brown Lolico Armor (Ma, PDD 15): the shop of Pan (21000)
 
     // Beginner img per worn slot: the doll merge draws these when the slot
     // sits empty (only slots with v1 equips need entries). The beginner's

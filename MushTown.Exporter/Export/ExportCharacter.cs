@@ -26,13 +26,10 @@ public static partial class Export
         @"Weapon\01302000.img",
     };
 
-    // Wearable gear: img path + the beginner img it swaps out of the doll
-    // merge (swap position = the beginner img's slot in CharaEquips).
-    private static readonly (string gear, string beginner)[] CharaGears = new[]
-    {
-        (@"Coat\01040039.img", @"Longcoat\01050287.img"),
-        (@"Weapon\01442004.img", @"Weapon\01302000.img"),
-    };
+    // The doll part a piece of gear replaces: a coat takes the longcoat's
+    // place, a weapon the sword's.
+    private const string BeginnerLongcoat = @"Longcoat\01050287.img";
+    private const string BeginnerSword = @"Weapon\01302000.img";
 
     // img/action/frame with a uol resolved at both levels (AvatarCanvas.cs:1203-1226)
     private static Wz_Node? FindImgFrame(WzRoot looseRoot, string img, string action, int frameIdx)

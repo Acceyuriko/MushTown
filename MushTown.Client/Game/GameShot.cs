@@ -17,9 +17,10 @@ public partial class MushTownGame
         if (_shotWear) // --wear runs the real Wear path on the demo (plain shots grow one, like --skill buffs)
         {
             _save ??= new SaveData();
-            _save.Slots[_slot] ??= DemoChara();
-            foreach (int id in _equips)
-                if (!Wear(id)) throw new InvalidDataException($"--wear found no {id} in the demo bag");
+            var chara = _save.Slots[_slot] ??= DemoChara();
+            // The demo bag (one item per slot: the doll wears it all)
+            foreach (int id in chara.EquipBag!.Keys.ToList())
+                if (!Wear(id)) throw new InvalidDataException($"--wear could not wear {id}");
             BuildStatScene(); // the equip page shows the worn items: bake them in
         }
         if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))

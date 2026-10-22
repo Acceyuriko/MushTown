@@ -168,7 +168,7 @@ public partial class MushTownGame
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
             if (shotScreen is "stat" or "hud") _showStat = true;
-            if (shotScreen == "equip") { _showStat = true; _statTab = 1; _statDetail = ItemData.Mop; }
+            if (shotScreen == "equip") { _showStat = true; _statTab = 1; _statDetail = ItemData.LongSword; }
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
             if (shotScreen == "quest") { _showQuest = true; _topPanel = 3; }
             if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
@@ -212,7 +212,9 @@ public partial class MushTownGame
     // The Lv.7 shot dummy: leveled stats (6 level-ups at +4/+1), half-full
     // EXP bar, full pools, 3 SP spent on Slash Blast (Lv.7 casts Spirit
     // Blade, the only buff with loop art). Plain --skill buff shots (no
-    // screen, no account) borrow it too.
+    // screen, no account) borrow it too. The bag holds one item per slot
+    // (the shop weapon, the shop coat, one ring), so the --wear shot shows
+    // the new art whatever order the bag walks in.
     private static CharaSlot DemoChara() => new()
     {
         Name = "hero",
@@ -229,7 +231,7 @@ public partial class MushTownGame
         Sp = 18, // earned 21 (creation 3 + 6 level-ups), spent 3 on Slash Blast
         SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
         Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
-        EquipBag = new Dictionary<int, int> { { ItemData.Mop, 1 }, { ItemData.Sergeant, 1 }, { ItemData.BambooRing, 1 }, { ItemData.InkRing, 1 }, { ItemData.IslandRing, 1 } },
+        EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },
     };
 
     // Item defs (Initialize phase: the doll art loop needs the roster before

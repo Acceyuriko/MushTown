@@ -86,8 +86,9 @@ public static partial class Export
                 return;
             }
         }
-        foreach ((string gear, string beginner) in CharaGears)
+        foreach ((string gear, string? beginner) in Gears)
         {
+            if (beginner == null) continue; // the rings carry no doll art
             foreach (string action in Net.Actions)
             {
                 if (!ExportCharacter(baseRoot, chara, outDir, action, gear, beginner))
@@ -187,7 +188,7 @@ public static partial class Export
         WriteJson(Path.Combine(outDir, "manifest.json"), new ManifestData
         {
             Potions = PotionIds.OrderBy(x => x).ToList(),
-            Equips = EquipGearPaths.Select(g => int.Parse(ImgId(g))).OrderBy(x => x).ToList(),
+            Equips = Gears.Select(g => int.Parse(ImgId(g.gear))).OrderBy(x => x).ToList(),
             Skills = Skills.Keys.OrderBy(x => x).ToList(),
         });
         // Tracked art/fonts (official free Nexon fonts, see art/fonts/README.md)
