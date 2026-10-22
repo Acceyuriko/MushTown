@@ -75,6 +75,13 @@ public static partial class Export
         foreach (string piece in new[] { "base_t", "base_c", "base_b", "prev", "next" })
             if (!UiPng.Save(ui, $"{chat}/view/scroll/disabled/{piece}", Path.Combine(dir, $"chat_scroll_off_{piece}.png"))) return false;
 
+        // the chat target button of the input row: the official switch
+        // between the world and the party. The button shows the target the
+        // line goes to, so both words are needed.
+        foreach (var (node, name) in new[] { ("all", "chat_target_all"), ("party", "chat_target_party") })
+            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
+                if (!UiPng.Save(ui, $"{chat}/input/chatTarget/{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
+
         // the NPC talk art ships with the chat art
         if (!ExportTalkUi(ui, outDir)) return false;
 
@@ -130,6 +137,38 @@ public static partial class Export
         foreach (string piece in new[] { "prev0", "prev1", "prev2", "base", "next0", "next1", "next2", "thumb0", "thumb1", "thumb2" })
             if (!UiPng.Save(ui, $"Quest.img/Helper/scroll:list/enabled/{piece}", Path.Combine(dir, $"talk_helper_scroll_{piece}.png"))) return false;
 
+        // the dialogue frame and its buttons: the NPC talk and the party
+        // invite popup use the same box
+        if (!ExportDialogUi(ui, outDir)) return false;
+
+        // the blue system popup: the "congratulations" window and its family
+        for (int i = 0; i <= 18; i++)
+            if (!UiPng.Save(ui, $"UIWindow2.img/Notice/{i}", Path.Combine(dir, $"notice_popup_{i}.png"))) return false;
+        foreach (var (node, name) in new[]
+        {
+            ("btOK", "notice_btok"),
+            ("btYes", "notice_btyes"),
+            ("btNo", "notice_btno"),
+        })
+            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
+                if (!UiPng.Save(ui, $"UIWindow2.img/Notice/{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
+
+        // the small frame the NPC uses for a short line of talk
+        for (int i = 0; i < 4; i++)
+            if (!UiPng.Save(ui, $"Basic.img/Monologue/0/{i}", Path.Combine(dir, $"talk_monologue_{i}.png"))) return false;
+
+        Console.WriteLine("talk ui: helper window, dialogue frame, system popup, monologue");
+        return true;
+    }
+
+    // The dialogue box (UI/UIWindow2.img/UtilDlgEx): the frame with the
+    // name tab, the text area and the buttons. The NPC talk and the party
+    // invite popup both use it.
+    public static bool ExportDialogUi(WzRoot ui, string outDir)
+    {
+        string dir = Path.Combine(outDir, "ui");
+        Directory.CreateDirectory(dir);
+
         // the dialogue frame: top, middle and bottom. The i* ones are the
         // same frame with the icon column on the left.
         foreach (var (node, name) in new[]
@@ -161,23 +200,6 @@ public static partial class Export
             foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
                 if (!UiPng.Save(ui, $"UIWindow2.img/UtilDlgEx/{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
 
-        // the blue system popup: the "congratulations" window and its family
-        for (int i = 0; i <= 18; i++)
-            if (!UiPng.Save(ui, $"UIWindow2.img/Notice/{i}", Path.Combine(dir, $"notice_popup_{i}.png"))) return false;
-        foreach (var (node, name) in new[]
-        {
-            ("btOK", "notice_btok"),
-            ("btYes", "notice_btyes"),
-            ("btNo", "notice_btno"),
-        })
-            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
-                if (!UiPng.Save(ui, $"UIWindow2.img/Notice/{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
-
-        // the small frame the NPC uses for a short line of talk
-        for (int i = 0; i < 4; i++)
-            if (!UiPng.Save(ui, $"Basic.img/Monologue/0/{i}", Path.Combine(dir, $"talk_monologue_{i}.png"))) return false;
-
-        Console.WriteLine("talk ui: helper window, dialogue frame, system popup, monologue");
         return true;
     }
 }

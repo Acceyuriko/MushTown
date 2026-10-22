@@ -137,15 +137,25 @@ public partial class MushTownGame : Game
         // player) the line stays in the chat.
         _chatWindow = new ChatWindow(this, text =>
         {
-            if (_net != null && _net.Connected) { _net.SendChat(text); return; }
+            if (_net != null && _net.Connected)
+            {
+                // the chat target decides where the line goes: the world or
+                // the party
+                if (_chatWindow.PartyTarget) _net.SendPartyChat(text);
+                else _net.SendChat(text);
+                return;
+            }
             _chatWindow.AddLine(_save?.Slots[_slot]?.Name ?? "Me", text);
         });
         new MinimapWindow(this); // the new windows keep themselves in the list
         new WorldMapWindow(this);
         new KeyConfigWindow(this);
+        _partyWindow = new PartyWindow(this);
+        _partySearchWindow = new PartySearchWindow(this);
         _guideWindow = new GuideWindow(this);
         _guideCardWindow = new GuideCardWindow(this);
         _menuWindow = new MenuWindow(this);
+        _partyAskWindow = new PartyAskWindow(this); // the invite popup sits on top of the other windows
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
@@ -386,7 +396,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide" or "guidecard";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -721,7 +731,13 @@ public partial class MushTownGame : Game
                     plate.Plate = n.Plate;
                 }
             }
-            while (_net.TryTakeChat(out var chat)) _chatWindow.AddLine(chat.Name, chat.Text);            // Quest events drain before mob hits: a level-up inside ApplyHit
+            while (_net.TryTakeChat(out var chat)) _chatWindow.AddLine(chat.Name, chat.Text);
+            // the party: the member list, the invite list and the invite that
+            // waits for an answer (the party chat lines are chat lines)
+            while (_net.TryTakeParty(out var party)) SetPartyMembers(party.Members);
+            while (_net.TryTakePartyPlayers(out var players)) SetPartyPlayers(players.Players);
+            while (_net.TryTakePartyAsk(out var ask)) SetPartyAsk(ask);
+            // Quest events drain before mob hits: a level-up inside ApplyHit
             // re-syncs, and the sync must carry the counters this frame's
             // kills pushed (not wipe them on the server's copy).
             while (_net.TryTakeQuest(out var q))
@@ -760,6 +776,8 @@ public partial class MushTownGame : Game
             }
             if (!_net.Connected && _remotes.Count > 0)
                 ClearPeers(); // link lost: peers vanish, the local world takes over
+            if (!_net.Connected && (PartyMembers.Length > 0 || PartyAsk != null || PartyPlayers.Length > 0))
+                ClearParty(); // link lost: the party is gone with it
             if (!_net.Connected && _localWorld == null)
                 StartLocalWorld(); // link lost: a fresh local world keeps the mobs working (kills come back: the drop resets the session)
         }
@@ -955,7 +973,7 @@ public partial class MushTownGame : Game
         _settingsPos = SettingsLayoutPos();
         _shopPos = new Point(0, 0); _shopPlaced = false; // the shop window takes its spot from its own file again
         _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
-        foreach (var w in UiWindow.List) { w.Pos = w.LayoutPos(); w.Built = false; w.Drag = null; } // the new windows go back to the file spot
+        foreach (var w in UiWindow.List) { w.Pos = w.LayoutPos(); w.Dirty = true; w.Drag = null; } // the new windows go back to the file spot
         if (_contentLoaded) BuildScreenScene(); // ctor reload skips: no textures yet
     }
 

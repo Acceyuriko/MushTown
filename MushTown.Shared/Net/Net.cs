@@ -28,6 +28,16 @@ public static class Net
     public const byte QuestKill = 21; // server -> client: int quest, int index, int count (authoritative counter)
     public const byte Chat = 22; // client -> server: string text; the server relays int id, string name, string text
 
+    public const byte PartyMake = 23;   // client -> server: make a party (the sender leads it)
+    public const byte PartyInvite = 24; // client -> server: int target (the target gets the ask)
+    public const byte PartyAsk = 25;    // server -> client: int from, string name (the invite)
+    public const byte PartyAnswer = 26; // client -> server: byte accept
+    public const byte PartyInfo = 27;   // server -> client: int n + n * (int id, string name, int level)
+    public const byte PartyLeave = 28;  // client -> server: leave the party
+    public const byte PartyChat = 29;   // client -> server: string text; the server relays string name, string text to the party
+    public const byte PartyList = 30;   // client -> server: the players of my map (the invite list)
+    public const byte PartyPlayers = 31; // server -> client: int n + n * (int id, string name, int level)
+
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
     public const byte ActJump = 2;
@@ -130,6 +140,19 @@ public readonly record struct QuestEvent(bool Kill, int Quest, int Index, int Co
 // One chat line from the server: who said what (the sender name and the
 // text). The server adds the name to every line.
 public readonly record struct ChatEvent(string Name, string Text);
+
+// One party member: the id, the name and the level.
+public readonly record struct PartyMember(int Id, string Name, int Level);
+
+// The party member list from the server. An empty list means no party. The
+// first member is the leader.
+public readonly record struct PartyEvent(PartyMember[] Members);
+
+// The players of the map, for the invite list: the id, the name and the level.
+public readonly record struct PartyPlayersEvent(PartyMember[] Players);
+
+// An invite to join a party: who asked. The client answers the server.
+public readonly record struct PartyAskEvent(int Id, string Name);
 
 // Accumulates raw TCP bytes and yields whole payloads (header eaten).
 // TCP splits and merges at will, so one Feed can yield zero, one, or more.

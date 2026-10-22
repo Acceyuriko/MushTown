@@ -29,8 +29,8 @@ public partial class MushTownGame
             if (json == null) return;
             _bgm.Volume = json.Bgm;
             _sfxVol = Math.Clamp(json.Sfx, 0, 100);
-            LoadHotkeys(json.Keys);
-            LoadHotkeyPresets(json.Presets);
+            LoadHotkeys(json.Keys, json.KeyVersion);
+            LoadHotkeyPresets(json.Presets, json.KeyVersion);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
     }
@@ -38,13 +38,14 @@ public partial class MushTownGame
     private void SaveSettings()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); // fresh checkouts have no data/ yet (SaveStore.Save does the same)
-        File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgm.Volume, Sfx = _sfxVol, Keys = SaveHotkeys(), Presets = SaveHotkeyPresets() }));
+        File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new Settings { Bgm = _bgm.Volume, Sfx = _sfxVol, KeyVersion = KeyVersion, Keys = SaveHotkeys(), Presets = SaveHotkeyPresets() }));
     }
 
     private sealed class Settings
     {
         public int Bgm { get; set; } = 80;
         public int Sfx { get; set; } = 80;
+        public int KeyVersion { get; set; } // the key set version (an old file has none)
         public Dictionary<string, string>? Keys { get; set; } // the panel hotkeys (action name -> key name)
         public List<Dictionary<string, string>>? Presets { get; set; } // the three saved binding sets
     }

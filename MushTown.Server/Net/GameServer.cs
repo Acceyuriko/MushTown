@@ -14,7 +14,7 @@ namespace MushTown.Server;
 // spawns, and each Attack is judged from the sender's last State and
 // broadcast as MobHit (clients drop hits for other maps, like states).
 // All socket work runs on background tasks; the host only calls Start/Dispose.
-public sealed class GameServer : IDisposable
+public sealed partial class GameServer : IDisposable
 {
     private sealed class Client
     {
@@ -196,16 +196,54 @@ public sealed class GameServer : IDisposable
             _names.Remove(id);
             _questLogs.Remove(id);
         }
+        int party;
+        lock (_partyOps) // the party change and its list go together
+        {
+            party = _party.PartyOf(id);
+            _party.Leave(id);
+            if (party != 0) PushParty(party); // the party sees the member leave
+        }
         client.Tcp.Close();
         Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
         _log($"client {id} left");
     }
 
-    // Clients send State, Attack, Build, SkillCast, Pickup, Name, Chat, and
-    // the quest trio (Sync/Accept/Complete); anything else means a foreign client.
+    // Clients send State, Attack, Build, SkillCast, Pickup, Name, Chat, the
+    // quest trio (Sync/Accept/Complete) and the party messages; anything else
+    // means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
+        if (payload[0] == Net.PartyMake && payload.Length == 1)
+        {
+            OnPartyMake(id);
+            return;
+        }
+        if (payload[0] == Net.PartyInvite && payload.Length == 5)
+        {
+            OnPartyInvite(id, BitConverter.ToInt32(payload, 1));
+            return;
+        }
+        if (payload[0] == Net.PartyAnswer && payload.Length == 2)
+        {
+            OnPartyAnswer(id, payload[1] != 0);
+            return;
+        }
+        if (payload[0] == Net.PartyLeave && payload.Length == 1)
+        {
+            OnPartyLeave(id);
+            return;
+        }
+        if (payload[0] == Net.PartyChat)
+        {
+            OnPartyChat(id, payload);
+            return;
+        }
+        if (payload[0] == Net.PartyList && payload.Length == 1)
+        {
+            OnPartyList(id);
+            return;
+        }
         if (payload[0] == Net.Name)
         {
             OnName(id, payload);
@@ -313,10 +351,7 @@ public sealed class GameServer : IDisposable
         {
             throw new InvalidDataException($"bad chat from {id} ({ex.Message})");
         }
-        string name;
-        lock (_mobLock)
-            name = _names.TryGetValue(id, out var n) ? n.name : "";
-        if (name == "") name = "Player " + id; // a client that never sent a name
+        string name = PlayerName(id);
         Broadcast(Net.Encode(Net.Chat, w =>
         {
             w.Write(name);
@@ -346,6 +381,7 @@ public sealed class GameServer : IDisposable
         {
             throw new InvalidDataException($"bad quest sync from {id} ({ex.Message})");
         }
+        int oldLevel = 0;
         lock (_mobLock)
         {
             // Re-syncs merge, never clobber: a level-up Sync can trail an
@@ -354,6 +390,7 @@ public sealed class GameServer : IDisposable
             // then re-shrinks: harmless, payouts stay client-guarded).
             if (_questLogs.TryGetValue(id, out var old))
             {
+                oldLevel = old.chara.Level;
                 foreach (int q in old.chara.Quests) if (!chara.Quests.Contains(q)) chara.Quests.Add(q);
                 foreach (int q in old.chara.QuestsDone) if (!chara.QuestsDone.Contains(q)) chara.QuestsDone.Add(q);
                 foreach (var kv in old.chara.QuestKills)
@@ -362,6 +399,14 @@ public sealed class GameServer : IDisposable
             var log = new QuestLog(_questDefs);
             log.Sync(chara);
             _questLogs[id] = (log, chara);
+        }
+        if (oldLevel != chara.Level) // a level-up: the party list shows the level
+        {
+            lock (_partyOps)
+            {
+                int party = _party.PartyOf(id);
+                if (party != 0) PushParty(party);
+            }
         }
     }
 

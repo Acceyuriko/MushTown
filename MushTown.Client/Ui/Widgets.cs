@@ -571,7 +571,7 @@ public sealed class TalkButton : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         var b = Owner.Get<Rect>()!.Box;
-        string state = gfx.Pressed ? "_p.png" : _hover() == _id ? "_h.png" : "_n.png";
+        string state = _hover() == _id ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
         gfx.Sb.Draw(gfx.Tex($"ui/{_stem}{state}"), new Vector2(b.X, b.Y), Color.White);
         var t = gfx.Ui.GetSmall(_label);
         gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + _dy), Color.Black);

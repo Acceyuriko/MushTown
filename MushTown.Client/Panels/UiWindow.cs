@@ -18,7 +18,8 @@ public abstract class UiWindow
     public HotkeyAction Action; // the key that opens it
     public Point? Drag;       // the grab offset while the title is held
     private Point _builtPos;
-    public bool Built;        // the scene was built at least once
+    private bool _built;      // the scene was built at least once
+    public bool Dirty;        // the state changed: the scene has to be built again
 
     protected UiWindow(HotkeyAction action)
     {
@@ -44,14 +45,15 @@ public abstract class UiWindow
     // Start a title drag: the game moves the window while the mouse is held.
     public void StartDrag() => Drag = new Point(Scene.LastClick.X - Pos.X, Scene.LastClick.Y - Pos.Y);
 
-    // Rebuild the scene when the window moved.
+    // Rebuild the scene when the window moved or the state changed.
     public void Sync()
     {
-        if (!Built || Pos != _builtPos)
+        if (!_built || Pos != _builtPos || Dirty)
         {
+            Dirty = false; // the flag is cleared first: a build that wants a new build says so
             Build();
             _builtPos = Pos;
-            Built = true;
+            _built = true;
         }
     }
 }

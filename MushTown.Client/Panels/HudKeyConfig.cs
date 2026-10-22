@@ -56,6 +56,7 @@ public sealed class KeyConfigWindow : UiWindow
         (HotkeyAction.Skill, 3),
         (HotkeyAction.Quest, 8),
         (HotkeyAction.WorldMap, 5),
+        (HotkeyAction.Party, 19),
         (HotkeyAction.Settings, 46),
     };
 

@@ -11,12 +11,13 @@ namespace MushTown.Client;
 public sealed class ChatWindow : UiWindow
 {
     // The filter tabs, in the order they sit in the window. The official
-    // chat has four tabs, but Party and Friend need a party and a whisper:
-    // the protocol has neither, so those tabs are not drawn.
+    // chat has four tabs, but Friend needs a whisper: the protocol has
+    // none, so that tab is not drawn. The party lines show in the All tab
+    // and the party chat button in the input row sends to the party.
     private enum Tab { All, Etc }
 
     // One log line. The tab says where the line shows up: a normal chat
-    // line is All, a system line is Etc.
+    // line (and a party line) is All, a system line is Etc.
     private sealed record Line(string Name, string Text, Tab Tab);
 
     // The art the exporter writes (assets/ui/chat_*.png).
@@ -55,6 +56,7 @@ public sealed class ChatWindow : UiWindow
     private bool _focused;
     private bool _mouseDown; // the mouse button was down last frame
     private bool _minimised; // the chat is folded into a small box
+    private bool _partyTarget; // the line goes to the party instead of the world
     private int _scroll; // the lines the log is scrolled up from the newest
     private int _wheel; // the wheel value of the last frame
     private GameObject? _minBox; // the minimised box (the hover changes its art)
@@ -99,8 +101,15 @@ public sealed class ChatWindow : UiWindow
         return w + MinBtnW + _lay.Get("btnGap", 1);
     }
     private int BarW() => _lay.Get("w", 315) - ButtonsW();
+    // The input field starts after the chat target button (the official
+    // spot: the target button is 60 wide at x=6, the field at x=71).
+    private int FieldX() => _lay.Get("fieldX", 71);
     private Rectangle InputRect() => new(Pos.X, Pos.Y + _lay.Get("inputY", 125), BarW(), _lay.Get("inputH", 25));
     private Rectangle SettingsRect() => new(Pos.X + BarW(), Pos.Y + _lay.Get("inputY", 125), _lay.Get("btnW", 24), _lay.Get("inputH", 25));
+
+    // The chat target button: it says where the line goes when it is
+    // clicked (the world or the party).
+    private Rectangle TargetRect() => new(Pos.X + _lay.Get("targetX", 6), Pos.Y + _lay.Get("inputY", 125) + _lay.Get("targetY", 1), 60, 24);
 
     // The window buttons follow the settings button, the minimise last.
     private Rectangle WinArtRect(int i)
@@ -124,10 +133,35 @@ public sealed class ChatWindow : UiWindow
     // True while the input has the focus: the game gives the keys to the chat.
     public bool Focused => _focused;
 
-    // A chat line from a player.
+    // The chat target: the line goes to the party instead of the world.
+    public bool PartyTarget => _partyTarget;
+
+    // The target button swaps the target. Without a party there is no party
+    // to write to: the button says so instead of doing nothing.
+    private void ToggleTarget()
+    {
+        if (!_partyTarget && _game.PartyMembers.Length == 0)
+        {
+            AddSystem("you are not in a party.");
+            return;
+        }
+        SetPartyTarget(!_partyTarget);
+    }
+
+    // The chat target: the line goes to the party or to the world. The
+    // scene is built again so the button shows the other word.
+    public void SetPartyTarget(bool on)
+    {
+        if (_partyTarget == on) return;
+        _partyTarget = on;
+        Dirty = true; // the game rebuilds the scene on the next frame
+    }
+
+    // A chat line from a player. A line without a name is a system line
+    // from the server: it belongs to the Etc. tab.
     public void AddLine(string name, string text)
     {
-        _lines.Add(new Line(name, text, Tab.All));
+        _lines.Add(new Line(name, text, name == "" ? Tab.Etc : Tab.All));
         if (_lines.Count > MaxLines) _lines.RemoveAt(0);
     }
 
@@ -221,6 +255,8 @@ public sealed class ChatWindow : UiWindow
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
         foreach (string stem in new[] { "chat_btaddtab", "chat_btmax", "chat_btoutchat", MinBtnStem })
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
+        foreach (string stem in new[] { "chat_target_all", "chat_target_party" })
+            foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
         foreach (string stem in new[] { "chat_scroll", "chat_scroll_off" })
             foreach (string piece in new[] { "base_t", "base_c", "base_b" }) _game.LoadTexture($"ui/{stem}_{piece}.png");
         foreach (string piece in new[] { "thumb0", "thumb1", "thumb2" }) _game.LoadTexture($"ui/chat_scroll_{piece}.png");
@@ -277,6 +313,14 @@ public sealed class ChatWindow : UiWindow
         input.Add(new Rect(InputRect()));
         input.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _focused = true });
         root.AddChild(input);
+
+        // the chat target button: it shows where the line goes now (the
+        // official art: "To All" or "To Party")
+        var target = new GameObject();
+        target.Add(new Rect(TargetRect()));
+        target.Add(new Button { Kind = ButtonKind.Click, OnClick = ToggleTarget });
+        target.Add(new Image(_partyTarget ? "ui/chat_target_party" : "ui/chat_target_all"));
+        root.AddChild(target);
 
         // the settings button: the official art, it opens the options window.
         // The other official buttons (whisper, link, command, emoticon) have
@@ -383,7 +427,7 @@ public sealed class ChatWindow : UiWindow
         gfx.Sb.Draw(gfx.Tex("ui/chat_input_c.png"), new Rectangle(bar.X + cap, bar.Y, bar.Width - 2 * cap, bar.Height), Color.White);
         gfx.Sb.Draw(gfx.Tex("ui/chat_input_e.png"), new Vector2(bar.Right - cap, bar.Y), Color.White);
         var t = gfx.Ui.GetSmall(_input);
-        int tx = bar.X + _lay.Get("inputPadX", 8);
+        int tx = bar.X + FieldX(); // the text starts after the target button
         gfx.Sb.Draw(t, new Vector2(tx, bar.Y + (bar.Height - t.Height) / 2), Color.White);
         if (_focused) gfx.Sb.Draw(gfx.Pixel, new Rectangle(tx + t.Width + _lay.Get("caretDx", 1), bar.Y + _lay.Get("caretDy", 6),
             _lay.Get("caretW", 1), _lay.Get("caretH", 12)), Color.White);
@@ -431,12 +475,12 @@ public sealed class ChatWindow : UiWindow
     {
         _minimised = true;
         _focused = false;
-        Built = false; // the game rebuilds the scene on the next frame
+        Dirty = true; // the game rebuilds the scene on the next frame
     }
 
     private void Restore()
     {
         _minimised = false;
-        Built = false;
+        Dirty = true;
     }
 }

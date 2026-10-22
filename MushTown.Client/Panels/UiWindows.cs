@@ -40,7 +40,7 @@ public partial class MushTownGame
             if (!w.Show) { w.Drag = null; continue; }
             if (!w.Drag.HasValue) continue;
             if (!held) { w.Drag = null; continue; }
-            w.Pos = ClampPanel(new Point(gx - w.Drag.Value.X, gy - w.Drag.Value.Y), w.Rect().Width);
+            w.Pos = ClampPanel(new Point(gx - w.Drag.Value.X, gy - w.Drag.Value.Y), w.Rect().Width, w.Rect().Height);
         }
     }
 
@@ -84,6 +84,7 @@ public partial class MushTownGame
             SfxOnHover(w.Scene.Hover(gx, gy));
             hit = true;
         }
+        if (!hit) SfxOnHover(""); // no window has the mouse: the last hover id goes away
         return hit;
     }
 }

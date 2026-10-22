@@ -21,6 +21,7 @@ public static class HotkeyBar
         (HotkeyAction.Skill, Feature.Skill),
         (HotkeyAction.Quest, Feature.Quest),
         (HotkeyAction.WorldMap, Feature.WorldMap),
+        (HotkeyAction.Party, Feature.Party),
         (HotkeyAction.Settings, Feature.Settings),
     };
 
@@ -45,7 +46,7 @@ public static class HotkeyBar
 
     // One cell box.
     private static Rectangle CellRect(int i) => new(
-        _lay.Get("x", 715) + i * _lay.Get("pitch", 35),
+        _lay.Get("x", 680) + i * _lay.Get("pitch", 35),
         _lay.Get("y", 645),
         _lay.Get("cellW", 35), _lay.Get("cellH", 33));
 }

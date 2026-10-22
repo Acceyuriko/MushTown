@@ -19,6 +19,9 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<NameEvent> _nameEvents = new();
     private readonly ConcurrentQueue<QuestEvent> _questEvents = new();
     private readonly ConcurrentQueue<ChatEvent> _chatEvents = new();
+    private readonly ConcurrentQueue<PartyEvent> _partyEvents = new();
+    private readonly ConcurrentQueue<PartyPlayersEvent> _partyPlayersEvents = new();
+    private readonly ConcurrentQueue<PartyAskEvent> _partyAskEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -187,6 +190,48 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.Chat, w => w.Write(text)));
     }
 
+    // Make a party (we lead it).
+    public void SendPartyMake()
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.PartyMake, w => { }));
+    }
+
+    // Ask another player to join our party.
+    public void SendPartyInvite(int target)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.PartyInvite, w => w.Write(target)));
+    }
+
+    // The answer to an invite we got.
+    public void SendPartyAnswer(bool accept)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.PartyAnswer, w => w.Write((byte)(accept ? 1 : 0))));
+    }
+
+    // Leave the party.
+    public void SendPartyLeave()
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.PartyLeave, w => { }));
+    }
+
+    // One party chat line: the server relays it to the party only.
+    public void SendPartyChat(string text)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.PartyChat, w => w.Write(text)));
+    }
+
+    // Ask for the players of our map (the invite list).
+    public void SendPartyList()
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.PartyList, w => { }));
+    }
+
     private void SendFrame(byte[] frame)
     {
         try
@@ -218,6 +263,12 @@ public sealed class NetClient : IDisposable
     public bool TryTakeQuest(out QuestEvent e) => _questEvents.TryDequeue(out e);
 
     public bool TryTakeChat(out ChatEvent e) => _chatEvents.TryDequeue(out e);
+
+    public bool TryTakeParty(out PartyEvent e) => _partyEvents.TryDequeue(out e);
+
+    public bool TryTakePartyPlayers(out PartyPlayersEvent e) => _partyPlayersEvents.TryDequeue(out e);
+
+    public bool TryTakePartyAsk(out PartyAskEvent e) => _partyAskEvents.TryDequeue(out e);
 
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
@@ -308,6 +359,68 @@ public sealed class NetClient : IDisposable
             {
                 using var ms = new MemoryStream(p, 1, p.Length - 1);
                 using var r = new BinaryReader(ms);
+                _chatEvents.Enqueue(new ChatEvent(r.ReadString(), r.ReadString()));
+            }
+            catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
+            {
+                _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
+            }
+        }
+        else if (p[0] == Net.PartyAsk)
+        {
+            try
+            {
+                using var ms = new MemoryStream(p, 1, p.Length - 1);
+                using var r = new BinaryReader(ms);
+                _partyAskEvents.Enqueue(new PartyAskEvent(r.ReadInt32(), r.ReadString()));
+            }
+            catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
+            {
+                _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
+            }
+        }
+        else if (p[0] == Net.PartyInfo)
+        {
+            try
+            {
+                using var ms = new MemoryStream(p, 1, p.Length - 1);
+                using var r = new BinaryReader(ms);
+                int n = r.ReadInt32();
+                if (n < 0 || n > 64) throw new FormatException("bad party count");
+                var members = new PartyMember[n];
+                for (int i = 0; i < n; i++) members[i] = new PartyMember(r.ReadInt32(), r.ReadString(), r.ReadInt32());
+                _partyEvents.Enqueue(new PartyEvent(members));
+            }
+            catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
+            {
+                _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
+            }
+        }
+        else if (p[0] == Net.PartyPlayers)
+        {
+            try
+            {
+                using var ms = new MemoryStream(p, 1, p.Length - 1);
+                using var r = new BinaryReader(ms);
+                int n = r.ReadInt32();
+                if (n < 0 || n > 64) throw new FormatException("bad player count");
+                var players = new PartyMember[n];
+                for (int i = 0; i < n; i++) players[i] = new PartyMember(r.ReadInt32(), r.ReadString(), r.ReadInt32());
+                _partyPlayersEvents.Enqueue(new PartyPlayersEvent(players));
+            }
+            catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
+            {
+                _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
+            }
+        }
+        else if (p[0] == Net.PartyChat)
+        {
+            try
+            {
+                using var ms = new MemoryStream(p, 1, p.Length - 1);
+                using var r = new BinaryReader(ms);
+                // a party line is a normal chat line: the log shows it in the
+                // All tab, next to the lines of the world
                 _chatEvents.Enqueue(new ChatEvent(r.ReadString(), r.ReadString()));
             }
             catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal

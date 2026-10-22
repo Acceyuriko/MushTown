@@ -162,7 +162,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide" or "guidecard" => Screen.Game,
+                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
                 _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
@@ -179,6 +179,16 @@ public partial class MushTownGame
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
             if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);
+            if (shotScreen is "party" or "partysearch" or "partyask")
+            {
+                // the demo party: the shot shows the member rows
+                PartyMembers = new[] { new PartyMember(1, "Sugar", 42), new PartyMember(2, "hero", 7) };
+                PartyPlayers = new[] { new PartyMember(3, "Sugar", 42), new PartyMember(4, "hero", 7) };
+                PartyAsk = new PartyAskEvent(1, "Sugar");
+                ShowWindow(HotkeyAction.Party);
+                if (shotScreen == "partysearch") ShowWindow(HotkeyAction.PartySearch);
+                if (shotScreen == "partyask") ShowWindow(HotkeyAction.PartyAsk);
+            }
             if (shotScreen == "chars2") _page = 1; // empty page: the demo fills page 1 only
             if (shotScreen == "job2") { _jobPage = 1; _jobPick = 14; } // second card page: proves paging draws other classes
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
@@ -705,6 +715,7 @@ public partial class MushTownGame
         _net = null;
         _server = null;
         ClearPeers();
+        ClearParty(); // the party dies with the session (the members, the ask and the chat target)
         _localWorld = null;
         ClearMobs();
         ClearDrops();

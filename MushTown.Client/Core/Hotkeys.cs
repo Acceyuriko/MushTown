@@ -12,6 +12,9 @@ public enum HotkeyAction
     Quest,
     Minimap,
     WorldMap,
+    Party,      // the party window
+    PartySearch, // no key: the party window opens the search window
+    PartyAsk,   // no key: the server sends the invite
     Settings,
     KeyConfig, // no key by default: the options window opens it
     Menu,      // no key: the HUD menu button opens the MENU window
@@ -22,6 +25,11 @@ public enum HotkeyAction
 
 public partial class MushTownGame
 {
+    // The version of the key set: the settings file says which one it was
+    // written for. A file from an older build has no version and holds the
+    // old keys, so the defaults are used instead.
+    private const int KeyVersion = 1;
+
     // action -> key name. The key settings panel edits this and saves it.
     private readonly Dictionary<HotkeyAction, string> _hotkeys = new()
     {
@@ -31,7 +39,8 @@ public partial class MushTownGame
         [HotkeyAction.Quest] = "V",
         [HotkeyAction.Minimap] = "",   // the minimap is always on the screen
         [HotkeyAction.WorldMap] = "M",
-        [HotkeyAction.Settings] = "P",
+        [HotkeyAction.Party] = "P",
+        [HotkeyAction.Settings] = "O",
         [HotkeyAction.KeyConfig] = "",
     };
 
@@ -91,7 +100,8 @@ public partial class MushTownGame
         [HotkeyAction.Quest] = "V",
         [HotkeyAction.Minimap] = "",   // the minimap is always on the screen
         [HotkeyAction.WorldMap] = "M",
-        [HotkeyAction.Settings] = "P",
+        [HotkeyAction.Party] = "P",
+        [HotkeyAction.Settings] = "O",
         [HotkeyAction.KeyConfig] = "",
     };
 
@@ -120,9 +130,13 @@ public partial class MushTownGame
 
     // Load the saved bindings (a missing file keeps the defaults).
     // A binding is one key ("I") or a combo of two ("I+K").
-    private void LoadHotkeys(Dictionary<string, string>? saved)
+    // The version says which key set the file was written for: an old file
+    // holds the old keys (the party key would fight with the old settings
+    // key) and an old key cannot be told from a key the player picked, so
+    // an old file keeps the defaults.
+    private void LoadHotkeys(Dictionary<string, string>? saved, int version)
     {
-        if (saved == null) return;
+        if (saved == null || version != KeyVersion) return;
         foreach (var (action, key) in saved)
             if (Enum.TryParse<HotkeyAction>(action, out var a))
             {
@@ -146,9 +160,9 @@ public partial class MushTownGame
     }
 
     // Load the saved preset slots (a missing list keeps the empty slots).
-    private void LoadHotkeyPresets(List<Dictionary<string, string>>? saved)
+    private void LoadHotkeyPresets(List<Dictionary<string, string>>? saved, int version)
     {
-        if (saved == null) return;
+        if (saved == null || version != KeyVersion) return;
         for (int i = 0; i < _hotkeyPresets.Count && i < saved.Count; i++)
         {
             var slot = new Dictionary<HotkeyAction, string>();
