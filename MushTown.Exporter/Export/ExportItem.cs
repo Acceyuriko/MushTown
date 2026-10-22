@@ -98,8 +98,12 @@ public static partial class Export
     // info node. v1 ships only all-supported stats: any other inc* fails loud
     // (a half-working item must never sneak in); reqs/pose/sfx/speed/tuc/
     // cash sit unused by design (ItemData documents the v1 gear rules).
-    private static bool ExportEquips(WzRoot chara, WzRoot str, string outDir)
+    // ReadEquips checks every row before the doll bake (a bad pairing must
+    // not bake wrong art); WriteEquips writes the defs after it (a failed
+    // bake must not leave a def whose art is missing).
+    private static List<(string Gear, ItemData Data)>? ReadEquips(WzRoot chara, WzRoot str)
     {
+        var defs = new List<(string, ItemData)>();
         foreach ((string gear, string? beginner) in Gears)
         {
             int id = int.Parse(ImgId(gear));
@@ -107,14 +111,14 @@ public static partial class Export
             if (info == null)
             {
                 Console.WriteLine($"equip {id} has no info");
-                return false;
+                return null;
             }
             foreach (Wz_Node c in info.Nodes)
             {
                 if (c.Text.StartsWith("inc") && c.Text is not ("incPAD" or "incPDD" or "incSTR" or "incDEX"))
                 {
                     Console.WriteLine($"equip {id} has unsupported stat {c.Text}");
-                    return false;
+                    return null;
                 }
             }
             string cat = gear.Split('\\')[0]; // Coat/Weapon/Ring: the Eqp.img shelf matches the Character folder
@@ -122,7 +126,7 @@ public static partial class Export
             if (name == "")
             {
                 Console.WriteLine($"equip {id} has no String name");
-                return false;
+                return null;
             }
             // The doll art only fits the slots the doll has: the game boots
             // on the same slot (ItemData.Slot), so check the same node. A
@@ -132,26 +136,27 @@ public static partial class Export
             if (slot == "")
             {
                 Console.WriteLine($"equip {id} has no slot");
-                return false;
+                return null;
             }
+            int tag = Int(info, "nameTag");
             if (beginner == null)
             {
                 if (slot != "Ri")
                 {
                     Console.WriteLine($"equip {id} has no art (slot {slot} needs one)");
-                    return false;
+                    return null;
                 }
-                if (Int(info, "nameTag") == 0) // the boot asks for the plate the ring draws with
+                if (!NameTagNodes.Contains(tag)) // the boot loads the plate art by this node
                 {
-                    Console.WriteLine($"equip {id} is a ring with no name tag");
-                    return false;
+                    Console.WriteLine($"equip {id} is a ring with no exported name tag ({tag})");
+                    return null;
                 }
             }
             else if (!ItemData.BeginnerImgs.TryGetValue(slot, out string? part) || part != ImgId(beginner))
             {
                 Console.WriteLine($"equip {id} pairs {ImgId(beginner)} with slot {slot}, " +
                     $"which replaces {ItemData.BeginnerImgs.GetValueOrDefault(slot, "nothing")}");
-                return false;
+                return null;
             }
             var data = new ItemData
             {
@@ -164,17 +169,26 @@ public static partial class Export
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),
                 Price = Int(info, "price"),
-                NameTag = Int(info, "nameTag"),
+                NameTag = tag,
                 HasArt = beginner != null,
             };
             if (data.Price <= 0 && Int(info, "cash") == 0) // cash gear carries no meso price
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
-                return false;
+                return null;
             }
+            defs.Add((gear, data));
+        }
+        return defs;
+    }
+
+    private static bool WriteEquips(List<(string Gear, ItemData Data)> defs, WzRoot chara, string outDir)
+    {
+        foreach (var (gear, data) in defs)
+        {
             if (!UiPng.Save(chara, "Character", $@"{gear}\info/icon", Path.Combine(outDir, data.Image)))
                 return false;
-            WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
+            WriteJson(Path.Combine(outDir, "item", $"{data.ItemId}.json"), data);
         }
         Console.WriteLine($"equips: {string.Join(" ", GearIds)}");
         return true;

@@ -78,6 +78,15 @@ public static partial class Export
             }
         }
         var chara = WzRoot.LoadCategory(dataDir, "Character");
+        // Pairings are checked before any gear is baked: a bad pair must not
+        // bake wrong art. The defs are written after the bake: a failed bake
+        // must not leave a def whose art is missing.
+        var equips = ReadEquips(chara, str);
+        if (equips == null)
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         foreach (string action in Net.Actions)
         {
             if (!ExportCharacter(baseRoot, chara, outDir, action))
@@ -85,13 +94,6 @@ public static partial class Export
                 Environment.ExitCode = 1;
                 return;
             }
-        }
-        // Pairings are checked before any gear is baked: a bad pairing must
-        // not leave wrong art on disk.
-        if (!ExportEquips(chara, str, outDir))
-        {
-            Environment.ExitCode = 1;
-            return;
         }
         foreach ((string gear, string? beginner) in Gears)
         {
@@ -104,6 +106,11 @@ public static partial class Export
                     return;
                 }
             }
+        }
+        if (!WriteEquips(equips, chara, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
         }
         var mob = WzRoot.LoadCategory(dataDir, "Mob");
         foreach (int mobId in Mobs.Keys.OrderBy(id => id))
