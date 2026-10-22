@@ -86,6 +86,13 @@ public static partial class Export
                 return;
             }
         }
+        // Pairings are checked before any gear is baked: a bad pairing must
+        // not leave wrong art on disk.
+        if (!ExportEquips(chara, str, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         foreach ((string gear, string? beginner) in Gears)
         {
             if (beginner == null) continue; // the rings carry no doll art
@@ -115,11 +122,6 @@ public static partial class Export
         }
         var item = WzRoot.LoadCategory(dataDir, "Item");
         if (!ExportPotions(item, str, outDir))
-        {
-            Environment.ExitCode = 1;
-            return;
-        }
-        if (!ExportEquips(chara, str, outDir))
         {
             Environment.ExitCode = 1;
             return;
@@ -188,7 +190,7 @@ public static partial class Export
         WriteJson(Path.Combine(outDir, "manifest.json"), new ManifestData
         {
             Potions = PotionIds.OrderBy(x => x).ToList(),
-            Equips = Gears.Select(g => int.Parse(ImgId(g.gear))).OrderBy(x => x).ToList(),
+            Equips = GearIds.OrderBy(x => x).ToList(),
             Skills = Skills.Keys.OrderBy(x => x).ToList(),
         });
         // Tracked art/fonts (official free Nexon fonts, see art/fonts/README.md)

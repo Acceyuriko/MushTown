@@ -14,7 +14,7 @@ public partial class MushTownGame
     {
         StartLocalWorld();
         SetupShotQuests(); // quest/talk screens run the real accept/open path (other shots no-op)
-        if (_shotWear) // --wear runs the real Wear path on the demo (plain shots grow one, like --skill buffs)
+        if (_shotWear) // --wear runs the real WearEquip path on the demo (plain shots grow one, like --skill buffs)
         {
             _save ??= new SaveData();
             var chara = _save.Slots[_slot] ??= DemoChara();

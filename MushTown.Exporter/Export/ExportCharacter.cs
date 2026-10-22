@@ -21,8 +21,8 @@ public static partial class Export
     // Beginner gear on top of the naked body: the modern beginner default
     // (Purple Muffler Outfit + Yellow Adventure Shoes) plus the one-handed
     // Sword the stand1/walk1/swingO1 art is baked from. The striped boxers
-    // stay under the outfit so a worn coat (the one Ma gear in v1) still has
-    // legs to show.
+    // stay under the outfit so a worn coat (any Ma gear) still has legs to
+    // show.
     private static readonly string[] CharaEquips = new[]
     {
         @"Pants\01060026.img",

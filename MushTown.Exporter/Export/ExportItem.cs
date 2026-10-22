@@ -29,6 +29,9 @@ public static partial class Export
         (@"Coat\01040022.img", BeginnerLongcoat),
     };
 
+    // The wearable ids: the export log and the manifest both print them.
+    private static IEnumerable<int> GearIds => Gears.Select(g => int.Parse(ImgId(g.gear)));
+
     // The potions of lists/potions.json. Heals come from the WZ spec node;
     // icons are the info/icon canvases (_outlink to _Canvas).
     private static bool ExportPotions(WzRoot item, WzRoot str, string outDir)
@@ -138,6 +141,11 @@ public static partial class Export
                     Console.WriteLine($"equip {id} has no art (slot {slot} needs one)");
                     return false;
                 }
+                if (Int(info, "nameTag") == 0) // the boot asks for the plate the ring draws with
+                {
+                    Console.WriteLine($"equip {id} is a ring with no name tag");
+                    return false;
+                }
             }
             else if (!ItemData.BeginnerImgs.TryGetValue(slot, out string? part) || part != ImgId(beginner))
             {
@@ -168,7 +176,7 @@ public static partial class Export
                 return false;
             WriteJson(Path.Combine(outDir, "item", $"{id}.json"), data);
         }
-        Console.WriteLine($"equips: {string.Join(" ", Gears.Select(g => int.Parse(ImgId(g.gear))))}");
+        Console.WriteLine($"equips: {string.Join(" ", GearIds)}");
         return true;
     }
 }
