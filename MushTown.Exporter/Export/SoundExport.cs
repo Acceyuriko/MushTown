@@ -12,8 +12,9 @@ namespace MushTown.Exporter;
 public static class SoundExport
 {
     // (file key, path under Sound\). Mob Die sources match the Mobs art
-    // twins: snails and the spore link to 0100100's, orange has 1210102's,
-    // the boss has its own.
+    // twins: the snail's carries 0100100's, the orange mushroom 1210102's,
+    // the pig 1210100's, the boss its own; the other twins have no Die node,
+    // so they fall back to the snail's.
     private static readonly (string Key, string Path)[] Sfx = new[]
     {
         ("swing_sword", @"Weapon.img\swordL\Attack"),
@@ -21,6 +22,7 @@ public static class SoundExport
         ("hit", @"Mob.img\0100100\Damage"),
         ("die_snail", @"Mob.img\0100100\Die"),
         ("die_orange", @"Mob.img\1210102\Die"),
+        ("die_pig", @"Mob.img\1210100\Die"),
         ("die_boss", @"Mob.img\6130101\Die"),
         ("pickup", @"Game.img\PickUpItem"),
         ("levelup", @"Game.img\LevelUp"),

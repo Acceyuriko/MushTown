@@ -126,6 +126,7 @@ public partial class MushTownGame
         }
         SyncPanelScenes(); // drags + tab flips move the baked Rects (hover ran first, so it lags one frame, like legacy)
         DragWindows(held, gx, gy); // the new windows move by their title
+        _worldMapWindow.UpdateWheel(); // the wheel scrolls the map list: before the sync, so the rows land this frame
         SyncWindows(); // the new windows rebuild when they move
         if (!click) return;
         UpdateHudClick(gx, gy); // click sounds play by Button Kind inside ClickTree (the flag funnel is gone)

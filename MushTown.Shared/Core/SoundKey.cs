@@ -8,7 +8,7 @@ public static class SoundKey
     public static readonly string[] Sfx = new[]
     {
         "swing_sword", "swing_pole", "hit", "die_snail", "die_orange",
-        "die_boss", "pickup", "levelup", "portal", "jump", "click", "over",
+        "die_pig", "die_boss", "pickup", "levelup", "portal", "jump", "click", "over",
         "shopbuy", "questclear", "buff",
     };
 
@@ -30,8 +30,9 @@ public static class SoundKey
     private static string Keep(string s) =>
         new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
-    // Which death cry a mob plays. Orange mushrooms and the boss have own
-    // Die nodes; every other mob links to the snail's (0100100, verified W18).
+    // Which death cry a mob plays. The orange mushroom (100004) and the pig
+    // (100007) have own Die nodes on their art twins, and so does the boss;
+    // every other mob's twin has none, so it falls back to the snail's.
     public static string MobDie(int mobId, bool boss) =>
-        boss ? "die_boss" : mobId == 100004 ? "die_orange" : "die_snail";
+        boss ? "die_boss" : mobId == 100007 ? "die_pig" : mobId == 100004 ? "die_orange" : "die_snail";
 }

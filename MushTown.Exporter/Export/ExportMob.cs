@@ -26,8 +26,9 @@ public static partial class Export
     // modern ids 100000-100007 have no art img of their own, the old twins
     // do (Snail 100100, Blue Snail 100101, Spore 120100, Stump 130100,
     // Red Snail 130101, Slime 210100, Pig 1210100, Orange Mushroom 1210102).
-    // The strength numbers are a ladder by strength, not by id: the Slime
-    // (100006) is weaker than the Orange Mushroom (100004). The official
+    // The hp, exp and def numbers are a ladder by strength, not by id: the
+    // Slime (100006) is weaker than the Orange Mushroom (100004). Touch,
+    // speed and aggro are feel numbers, not part of that ladder. The official
     // levels live on the server, the WZ has none, so the order is ours.
     // The official training centers are no ladder either (center 1 holds the
     // Stump, center 2 the weaker Red Snail).

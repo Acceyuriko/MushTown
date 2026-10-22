@@ -227,12 +227,10 @@ public sealed class WorldMapWindow : UiWindow
     private readonly List<(MapNameUi Map, string Text, int Y)> _lines = new();
     // The list scrolls like the official panel: the first line on screen,
     // the lines that do not fit and the wheel that moves the list.
-    private int _scroll;
-    private int _hidden;
-    private int _wheel;      // the wheel value of the last frame
-    private bool _moved;     // the last rebuild came from the wheel
-    private bool _toEnd;     // the shot mode wants the end of the list
-    private int _rowScroll;  // the scroll the drawn rows were built with (the wheel can move _scroll mid-frame)
+    private int _scroll;    // the first line on screen
+    private int _hidden;    // the lines that do not fit
+    private int _wheel;     // the wheel value of the last frame
+    private bool _toEnd;    // the shot mode wants the end of the list
 
     public WorldMapWindow(MushTownGame game) : base(HotkeyAction.WorldMap) { _game = game; }
 
@@ -281,11 +279,6 @@ public sealed class WorldMapWindow : UiWindow
         _hidden = 0;
         if (_shown != null && maps.TryGetValue(_shown, out var shown))
             BuildList(root, shown);
-        // The wheel baseline: a rebuild caused by the wheel keeps it (the
-        // notches of the next frame still count), any other rebuild (the
-        // window opens, the region changes) starts fresh.
-        if (!_moved) _wheel = Mouse.GetState().ScrollWheelValue;
-        _moved = false;
         root.Add(new Invoke(Draw));
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MapWindowParts.Close(this, new Rectangle(Pos.X + _lay.Get("wcloseX", 829), Pos.Y + _lay.Get("wcloseY", 12), 11, 11)));
@@ -314,7 +307,6 @@ public sealed class WorldMapWindow : UiWindow
         }
         _hidden = Math.Max(0, total - visible);
         _scroll = toEnd ? _hidden : Math.Clamp(_scroll, 0, _hidden);
-        _rowScroll = _scroll; // the rows and the scroll bar show this scroll
         foreach (var (map, lines, start) in names)
         {
             if (start + lines.Count <= _scroll || start >= _scroll + visible) continue; // off screen
@@ -372,7 +364,6 @@ public sealed class WorldMapWindow : UiWindow
     // The region marks on the world map and the maps of the shown region.
     private void Draw(UiGfx gfx)
     {
-        ReadWheel(); // the wheel scrolls the list
         var r = Rect();
         int mapId = _game.GameMap.MapId;
         var here = MapUi.Region(mapId);
@@ -396,13 +387,17 @@ public sealed class WorldMapWindow : UiWindow
         if (_hidden > 0) ScrollBar(gfx);
     }
 
-    // The wheel scrolls the list (the official panel scrolls it too).
-    private void ReadWheel()
+    // The wheel scrolls the list (the official panel scrolls it too). Runs
+    // every frame before the windows sync, so the rebuild consumes the new
+    // scroll and the rows and the bar always agree; while the window is
+    // closed it only keeps the baseline fresh, so a reopen cannot replay
+    // the notches of a scroll that happened while the map was away.
+    public void UpdateWheel()
     {
         var ms = Mouse.GetState();
         int delta = ms.ScrollWheelValue - _wheel;
         _wheel = ms.ScrollWheelValue; // every frame, so the next delta is a step
-        if (delta == 0 || _hidden == 0) return;
+        if (!Show || delta == 0 || _hidden == 0) return;
         var (gx, gy) = _game.MouseGamePos(ms);
         if (!ListRect().Contains(gx, gy)) return;
         int steps = delta / 120; // one notch is 120, like the chat log
@@ -412,7 +407,6 @@ public sealed class WorldMapWindow : UiWindow
         int want = Math.Clamp(_scroll - steps * _lay.Get("wheelStep", 3), 0, _hidden);
         if (want == _scroll) return;
         _scroll = want;
-        _moved = true; // the next rebuild keeps the wheel baseline
         Dirty = true; // the list moves
     }
 
@@ -434,8 +428,9 @@ public sealed class WorldMapWindow : UiWindow
         int top = box.Y;
         int len = box.Height;
         var thumb = gfx.Tex("ui/wm_scroll_thumb.png");
-        gfx.Sb.Draw(gfx.Tex("ui/wm_scroll_base.png"), new Rectangle(x, top, thumb.Width, len), Color.White);
-        int y = top + (len - thumb.Height) * _rowScroll / _hidden;
+        var track = gfx.Tex("ui/wm_scroll_base.png");
+        gfx.Sb.Draw(track, new Rectangle(x, top, track.Width, len), Color.White);
+        int y = top + (len - thumb.Height) * _scroll / _hidden;
         gfx.Sb.Draw(thumb, new Rectangle(x, y, thumb.Width, thumb.Height), Color.White);
     }
 }
