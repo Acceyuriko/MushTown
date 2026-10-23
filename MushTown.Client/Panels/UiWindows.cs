@@ -86,7 +86,8 @@ public partial class MushTownGame
             SfxOnHover(w.Scene.Hover(gx, gy));
             hit = true;
         }
-        if (!hit) SfxOnHover(""); // no window has the mouse: the last hover id goes away
+        // No window has the mouse: UpdateHudHover refreshes the hover id later
+        // this frame. Do not reset it here, or the hover sfx repeats every frame.
         return hit;
     }
 }

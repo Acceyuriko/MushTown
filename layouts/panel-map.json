@@ -1,5 +1,5 @@
 {
-  "_help": "World map window and channel bar in 1366x768 space. World map: wx,wy,ww,wh is the window; worldX/worldY the map art inside it; titleH is the title strip height; infoX/infoY the region title in MAP INFO; listX/listY the map list under it; listW the text width (a long name wraps); listStep the row pitch; listH the height of the list area (the rows that fit); wheelStep the lines one wheel notch scrolls; scrollX is the official scroll bar beside the list (the track and the thumb art are 5 px wide, so the width comes from the art; the thumb art is 5x26 and is drawn at that size; the bar spans the rows, so it uses listY and listH). wcloseX/wcloseY the X button. The region dots: dotW/dotH is the drawn dot; dotClickW/dotClickH is the click box on a dot (it sits on the dot). Channel bar: chX,chY is the bar spot (the art is 436x67); chTextX/chTextY the world name; chCountX the channel count; chSlotX/chSlotY/chSlotPitch/chSlotW/chSlotH the channel ticks. The minimap window has its own file (panel-minimap.json).",
+  "_help": "World map window in 1366x768 space. World map: wx,wy,ww,wh is the window; worldX/worldY the map art inside it; titleH is the title strip height; infoX/infoY the region title in MAP INFO; listX/listY the map list under it; listW the text width (a long name wraps); listStep the row pitch; listH the height of the list area (the rows that fit); wheelStep the lines one wheel notch scrolls; scrollX is the official scroll bar beside the list (the track and the thumb art are 5 px wide, so the width comes from the art; the thumb art is 5x26 and is drawn at that size; the bar spans the rows, so it uses listY and listH). wcloseX/wcloseY the X button. The region dots: dotW/dotH is the drawn dot; dotClickW/dotClickH is the click box on a dot (it sits on the dot). The minimap window has its own file (panel-minimap.json).",
   "wx": 250,
   "wy": 30,
   "ww": 852,
@@ -21,15 +21,5 @@
   "dotClickW": 17,
   "dotClickH": 17,
   "wcloseX": 829,
-  "wcloseY": 12,
-  "chX": 930,
-  "chY": 616,
-  "chTextX": 14,
-  "chTextY": 30,
-  "chCountX": 356,
-  "chSlotX": 14,
-  "chSlotY": 54,
-  "chSlotPitch": 13,
-  "chSlotW": 11,
-  "chSlotH": 12
+  "wcloseY": 12
 }

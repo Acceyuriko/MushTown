@@ -57,18 +57,12 @@ public static class NineSlice
 // _hoverId world; gone at the W5 cleanup).
 public enum ButtonKind { Silent, Click } // click sfx via ClickTree (conditional sounds stay explicit in callbacks)
 
-public class Button : Component, IDrawable
+public class Button : Component
 {
     public string LegacyId = "";
     public ButtonKind Kind; // Silent by default (slots, titles, furniture, gated clicks)
-    public bool HoverFill; // white-30 overlay when hovered (the hotkey cell)
     public Action? OnClick;
     public void Press() => OnClick?.Invoke();
-    public virtual void Draw(UiGfx gfx)
-    {
-        if (HoverFill && gfx.HoverButton == this)
-            gfx.Sb.Draw(gfx.Pixel, Owner.Get<Rect>()!.Box, new Color(255, 255, 255, 30));
-    }
 }
 
 // Wooden-button answer: hover 0.9, pressed 0.6 (one spelling for all menu art).

@@ -403,13 +403,10 @@ public sealed class MapUiData
     public List<MapNameUi> Maps { get; set; } = new();
 }
 
-// The channel bar (UIWindow.img/Channel): the panel art, the world name
-// and the number of channels.
+// The world name in the MENU window's channel pill (the String.wz folder).
 public sealed class ChannelUiData
 {
-    public string Image { get; set; } = "";
     public string World { get; set; } = "";
-    public int Channels { get; set; }
 }
 
 // The world map art and the regions on it (Map/WorldMap/WorldMap.img).

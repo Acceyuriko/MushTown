@@ -11,7 +11,6 @@ internal enum Feature
     Skill,      // Skills
     Quest,      // Quests
     WorldMap,   // World Map
-    Party,      // the party window
     Keys,       // Key Bindings
     Settings,   // Settings
     Guide,      // Guides (the contents guide window)
@@ -32,7 +31,6 @@ public partial class MushTownGame
             case Feature.Skill: OpenSkillWindow(); break;
             case Feature.Quest: OpenQuestWindow(); break;
             case Feature.WorldMap: ShowWindow(HotkeyAction.WorldMap); break;
-            case Feature.Party: ShowWindow(HotkeyAction.Party); break;
             case Feature.Keys: OpenKeyWindow(); break;
             case Feature.Settings: OpenSettings(); break;
             case Feature.Guide: ShowWindow(HotkeyAction.GuideCard); break;

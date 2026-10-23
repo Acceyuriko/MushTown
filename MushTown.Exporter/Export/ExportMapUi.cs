@@ -2,10 +2,11 @@ using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
 
-// The map window art: the minimap window (UIMap.img/MiniMap), the world map
-// window (UIMap.img/WorldMap), the world map itself (Map/WorldMap/WorldMap.img)
-// and the channel bar (UIWindow.img/Channel). The file names must match the
-// client (MushTown.Client/Panels/HudMap.cs).
+// The map window art: the minimap window (UIMap.img/MiniMap) and the world
+// map window (UIMap.img/WorldMap), the world map itself
+// (Map/WorldMap/WorldMap.img), and the world name the MENU window's channel
+// pill shows (read by MushTown.Client/Panels/HudMenu.cs). The file names
+// must match the client (MushTown.Client/Panels/HudMap.cs).
 public static partial class Export
 {
     public static bool ExportMapUi(WzRoot ui, WzRoot map, WzRoot str, string outDir)
@@ -44,9 +45,6 @@ public static partial class Export
         // bottom, so a long list needs the official scroll bar.
         if (!UiPng.Save(ui, "UI", "Basic.img/VScr111/enabled/base", Path.Combine(dir, "wm_scroll_base.png"))) return false;
         if (!UiPng.Save(ui, "UI", "Basic.img/VScr111/enabled/thumb0", Path.Combine(dir, "wm_scroll_thumb.png"))) return false;
-
-        // The channel bar: the CHANGE CHANNEL panel.
-        if (!UiPng.Save(ui, "UI", "UIWindow.img/Channel/t", Path.Combine(dir, "ch_t.png"))) return false;
 
         // The world map art and the region marks (Map/WorldMap/WorldMap.img).
         // The Base tree keeps the "Map/" folder in the path, a Map.wz root
@@ -138,21 +136,13 @@ public static partial class Export
             names.Add(new { Id = id, Name = name, Street = street });
         }
 
-        // The channel rows of the channel panel (CH1..CH30).
-        var channelRows = ui.Find("UIWindow.img/Channel/ch");
-        if (channelRows == null)
-        {
-            Console.WriteLine("channel list not found: UIWindow.img/Channel/ch");
-            return false;
-        }
-
         WriteJson(Path.Combine(dir, "mapui.json"), new
         {
             World = new { Image = "ui/wm_world.png", Regions = regions },
-            Channel = new { Image = "ui/ch_t.png", World = worldName, Channels = channelRows.Nodes.Count },
+            Channel = new { World = worldName },
             Maps = names,
         });
-        Console.WriteLine($"map ui: {regions.Count} regions, {names.Count} map names, {channelRows.Nodes.Count} channels");
+        Console.WriteLine($"map ui: {regions.Count} regions, {names.Count} map names");
         return true;
     }
 }

@@ -94,8 +94,8 @@ public partial class MushTownGame
             rb.Add(new Rect(rr));
             var btn = new Button { LegacyId = "questrow" + i, Kind = ButtonKind.Click, OnClick = () => _questSel = qid };
             rb.Add(btn);
-            // The row lights up under the mouse (the white hover fill of the
-            // Button would vanish on the white list panel).
+            // The row lights up under the mouse (the list panel is white, so
+            // the light is a blue fill drawn here).
             rb.Add(new Invoke(gfx =>
             {
                 if (gfx.HoverButton != btn) return;

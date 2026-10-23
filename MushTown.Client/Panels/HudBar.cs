@@ -298,8 +298,6 @@ public partial class MushTownGame
         var bossBar = new GameObject { NoHit = true };
         bossBar.Add(new BossBar(BossBarW, FindBoss));
         _gameScene.Add(bossBar);
-        _gameScene.Add(ChannelBar.Build(this)); // the channel bar: bottom right, above the quick slots
-        _gameScene.Add(HotkeyBar.Build(this)); // the hotkey bar: the action icons with the key caps above
         _gameScene.Add(BuildQuickMenu()); // the quick menu icons: right of the two blue buttons, topmost so the clicks land there
         SyncPanelScenes(); // shots skip Update: without this the panels draw empty there (first Update no-ops, positions match)
     }
