@@ -17,7 +17,7 @@ public enum HotkeyAction
     PartyAsk,   // no key: the server sends the invite
     Settings,
     KeyConfig, // no key by default: the options window opens it
-    Menu,      // no key: the HUD menu button opens the MENU window
+    Menu,      // no default key: the key window binds it
     Chat,      // no key: the chat input is clicked
     Guide,     // no key: the green plus of the small guide opens the big guide
     GuideCard, // no key: the MENU window opens the small guide
@@ -41,6 +41,7 @@ public partial class MushTownGame
         [HotkeyAction.WorldMap] = "M",
         [HotkeyAction.Party] = "P",
         [HotkeyAction.Settings] = "O",
+        [HotkeyAction.Menu] = "",
         [HotkeyAction.KeyConfig] = "",
     };
 
@@ -102,6 +103,7 @@ public partial class MushTownGame
         [HotkeyAction.WorldMap] = "M",
         [HotkeyAction.Party] = "P",
         [HotkeyAction.Settings] = "O",
+        [HotkeyAction.Menu] = "",
         [HotkeyAction.KeyConfig] = "",
     };
 

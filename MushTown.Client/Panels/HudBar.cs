@@ -18,8 +18,6 @@ public partial class MushTownGame
         "hud_plate.png", "hud_lvtag.png",
         "hud_hpbg.png", "hud_hpcover.png", "hud_hpfill.png", "hud_mpfill.png",
         "hud_expback.png", "hud_expcover.png", "hud_expgauge.png",
-        "hud_btn_char_n.png", "hud_btn_char_h.png", "hud_btn_char_p.png",
-        "hud_btn_menu_n.png", "hud_btn_menu_h.png", "hud_btn_menu_p.png",
         "hud_qslot.png", "hud_qslotcover.png",
         "hud_key_ctrl.png", "hud_key_alt.png", "hud_key_i.png", "hud_key_c.png",
         "hud_coin.png", "hud_stathilong.png", "hud_statx.png",
@@ -60,8 +58,6 @@ public partial class MushTownGame
 
     private static Rectangle PlateRect() => new(Layout.Plate.X, Layout.Plate.Y, 250, 35);
     private static Rectangle HpRect() => new(Layout.HpMp.X, Layout.HpMp.Y, 205, 46); // cover bottom flush with EXP top
-    private static Rectangle MenuBtnRect() => new(Layout.MenuBtn.X, Layout.MenuBtn.Y, 34, 37);
-    private static Rectangle CharBtnRect() => new(Layout.CharBtn.X, Layout.CharBtn.Y, 34, 37);
     private static Rectangle QslotRect() => new(Layout.Qslot.X, Layout.Qslot.Y, 557, 67);
     private static Rectangle ExpRect() => new(0, 758, 1366, 10);
     private Point _invPos = new(0, 0), _statPos = new(0, 0);
@@ -79,7 +75,7 @@ public partial class MushTownGame
         bool keyWindowOpen = WindowFor(HotkeyAction.KeyConfig)?.Show == true;
         if (hotkey != null && _talkNpc == 0 && (hotkey.Value == HotkeyAction.KeyConfig || !keyWindowOpen))
         {
-            _menuWindow.Close(); // a key opens a panel: the MENU window would cover it
+            if (hotkey.Value != HotkeyAction.Menu) _menuWindow.Close(); // a key opens a panel: the MENU window would cover it (its own key toggles it)
             bool old = true; // the old panels click here; the new windows click themselves
             switch (hotkey.Value)
             {
@@ -161,7 +157,7 @@ public partial class MushTownGame
                 return;
             }
         }
-        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // menu/char/furniture all live in the tree now
+        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // the HUD widgets all live in the tree now
     }
 
     private void UpdateHudClick(int gx, int gy)
@@ -212,10 +208,9 @@ public partial class MushTownGame
             else if (onShop) ClickTree(_shopScene, gx, gy);
             return;
         }
-        var hudHit = ClickTree(_scenes.Current, gx, gy); // menu/char/furniture all live in the tree now
-        // Any click outside the menu closes it. The HUD menu button toggles it
-        // by itself, so it is the one click that must not close the menu here.
-        if (_menuWindow.Show && _scenes.Current?.ClickButton?.LegacyId != "menu") _menuWindow.Close();
+        var hudHit = ClickTree(_scenes.Current, gx, gy); // the HUD widgets all live in the tree now
+        // Any click outside the menu closes it (the menu key toggles it too).
+        if (_menuWindow.Show) _menuWindow.Close();
         else if (hudHit == null) NpcClick(gx, gy); // no UI took it: the world gets the click
     }
 
@@ -240,21 +235,11 @@ public partial class MushTownGame
             f.Add(new Rect(r));
             furniture.AddChild(f);
         }
-        _gameScene.Add(furniture); // first (bottom): menu/char cover its Exp strip
+        _gameScene.Add(furniture); // first (bottom): the art roots added after draw over it, its rects swallow the clicks
         var exp = new GameObject();
         exp.Add(new Rect(ExpRect()));
         exp.Add(new Bar("ui/hud_expback.png", "ui/hud_expgauge.png", "ui/hud_expcover.png", ExpFill));
         _gameScene.Add(exp); // legacy draws exp first: same pixels, owned by the tree now
-        var charBtn = new GameObject();
-        charBtn.Add(new Rect(CharBtnRect()));
-        charBtn.Add(new Image("ui/hud_btn_char")); // art rides the button now (was DrawHudButton); keep art a Component, never a child (Image matches Hovered == Owner)
-        charBtn.Add(new Button { LegacyId = "char", Kind = ButtonKind.Click, OnClick = () => { _showStat = !_showStat; _menuWindow.Close(); if (_showStat) _topPanel = 1; } });
-        _gameScene.Add(charBtn);
-        var menuBtn = new GameObject();
-        menuBtn.Add(new Rect(MenuBtnRect()));
-        menuBtn.Add(new Image("ui/hud_btn_menu")); // art rides the button now (was DrawHudButton)
-        menuBtn.Add(new Button { LegacyId = "menu", Kind = ButtonKind.Click, OnClick = () => _menuWindow.Toggle() });
-        _gameScene.Add(menuBtn); // topmost hit: legacy checks menu/char before the furniture (art roots added after are NoHit)
         var plate = new GameObject { NoHit = true }; // art-only roots below: the furniture keeps swallowing plate/HP/quickslot/exp; tracker/boss/minimap pass clicks through like before
         plate.Add(new Rect(PlateRect()));
         plate.Add(new Picture("ui/hud_plate.png"));
@@ -298,7 +283,7 @@ public partial class MushTownGame
         var bossBar = new GameObject { NoHit = true };
         bossBar.Add(new BossBar(BossBarW, FindBoss));
         _gameScene.Add(bossBar);
-        _gameScene.Add(BuildQuickMenu()); // the quick menu icons: right of the two blue buttons, topmost so the clicks land there
+        _gameScene.Add(BuildQuickMenu()); // the quick menu icon row: topmost so the clicks land there
         SyncPanelScenes(); // shots skip Update: without this the panels draw empty there (first Update no-ops, positions match)
     }
 

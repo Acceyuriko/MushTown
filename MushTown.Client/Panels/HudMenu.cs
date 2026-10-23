@@ -51,13 +51,6 @@ public sealed class MenuWindow : UiWindow
     // The official art: seven columns, the row counts of the WZ tree.
     private static readonly int[] ColumnRows = { 4, 8, 8, 9, 6, 4, 4 };
 
-    // Open or close the window (the HUD menu button).
-    public void Toggle()
-    {
-        Show = !Show;
-        if (Show) Sync();
-    }
-
     // Close the window (the X button, a menu row, or the game).
     public void Close()
     {

@@ -57,6 +57,7 @@ public sealed class KeyConfigWindow : UiWindow
         (HotkeyAction.Quest, 8),
         (HotkeyAction.WorldMap, 5),
         (HotkeyAction.Party, 19),
+        (HotkeyAction.Menu, 46),
         (HotkeyAction.Settings, 46),
     };
 
@@ -181,7 +182,7 @@ public sealed class KeyConfigWindow : UiWindow
                 _game.LoadTexture(stem + state);
         foreach (var s in Spots.Keys)
             if (s.Cap != "") _game.LoadTexture("ui/" + s.Cap);
-        foreach (var a in Actions) _game.LoadTexture($"ui/keys_icon_{a.Icon}.png");
+        foreach (var a in Actions) _game.LoadTexture(IconTex(a.Action));
         LoadComboBox();
 
         // The draft starts from the saved bindings (a window built without
@@ -421,7 +422,7 @@ public sealed class KeyConfigWindow : UiWindow
         var action = ActionFor(KeyName(s.Code));
         if (action != null)
         {
-            var icon = gfx.Tex($"ui/keys_icon_{IconOf(action.Value)}.png");
+            var icon = gfx.Tex(IconTex(action.Value));
             gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
             return;
         }
@@ -434,7 +435,7 @@ public sealed class KeyConfigWindow : UiWindow
     private void DrawCell(UiGfx gfx, (HotkeyAction Action, int Icon) a, int index)
     {
         var r = CellRect(index);
-        var icon = gfx.Tex($"ui/keys_icon_{a.Icon}.png");
+        var icon = gfx.Tex(IconTex(a.Action));
         gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
         var parts = Keys(a.Action);
         if (parts.Length < 2) return;
@@ -480,7 +481,7 @@ public sealed class KeyConfigWindow : UiWindow
             Drop(_held.Value, gx, gy);
             return;
         }
-        var icon = gfx.Tex($"ui/keys_icon_{IconOf(_held.Value)}.png");
+        var icon = gfx.Tex(IconTex(_held.Value));
         gfx.Sb.Draw(icon, new Vector2(gx - icon.Width / 2, gy - icon.Height / 2), Color.White);
     }
 
@@ -666,6 +667,12 @@ public sealed class KeyConfigWindow : UiWindow
             if (Keys(a.Action).Contains(key)) return a.Action;
         return null;
     }
+
+    // The icon art of an action. The KeyConfig set has no settings icon (the
+    // options are a row of the MENU window), so Settings shows the gear of the
+    // quick menu row.
+    private static string IconTex(HotkeyAction action) =>
+        action == HotkeyAction.Settings ? "ui/quickmenu_53_n.png" : $"ui/keys_icon_{IconOf(action)}.png";
 
     // The official icon of an action.
     internal static int IconOf(HotkeyAction action)

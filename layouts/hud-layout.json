@@ -1,16 +1,8 @@
 {
   "_help": "HUD widget top-left positions in 1366x768 space. Sizes stay in code (they must match the art). The game windows (inventory, stat, skill, quest, settings) have their own file: layouts/panel-<name>.json. Keys may be omitted (keeps current value). DEBUG builds reload this file live on save; the file wins over dragged panels.",
-  "charBtn": [
-    304,
-    724
-  ],
   "hpmp": [
     584,
     715
-  ],
-  "menuBtn": [
-    266,
-    724
   ],
   "plate": [
     0,

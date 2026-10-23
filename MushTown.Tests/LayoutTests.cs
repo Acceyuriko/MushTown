@@ -6,16 +6,16 @@ namespace MushTown.Tests;
 [TestClass]
 public class LayoutTests
 {
-    private const string Full = """{"plate":[5,6],"hpmp":[7,8],"menuBtn":[9,10],"charBtn":[11,12],"qslot":[13,14]}""";
+    private const string Full = """{"plate":[5,6],"hpmp":[7,8],"qslot":[13,14]}""";
 
     // Layout fields are shared statics: leave them as found.
-    private ((int X, int Y) plate, (int X, int Y) hpmp, (int X, int Y) menuBtn, (int X, int Y) charBtn, (int X, int Y) qslot) _saved;
+    private ((int X, int Y) plate, (int X, int Y) hpmp, (int X, int Y) qslot) _saved;
 
     [TestInitialize]
-    public void Save() => _saved = (Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot);
+    public void Save() => _saved = (Layout.Plate, Layout.HpMp, Layout.Qslot);
 
     [TestCleanup]
-    public void Restore() => (Layout.Plate, Layout.HpMp, Layout.MenuBtn, Layout.CharBtn, Layout.Qslot) = _saved;
+    public void Restore() => (Layout.Plate, Layout.HpMp, Layout.Qslot) = _saved;
 
     [TestMethod]
     public void Load_FullFile_OverridesAll()
@@ -26,8 +26,6 @@ public class LayoutTests
             Layout.Load(path);
             Assert.AreEqual((5, 6), Layout.Plate);
             Assert.AreEqual((7, 8), Layout.HpMp);
-            Assert.AreEqual((9, 10), Layout.MenuBtn);
-            Assert.AreEqual((11, 12), Layout.CharBtn);
             Assert.AreEqual((13, 14), Layout.Qslot);
         }
         finally { File.Delete(path); }
@@ -45,8 +43,6 @@ public class LayoutTests
             Assert.AreEqual((100, 200), Layout.Qslot);
             Assert.AreEqual((5, 6), Layout.Plate);
             Assert.AreEqual((7, 8), Layout.HpMp);
-            Assert.AreEqual((9, 10), Layout.MenuBtn);
-            Assert.AreEqual((11, 12), Layout.CharBtn);
         }
         finally { File.Delete(path); }
     }
@@ -57,7 +53,7 @@ public class LayoutTests
         string path = WriteTemp(Full);
         try
         {
-            string[] bad = ["{\"qslot\":[100,200],\"plate\":[1]}", "{\"qslot\":[100,200],\"plate\":\"bad\"}", "{\"qslot\":[100,200],\"charBtn\":[1.5,2]}", "{\"qslot\":[100,200],\"menuBtn\":[1,2,3]}"];
+            string[] bad = ["{\"qslot\":[100,200],\"plate\":[1]}", "{\"qslot\":[100,200],\"plate\":\"bad\"}", "{\"qslot\":[100,200],\"hpmp\":[1.5,2]}", "{\"qslot\":[100,200],\"plate\":[1,2,3]}"];
             foreach (string json in bad)
             {
                 Layout.Load(path);
@@ -65,7 +61,7 @@ public class LayoutTests
                 try { Layout.Load(path); Assert.Fail($"expected a JsonException for {json}"); }
                 catch (JsonException) { }
                 Assert.AreEqual((13, 14), Layout.Qslot, json);
-                Assert.AreEqual((11, 12), Layout.CharBtn, json);
+                Assert.AreEqual((7, 8), Layout.HpMp, json);
                 File.WriteAllText(path, Full);
             }
         }

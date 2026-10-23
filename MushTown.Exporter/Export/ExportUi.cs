@@ -184,12 +184,6 @@ public static partial class Export
             files.Add(($"{sb3}/main/status/normal/gauge/number/{d}", $"hud_num{d}.png"));
         // number's 11th child is "\" (the HP/MP separator): its name breaks
         // path lookup, so the client bakes "/" instead. No other symbols exist.
-        (string state, string suffix)[] states = new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") };
-        foreach ((string state, string suffix) in states)
-        {
-            files.Add(($"{sb3}/mainBar/menu/button:Character/{state}/0", $"hud_btn_char_{suffix}.png"));
-            files.Add(($"{sb3}/mainBar/menu/button:Menu/{state}/0", $"hud_btn_menu_{suffix}.png"));
-        }
         foreach ((string node, string file) in files)
         {
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))
