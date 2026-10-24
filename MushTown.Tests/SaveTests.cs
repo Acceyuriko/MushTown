@@ -172,6 +172,28 @@ public class SaveTests
     }
 
     [TestMethod]
+    public void Save_Load_RoundtripsQuickSlots()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            var chara = store.CreateHero(0, 0, "hero");
+            chara.QuickSlots = new List<int> { 2000000, 0, 2000001 };
+            store.Save(path);
+            var slot = SaveStore.Load(path).Saves[0]!.Slots[0]!;
+            Assert.AreEqual(3, slot.QuickSlots!.Count);
+            Assert.AreEqual(2000000, slot.QuickSlots[0]);
+            Assert.AreEqual(0, slot.QuickSlots[1]);
+            Assert.AreEqual(2000001, slot.QuickSlots[2]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void Save_MissingDirectory_CreatesIt()
     {
         string dir = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}");

@@ -168,7 +168,7 @@ public sealed class CharaSlot
     public int Luk { get; set; } = 4;
     public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
     public Dictionary<int, int>? EquipBag { get; set; } // itemId -> count (EQUIP tab bag)
-    public List<int>? Qs { get; set; } // the twelve quickslot item ids (0 = empty; null = pre-W18 saves)
+    public List<int>? QuickSlots { get; set; } // the twelve quickslot item ids (0 = empty; null = pre-W18 saves)
     public List<int>? Equips { get; set; } // worn equip ids (null = beginner set)
     public Dictionary<int, int> SkillLv { get; set; } = new();
     public List<int> Quests { get; set; } = new(); // accepted quest ids

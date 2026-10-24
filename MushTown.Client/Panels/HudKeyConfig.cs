@@ -523,6 +523,7 @@ public sealed class KeyConfigWindow : UiWindow
     // ("I+K"). The action then fires on either key.
     private void AddKey(HotkeyAction action, string key)
     {
+        if (MushTownGame.QuickSlotKey(key)) return; // the strip keeps its own keys
         var parts = Keys(action);
         if (parts.Length == 0) { Bind(action, key); return; }
         if (parts.Contains(key)) return;
@@ -535,7 +536,7 @@ public sealed class KeyConfigWindow : UiWindow
     // The action takes the key. The key is taken away from the other actions.
     private void Bind(HotkeyAction action, string key)
     {
-        if (key == "") return;
+        if (key == "" || MushTownGame.QuickSlotKey(key)) return; // the strip keeps its own keys
         TakeAway(key, action);
         _draft[action] = key;
     }

@@ -73,10 +73,10 @@ public partial class MushTownGame
         _hoverItem = hoverSlot != null;
         TrackTip(hoverSlot);
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
-        QuickSlotKeyEdges(kb); // 1-9, 0, - and = drink the bound potions
         var hotkey = FreshHotkey(kb);
         // The key window is modal: while it is open, only its own key works.
         bool keyWindowOpen = WindowFor(HotkeyAction.KeyConfig)?.Show == true;
+        QuickSlotKeyEdges(kb, _talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // 1-9, 0, - and = drink the bound potions
         if (hotkey != null && _talkNpc == 0 && (hotkey.Value == HotkeyAction.KeyConfig || !keyWindowOpen))
         {
             if (hotkey.Value != HotkeyAction.Menu) _menuWindow.Close(); // a key opens a panel: the MENU window would cover it (its own key toggles it)
@@ -422,11 +422,7 @@ public partial class MushTownGame
         DrawTip(gx, gy); // the item tooltip goes over everything
     }
 
-    private static Rectangle QslotCell(int i)
-    {
-        var r = QslotRect();
-        return new Rectangle(r.X + 6 + i * 34, r.Y + 2, 34, 31);
-    }
+    private static Rectangle QslotCell(int i) => new(QslotRect().X + i * 35, QslotRect().Y, 32, 32); // the official cells: 32x32, pitch 35
 
     // The quick slot shows the official cap of the key the action has now
     // (the player can rebind it in the key settings window).

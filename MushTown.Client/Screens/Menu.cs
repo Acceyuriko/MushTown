@@ -232,6 +232,7 @@ public partial class MushTownGame
         SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
         Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
         EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },
+        QuickSlots = new List<int> { ItemData.RedPotion, 0, ItemData.BluePotion }, // the shot shows two bound cells
     };
 
     // Item defs (Initialize phase: the doll art loop needs the roster before
