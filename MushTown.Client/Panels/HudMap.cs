@@ -214,9 +214,10 @@ public sealed class MinimapWindow : UiWindow
 }
 
 // The world map window: the whole world, with the regions. Click a region to
-// see the maps of that region, click a map to travel there.
+// see the maps of that region; a click on a map picks it and Go travels.
 public sealed class WorldMapWindow : UiWindow
 {
+    private static readonly Color HoverBlue = new(123, 204, 224); // the official hover blue
     private readonly MushTownGame _game;
     private WorldRegionUi? _picked; // the region the player clicked
     private WorldRegionUi? _shown;  // the region the list was built for (the picked one, or the one we stand in)
@@ -273,12 +274,13 @@ public sealed class WorldMapWindow : UiWindow
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(region) });
             root.AddChild(o);
         }
-        // the maps of the shown region: click one to travel there
+        // the maps of the shown region: click one to pick it
         _lines.Clear();
         var here = MapUi.Region(_game.GameMap.MapId);
         if (here != null && _picked != null && _picked != here) _picked = null; // the player left that region
         var listRegion = _picked ?? here;
         if (listRegion != _shown) { _scroll = 0; _sel = null; } // a new list starts at the top with nothing picked
+        if (_sel?.Id == _game.GameMap.MapId) _sel = null; // the row of the map we stand on is gone: nothing to pick
         _shown = listRegion;
         _hidden = 0;
         _rows.Clear();
@@ -287,7 +289,7 @@ public sealed class WorldMapWindow : UiWindow
         root.Add(new Invoke(Draw));
         var go = new GameObject();
         go.Add(new Rect(GoRect()));
-        go.Add(new Button { Kind = ButtonKind.Click, OnClick = GoPicked });
+        go.Add(new Button { Kind = ButtonKind.Silent, OnClick = GoPicked }); // the travel plays the portal sound
         root.AddChild(go);
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MapWindowParts.Close(this, new Rectangle(Pos.X + _lay.Get("wcloseX", 829), Pos.Y + _lay.Get("wcloseY", 12), 11, 11)));
@@ -295,8 +297,8 @@ public sealed class WorldMapWindow : UiWindow
     }
 
     // The map list of the shown region: every name on the lines it needs, and
-    // a click box on the part of the name that is on screen (clicking it
-    // travels there).
+    // a click box on the part of the name that is on screen (clicking it picks
+    // the map, the Go button travels).
     private void BuildList(GameObject root, List<MapNameUi> shown)
     {
         bool toEnd = _toEnd;
@@ -401,21 +403,31 @@ public sealed class WorldMapWindow : UiWindow
             gfx.Sb.Draw(gfx.Pixel, new Rectangle(spot.X - (dotW - 1) / 2, spot.Y - (dotH - 1) / 2, dotW, dotH), ink);
         }
         if (_shown == null) return;
-        // The row under the mouse frames in the official blue and names itself in
-        // the MAP INFO line; a picked row keeps both until another one is picked.
-        var info = _sel;
+        // A pick keeps the blue frame until another row is picked, and the MAP INFO
+        // line always names what Go will do. The row under the mouse only tints, so
+        // the two can be seen at the same time.
+        MapNameUi? hovered = null;
         foreach (var (btn, map, _) in _rows)
-            if (btn == gfx.HoverButton) info = map;
+            if (btn == gfx.HoverButton) hovered = map;
+        var info = _sel ?? hovered;
         foreach (var (_, map, box) in _rows)
-            if (map == info) Border.Draw(gfx, box, new Color(123, 204, 224));
-        // The info line keeps one line: a long name is cut at a word, the framed
-        // row right below carries the whole of it.
-        var title = info != null ? _game.WrapText(info.Name, _lay.Get("listW", 146))[0] : _shown.Title;
+        {
+            if (map == _sel) Border.Draw(gfx, box, HoverBlue);
+            else if (map == hovered) gfx.Sb.Draw(gfx.Pixel, box, new Color(123, 204, 224, 50));
+        }
+        // The info line keeps one line: a long name is cut at a word and marked,
+        // the framed row right below it carries the whole of it.
+        var title = _shown.Title;
+        if (info != null)
+        {
+            var lines = _game.WrapText(info.Name, _lay.Get("listW", 146));
+            title = lines.Count > 1 ? lines[0] + "…" : lines[0];
+        }
         gfx.Sb.Draw(gfx.Ui.GetSmall(title), new Vector2(r.X + _lay.Get("infoX", 20), r.Y + _lay.Get("infoY", 51)),
             info != null ? new Color(255, 220, 0) : Color.White);
         // The Go button: grey until a row is picked.
         var go = GoRect();
-        Border.Draw(gfx, go, _sel != null ? new Color(123, 204, 224) : new Color(90, 100, 110));
+        Border.Draw(gfx, go, _sel != null ? HoverBlue : new Color(90, 100, 110));
         var goText = gfx.Ui.GetSmall("GO");
         gfx.Sb.Draw(goText, new Vector2(go.X + (go.Width - goText.Width) / 2, go.Y + (go.Height - goText.Height) / 2),
             _sel != null ? Color.White : new Color(120, 130, 140));
