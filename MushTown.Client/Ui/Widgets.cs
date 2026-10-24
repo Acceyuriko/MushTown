@@ -251,6 +251,7 @@ public sealed class Slot : Button
 {
     public string ItemKind = ""; // carry-match kind (use/worn/bag); sfx Kind stays Silent
     public int Index;
+    public required Func<int> Count; // how many the player owns: the tooltip reads it to skip empty cells
 }
 
 // Baked small text at a rect offset (matches the HUD label rows).

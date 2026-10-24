@@ -692,11 +692,7 @@ public partial class MushTownGame
         GameLog($"{chara.Name} entered the game ({mode})");
         _localWorld = null; ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); _fighter.Cooldowns.Clear(); _fighter.Buffs.Clear(); _fighter.Orbs = 0; // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
-        _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
-        _upWasDown = kb.IsKeyDown(Keys.Up);
-        _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
-        _zWasDown = kb.IsKeyDown(Keys.Z);
-        SeedSkillKeys(kb);
+        SeedGameKeys(kb);
         SeedHotkeys(kb);
         ReseedPortalState(); // the arrival spot, not the old one
         _screen = Screen.Game;

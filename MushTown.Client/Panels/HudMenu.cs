@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -55,7 +56,40 @@ public sealed class MenuWindow : UiWindow
     public void Close()
     {
         Show = false;
+        OnClosed(); // the pick starts over next time
     }
+
+    public override void OnClosed()
+    {
+        _curCol = 0;
+        _curRow = 0;
+    }
+
+    // The arrows pick a cell: left and right hop a column, up and down walk
+    // the rows of this one. The bottom button is the last row of a column.
+    private int _curCol, _curRow;
+
+    public void MoveCursor(int dc, int dr)
+    {
+        _curCol = (_curCol + ColumnRows.Length + dc) % ColumnRows.Length;
+        _curRow = Math.Clamp(_curRow + dr, 0, RowsOf(_curCol));
+    }
+
+    // Enter opens the picked cell. A grey row does nothing, like a click.
+    public bool OpenFocused()
+    {
+        Feature action = _curRow == RowsOf(_curCol) ? BottomButtons[_curCol].Action : ActionOf(_curCol, _curRow);
+        if (action == Feature.None) return false;
+        _game.OpenFeature(action);
+        return true;
+    }
+
+    // The pick shows as a blue frame over the row, in the official hover blue.
+    // The hover art itself would light the grey rows up like live ones.
+    private Invoke FocusFrame(GameObject cell, int col, int row) => new(gfx =>
+    {
+        if (_curCol == col && _curRow == row) Border.Draw(gfx, cell.Get<Rect>()!.Box, new Color(123, 204, 224));
+    });
 
     public override void Build()
     {
@@ -100,6 +134,7 @@ public sealed class MenuWindow : UiWindow
                     item.Add(new Image(stem));
                     AddBadge(item, x, y, action);
                 }
+                item.Add(FocusFrame(item, c, r)); // the arrows frame the pick here
                 root.AddChild(item);
             }
         }
@@ -120,6 +155,7 @@ public sealed class MenuWindow : UiWindow
                 o.Add(new Image($"ui/{stem}"));
                 AddBadge(o, x, botY, action);
             }
+            o.Add(FocusFrame(o, i, RowsOf(i))); // the bottom row is the last row of its column
             root.AddChild(o);
         }
 
@@ -214,6 +250,27 @@ public partial class MushTownGame
 {
     // The MENU window (the HUD menu button opens it).
     private MenuWindow _menuWindow = null!;
+
+    // The keys of the open MENU window: the official says at the bottom of
+    // the menu that Tab and the arrows move between the menus (the arrows
+    // also walk the rows inside one column).
+    private bool _menuLeftWasDown, _menuRightWasDown, _menuUpWasDown, _menuDownWasDown, _menuTabWasDown, _menuEnterWasDown;
+
+    private void MenuKeys(KeyboardState kb)
+    {
+        bool left = FreshKey(kb, Keys.Left, ref _menuLeftWasDown);
+        bool right = FreshKey(kb, Keys.Right, ref _menuRightWasDown);
+        bool up = FreshKey(kb, Keys.Up, ref _menuUpWasDown);
+        bool down = FreshKey(kb, Keys.Down, ref _menuDownWasDown);
+        bool tab = FreshKey(kb, Keys.Tab, ref _menuTabWasDown);
+        bool enter = FreshKey(kb, Keys.Enter, ref _menuEnterWasDown);
+        if (!_menuWindow.Show || _talkNpc != 0) return; // a talk bubble covers the menu: it owns the keys
+        if (left) _menuWindow.MoveCursor(-1, 0);
+        if (right || tab) _menuWindow.MoveCursor(1, 0);
+        if (up) _menuWindow.MoveCursor(0, -1);
+        if (down) _menuWindow.MoveCursor(0, 1);
+        if (enter && _menuWindow.OpenFocused()) PlaySfx("click");
+    }
 
     // The menu rows open the panels the game has.
     internal void OpenStatWindow(int tab)

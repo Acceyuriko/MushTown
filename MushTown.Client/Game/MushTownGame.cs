@@ -454,6 +454,7 @@ public partial class MushTownGame : Game
         }
 
         var kb = Keyboard.GetState();
+        var keys = kb; // the real keyboard: the chat and the MENU window blank the keys
         // One layer per press: the edge is taken here, before the chat empties
         // the keyboard, so a held Esc closes once and the chat press is spent.
         bool esc = FreshKey(kb, Keys.Escape, ref _escWasDown);
@@ -481,6 +482,7 @@ public partial class MushTownGame : Game
         bool click = ClickEdge(ms);
         var (mx, my) = MouseGamePos(ms);
         UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
+        if (_menuWindow.Show) kb = new KeyboardState(); // while the MENU is open the character ignores the keys
         SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;
 
@@ -519,6 +521,10 @@ public partial class MushTownGame : Game
         bool freshJ = FreshKey(kb, Keys.J, ref _jWasDown);
         bool freshL = FreshKey(kb, Keys.L, ref _lWasDown);
         bool freshZ = FreshKey(kb, Keys.Z, ref _zWasDown);
+
+        // The MENU window blanks the keys, so the edges above saw nothing held:
+        // a key still down when the menu closes must not count as a fresh press.
+        if (_menuWindow.Show) SeedGameKeys(keys);
 
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).

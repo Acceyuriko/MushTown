@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -37,13 +38,15 @@ public partial class MushTownGame
     // The worn gear takes the first row(s); the bag rows start below it.
     private int InvWornRows => (_equips.Count + InvCols - 1) / InvCols;
 
-    private GameObject PanelSlot(Rectangle r, string itemKind, int index)
+    private GameObject PanelSlot(Rectangle r, string itemKind, int index, Func<int> count)
     {
         var o = new GameObject();
         o.Add(new Rect(r));
-        var s = new Slot { ItemKind = itemKind, Index = index };
+        var s = new Slot { ItemKind = itemKind, Index = index, Count = count };
         s.OnClick = () => ClickSlot(itemKind, index);
         o.Add(s);
+        int id = itemKind == "use" ? _potions[index] : _equips[index];
+        o.Add(new InvSlot(_items[id].Image, count, false));
         return o;
     }
 
@@ -61,9 +64,7 @@ public partial class MushTownGame
             {
                 int i = s; // for-loop variables capture shared: copy per slot
                 int id = _potions[i];
-                var slot = PanelSlot(InvCell(i), "use", i);
-                slot.Add(new InvSlot(_items[id].Image, () => _save?.Slots[_slot]?.Use?.GetValueOrDefault(id) ?? 0, false));
-                body.AddChild(slot);
+                body.AddChild(PanelSlot(InvCell(i), "use", i, () => _save?.Slots[_slot]?.Use?.GetValueOrDefault(id) ?? 0));
             }
         if (_invTab == 0)
             for (int s = 0; s < _equips.Count; s++)
@@ -73,12 +74,8 @@ public partial class MushTownGame
                 // The worn gear sits on the first row(s). The small window has
                 // 4 columns, so 5 equip types wrap onto a second row: that is
                 // the official layout, not a bug.
-                var worn = PanelSlot(InvCell(i), "worn", i);
-                worn.Add(new InvSlot(_items[id].Image, () => _save?.Slots[_slot]?.Equips?.Count(w => w == id) ?? 0, false));
-                body.AddChild(worn);
-                var bag = PanelSlot(InvCell(InvWornRows * InvCols + i), "bag", i);
-                bag.Add(new InvSlot(_items[id].Image, () => _save?.Slots[_slot]?.EquipBag?.GetValueOrDefault(id) ?? 0, false));
-                body.AddChild(bag);
+                body.AddChild(PanelSlot(InvCell(i), "worn", i, () => _save?.Slots[_slot]?.Equips?.Count(w => w == id) ?? 0));
+                body.AddChild(PanelSlot(InvCell(InvWornRows * InvCols + i), "bag", i, () => _save?.Slots[_slot]?.EquipBag?.GetValueOrDefault(id) ?? 0));
             }
         for (int t = 0; t < TabCount; t++)
         {
@@ -198,5 +195,54 @@ public partial class MushTownGame
         var act = _hand.Click(chara, kind, id, _items, OwnHpPct(), _timeMs);
         if (act == HandAct.Wore) { PushBuild(); PushName(); PlaySfx("click"); }
         else if (act == HandAct.Moved) PlaySfx("click");
+    }
+
+    // The item tooltip: the icon, the name, the bonuses and the sell price of
+    // the slot under the mouse, after a short rest. It reuses the official box
+    // and the detail lines of the stat window, sized to the text.
+    private int _tipItem; // the item id under the mouse, 0 = none
+    private double _tipSince;
+    private const double TipDelayMs = 400; // the rest before the tooltip shows
+
+    private void TrackTip(Slot? slot)
+    {
+        int id = 0;
+        if (_hand.Empty && slot != null && slot.Count() != 0) // a held piece covers the cursor: no tooltip then
+            id = slot.ItemKind == "use" ? _potions[slot.Index] : _equips[slot.Index];
+        if (id == _tipItem) return; // the same item: the rest keeps counting
+        _tipItem = id;
+        _tipSince = _timeMs;
+    }
+
+    private void DrawTip(int gx, int gy)
+    {
+        if (_tipItem == 0 || _timeMs - _tipSince < TipDelayMs) return;
+        var item = _items[_tipItem];
+        var name = _gfx.Ui.GetSmall(item.Name);
+        var lines = new List<Texture2D>();
+        foreach (string text in ItemDetailLines(item)) lines.Add(_gfx.Ui.GetSmall(text));
+
+        int iconX = _statLay.Get("detailIconX", 8), iconY = _statLay.Get("detailIconY", 8);
+        int iconSize = _statLay.Get("detailIconSize", 32);
+        int nameX = _statLay.Get("detailNameX", 48), nameY = _statLay.Get("detailNameY", 6);
+        int lineX = _statLay.Get("detailLineX", 48), lineY = _statLay.Get("detailLineY", 28);
+        int lineGap = _statLay.Get("detailLineGap", 16);
+        int textW = name.Width;
+        foreach (var line in lines) textW = Math.Max(textW, line.Width);
+        int w = nameX + textW + iconX;
+        int h = Math.Max(lineY + lines.Count * lineGap, iconY + iconSize) + iconX;
+        int edge = _invLay.Get("tipEdge", 4); // keeps the box off the screen edge
+        var box = new Rectangle(Math.Min(gx + _invLay.Get("tipDX", 18), GameWidth - w - edge),
+            Math.Min(gy + _invLay.Get("tipDY", 12), GameHeight - h - edge), w, h);
+
+        NineSlice.Draw(_gfx, "tip", box);
+        _gfx.Sb.Draw(_gfx.Tex(item.Image), new Rectangle(box.X + iconX, box.Y + iconY, iconSize, iconSize), Color.White);
+        _gfx.Sb.Draw(name, new Vector2(box.X + nameX, box.Y + nameY), new Color(255, 220, 0));
+        int y = box.Y + lineY;
+        foreach (var line in lines)
+        {
+            _gfx.Sb.Draw(line, new Vector2(box.X + lineX, y), Color.White);
+            y += lineGap;
+        }
     }
 }

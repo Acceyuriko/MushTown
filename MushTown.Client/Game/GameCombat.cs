@@ -194,9 +194,13 @@ public partial class MushTownGame
         return fresh;
     }
 
-    // Menu trips don't track game keys: seed every skill edge from live state.
-    private void SeedSkillKeys(KeyboardState kb)
+    // Menu trips don't track game keys: seed every game edge from live state.
+    private void SeedGameKeys(KeyboardState kb)
     {
+        _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
+        _upWasDown = kb.IsKeyDown(Keys.Up);
+        _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
+        _zWasDown = kb.IsKeyDown(Keys.Z);
         _qWasDown = kb.IsKeyDown(Keys.Q);
         _wWasDown = kb.IsKeyDown(Keys.W);
         _eWasDown = kb.IsKeyDown(Keys.E);

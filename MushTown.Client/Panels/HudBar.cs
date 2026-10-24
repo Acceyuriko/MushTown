@@ -69,7 +69,8 @@ public partial class MushTownGame
 
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
     {
-        UpdateHudHover(gx, gy); // every frame (clicks return early below)
+        TrackTip(UpdateHudHover(gx, gy)); // every frame (clicks return early below)
+        MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
         var hotkey = FreshHotkey(kb);
         // The key window is modal: while it is open, only its own key works.
         bool keyWindowOpen = WindowFor(HotkeyAction.KeyConfig)?.Show == true;
@@ -165,11 +166,12 @@ public partial class MushTownGame
     // Hover respects overlap now (the W5 z-fix): the frontmost panel at the
     // point swallows below, so covered buttons stay silent and dark. Where
     // nothing overlaps, the ids match the legacy chain exactly.
-    private void UpdateHudHover(int gx, int gy)
+    // Returns the hovered inventory slot: that is where the tooltip timer starts.
+    private Slot? UpdateHudHover(int gx, int gy)
     {
         _hoverItem = false;
-        if (_talkNpc != 0) { _gameScene.ClearHover(); SfxOnHover(_talkScene.Hover(gx, gy)); return; }
-        if (HoverWindows(gx, gy)) { _gameScene.ClearHover(); return; } // the new windows sit on top
+        if (_talkNpc != 0) { _gameScene.ClearHover(); SfxOnHover(_talkScene.Hover(gx, gy)); return null; }
+        if (HoverWindows(gx, gy)) { _gameScene.ClearHover(); return null; } // the new windows sit on top
         foreach (var (show, scene) in PanelsFrontToBack())
         {
             if (!show) continue;
@@ -177,12 +179,14 @@ public partial class MushTownGame
             if (scene.Hovered != null)
             {
                 _gameScene.ClearHover();
-                _hoverItem = scene == _invScene && scene.HoverButton is Slot;
+                var slot = scene == _invScene ? scene.HoverButton as Slot : null;
+                _hoverItem = slot != null;
                 SfxOnHover(id);
-                return;
+                return slot;
             }
         }
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // the HUD widgets all live in the tree now
+        return null;
     }
 
     private void UpdateHudClick(int gx, int gy)
@@ -413,6 +417,7 @@ public partial class MushTownGame
             var icon = _textures[_items[_hand.Id].Image];
             _spriteBatch.Draw(icon, new Vector2(gx - icon.Width / 2, gy - icon.Height / 2), Color.White);
         }
+        DrawTip(gx, gy); // the item tooltip goes over everything
     }
 
     private static Rectangle QslotCell(int i)
