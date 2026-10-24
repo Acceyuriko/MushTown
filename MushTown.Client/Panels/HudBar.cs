@@ -136,6 +136,31 @@ public partial class MushTownGame
         for (int i = 0; i < 6; i++) if (i != _topPanel) yield return all[i];
     }
 
+    // The panel drawn last: the top panel if it is open, else the last one the
+    // draw order reaches. -1 when nothing is open. The order must stay the one
+    // DrawHud uses.
+    private int FrontPanel()
+    {
+        bool[] shown = { _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop };
+        if (shown[_topPanel]) return _topPanel;
+        for (int i = 5; i >= 0; i--) if (shown[i]) return i;
+        return -1;
+    }
+
+    // Hide one panel; hiding mid-drag drops the grab.
+    private void HidePanel(int i)
+    {
+        switch (i)
+        {
+            case 0: _showInv = false; _dragInv = null; break;
+            case 1: _showStat = false; _dragStat = null; break;
+            case 2: _showSkill = false; _dragSkill = null; break;
+            case 3: _showQuest = false; _dragQuest = null; break;
+            case 4: _showSettings = false; _dragSettings = null; break;
+            case 5: _showShop = false; _dragShop = null; break;
+        }
+    }
+
     // One "over" per HUD button entry (clicks live in UpdateHudClick below).
     // Hover respects overlap now (the W5 z-fix): the frontmost panel at the
     // point swallows below, so covered buttons stay silent and dark. Where
@@ -209,9 +234,7 @@ public partial class MushTownGame
             return;
         }
         var hudHit = ClickTree(_scenes.Current, gx, gy); // the HUD widgets all live in the tree now
-        // Any click outside the menu closes it (the menu key toggles it too).
-        if (_menuWindow.Show) _menuWindow.Close();
-        else if (hudHit == null) NpcClick(gx, gy); // no UI took it: the world gets the click
+        if (hudHit == null) NpcClick(gx, gy); // no UI took it: the world gets the click
     }
 
     // Panels stay reachable: 80px on screen sideways, title never above the top.

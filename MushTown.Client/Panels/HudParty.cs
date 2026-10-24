@@ -311,9 +311,8 @@ public partial class MushTownGame
     internal void OpenPartySearch()
     {
         PartyPlayers = Array.Empty<PartyMember>(); // the old list is stale
-        _partySearchWindow.Dirty = true;
         _net?.SendPartyList();
-        _partySearchWindow.Show = true;
+        ShowWindow(HotkeyAction.PartySearch);
     }
 
     // A new member list: the party window shows it.
@@ -335,8 +334,7 @@ public partial class MushTownGame
     internal void SetPartyAsk(PartyAskEvent ask)
     {
         PartyAsk = ask;
-        _partyAskWindow.Dirty = true;
-        _partyAskWindow.Show = true;
+        ShowWindow(HotkeyAction.PartyAsk); // the popup asks: it opens on top
     }
 
     // The link is lost: the party is gone with it.

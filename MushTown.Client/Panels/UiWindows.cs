@@ -7,7 +7,7 @@ namespace MushTown.Client;
 // a key, draws them above the older panels, and lets them take the clicks.
 public partial class MushTownGame
 {
-    // The windows that are open (the creation order).
+    // The windows that are open, in the draw order.
     private List<UiWindow> OpenWindows() => UiWindow.List.Where(w => w.Show).ToList();
 
     // The window a key opens, or null.
@@ -19,7 +19,7 @@ public partial class MushTownGame
         var w = WindowFor(action);
         if (w == null) return;
         w.Show = !w.Show;
-        if (w.Show) w.Dirty = true; // the window opens with a fresh scene
+        if (w.Show) { w.Dirty = true; if (!Pinned(w)) Raise(w); } // it opens on top, with a fresh scene
         w.Sync();
         PlaySfx("click");
     }
@@ -32,6 +32,7 @@ public partial class MushTownGame
         if (w == null) return;
         w.Show = true;
         w.Dirty = true; // the window opens with a fresh scene
+        if (!Pinned(w)) Raise(w); // on top of the ones already open
     }
 
     // Move a window that its title is dragging.
@@ -59,6 +60,18 @@ public partial class MushTownGame
         foreach (var w in OpenWindows()) w.Scene.Draw(_gfx);
     }
 
+    // A click brings the window to the front. The last one drawn is the top
+    // one, so the list order is the z order.
+    private static void Raise(UiWindow w)
+    {
+        UiWindow.List.Remove(w);
+        UiWindow.List.Add(w);
+    }
+
+    // The chat and the minimap are the HUD itself: they never come to the
+    // front and Esc never closes them.
+    private bool Pinned(UiWindow w) => w == _chatWindow || w.Action == HotkeyAction.Minimap;
+
     // The click goes to the topmost open window that has the point.
     private bool ClickWindows(int gx, int gy)
     {
@@ -66,10 +79,25 @@ public partial class MushTownGame
         {
             var w = UiWindow.List[i];
             if (!w.Show || !w.Rect().Contains(gx, gy)) continue;
+            if (!Pinned(w)) Raise(w); // the clicked window comes to the front, like the official client
             ClickTree(w.Scene, gx, gy);
             return true;
         }
         return false;
+    }
+
+    // Esc closes one layer: the front window, else the front panel of the
+    // HUD. The official client closes the topmost thing, not everything.
+    private bool EscCloseFront()
+    {
+        var front = UiWindow.List.LastOrDefault(w => w.Show && !Pinned(w));
+        if (front != null) { front.OnClosed(); front.Show = false; return true; }
+        int panel = FrontPanel();
+        if (panel < 0) return false;
+        HidePanel(panel);
+        int next = FrontPanel(); // the closed one may have been the top: hand the front over
+        if (next >= 0) _topPanel = next;
+        return true;
     }
 
     // The hover goes to the same window.

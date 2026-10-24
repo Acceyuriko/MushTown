@@ -78,7 +78,7 @@ public sealed class MenuWindow : UiWindow
         // panel, like the menu rows do.
         int qsSize = _lay.Get("qsIconSize", 30);
         root.AddChild(_game.BuildQuickIcons(Pos.X + _lay.Get("qsSlotX", 277), Pos.Y + _lay.Get("qsSlotY", 647),
-            qsSize, _lay.Get("qsSlotPitch", 42) - qsSize, Open));
+            qsSize, _lay.Get("qsSlotPitch", 42) - qsSize));
 
         // the menu items: seven columns under the seven tabs
         for (int c = 0; c < ColumnRows.Length; c++)
@@ -96,7 +96,7 @@ public sealed class MenuWindow : UiWindow
                     item.Add(new Picture(stem + "_d.png")); // the official disabled art
                 else
                 {
-                    item.Add(new Button { LegacyId = $"menu{c}r{r}", Kind = ButtonKind.Click, OnClick = () => Open(action) });
+                    item.Add(new Button { LegacyId = $"menu{c}r{r}", Kind = ButtonKind.Click, OnClick = () => _game.OpenFeature(action) });
                     item.Add(new Image(stem));
                     AddBadge(item, x, y, action);
                 }
@@ -116,7 +116,7 @@ public sealed class MenuWindow : UiWindow
                 o.Add(new Picture($"ui/{stem}_d.png")); // the official disabled art
             else
             {
-                o.Add(new Button { LegacyId = $"menub{i}", Kind = ButtonKind.Click, OnClick = () => Open(action) });
+                o.Add(new Button { LegacyId = $"menub{i}", Kind = ButtonKind.Click, OnClick = () => _game.OpenFeature(action) });
                 o.Add(new Image($"ui/{stem}"));
                 AddBadge(o, x, botY, action);
             }
@@ -180,13 +180,6 @@ public sealed class MenuWindow : UiWindow
         foreach (var (c, r, action) in LiveRows)
             if (c == col && r == row) return action;
         return Feature.None;
-    }
-
-    // A menu row opens the panel the game has and closes the window.
-    private void Open(Feature action)
-    {
-        Close();
-        _game.OpenFeature(action);
     }
 }
 

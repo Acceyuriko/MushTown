@@ -745,7 +745,7 @@ public partial class MushTownGame
         PlayScreenBgm(); // back to the login theme
     }
 
-    // Esc and the exit both close every window: the minimap and the chat log
+    // Leaving the game closes every window: the minimap and the chat log
     // re-show themselves in OnClosed.
     private void CloseAllWindows()
     {

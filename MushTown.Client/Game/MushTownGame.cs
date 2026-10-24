@@ -158,7 +158,7 @@ public partial class MushTownGame : Game
         _guideWindow = new GuideWindow(this);
         _guideCardWindow = new GuideCardWindow(this);
         _menuWindow = new MenuWindow(this);
-        _partyAskWindow = new PartyAskWindow(this); // the invite popup sits on top of the other windows
+        _partyAskWindow = new PartyAskWindow(this); // the invite popup raises itself when it opens
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
@@ -454,26 +454,21 @@ public partial class MushTownGame : Game
         }
 
         var kb = Keyboard.GetState();
-        if (_chatWindow.Focused) { _chatWindow.UpdateKeys(kb); kb = new KeyboardState(); } // the chat input eats the keys
-        if (kb.IsKeyDown(Keys.Escape))
+        // One layer per press: the edge is taken here, before the chat empties
+        // the keyboard, so a held Esc closes once and the chat press is spent.
+        bool esc = FreshKey(kb, Keys.Escape, ref _escWasDown);
+        if (_chatWindow.Focused)
+        {
+            _chatWindow.UpdateKeys(kb);
+            kb = new KeyboardState(); // the chat input eats the keys
+            esc = false; // that Esc leaves the input, it closes nothing
+        }
+        if (esc)
         {
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
-            if (UiWindow.List.Any(w => w.Show && w != _chatWindow)) // the new windows draw on top: Esc closes them first
-            {
-                CloseAllWindows();
-                PlaySfx("click");
-                base.Update(gameTime); return;
-            }
-            if (_showInv || _showStat || _showSkill || _showQuest || _showSettings || _showShop)
-            {
-                _showInv = false; _showStat = false; _showSkill = false;
-                _showQuest = false; _showSettings = false; _showShop = false;
-                _dragInv = _dragStat = _dragSkill = _dragQuest = _dragSettings = _dragShop = null; // hiding mid-drag drops the grab
-                PlaySfx("click");
-                base.Update(gameTime); return;
-            }
+            if (EscCloseFront()) { PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the front window, else the front panel
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
         // Talk needs presence: walking out of reach closes the modal.
