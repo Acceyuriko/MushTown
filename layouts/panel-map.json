@@ -1,5 +1,5 @@
 {
-  "_help": "World map window in 1366x768 space. World map: wx,wy,ww,wh is the window; worldX/worldY the map art inside it; titleH is the title strip height; infoX/infoY the region title in MAP INFO; listX/listY the map list under it; listW the text width (a long name wraps); listStep the row pitch; listH the height of the list area (the rows that fit); wheelStep the lines one wheel notch scrolls; scrollX is the official scroll bar beside the list (the track and the thumb art are 5 px wide, so the width comes from the art; the thumb art is 5x26 and is drawn at that size; the bar spans the rows, so it uses listY and listH). wcloseX/wcloseY the X button. The region dots: dotW/dotH is the drawn dot; dotClickW/dotClickH is the click box on a dot (it sits on the dot). The minimap window has its own file (panel-minimap.json).",
+  "_help": "World map window in 1366x768 space. World map: wx,wy,ww,wh is the window; worldX/worldY the map art inside it; titleH is the title strip height; infoX/infoY the region title in MAP INFO; listX/listY the map list under it; listW the text width (a long name wraps); listStep the row pitch; listH the height of the list area (the rows that fit); wheelStep the lines one wheel notch scrolls; scrollX is the official scroll bar beside the list (the track and the thumb art are 5 px wide, so the width comes from the art; the thumb art is 5x26 and is drawn at that size; the bar spans the rows, so it uses listY and listH). wcloseX/wcloseY the X button. The region dots: dotW/dotH is the drawn dot; dotClickW/dotClickH is the click box on a dot (it sits on the dot). goX/goY/goW/goH = the Go button under the list (it travels to the picked map). The minimap window has its own file (panel-minimap.json).",
   "wx": 250,
   "wy": 30,
   "ww": 852,
@@ -20,6 +20,11 @@
   "dotH": 7,
   "dotClickW": 17,
   "dotClickH": 17,
+
+  "goX": 16,
+  "goY": 420,
+  "goW": 64,
+  "goH": 22,
   "wcloseX": 829,
   "wcloseY": 12
 }

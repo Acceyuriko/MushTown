@@ -231,6 +231,10 @@ public sealed class WorldMapWindow : UiWindow
     private int _hidden;    // the lines that do not fit
     private int _wheel;     // the wheel value of the last frame
     private bool _toEnd;    // the shot mode wants the end of the list
+    // The rows of the list: their buttons, their maps and the box on screen.
+    // The picked map travels only when the Go button is pressed.
+    private readonly List<(Button Btn, MapNameUi Map, Rectangle Box)> _rows = new();
+    private MapNameUi? _sel;
 
     public WorldMapWindow(MushTownGame game) : base(HotkeyAction.WorldMap) { _game = game; }
 
@@ -274,12 +278,17 @@ public sealed class WorldMapWindow : UiWindow
         var here = MapUi.Region(_game.GameMap.MapId);
         if (here != null && _picked != null && _picked != here) _picked = null; // the player left that region
         var listRegion = _picked ?? here;
-        if (listRegion != _shown) _scroll = 0; // a new list starts at the top
+        if (listRegion != _shown) { _scroll = 0; _sel = null; } // a new list starts at the top with nothing picked
         _shown = listRegion;
         _hidden = 0;
+        _rows.Clear();
         if (_shown != null && maps.TryGetValue(_shown, out var shown))
             BuildList(root, shown);
         root.Add(new Invoke(Draw));
+        var go = new GameObject();
+        go.Add(new Rect(GoRect()));
+        go.Add(new Button { Kind = ButtonKind.Click, OnClick = GoPicked });
+        root.AddChild(go);
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MapWindowParts.Close(this, new Rectangle(Pos.X + _lay.Get("wcloseX", 829), Pos.Y + _lay.Get("wcloseY", 12), 11, 11)));
         Scene.Add(root);
@@ -323,8 +332,11 @@ public sealed class WorldMapWindow : UiWindow
             // of the row above it.
             int top = listY + Math.Max(0, start - _scroll) * listStep;
             int bottom = listY + Math.Min(visible, start + lines.Count - _scroll) * listStep;
-            o.Add(new Rect(new Rectangle(listX, top, listW, bottom - top)));
-            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _game.TravelTo(map.Id); Show = false; } });
+            var rowBox = new Rectangle(listX, top, listW, bottom - top);
+            var pick = new Button { Kind = ButtonKind.Click, OnClick = () => _sel = map }; // a click picks, Go travels
+            o.Add(new Rect(rowBox));
+            o.Add(pick);
+            _rows.Add((pick, map, rowBox));
             root.AddChild(o);
         }
     }
@@ -358,6 +370,18 @@ public sealed class WorldMapWindow : UiWindow
         Dirty = true;
     }
 
+    // The Go button: the picked map travels only when it is pressed.
+    private Rectangle GoRect() => new(Rect().X + _lay.Get("goX", 16), Rect().Y + _lay.Get("goY", 420),
+        _lay.Get("goW", 64), _lay.Get("goH", 22));
+
+    private void GoPicked()
+    {
+        if (_sel == null) return;
+        _game.TravelTo(_sel.Id);
+        _sel = null;
+        Show = false;
+    }
+
     // The map changed: rebuild the list (the map we stand on has no button).
     public void OnMapChanged() => Dirty = true;
 
@@ -377,7 +401,24 @@ public sealed class WorldMapWindow : UiWindow
             gfx.Sb.Draw(gfx.Pixel, new Rectangle(spot.X - (dotW - 1) / 2, spot.Y - (dotH - 1) / 2, dotW, dotH), ink);
         }
         if (_shown == null) return;
-        gfx.Sb.Draw(gfx.Ui.GetSmall(_shown.Title), new Vector2(r.X + _lay.Get("infoX", 20), r.Y + _lay.Get("infoY", 51)), Color.White);
+        // The row under the mouse frames in the official blue and names itself in
+        // the MAP INFO line; a picked row keeps both until another one is picked.
+        var info = _sel;
+        foreach (var (btn, map, _) in _rows)
+            if (btn == gfx.HoverButton) info = map;
+        foreach (var (_, map, box) in _rows)
+            if (map == info) Border.Draw(gfx, box, new Color(123, 204, 224));
+        // The info line keeps one line: a long name is cut at a word, the framed
+        // row right below carries the whole of it.
+        var title = info != null ? _game.WrapText(info.Name, _lay.Get("listW", 146))[0] : _shown.Title;
+        gfx.Sb.Draw(gfx.Ui.GetSmall(title), new Vector2(r.X + _lay.Get("infoX", 20), r.Y + _lay.Get("infoY", 51)),
+            info != null ? new Color(255, 220, 0) : Color.White);
+        // The Go button: grey until a row is picked.
+        var go = GoRect();
+        Border.Draw(gfx, go, _sel != null ? new Color(123, 204, 224) : new Color(90, 100, 110));
+        var goText = gfx.Ui.GetSmall("GO");
+        gfx.Sb.Draw(goText, new Vector2(go.X + (go.Width - goText.Width) / 2, go.Y + (go.Height - goText.Height) / 2),
+            _sel != null ? Color.White : new Color(120, 130, 140));
         var list = ListRect();
         foreach (var (map, text, y) in _lines)
         {
