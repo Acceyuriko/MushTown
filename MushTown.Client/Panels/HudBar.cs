@@ -88,7 +88,7 @@ public partial class MushTownGame
                 case HotkeyAction.Skill: _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; break;
                 case HotkeyAction.Quest: _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) _topPanel = 3; break; // the modal freezes panels
                 case HotkeyAction.Settings: if (_showSettings) CloseSettings(); else OpenSettings(); break;
-                case HotkeyAction.Menu: if (_menuWindow.Show) _menuWindow.Close(); else ShowWindow(HotkeyAction.Menu); break; // Close resets the pick, ToggleWindow would not
+                case HotkeyAction.Menu: ToggleMenu(); break; // the close resets the pick, ToggleWindow would not
                 case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // the minimap is always on screen
                 default: old = false; ToggleWindow(hotkey.Value); break; // the new windows draw above the older panels
             }

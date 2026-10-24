@@ -21,9 +21,10 @@ public static partial class Export
         }
 
         int index = 0;
+        var states = new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") };
         foreach (Wz_Node icon in menu.Nodes)
         {
-            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
+            foreach (var (state, suffix) in states)
                 if (!UiPng.Save(ui, $"UITotalMenu.img/quickMenu/menu/{icon.Text}/{state}/0", Path.Combine(dir, $"quickmenu_{index}_{suffix}.png"))) return false;
             // The name proves the order is the official one: the client asks
             // for quickmenu_<official number>, so index 52 must be Key Bindings.
@@ -32,6 +33,11 @@ public static partial class Export
             index++;
         }
         Console.WriteLine($"quick menu ui: {index} icons");
+
+        // The hamburger at the right end of the row (tooltip "Menu"): it opens
+        // the MENU window, and our MENU has no other mouse entry.
+        foreach (var (state, suffix) in states)
+            if (!UiPng.Save(ui, $"UITotalMenu.img/quickMenu/button:menu/{state}/0", Path.Combine(dir, $"quickmenu_hamburger_{suffix}.png"))) return false;
         return true;
     }
 }

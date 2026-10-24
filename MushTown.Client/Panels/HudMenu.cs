@@ -21,7 +21,7 @@ public sealed class MenuWindow : UiWindow
     private const int ItemW = 136, ItemH = 40;
     private const int CloseW = 20, CloseH = 20;
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 1022), _lay.Get("h", 698));
+    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 1022), _lay.Get("h", 597));
     public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("titleH", 46));
     public override Point LayoutPos() => new(_lay.Get("x", 172), _lay.Get("y", 18));
 
@@ -105,14 +105,7 @@ public sealed class MenuWindow : UiWindow
         var root = new GameObject();
         root.Add(new Rect(Rect()));
         root.Add(new BlurBackdrop()); // the frosted glass: the screen at 1/4 size
-        root.Add(new MenuArt()); // the 40% white panel, the tabs and the quick menu strip
-
-        // the quick menu strip: the same icons as the HUD row, in the slots
-        // that the official art has. A click closes the window and opens the
-        // panel, like the menu rows do.
-        int qsSize = _lay.Get("qsIconSize", 30);
-        root.AddChild(_game.BuildQuickIcons(Pos.X + _lay.Get("qsSlotX", 277), Pos.Y + _lay.Get("qsSlotY", 647),
-            qsSize, _lay.Get("qsSlotPitch", 42) - qsSize));
+        root.Add(new MenuArt()); // the 40% white panel, the tabs and the title
 
         // the menu items: seven columns under the seven tabs
         for (int c = 0; c < ColumnRows.Length; c++)
@@ -220,8 +213,9 @@ public sealed class MenuWindow : UiWindow
 }
 
 // The panel art of the MENU window: the body (the tabs, the title and the
-// 40% white) and the quick menu strip. The strip is drawn translucent, so
-// the game shows through it like the rest of the glass.
+// 40% white). The art's last rows are the official quick menu strip, which we
+// do not show (we cannot edit the row): the body and its shadow end at y=596,
+// so the window stops there and the art is drawn from its own top-left.
 public sealed class MenuArt : Component, IDrawable
 {
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-menu.json"));
@@ -229,14 +223,7 @@ public sealed class MenuArt : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Box;
-        var tex = gfx.Tex("ui/menu_bg.png");
-        int sx = _lay.Get("stripX", 259), sy = _lay.Get("stripY", 611);
-        int sw = _lay.Get("stripW", 504), sh = _lay.Get("stripH", 87);
-        // the body: everything above the strip
-        gfx.Sb.Draw(tex, new Rectangle(r.X, r.Y, r.Width, sy), new Rectangle(0, 0, r.Width, sy), Color.White);
-        // the strip: the same art, but thin enough to see the game through it
-        gfx.Sb.Draw(tex, new Rectangle(r.X + sx, r.Y + sy, sw, sh), new Rectangle(sx, sy, sw, sh),
-            new Color(255, 255, 255, _lay.Get("stripAlpha", 102)));
+        gfx.Sb.Draw(gfx.Tex("ui/menu_bg.png"), r, new Rectangle(0, 0, r.Width, r.Height), Color.White);
         // the channel name in the pill at the top right (the official
         // vector:info spot: the middle of the pill)
         string world = MapUi.Data.Channel.World;
@@ -250,6 +237,17 @@ public partial class MushTownGame
 {
     // The MENU window (the HUD menu button opens it).
     private MenuWindow _menuWindow = null!;
+
+    // The hotkey and the hamburger of the quick menu row both toggle the MENU.
+    private void ToggleMenu()
+    {
+        if (_menuWindow.Show) _menuWindow.Close();
+        else
+        {
+            ShowWindow(HotkeyAction.Menu);
+            _menuWindow.Sync(); // the click lands after SyncWindows: build the scene now, not next frame
+        }
+    }
 
     // The keys of the open MENU window: the official says at the bottom of
     // the menu that Tab and the arrows move between the menus (the arrows
