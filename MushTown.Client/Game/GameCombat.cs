@@ -201,6 +201,7 @@ public partial class MushTownGame
         _upWasDown = kb.IsKeyDown(Keys.Up);
         _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
         _zWasDown = kb.IsKeyDown(Keys.Z);
+        for (int k = 0; k < QuickSlotCount; k++) _qsWasDown[k] = kb.IsKeyDown(QuickSlotBinds[k]);
         _qWasDown = kb.IsKeyDown(Keys.Q);
         _wWasDown = kb.IsKeyDown(Keys.W);
         _eWasDown = kb.IsKeyDown(Keys.E);

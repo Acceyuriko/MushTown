@@ -45,10 +45,13 @@ public partial class MushTownGame
         var s = new Slot { ItemKind = itemKind, Index = index, Count = count };
         s.OnClick = () => ClickSlot(itemKind, index);
         o.Add(s);
-        int id = itemKind == "use" ? _potions[index] : _equips[index];
+        int id = ItemId(itemKind, index);
         o.Add(new InvSlot(_items[id].Image, count, false));
         return o;
     }
+
+    // The item a cell stands for: the USE tab lists potions, the EQUIP tab gear.
+    private int ItemId(string kind, int index) => kind == "use" ? _potions[index] : _equips[index];
 
     private void BuildInvScene()
     {
@@ -125,6 +128,8 @@ public partial class MushTownGame
                 LoadTexture($"ui/{p}_tab_n{t}.png");
             }
         }
+        foreach (string side in new[] { "nw", "ne", "sw", "se", "n", "s", "w", "e", "c" })
+            LoadTexture($"ui/tip_{side}.png"); // the tooltip frame: the stat window loads it too, this one must not depend on that
     }
 
     // The official expand button: "+" opens the wide window, "-" goes back.
@@ -191,7 +196,7 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions carry no bag
-        int id = kind == "use" ? _potions[index] : _equips[index];
+        int id = ItemId(kind, index);
         var act = _hand.Click(chara, kind, id, _items, OwnHpPct(), _timeMs);
         if (act == HandAct.Wore) { PushBuild(); PushName(); PlaySfx("click"); }
         else if (act == HandAct.Moved) PlaySfx("click");
@@ -208,7 +213,7 @@ public partial class MushTownGame
     {
         int id = 0;
         if (_hand.Empty && slot != null && slot.Count() != 0) // a held piece covers the cursor: no tooltip then
-            id = slot.ItemKind == "use" ? _potions[slot.Index] : _equips[slot.Index];
+            id = ItemId(slot.ItemKind, slot.Index);
         if (id == _tipItem) return; // the same item: the rest keeps counting
         _tipItem = id;
         _tipSince = _timeMs;
@@ -236,7 +241,8 @@ public partial class MushTownGame
             Math.Min(gy + _invLay.Get("tipDY", 12), GameHeight - h - edge), w, h);
 
         NineSlice.Draw(_gfx, "tip", box);
-        _gfx.Sb.Draw(_gfx.Tex(item.Image), new Rectangle(box.X + iconX, box.Y + iconY, iconSize, iconSize), Color.White);
+        var icon = _gfx.Tex(item.Image); // native size, like every other item icon
+        _gfx.Sb.Draw(icon, new Vector2(box.X + iconX + (iconSize - icon.Width) / 2, box.Y + iconY + (iconSize - icon.Height) / 2), Color.White);
         _gfx.Sb.Draw(name, new Vector2(box.X + nameX, box.Y + nameY), new Color(255, 220, 0));
         int y = box.Y + lineY;
         foreach (var line in lines)

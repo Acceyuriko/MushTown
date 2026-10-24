@@ -69,8 +69,11 @@ public partial class MushTownGame
 
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
     {
-        TrackTip(UpdateHudHover(gx, gy)); // every frame (clicks return early below)
+        var hoverSlot = UpdateHudHover(gx, gy); // every frame (clicks return early below)
+        _hoverItem = hoverSlot != null;
+        TrackTip(hoverSlot);
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
+        QuickSlotKeyEdges(kb); // 1-9, 0, - and = drink the bound potions
         var hotkey = FreshHotkey(kb);
         // The key window is modal: while it is open, only its own key works.
         bool keyWindowOpen = WindowFor(HotkeyAction.KeyConfig)?.Show == true;
@@ -85,6 +88,7 @@ public partial class MushTownGame
                 case HotkeyAction.Skill: _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; break;
                 case HotkeyAction.Quest: _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) _topPanel = 3; break; // the modal freezes panels
                 case HotkeyAction.Settings: if (_showSettings) CloseSettings(); else OpenSettings(); break;
+                case HotkeyAction.Menu: if (_menuWindow.Show) _menuWindow.Close(); else ShowWindow(HotkeyAction.Menu); break; // Close resets the pick, ToggleWindow would not
                 case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // the minimap is always on screen
                 default: old = false; ToggleWindow(hotkey.Value); break; // the new windows draw above the older panels
             }
@@ -169,7 +173,6 @@ public partial class MushTownGame
     // Returns the hovered inventory slot: that is where the tooltip timer starts.
     private Slot? UpdateHudHover(int gx, int gy)
     {
-        _hoverItem = false;
         if (_talkNpc != 0) { _gameScene.ClearHover(); SfxOnHover(_talkScene.Hover(gx, gy)); return null; }
         if (HoverWindows(gx, gy)) { _gameScene.ClearHover(); return null; } // the new windows sit on top
         foreach (var (show, scene) in PanelsFrontToBack())
@@ -179,10 +182,8 @@ public partial class MushTownGame
             if (scene.Hovered != null)
             {
                 _gameScene.ClearHover();
-                var slot = scene == _invScene ? scene.HoverButton as Slot : null;
-                _hoverItem = slot != null;
                 SfxOnHover(id);
-                return slot;
+                return scene == _invScene ? scene.HoverButton as Slot : null;
             }
         }
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // the HUD widgets all live in the tree now
@@ -305,6 +306,7 @@ public partial class MushTownGame
         gloss.Add(new Picture("ui/hud_qslotcover.png")); // gloss stretched onto the cells: bottom flush with EXP top
         qslot.AddChild(gloss);
         _gameScene.Add(qslot);
+        _gameScene.Add(BuildQuickSlots()); // the twelve item cells of the same strip
         _gameScene.Add(BuildQuestHelper()); // the quest helper bar: the count, the buttons, the quest list
         _gameScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
         var bossBar = new GameObject { NoHit = true };
