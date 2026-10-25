@@ -34,6 +34,7 @@ public partial class MushTownGame
             cell.Add(new Rect(s));
             // Silent: the click sound comes from ClickQuickSlot, and drinking is quiet.
             cell.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => ClickQuickSlot(i) });
+            cell.Add(new ItemTip(() => QuickSlotItem(i))); // the same tooltip as a bag slot
             cell.Add(new Invoke(gfx => DrawQuickSlot(gfx, i, s)));
             root.AddChild(cell);
         }

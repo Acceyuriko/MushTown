@@ -57,12 +57,13 @@ public partial class MushTownGame
     private int _invTab; // 0 Equip 1 Use 2 Etc 3 Set-up 4 Cash 5 Dec
 
     private static Rectangle PlateRect() => new(Layout.Plate.X, Layout.Plate.Y, 250, 35);
-    private static Rectangle HpRect() => new(Layout.HpMp.X, Layout.HpMp.Y, 205, 46); // cover bottom flush with EXP top
+    private static Rectangle HpRect() => new(Layout.HpMp.X, Layout.HpMp.Y, 205, 46); // the bars art: 46 tall, its last 3px overlap the EXP band (the bars draw over it)
     private static Rectangle QslotRect() => new(Layout.Qslot.X, Layout.Qslot.Y, 557, 67);
     private static Rectangle ExpRect() => new(0, 758, 1366, 10);
     private Point _invPos = new(0, 0), _statPos = new(0, 0);
     private Point _skillPos = new(0, 0); // the skill window takes its spot from layouts/panel-skill.json
     private Point? _dragInv, _dragStat, _dragSkill, _dragQuest, _dragSettings, _dragShop; // title grab offsets while held
+    private GameObject? _hovered; // the object under the mouse: both tip kinds read it
     private int _topPanel = 1; // the front panel: 0 = inventory, 1 = stat, 2 = skill, 3 = quest, 4 = settings, 5 = shop
 
     private Texture2D Tex(string file) => _textures["ui/" + file];
@@ -71,7 +72,6 @@ public partial class MushTownGame
     {
         var hoverSlot = UpdateHudHover(gx, gy); // every frame (clicks return early below)
         _hoverItem = hoverSlot != null;
-        TrackTip(hoverSlot);
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
         var hotkey = FreshHotkey(kb);
         // The key window is modal: while it is open, only its own key works.
@@ -170,9 +170,10 @@ public partial class MushTownGame
     // Hover respects overlap now (the W5 z-fix): the frontmost panel at the
     // point swallows below, so covered buttons stay silent and dark. Where
     // nothing overlaps, the ids match the legacy chain exactly.
-    // Returns the hovered inventory slot: that is where the tooltip timer starts.
+    // Returns the hovered inventory slot (it decides the grab cursor).
     private Slot? UpdateHudHover(int gx, int gy)
     {
+        _hovered = null;
         if (_talkNpc != 0) { _gameScene.ClearHover(); SfxOnHover(_talkScene.Hover(gx, gy)); return null; }
         if (HoverWindows(gx, gy)) { _gameScene.ClearHover(); return null; } // the new windows sit on top
         foreach (var (show, scene) in PanelsFrontToBack())
@@ -183,10 +184,12 @@ public partial class MushTownGame
             {
                 _gameScene.ClearHover();
                 SfxOnHover(id);
-                return scene == _invScene ? scene.HoverButton as Slot : null;
+                _hovered = scene.Hovered;
+                return scene.HoverButton as Slot; // the bag is the only panel with slots: that is the grab cursor
             }
         }
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // the HUD widgets all live in the tree now
+        _hovered = _scenes.Current?.Hovered;
         return null;
     }
 
@@ -255,20 +258,24 @@ public partial class MushTownGame
     // resets the panel positions above).
     private void BuildGameScene()
     {
+        _hovered = null; // the old scene's objects are gone
         _gameScene = new Scene();
         var furniture = new GameObject(); // HUD furniture: hit-rects with no Buttons (clicks stop here, silent)
-        foreach (var r in new[] { PlateRect(), HpRect(), QslotRect(), ExpRect() })
-        {
-            var f = new GameObject();
-            f.Add(new Rect(r));
-            furniture.AddChild(f);
-        }
+        furniture.AddChild(HitBox(PlateRect()));
+        var hp = HitBox(HpBox()); // the bars split at the line of their own numbers
+        hp.Add(new HoverTip(() => "HP (Health Point)"));
+        furniture.AddChild(hp);
+        var mp = HitBox(MpBox()); // it stops where the EXP line starts, or the EXP object would win there
+        mp.Add(new HoverTip(() => "MP (Mana Point)"));
+        furniture.AddChild(mp);
+        furniture.AddChild(HitBox(QslotRect()));
         _gameScene.Add(furniture); // first (bottom): the art roots added after draw over it, its rects swallow the clicks
-        var exp = new GameObject();
+        var exp = new GameObject(); // the EXP line: the hit is this object (its rect), the tip rides it
         exp.Add(new Rect(ExpRect()));
         exp.Add(new Bar("ui/hud_expback.png", "ui/hud_expgauge.png", "ui/hud_expcover.png", ExpFill));
+        exp.Add(new HoverTip(ExpTipText, above: true));
         _gameScene.Add(exp); // legacy draws exp first: same pixels, owned by the tree now
-        var plate = new GameObject { NoHit = true }; // art-only roots below: the furniture keeps swallowing plate/HP/quickslot/exp; tracker/boss/minimap pass clicks through like before
+        var plate = new GameObject { NoHit = true }; // art-only roots below: the furniture keeps swallowing plate/HP/quickslot and the exp object its own line; tracker/boss/minimap pass clicks through like before
         plate.Add(new Rect(PlateRect()));
         plate.Add(new Picture("ui/hud_plate.png"));
         plate.Add(new PlateLevel(() => _save?.Slots[_slot]?.Level ?? 1));
@@ -315,6 +322,18 @@ public partial class MushTownGame
         _gameScene.Add(BuildQuickMenu()); // the quick menu icon row: topmost so the clicks land there
         SyncPanelScenes(); // shots skip Update: without this the panels draw empty there (first Update no-ops, positions match)
     }
+
+    private static GameObject HitBox(Rectangle r)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(r));
+        return o;
+    }
+
+    // The HP/MP hit boxes: the numbers sit at +7 and +28 of the plate, and the
+    // bottom stops at the EXP line (y 758).
+    private static Rectangle HpBox() => new(Layout.HpMp.X, Layout.HpMp.Y, 205, 24);
+    private static Rectangle MpBox() => new(Layout.HpMp.X, Layout.HpMp.Y + 24, 205, 19);
 
     // The living boss on this map, if any (v1 has one: Mushmom).
     private (string Name, int Hp, int MaxHp)? FindBoss()
@@ -419,7 +438,77 @@ public partial class MushTownGame
             var icon = _textures[_items[_hand.Id].Image];
             _spriteBatch.Draw(icon, new Vector2(gx - icon.Width / 2, gy - icon.Height / 2), Color.White);
         }
-        DrawTip(gx, gy); // the item tooltip goes over everything
+
+        DrawTips(gx, gy); // tips sit above every HUD layer
+    }
+
+    // The tips of the object under the mouse: the text tip of the HUD widgets
+    // and the item tooltip of a slot or a quickslot cell. Drawn last, so a tip
+    // never hides under the bars or the quick slot caps.
+    private void DrawTips(int gx, int gy)
+    {
+        var mouse = new Point(gx, gy);
+        if (_hovered?.Get<HoverTip>() is HoverTip text) text.DrawAt(_gfx, mouse);
+        if (_hand.Empty && _hovered?.Get<ItemTip>() is ItemTip item) DrawTip(item.Id(), mouse); // a held piece covers the cursor
+    }
+
+    // The item tooltip: the icon, the name, the bonuses and the description of
+    // the cell whose ItemTip is hovered. It reuses the official box and the
+    // detail lines of the stat window, sized to the text.
+    private void DrawTip(int itemId, Point mouse)
+    {
+        if (itemId == 0) return; // an empty cell has nothing to show
+        int gx = mouse.X, gy = mouse.Y;
+        var item = _items[itemId];
+        var name = _gfx.Ui.GetSmall(item.Name);
+        var lines = new List<Texture2D>();
+        foreach (string text in ItemDetailLines(item)) lines.Add(_gfx.Ui.GetSmall(text));
+        // The description String.wz carries (potions have one, gear has none).
+        var desc = new List<Texture2D>();
+        if (item.Desc.Length != 0)
+            foreach (string text in _gfx.Ui.Wrap(item.Desc, _invLay.Get("tipTextW", 180))) desc.Add(_gfx.Ui.GetSmall(text));
+
+        int iconX = _statLay.Get("detailIconX", 8), iconY = _statLay.Get("detailIconY", 8);
+        int iconSize = _statLay.Get("detailIconSize", 32);
+        int nameX = _statLay.Get("detailNameX", 48), nameY = _statLay.Get("detailNameY", 6);
+        int lineX = _statLay.Get("detailLineX", 48), lineY = _statLay.Get("detailLineY", 28);
+        int lineGap = _statLay.Get("detailLineGap", 16);
+        int textW = name.Width;
+        foreach (var line in lines) textW = Math.Max(textW, line.Width);
+        foreach (var line in desc) textW = Math.Max(textW, line.Width);
+        int w = nameX + textW + iconX;
+        int rows = lines.Count + desc.Count; // the blank row between the two blocks
+        if (lines.Count > 0 && desc.Count > 0) rows++;
+        int h = Math.Max(lineY + rows * lineGap, iconY + iconSize) + iconX;
+        int edge = _invLay.Get("tipEdge", 4); // keeps the box off the screen edge
+        var box = new Rectangle(Math.Min(gx + _invLay.Get("tipDX", 18), GameWidth - w - edge),
+            Math.Min(gy + _invLay.Get("tipDY", 12), GameHeight - h - edge), w, h);
+
+        NineSlice.Draw(_gfx, "tip", box);
+        var icon = _gfx.Tex(item.Image); // native size, like every other item icon
+        _gfx.Sb.Draw(icon, new Vector2(box.X + iconX + (iconSize - icon.Width) / 2, box.Y + iconY + (iconSize - icon.Height) / 2), Color.White);
+        _gfx.Sb.Draw(name, new Vector2(box.X + nameX, box.Y + nameY), new Color(255, 220, 0));
+        int y = box.Y + lineY;
+        foreach (var line in lines)
+        {
+            _gfx.Sb.Draw(line, new Vector2(box.X + lineX, y), Color.White);
+            y += lineGap;
+        }
+        if (lines.Count > 0) y += lineGap; // the gap before the description
+        foreach (var line in desc)
+        {
+            _gfx.Sb.Draw(line, new Vector2(box.X + lineX, y), new Color(214, 216, 222));
+            y += lineGap;
+        }
+    }
+
+    // The EXP tip has the numbers: the official writes them as
+    // "EXP : 116 / 19,112 [0.61%]".
+    private string ExpTipText()
+    {
+        var (value, max) = ExpFill();
+        double pct = value * 100.0 / max;
+        return $"EXP : {value:#,##0} / {max:#,##0} [{pct:0.00}%]";
     }
 
     private static Rectangle QslotCell(int i) => new(QslotRect().X + i * 35, QslotRect().Y, 32, 32); // the official cells: 32x32, pitch 35

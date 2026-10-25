@@ -16,16 +16,16 @@ public partial class MushTownGame
     // The icons the game has: the official icon number and what it opens.
     // Exit Game is not here: the slot is the hamburger, and the MENU window
     // has the button.
-    private static readonly (int Icon, Feature Action)[] QuickIcons =
+    private static readonly (int Icon, Feature Action, string Label)[] QuickIcons =
     {
-        (0, Feature.Stat),      // Character Info
-        (4, Feature.Equip),     // Equipment
-        (6, Feature.Inventory), // Inventory
-        (11, Feature.Skill),    // Skills
-        (17, Feature.Quest),    // Quests
-        (19, Feature.WorldMap), // World Map
-        (52, Feature.Keys),     // Key Bindings
-        (53, Feature.Settings), // Settings
+        (0, Feature.Stat, "Character Info"),
+        (4, Feature.Equip, "Equipment"),
+        (6, Feature.Inventory, "Inventory"),
+        (11, Feature.Skill, "Skills"),
+        (17, Feature.Quest, "Quests"),
+        (19, Feature.WorldMap, "World Map"),
+        (52, Feature.Keys, "Key Bindings"),
+        (53, Feature.Settings, "Settings"),
     };
 
     // The three states of one icon art.
@@ -39,21 +39,22 @@ public partial class MushTownGame
         var row = new GameObject();
         for (int i = 0; i < QuickIcons.Length; i++)
         {
-            var (icon, action) = QuickIcons[i];
-            row.AddChild(Cell(x + i * (size + gap), y, size, $"quickmenu_{icon}", $"quickmenu{icon}", () => OpenFeature(action)));
+            var (icon, action, label) = QuickIcons[i];
+            row.AddChild(Cell(x + i * (size + gap), y, size, $"quickmenu_{icon}", $"quickmenu{icon}", label, () => OpenFeature(action)));
         }
-        row.AddChild(Cell(x + QuickIcons.Length * (size + gap), y, size, "quickmenu_hamburger", "quickmenuMenu", ToggleMenu));
+        row.AddChild(Cell(x + QuickIcons.Length * (size + gap), y, size, "quickmenu_hamburger", "quickmenuMenu", "Menu", ToggleMenu));
         return row;
     }
 
     // One cell: the hit rect and the click id (PanelButton), plus the official
     // three state art. The Image component picks the hover and press art itself.
-    private GameObject Cell(int x, int y, int size, string stem, string id, Action onClick)
+    private GameObject Cell(int x, int y, int size, string stem, string id, string label, Action onClick)
     {
         foreach (string state in IconStates)
             LoadTexture($"ui/{stem}{state}");
         var o = PanelButton(new Rectangle(x, y, size, size), id, onClick, ButtonKind.Click);
         o.Add(new Image($"ui/{stem}"));
+        o.Add(new HoverTip(() => label)); // the official names the icon under the cursor
         return o;
     }
 }

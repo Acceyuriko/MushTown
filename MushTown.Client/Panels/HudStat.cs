@@ -160,17 +160,17 @@ public partial class MushTownGame
         body.AddChild(icon);
     }
 
-    // The detail lines of one item: the bonuses it gives.
+    // The detail lines of one item: the level it asks for, then the bonuses.
+    // No HP/MP line: v1 takes no incHP/incMP from gear, and a potion's own
+    // String.wz description already says what it restores.
     private static List<string> ItemDetailLines(ItemData data)
     {
         var lines = new List<string>();
+        if (data.ReqLevel > 0) lines.Add($"Required Level Lv. {data.ReqLevel}");
         if (data.Atk != 0) lines.Add($"Attack +{data.Atk}");
         if (data.Def != 0) lines.Add($"Defense +{data.Def}");
         if (data.Str != 0) lines.Add($"STR +{data.Str}");
         if (data.Dex != 0) lines.Add($"DEX +{data.Dex}");
-        if (data.Hp != 0) lines.Add($"HP +{data.Hp}");
-        if (data.Mp != 0) lines.Add($"MP +{data.Mp}");
-        if (data.Price > 0) lines.Add($"Sells for {Shop.SellPrice(data.Price).ToString("#,##0")} mesos");
         return lines;
     }
 
@@ -305,26 +305,9 @@ public sealed class EquipIcon : Component, IDrawable
     }
 }
 
-// The official item tooltip frame: nine pieces (four corners, four edges and
-// the center) drawn around the owner rect.
+// The official item tooltip frame around the owner rect (the same nine pieces
+// as the item tooltip of the bag).
 public sealed class ToolTipFrame : Component, IDrawable
 {
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Box;
-        var nw = gfx.Tex("ui/tip_nw.png"); var ne = gfx.Tex("ui/tip_ne.png");
-        var sw = gfx.Tex("ui/tip_sw.png"); var se = gfx.Tex("ui/tip_se.png");
-        var n = gfx.Tex("ui/tip_n.png"); var s = gfx.Tex("ui/tip_s.png");
-        var w = gfx.Tex("ui/tip_w.png"); var e = gfx.Tex("ui/tip_e.png");
-        var c = gfx.Tex("ui/tip_c.png");
-        gfx.Sb.Draw(nw, new Vector2(r.X, r.Y), Color.White);
-        gfx.Sb.Draw(ne, new Vector2(r.Right - ne.Width, r.Y), Color.White);
-        gfx.Sb.Draw(sw, new Vector2(r.X, r.Bottom - sw.Height), Color.White);
-        gfx.Sb.Draw(se, new Vector2(r.Right - se.Width, r.Bottom - se.Height), Color.White);
-        gfx.Sb.Draw(n, new Rectangle(r.X + nw.Width, r.Y, r.Width - nw.Width - ne.Width, n.Height), Color.White);
-        gfx.Sb.Draw(s, new Rectangle(r.X + sw.Width, r.Bottom - s.Height, r.Width - sw.Width - se.Width, s.Height), Color.White);
-        gfx.Sb.Draw(w, new Rectangle(r.X, r.Y + nw.Height, w.Width, r.Height - nw.Height - sw.Height), Color.White);
-        gfx.Sb.Draw(e, new Rectangle(r.Right - e.Width, r.Y + ne.Height, e.Width, r.Height - ne.Height - se.Height), Color.White);
-        gfx.Sb.Draw(c, new Rectangle(r.X + w.Width, r.Y + n.Height, r.Width - w.Width - e.Width, r.Height - n.Height - s.Height), Color.White);
-    }
+    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, "tip", Owner.Get<Rect>()!.Box);
 }

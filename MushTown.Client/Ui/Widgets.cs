@@ -251,7 +251,6 @@ public sealed class Slot : Button
 {
     public string ItemKind = ""; // carry-match kind (use/worn/bag); sfx Kind stays Silent
     public int Index;
-    public required Func<int> Count; // how many the player owns: the tooltip reads it to skip empty cells
 }
 
 // Baked small text at a rect offset (matches the HUD label rows).
@@ -395,6 +394,40 @@ public sealed class Round : Component, IDrawable
             gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X + inset, r.Y + y, r.Width - inset * 2, 1), color);
         }
     }
+}
+
+// The dark rounded tip next to the cursor: the official shows one over the
+// HP/MP/EXP bars and over the quick menu icons. The component carries only the
+// text; the game draws it after every HUD layer, so a tip on a box deep in the
+// tree still shows above the bars.
+public sealed class HoverTip : Component
+{
+    private readonly Func<string> _text;
+    private readonly bool _above; // the bottom line of the screen puts its tip over the cursor
+    public HoverTip(Func<string> text, bool above = false) { _text = text; _above = above; }
+
+    public void DrawAt(UiGfx gfx, Point mouse)
+    {
+        var t = gfx.Ui.GetSmall(_text());
+        int w = t.Width + 12, h = t.Height + 6;
+        int x = Math.Clamp(mouse.X + 14, 0, MushTownGame.GameWidth - w);
+        int y = _above ? mouse.Y - h - 6 : mouse.Y - h / 2;
+        y = Math.Clamp(y, 0, MushTownGame.GameHeight - h);
+        var box = new Rectangle(x, y, w, h);
+        Round.Fill(gfx, box, 5, new Color(105, 110, 120)); // the 1px edge, then the rounded fill inside it
+        Round.Fill(gfx, new Rectangle(x + 1, y + 1, w - 2, h - 2), 4, new Color(40, 44, 52, 235));
+        gfx.Sb.Draw(t, new Vector2(x + 6, y + 3), Color.White);
+    }
+}
+
+// The item tooltip of one cell: the game draws the box of whichever cell the
+// mouse is on, so a bag slot and a quickslot share the same component. The cell
+// only says which item it holds (0 = empty, no tip).
+public sealed class ItemTip : Component
+{
+    private readonly Func<int> _id;
+    public ItemTip(Func<int> id) => _id = id;
+    public int Id() => _id();
 }
 
 // Fullscreen dim (matches DrawDim). Needs no rect.

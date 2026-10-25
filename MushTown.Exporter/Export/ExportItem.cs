@@ -71,6 +71,7 @@ public static partial class Export
                 Hp = Int(spec, "hp"),
                 Mp = Int(spec, "mp"),
                 Price = Int(pinfo, "price"),
+                Desc = (str.Find($@"Consume.img\{id}\desc")?.GetValueEx<string>("") ?? "").Replace("\\n", "\n"),
             };
             if (data.Price <= 0)
             {
@@ -94,10 +95,10 @@ public static partial class Export
         return true;
     }
 
-    // One def + icon per wearable gear: Slot and bonuses come from the img's
-    // info node. v1 ships only all-supported stats: any other inc* fails loud
-    // (a half-working item must never sneak in); reqs/pose/sfx/speed/tuc/
-    // cash sit unused by design (ItemData documents the v1 gear rules).
+    // One def + icon per wearable gear: Slot, bonuses and reqLevel come from
+    // the img's info node. v1 ships only all-supported stats: any other inc*
+    // fails loud (a half-working item must never sneak in); reqJob/pose/sfx/
+    // speed/tuc/cash sit unused by design (ItemData documents the rules).
     // ReadEquips checks every row before the doll bake (a bad pairing must
     // not bake wrong art); WriteEquips writes the defs after it (a failed
     // bake must not leave a def whose art is missing).
@@ -169,6 +170,7 @@ public static partial class Export
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),
                 Price = Int(info, "price"),
+                ReqLevel = Int(info, "reqLevel"),
                 NameTag = tag,
                 HasArt = beginner != null,
             };

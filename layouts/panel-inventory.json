@@ -1,5 +1,5 @@
 {
-  "_help": "The inventory window (official MapleStory art, UIInventory.img). x/y = the small window top-left in 1366x768 game pixels. w/h = the small window size (the art is 242x593). xExpanded/yExpanded/wExpanded/hExpanded = the wide window the + button opens (the art is 800x546). wide = 1 starts the wide window (0 = the small one). The rest is window-local, measured on the official art: titleH = the drag strip at the top. gridX/gridY = the first slot square, cellSize = the square, cellPitch = the step between the squares, cols/colsWide = the columns of the small and the wide window. tabX/tabY = the first tab, tabW/tabH = the tab box, tabStep/tabWideW/tabWideStep = the tab row of the small and the wide window. plusX/plusY/plusW/plusH = the + button (small window), minusX/minusY/minusW/minusH = the - button (wide window), closeX/closeY/closeW/closeH = the X, closeWideX = the X in the wide window. coinX/coinY = the meso coin, mesoX/mesoY = the meso number (the number's right end), mesoWideX/mesoWideY = the same in the wide window. Keys may be omitted (keeps the default). tipDX/tipDY = the item tooltip offset from the mouse, tipEdge = the gap it keeps from the screen edge (its inner layout comes from panel-stat.json: the detail pane of the stat window).",
+  "_help": "The inventory window (official MapleStory art, UIInventory.img). x/y = the small window top-left in 1366x768 game pixels. w/h = the small window size (the art is 242x593). xExpanded/yExpanded/wExpanded/hExpanded = the wide window the + button opens (the art is 800x546). wide = 1 starts the wide window (0 = the small one). The rest is window-local, measured on the official art: titleH = the drag strip at the top. gridX/gridY = the first slot square, cellSize = the square, cellPitch = the step between the squares, cols/colsWide = the columns of the small and the wide window. tabX/tabY = the first tab, tabW/tabH = the tab box, tabStep/tabWideW/tabWideStep = the tab row of the small and the wide window. plusX/plusY/plusW/plusH = the + button (small window), minusX/minusY/minusW/minusH = the - button (wide window), closeX/closeY/closeW/closeH = the X, closeWideX = the X in the wide window. coinX/coinY = the meso coin, mesoX/mesoY = the meso number (the number's right end), mesoWideX/mesoWideY = the same in the wide window. Keys may be omitted (keeps the default). tipDX/tipDY = the item tooltip offset from the mouse, tipEdge = the gap it keeps from the screen edge, tipTextW = the width the description wraps at (its inner layout comes from panel-stat.json: the detail pane of the stat window).",
   "x": 1114,
   "y": 45,
   "w": 242,
@@ -44,5 +44,6 @@
   "mesoWideY": 484,
   "tipDX": 18,
   "tipDY": 12,
-  "tipEdge": 4
+  "tipEdge": 4,
+  "tipTextW": 180
 }

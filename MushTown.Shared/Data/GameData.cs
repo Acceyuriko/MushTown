@@ -280,10 +280,12 @@ public sealed class ItemData
 
     public int ItemId { get; set; }
     public string Name { get; set; } = ""; // String.wz name (Consume/Eqp): the exporter fails loud when missing
+    public string Desc { get; set; } = ""; // the flavour text of String.wz: consumables have one, gear has none
     public string Image { get; set; } = "";
     public int Hp { get; set; }
     public int Mp { get; set; }
     public int Price { get; set; } // WZ info/price: what the shop charges (sell pays half, min 1)
+    public int ReqLevel { get; set; } // WZ info/reqLevel: the level it asks for (0 = none, and v1 does not enforce it)
     public string? Slot { get; set; } // equip slot (WZ islot); null = consumable
     public int Atk { get; set; } // WZ incPAD
     public int Def { get; set; } // WZ incPDD
