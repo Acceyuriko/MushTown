@@ -1,0 +1,5 @@
+# 官方客户端截图：Nexon 版权，只留本地，不进 git。
+*.jpg
+*.jpeg
+*.png
+*.webp
