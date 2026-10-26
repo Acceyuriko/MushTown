@@ -48,7 +48,7 @@ public sealed class GuideWindow : UiWindow
         foreach (string b in new[] { "min", "help" })
             _game.LoadTexture($"ui/guide_{b}_d.png");
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Picture("ui/guide_bg.png"));
@@ -58,7 +58,7 @@ public sealed class GuideWindow : UiWindow
         root.AddChild(CloseButton()); // the X sits on the title strip: it must be hit first
         root.AddChild(DisabledButton("min", _lay.Get("minX", 603), _lay.Get("minY", 4), 13, 12));
         root.AddChild(DisabledButton("help", _lay.Get("helpX", 589), _lay.Get("helpY", 3), 8, 11));
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // One tab of the window: it shows its list and it is drawn as selected

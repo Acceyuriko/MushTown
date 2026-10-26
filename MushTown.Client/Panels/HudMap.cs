@@ -113,7 +113,7 @@ public sealed class MinimapWindow : UiWindow
                 _game.LoadTexture($"ui/mini_btn_{name}{state}");
         _game.LoadTexture(_game.GameMap.MiniMap.Image);
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Invoke(Draw));  // the map, the dots and the names
@@ -121,7 +121,7 @@ public sealed class MinimapWindow : UiWindow
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         AddRow(root);
         AddZoom(root);
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // The row of five buttons on the top bar: the house, the book, the
@@ -253,7 +253,7 @@ public sealed class WorldMapWindow : UiWindow
         foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture("ui/map_x" + state);
         _game.LoadTexture(MapUi.Data.World.Image);
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect()));
         root.Add(new Picture("ui/wm_frame.png"));
@@ -293,7 +293,7 @@ public sealed class WorldMapWindow : UiWindow
         root.AddChild(go);
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MapWindowParts.Close(this, new Rectangle(Pos.X + _lay.Get("wcloseX", 829), Pos.Y + _lay.Get("wcloseY", 12), 11, 11)));
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // The map list of the shown region: every name on the lines it needs, and

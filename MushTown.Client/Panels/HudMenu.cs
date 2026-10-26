@@ -101,7 +101,7 @@ public sealed class MenuWindow : UiWindow
         LoadItemArt("ui/menu_close");
         MenuKeyBadge.LoadBadges(_game);
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect()));
         root.Add(new BlurBackdrop()); // the frosted glass: the screen at 1/4 size
@@ -165,7 +165,7 @@ public sealed class MenuWindow : UiWindow
         close.Add(new Image("ui/menu_close")); // the official white X, on the glass
         root.AddChild(close);
 
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // How many menu items the column has (the layout file wins).
@@ -242,11 +242,7 @@ public partial class MushTownGame
     private void ToggleMenu()
     {
         if (_menuWindow.Show) _menuWindow.Close();
-        else
-        {
-            ShowWindow(HotkeyAction.Menu);
-            _menuWindow.Sync(); // the click lands after SyncWindows: build the scene now, not next frame
-        }
+        else ShowWindow(HotkeyAction.Menu); // the build waits for the sync at the end of the click (or this frame's own sync)
     }
 
     // The keys of the open MENU window: the official says at the bottom of
@@ -276,28 +272,28 @@ public partial class MushTownGame
         SetStatTab(tab);
         _showStat = true;
         _dragStat = null;
-        _topPanel = 1;
+        RaisePanel(1);
     }
 
     internal void OpenInventoryWindow()
     {
         _showInv = true;
         _dragInv = null;
-        _topPanel = 0;
+        RaisePanel(0);
     }
 
     internal void OpenSkillWindow()
     {
         _showSkill = true;
         _dragSkill = null;
-        _topPanel = 2;
+        RaisePanel(2);
     }
 
     internal void OpenQuestWindow()
     {
         _showQuest = true;
         _dragQuest = null;
-        _topPanel = 3;
+        RaisePanel(3);
     }
 
     // The key settings window (the options window opens it too).

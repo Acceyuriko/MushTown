@@ -70,7 +70,7 @@ public partial class MushTownGame
         // panel (name, gauge, description) would stay empty.
         if (_questSel == 0 && accepted.Count > 0) _questSel = accepted[0];
         foreach (string f in QuestFiles) LoadTexture("ui/" + f);
-        _questScene = new Scene();
+        _questHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(QuestRect())); // no Button: the body swallows, like the legacy fallthrough
         body.Add(new Picture("ui/quest_list.png", 0, 0));
@@ -122,11 +122,11 @@ public partial class MushTownGame
         text.Add(new Invoke(gfx => DrawQuestBody(gfx)));
         body.AddChild(text);
 
-        body.AddChild(PanelButton(QuestTitleRect(), "", () => { _questDragged = true; _dragQuest = _questScene.LastClick - _questPos; })); // silent, like legacy
+        body.AddChild(PanelButton(QuestTitleRect(), "", () => { _questDragged = true; _dragQuest = _uiScene.LastClick - _questPos; })); // silent, like legacy
         var x = PanelButton(QuestXRect(), "x3", () => _showQuest = false, ButtonKind.Click);
         x.Add(new Picture("ui/quest_x.png"));
         body.AddChild(x);
-        _questScene.Add(body);
+        _questHost.AddChild(body);
     }
 
     // The panel file owns the window spot until the player drags it.
@@ -285,7 +285,7 @@ public partial class MushTownGame
     private void BuildTalkScene()
     {
         foreach (string f in TalkFiles) LoadTexture("ui/" + f);
-        _talkScene = new Scene();
+        _talkHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(TalkRect())); // no Button: talk swallows every click, like the legacy guard
         body.Add(new TalkFrame());
@@ -325,7 +325,7 @@ public partial class MushTownGame
             bb.Add(new TalkButton(TalkBtnArt(buttons[r]), buttons[r], "talkbtn" + r, () => _hoverId, _talkLay.Get("btnTextDy", 2)));
             body.AddChild(bb);
         }
-        _talkScene.Add(body);
+        _talkHost.AddChild(body);
     }
 
     // The official dialogue buttons: the art is blank, the label is ours.

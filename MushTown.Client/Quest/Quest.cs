@@ -220,7 +220,7 @@ public partial class MushTownGame
         _shopTab = 0; // the shop opens on the buy tab
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         _showShop = true;
-        _topPanel = 5;
+        RaisePanel(5);
     }
 
     // Last-page buttons: Accept/Complete close with a log line, Next flips.

@@ -22,7 +22,7 @@ public partial class MushTownGame
     {
         _showSettings = true;
         _dragSettings = null;
-        _topPanel = 4;
+        RaisePanel(4);
         _bgmAtOpen = _bgm.Volume;
         _sfxAtOpen = _sfxVol;
     }
@@ -61,7 +61,7 @@ public partial class MushTownGame
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
                 LoadTexture(stem + state);
 
-        _settingsScene = new Scene();
+        _settingsHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(SettingsRect()));
         body.Add(new Picture("ui/opt_bg.png")); // the official option window
@@ -92,12 +92,12 @@ public partial class MushTownGame
             CloseSettings();
         }));
 
-        body.AddChild(PanelButton(SettingsTitleRect(), "", () => _dragSettings = _settingsScene.LastClick - _settingsPos)); // silent, like legacy
+        body.AddChild(PanelButton(SettingsTitleRect(), "", () => _dragSettings = _uiScene.LastClick - _settingsPos)); // silent, like legacy
         var x = PanelButton(SettingsXRect(), "x4", CloseSettings, ButtonKind.Click);
         x.Add(new Picture("ui/hud_statx.png"));
         body.AddChild(x);
 
-        _settingsScene.Add(body);
+        _settingsHost.AddChild(body);
     }
 
     // One volume slider: the track takes the click, the knob shows the value.
@@ -112,7 +112,7 @@ public partial class MushTownGame
         track.Add(new Button
         {
             Kind = ButtonKind.Click,
-            OnClick = () => SetVolume(bgm, VolumeAt(tx, tw, _settingsScene.LastClick.X - r.X)),
+            OnClick = () => SetVolume(bgm, VolumeAt(tx, tw, _uiScene.LastClick.X - r.X)),
         });
         body.AddChild(track);
         var knob = new GameObject();

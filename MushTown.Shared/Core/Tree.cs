@@ -25,6 +25,10 @@ public sealed class GameObject
     public bool Enabled = true;
     public bool Modal; // swallows clicks below, even outside its rect (first user: delete modal, W2)
     public bool NoHit; // art-only: hit-testing skips it (first users: HUD art, U2)
+    // Scene-root order: a bigger Z draws later and hits first. The scene
+    // keeps its roots sorted; Scene.Move repoints one and re-sorts it.
+    // Children keep the order they were added in: a Z on a child does nothing.
+    public int Z;
     public GameObject? Parent { get; private set; }
     private readonly List<Component> _components = new();
     private readonly List<GameObject> _children = new();
@@ -42,5 +46,12 @@ public sealed class GameObject
         if (!_children.Remove(ch)) return false;
         ch.Parent = null;
         return true;
+    }
+
+    // Drop every child (a window rebuilds its content, the host stays).
+    public void Clear()
+    {
+        foreach (var ch in _children) ch.Parent = null;
+        _children.Clear();
     }
 }

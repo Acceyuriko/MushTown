@@ -59,7 +59,7 @@ public partial class MushTownGame
         LoadInvArt();
         InvPlaceFirst();
         _invPos = ClampPanel(_invPos, InvW); // keep the window on screen (the wide form is wider)
-        _invScene = new Scene();
+        _invHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(InvRect())); // no Button: the body swallows, like the legacy fallthrough
         body.Add(new Picture(_invWide ? "ui/invw_backgrnd.png" : "ui/inv_backgrnd.png"));
@@ -93,7 +93,7 @@ public partial class MushTownGame
             tab.Add(new Picture($"ui/{InvArtPrefix()}_tab_{(i == _invTab ? "s" : "n")}{i}.png", 0, 0));
             body.AddChild(tab);
         }
-        body.AddChild(PanelButton(InvTitleRect(), "", () => _dragInv = _invScene.LastClick - _invPos)); // silent, like legacy
+        body.AddChild(PanelButton(InvTitleRect(), "", () => _dragInv = _uiScene.LastClick - _invPos)); // silent, like legacy
         body.AddChild(InvExpandButton()); // the "+" (small) or the "-" (wide)
         body.AddChild(InvCloseButton());
         var coin = new GameObject { NoHit = true }; // purse draws last (bag rows can reach it when the roster grows)
@@ -105,7 +105,7 @@ public partial class MushTownGame
             _invWide ? _invLay.Get("mesoWideY", 484) : _invLay.Get("mesoY", 484),
             new Color(96, 104, 113)));
         body.AddChild(coin);
-        _invScene.Add(body);
+        _invHost.AddChild(body);
     }
 
     // The art file prefix: the small window or the wide one.

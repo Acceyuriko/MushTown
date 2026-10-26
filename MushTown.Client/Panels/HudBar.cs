@@ -37,10 +37,12 @@ public partial class MushTownGame
     private int _skillTab; // 0 Warrior, 1 Fighter, 2 Crusader
     private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
     private readonly SceneManager _scenes = new();
-    private Scene _gameScene = null!; // HUD furniture + exp + buttons + plate + bars + tracker + boss bar + minimap
-    private Scene _invScene = new(), _statScene = new(), _skillScene = new();
-    private readonly CarryHand _hand = new(); // game-level: panel rebuilds swap scenes, the held piece survives
-    private Scene _questScene = new(), _settingsScene = new(), _shopScene = new(), _talkScene = new();
+    private Scene _uiScene = new(); // one tree, ordered by Z (a reload makes a fresh one); not null from the start: shots raise windows before the HUD is built
+    private readonly GameObject _invHost = new(), _statHost = new(), _skillHost = new();
+    private readonly GameObject _questHost = new(), _settingsHost = new(), _shopHost = new();
+    private readonly GameObject[] _panelHosts; // panel-id order: 0 inventory .. 5 shop (filled by the constructor)
+    private readonly CarryHand _hand = new(); // game-level: a panel rebuilds its content, the held piece survives
+    private readonly GameObject _talkHost = new() { Modal = true, Z = TalkZ }; // the NPC dialog: one root carries the modal flag
     private Point _invBuiltPos = new(-1, -1), _statBuiltPos = new(-1, -1), _skillBuiltPos = new(-1, -1);
     private Point _questBuiltPos = new(-1, -1), _settingsBuiltPos = new(-1, -1), _shopBuiltPos = new(-1, -1);
     private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow drags + tab flips (bag counts are static)
@@ -63,8 +65,15 @@ public partial class MushTownGame
     private Point _invPos = new(0, 0), _statPos = new(0, 0);
     private Point _skillPos = new(0, 0); // the skill window takes its spot from layouts/panel-skill.json
     private Point? _dragInv, _dragStat, _dragSkill, _dragQuest, _dragSettings, _dragShop; // title grab offsets while held
-    private GameObject? _hovered; // the object under the mouse: both tip kinds read it
-    private int _topPanel = 1; // the front panel: 0 = inventory, 1 = stat, 2 = skill, 3 = quest, 4 = settings, 5 = shop
+    private readonly List<int> _panelOrder = new() { 0, 1, 2, 3, 4, 5 }; // panel ids back-to-front: the last one draws on top
+    // The Z bands: every layer keeps its own range, so one int decides draw and hit.
+    private const int BalloonZ = -10;
+    private const int HudTopZ = 100; // above the HUD roots, under the panels
+    private const int PanelZ = 200;
+    private const int WindowZ = 300; // above every panel, below the talk modal
+    private const int TalkZ = 500; // the NPC dialog: above every window, under the hand and the tips
+    private const int HeldZ = 600;
+    private const int TipZ = 700; // the last thing drawn: no layer can cover a tip
 
     private Texture2D Tex(string file) => _textures["ui/" + file];
 
@@ -80,19 +89,19 @@ public partial class MushTownGame
         if (hotkey != null && _talkNpc == 0 && (hotkey.Value == HotkeyAction.KeyConfig || !keyWindowOpen))
         {
             if (hotkey.Value != HotkeyAction.Menu) _menuWindow.Close(); // a key opens a panel: the MENU window would cover it (its own key toggles it)
-            bool old = true; // the old panels click here; the new windows click themselves
+            bool panelKey = true; // a panel key plays its click here; a window key plays it in ToggleWindow
             switch (hotkey.Value)
             {
-                case HotkeyAction.Inventory: _showInv = !_showInv; _dragInv = null; if (_showInv) _topPanel = 0; break; // hiding mid-drag drops the grab
-                case HotkeyAction.Stat: _showStat = !_showStat; _dragStat = null; if (_showStat) _topPanel = 1; break;
-                case HotkeyAction.Skill: _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) _topPanel = 2; break;
-                case HotkeyAction.Quest: _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) _topPanel = 3; break; // the modal freezes panels
+                case HotkeyAction.Inventory: _showInv = !_showInv; _dragInv = null; if (_showInv) RaisePanel(0); break; // hiding mid-drag drops the grab
+                case HotkeyAction.Stat: _showStat = !_showStat; _dragStat = null; if (_showStat) RaisePanel(1); break;
+                case HotkeyAction.Skill: _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) RaisePanel(2); break;
+                case HotkeyAction.Quest: _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) RaisePanel(3); break; // the modal freezes panels
                 case HotkeyAction.Settings: if (_showSettings) CloseSettings(); else OpenSettings(); break;
                 case HotkeyAction.Menu: ToggleMenu(); break; // the close resets the pick, ToggleWindow would not
                 case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // the minimap is always on screen
-                default: old = false; ToggleWindow(hotkey.Value); break; // the new windows draw above the older panels
+                default: panelKey = false; ToggleWindow(hotkey.Value); break; // a window key: the window band sits above the panels
             }
-            if (old) PlaySfx("click");
+            if (panelKey) PlaySfx("click");
         }
         // Title drag runs on held (down starts it in the chain below).
         if (_dragInv.HasValue)
@@ -125,30 +134,24 @@ public partial class MushTownGame
             if (!held) _dragShop = null;
             else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW, ShopH);
         }
-        SyncPanelScenes(); // drags + tab flips move the baked Rects (hover ran first, so it lags one frame, like legacy)
+        SyncPanels(); // drags + tab flips move the baked Rects (hover ran first, so it lags one frame, like legacy)
         DragWindows(held, gx, gy); // the new windows move by their title
         _worldMapWindow.UpdateWheel(); // the wheel scrolls the map list: before the sync, so the rows land this frame
-        SyncWindows(); // the new windows rebuild when they move
+        SyncWindows(); // a window rebuilds when it moves or its state changed
         if (!click) return;
         UpdateHudClick(gx, gy); // click sounds play by Button Kind inside ClickTree (the flag funnel is gone)
     }
 
-    // Panels front-to-back (the click z: front first, the rest in place).
-    private IEnumerable<(bool show, Scene scene)> PanelsFrontToBack()
-    {
-        var all = new (bool, Scene)[] { (_showInv, _invScene), (_showStat, _statScene), (_showSkill, _skillScene), (_showQuest, _questScene), (_showSettings, _settingsScene), (_showShop, _shopScene) };
-        yield return all[_topPanel];
-        for (int i = 0; i < 6; i++) if (i != _topPanel) yield return all[i];
-    }
-
-    // The panel drawn last: the top panel if it is open, else the last one the
-    // draw order reaches. -1 when nothing is open. The order must stay the one
-    // DrawHud uses.
+    // The front panel: the last shown one in the raise order (its host holds
+    // the band top). -1 when nothing is open.
     private int FrontPanel()
     {
         bool[] shown = { _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop };
-        if (shown[_topPanel]) return _topPanel;
-        for (int i = 5; i >= 0; i--) if (shown[i]) return i;
+        for (int i = _panelOrder.Count - 1; i >= 0; i--)
+        {
+            int id = _panelOrder[i];
+            if (shown[id]) return id;
+        }
         return -1;
     }
 
@@ -166,83 +169,60 @@ public partial class MushTownGame
         }
     }
 
-    // One "over" per HUD button entry (clicks live in UpdateHudClick below).
-    // Hover respects overlap now (the W5 z-fix): the frontmost panel at the
-    // point swallows below, so covered buttons stay silent and dark. Where
-    // nothing overlaps, the ids match the legacy chain exactly.
+    // One "over" per frame (clicks live in UpdateHudClick below): the tree
+    // answers with its topmost object, so a covered panel stays dark.
     // Returns the hovered inventory slot (it decides the grab cursor).
     private Slot? UpdateHudHover(int gx, int gy)
     {
-        _hovered = null;
-        if (_talkNpc != 0) { _gameScene.ClearHover(); SfxOnHover(_talkScene.Hover(gx, gy)); return null; }
-        if (HoverWindows(gx, gy)) { _gameScene.ClearHover(); return null; } // the new windows sit on top
-        foreach (var (show, scene) in PanelsFrontToBack())
-        {
-            if (!show) continue;
-            string id = scene.Hover(gx, gy);
-            if (scene.Hovered != null)
-            {
-                _gameScene.ClearHover();
-                SfxOnHover(id);
-                _hovered = scene.Hovered;
-                return scene.HoverButton as Slot; // the bag is the only panel with slots: that is the grab cursor
-            }
-        }
-        SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? ""); // the HUD widgets all live in the tree now
-        _hovered = _scenes.Current?.Hovered;
-        return null;
+        SfxOnHover(_uiScene.Hover(gx, gy)); // one tree: the topmost object by Z takes the hover (the modal blanks the rest)
+        return _uiScene.HoverButton as Slot; // the bag is the only panel with slots: that is the grab cursor
     }
 
     private void UpdateHudClick(int gx, int gy)
     {
-        if (_talkNpc != 0) { ClickTree(_talkScene, gx, gy); return; } // modal: talk swallows every click
-        if (ClickWindows(gx, gy)) return; // the new windows sit on top
-        bool onInv = _showInv && HitRect(InvRect(), gx, gy);
-        bool onStat = _showStat && HitRect(StatRect(), gx, gy);
-        bool onSkill = _showSkill && HitRect(SkillRect(), gx, gy);
-        bool onQuest = _showQuest && HitRect(QuestRect(), gx, gy);
-        bool onSettings = _showSettings && HitRect(SettingsRect(), gx, gy);
-        bool onShop = _showShop && HitRect(ShopRect(), gx, gy);
-        // Overlap: the frontmost panel owns the click. The front panel wins
-        // every tie; the back five keep inv < stat < skill < quest < settings < shop order.
-        // Pairwise elimination leaves the highest z standing, and the survivor
-        // comes to front (a click brings its panel to front, even on overlap).
-        int z(int p) => p == _topPanel ? 6 : p;
-        if (onInv && onStat) { if (z(0) < z(1)) onInv = false; else onStat = false; }
-        if (onInv && onSkill) { if (z(0) < z(2)) onInv = false; else onSkill = false; }
-        if (onInv && onQuest) { if (z(0) < z(3)) onInv = false; else onQuest = false; }
-        if (onStat && onSkill) { if (z(1) < z(2)) onStat = false; else onSkill = false; }
-        if (onStat && onQuest) { if (z(1) < z(3)) onStat = false; else onQuest = false; }
-        if (onSkill && onQuest) { if (z(2) < z(3)) onSkill = false; else onQuest = false; }
-        if (onInv && onSettings) { if (z(0) < z(4)) onInv = false; else onSettings = false; }
-        if (onStat && onSettings) { if (z(1) < z(4)) onStat = false; else onSettings = false; }
-        if (onSkill && onSettings) { if (z(2) < z(4)) onSkill = false; else onSettings = false; }
-        if (onQuest && onSettings) { if (z(3) < z(4)) onQuest = false; else onSettings = false; }
-        if (onInv && onShop) { if (z(0) < z(5)) onInv = false; else onShop = false; }
-        if (onStat && onShop) { if (z(1) < z(5)) onStat = false; else onShop = false; }
-        if (onSkill && onShop) { if (z(2) < z(5)) onSkill = false; else onShop = false; }
-        if (onQuest && onShop) { if (z(3) < z(5)) onQuest = false; else onShop = false; }
-        if (onSettings && onShop) { if (z(4) < z(5)) onSettings = false; else onShop = false; }
-        if (onInv) _topPanel = 0;
-        else if (onStat) _topPanel = 1;
-        else if (onSkill) _topPanel = 2;
-        else if (onQuest) _topPanel = 3;
-        else if (onSettings) _topPanel = 4;
-        else if (onShop) _topPanel = 5;
-        // Panels draw on top, so a panel click never reaches the bottom bar behind it.
-        if (onInv || onStat || onSkill || onQuest || onSettings || onShop)
-        {
-            _menuWindow.Close();
-            if (onInv) ClickTree(_invScene, gx, gy); // X > title > content, same order as the legacy chain
-            else if (onStat) ClickTree(_statScene, gx, gy);
-            else if (onSkill) ClickTree(_skillScene, gx, gy);
-            else if (onQuest) ClickTree(_questScene, gx, gy);
-            else if (onSettings) ClickTree(_settingsScene, gx, gy);
-            else if (onShop) ClickTree(_shopScene, gx, gy);
-            return;
-        }
-        var hudHit = ClickTree(_scenes.Current, gx, gy); // the HUD widgets all live in the tree now
-        if (hudHit == null) NpcClick(gx, gy); // no UI took it: the world gets the click
+        if (_talkNpc == 0) RaiseWindowAt(gx, gy); // the clicked window comes to the front before its button runs: a button may open another window on top
+        int panel = PanelOf(_uiScene.TopAt(gx, gy)); // the panel id before the press: a button may rebuild its own layer and detach the hit
+        if (panel >= 0) { RaisePanel(panel); _menuWindow.Close(); } // a panel click brings it to front and closes MENU, like a window
+        var hit = ClickTree(_uiScene, gx, gy); // one tree: the topmost object by Z takes the click
+        if (hit == null && _talkNpc == 0) NpcClick(gx, gy); // no UI took it: the world gets the click (the open dialog swallows it)
+    }
+
+    // The topmost window under the point goes to the front (the click that
+    // follows lands on it, like the official client). Topmost by Z: the
+    // pinned windows sit at the bottom of the band, whatever the list says.
+    private void RaiseWindowAt(int gx, int gy)
+    {
+        UiWindow? top = null;
+        foreach (var w in UiWindow.List)
+            if (w.Show && !Pinned(w) && w.Rect().Contains(gx, gy) && (top == null || w.Host.Z > top.Host.Z)) top = w;
+        if (top != null) Raise(top);
+    }
+
+    // A click or Esc changed what is open: the draw runs right after Update,
+    // so the new state has to be in the tree this frame (a ghost frame shows).
+    // The only two sync points: UpdateHud (after the hover, before the click,
+    // so the hit test sees this frame's rects) and this one, which catches
+    // what changed after it (net, map, death) and the shots, which never run
+    // Update. A third, deliberate early write lives where the walk-away closes
+    // the dialog: the hover and the click of that frame read the modal first.
+    private void SyncLayers()
+    {
+        SyncPanels();
+        SyncWindows();
+    }
+
+    // The panel id a hit object belongs to, or -1 (HUD, window, world).
+    private int PanelOf(GameObject? o)
+    {
+        var root = RootOf(o);
+        return root == null ? -1 : Array.IndexOf(_panelHosts, root);
+    }
+
+    // The scene root a hit object belongs to (null = no hit).
+    private static GameObject? RootOf(GameObject? o)
+    {
+        while (o?.Parent != null) o = o.Parent;
+        return o;
     }
 
     // Panels stay reachable: 80px on screen sideways, title never above the top.
@@ -252,14 +232,16 @@ public partial class MushTownGame
 
     private Texture2D TexByKey(string key) => _textures[key]; // full keys ("ui/..."): all screens share one lookup
 
-    // The game scene holds HUD furniture, exp, buttons, plate, bars,
-    // tracker, boss bar, and minimap.
-    // Built after textures load, rebuilt on layout reload (a rebuild
-    // resets the panel positions above).
+    // The one UI tree: HUD furniture, exp, plate, bars, quick slots,
+    // tracker, buffs, boss bar, quick menu, then the panel and window
+    // hosts, the dialog, the hand and the tips. Built after textures
+    // load, rebuilt on layout reload.
     private void BuildGameScene()
     {
-        _hovered = null; // the old scene's objects are gone
-        _gameScene = new Scene();
+        _uiScene = new Scene(); // a reload starts over: no stale hover, click or root list
+        var balloon = new GameObject { NoHit = true, Z = BalloonZ }; // the speech bubble over the character: under every HUD piece
+        balloon.Add(new Invoke(DrawBalloon));
+        _uiScene.Add(balloon);
         var furniture = new GameObject(); // HUD furniture: hit-rects with no Buttons (clicks stop here, silent)
         furniture.AddChild(HitBox(PlateRect()));
         var hp = HitBox(HpBox()); // the bars split at the line of their own numbers
@@ -269,19 +251,19 @@ public partial class MushTownGame
         mp.Add(new HoverTip(() => "MP (Mana Point)"));
         furniture.AddChild(mp);
         furniture.AddChild(HitBox(QslotRect()));
-        _gameScene.Add(furniture); // first (bottom): the art roots added after draw over it, its rects swallow the clicks
+        _uiScene.Add(furniture); // Z 0, first: the art roots added after draw over it, its rects swallow the clicks
         var exp = new GameObject(); // the EXP line: the hit is this object (its rect), the tip rides it
         exp.Add(new Rect(ExpRect()));
         exp.Add(new Bar("ui/hud_expback.png", "ui/hud_expgauge.png", "ui/hud_expcover.png", ExpFill));
         exp.Add(new HoverTip(ExpTipText, above: true));
-        _gameScene.Add(exp); // legacy draws exp first: same pixels, owned by the tree now
+        _uiScene.Add(exp); // the EXP line: same pixels as the legacy draw, owned by the tree now
         var plate = new GameObject { NoHit = true }; // art-only roots below: the furniture keeps swallowing plate/HP/quickslot and the exp object its own line; tracker/boss/minimap pass clicks through like before
         plate.Add(new Rect(PlateRect()));
         plate.Add(new Picture("ui/hud_plate.png"));
         plate.Add(new PlateLevel(() => _save?.Slots[_slot]?.Level ?? 1));
         plate.Add(new Picture("ui/hud_lvtag.png", 8, 13));
         plate.Add(new LiveLabel(() => _save?.Slots[_slot]?.Name ?? "", 67, 13, Color.White)); // WZ namePos; CLI sessions have no name (empty draws nothing)
-        _gameScene.Add(plate);
+        _uiScene.Add(plate);
         var hpmp = new GameObject { NoHit = true };
         hpmp.Add(new Rect(HpRect()));
         hpmp.Add(new Picture("ui/hud_hpbg.png"));
@@ -290,7 +272,7 @@ public partial class MushTownGame
         hpmp.Add(new BarNumber(HpText, 101, 7));
         hpmp.Add(new BarNumber(MpText, 101, 28));
         hpmp.Add(new Picture("ui/hud_hpcover.png", 3, 3));
-        _gameScene.Add(hpmp);
+        _uiScene.Add(hpmp);
         var qslot = new GameObject { NoHit = true };
         qslot.Add(new Rect(QslotRect()));
         qslot.Add(new Picture("ui/hud_qslot.png"));
@@ -312,15 +294,24 @@ public partial class MushTownGame
         gloss.Add(new Rect(QslotRect()));
         gloss.Add(new Picture("ui/hud_qslotcover.png")); // gloss stretched onto the cells: bottom flush with EXP top
         qslot.AddChild(gloss);
-        _gameScene.Add(qslot);
-        _gameScene.Add(BuildQuickSlots()); // the twelve item cells of the same strip
-        _gameScene.Add(BuildQuestHelper()); // the quest helper bar: the count, the buttons, the quest list
-        _gameScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
+        _uiScene.Add(qslot);
+        _uiScene.Add(BuildQuickSlots()); // the twelve item cells of the same strip
+        _uiScene.Add(BuildQuestHelper()); // the quest helper bar: the count, the buttons, the quest list
+        _uiScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
         var bossBar = new GameObject { NoHit = true };
         bossBar.Add(new BossBar(BossBarW, FindBoss));
-        _gameScene.Add(bossBar);
-        _gameScene.Add(BuildQuickMenu()); // the quick menu icon row: topmost so the clicks land there
-        SyncPanelScenes(); // shots skip Update: without this the panels draw empty there (first Update no-ops, positions match)
+        _uiScene.Add(bossBar);
+        _uiScene.Add(BuildQuickMenu()); // the quick menu icon row: the top of the HUD band, so the clicks land there
+        foreach (var host in _panelHosts) _uiScene.Add(host); // the panels ride the same tree: their Z is the whole order
+        foreach (var w in UiWindow.List) { w.Scene = _uiScene; _uiScene.Add(w.Host); } // the windows too: one tree, one Z order
+        _uiScene.Add(_talkHost); // the modal: clicks outside it blank in Scene.Hit
+        var held = new GameObject { NoHit = true, Z = HeldZ }; // the piece on the cursor: above the modal, under the tips
+        held.Add(new Invoke(DrawHeld));
+        _uiScene.Add(held);
+        var tips = new GameObject { NoHit = true, Z = TipZ }; // the last thing drawn: no layer can cover a tip
+        tips.Add(new Invoke(DrawTips));
+        _uiScene.Add(tips);
+        SyncLayers(); // shots skip Update: without this the panels and windows draw empty there (first Update no-ops)
     }
 
     private static GameObject HitBox(Rectangle r)
@@ -365,19 +356,54 @@ public partial class MushTownGame
         return chara == null ? (0, 1) : (chara.Exp, Progression.ExpNext(chara.Level));
     }
 
-    // Panel trees are pure functions of (pos, tab): rebuild when either
-    // moves. Bag counts are static catalogs, so slots never reshape.
-    private void SyncPanelScenes()
+    // The panel band: one row, back to front. The last one raised draws last.
+    private void SyncPanelZ()
     {
+        for (int i = 0; i < _panelOrder.Count; i++)
+        {
+            SetRootZ(_panelHosts[_panelOrder[i]], PanelZ + i); // the row index is the whole panel order
+        }
+    }
+
+    // Repoint a root only when its Z moved: every Move is a remove + insert.
+    private void SetRootZ(GameObject host, int z)
+    {
+        if (host.Z != z) _uiScene.Move(host, z);
+    }
+
+    // A click or a hotkey opened a panel: it goes to the front of the row.
+    private void RaisePanel(int id)
+    {
+        _panelOrder.Remove(id);
+        _panelOrder.Add(id);
+        SyncPanelZ();
+    }
+
+    // Panel trees are pure functions of (pos, tab): rebuild when either
+    // moves. Bag counts are static catalogs, so slots never reshape. Also
+    // the dialog root: its visibility follows the talk state, and the row
+    // order is the panel Z.
+    private void SyncPanels()
+    {
+        _invHost.Enabled = _showInv; _statHost.Enabled = _showStat; _skillHost.Enabled = _showSkill; // a hidden panel stays in the tree, it just stops drawing and hitting
+        _questHost.Enabled = _showQuest; _settingsHost.Enabled = _showSettings; _shopHost.Enabled = _showShop;
+        _talkHost.Enabled = _talkNpc != 0; // the dialog root is in the tree: showing it is all it takes
+        SyncPanelZ();
         if (_invPos != _invBuiltPos || _invTab != _invBuiltTab) { BuildInvScene(); _invBuiltPos = _invPos; _invBuiltTab = _invTab; }
         if (_statPos != _statBuiltPos) { BuildStatScene(); _statBuiltPos = _statPos; }
         if (_skillPos != _skillBuiltPos || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuiltPos = _skillPos; _skillBuiltTab = _skillTab; }
-        var quests = QuestRows();
-        if (_questPos != _questBuiltPos || !quests.SequenceEqual(_questBuiltRows)) { BuildQuestScene(quests); _questBuiltPos = _questPos; _questBuiltRows = quests; }
+        if (_showQuest) // the rows cost a list each call, and a hidden panel is not drawn: skip it
+        {
+            var quests = QuestRows();
+            if (_questPos != _questBuiltPos || !quests.SequenceEqual(_questBuiltRows)) { BuildQuestScene(quests); _questBuiltPos = _questPos; _questBuiltRows = quests; }
+        }
         if (_settingsPos != _settingsBuiltPos) { BuildSettingsScene(); _settingsBuiltPos = _settingsPos; }
-        var sells = ShopSellRows();
-        if (_shopStock != null && (_shopPos != _shopBuiltPos || !ReferenceEquals(_shopStock, _shopBuiltStock) || !sells.SequenceEqual(_shopBuiltSells) || _shopTab != _shopBuiltTab))
-        { BuildShopScene(sells); _shopBuiltPos = _shopPos; _shopBuiltStock = _shopStock; _shopBuiltSells = sells; _shopBuiltTab = _shopTab; }
+        if (_showShop && _shopStock != null)
+        {
+            var sells = ShopSellRows();
+            if (_shopPos != _shopBuiltPos || !ReferenceEquals(_shopStock, _shopBuiltStock) || !sells.SequenceEqual(_shopBuiltSells) || _shopTab != _shopBuiltTab)
+            { BuildShopScene(sells); _shopBuiltPos = _shopPos; _shopBuiltStock = _shopStock; _shopBuiltSells = sells; _shopBuiltTab = _shopTab; }
+        }
         if (_talkNpc != 0) // gated: TalkButtons needs an open talk (same exposure as the legacy chain)
         {
             string buttons = string.Join(",", TalkButtons());
@@ -422,34 +448,24 @@ public partial class MushTownGame
     private void DrawHud(int gx, int gy, bool pressed)
     {
         _gfx.Pressed = pressed;
-        DrawBalloon(_gfx); // the speech bubble over the character
-        _scenes.Current?.Draw(_gfx); // HUD art lives in the tree now (exp, buttons, plate, HP/MP, quickslot, tracker, boss bar, minimap); panels and talk draw above it
-        // The front panel draws last (on top); the back five keep inv < stat < skill < quest < settings < shop.
-        if (_topPanel == 0) { if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showInv) _invScene.Draw(_gfx); }
-        else if (_topPanel == 1) { if (_showInv) _invScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); }
-        else if (_topPanel == 2) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); }
-        else if (_topPanel == 3) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); }
-        else if (_topPanel == 4) { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); }
-        else { if (_showInv) _invScene.Draw(_gfx); if (_showStat) _statScene.Draw(_gfx); if (_showSkill) _skillScene.Draw(_gfx); if (_showQuest) _questScene.Draw(_gfx); if (_showSettings) _settingsScene.Draw(_gfx); if (_showShop) _shopScene.Draw(_gfx); }
-        DrawWindows(); // the new windows (minimap, world map, key settings, MENU) draw above the older panels
-        if (_talkNpc != 0) _talkScene.Draw(_gfx); // modal: above everything
-        if (!_hand.Empty) // the held piece rides the cursor (take-1: no count to show)
-        {
-            var icon = _textures[_items[_hand.Id].Image];
-            _spriteBatch.Draw(icon, new Vector2(gx - icon.Width / 2, gy - icon.Height / 2), Color.White);
-        }
+        _gfx.Mouse = new Point(gx, gy); // the held piece and the tips ride this
+        _uiScene.Draw(_gfx); // one tree, one Z order: balloon, HUD, panels, windows, dialog, hand, tips
+    }
 
-        DrawTips(gx, gy); // tips sit above every HUD layer
+    // The piece on the cursor (take-1: no count to show).
+    private void DrawHeld(UiGfx gfx)
+    {
+        if (_hand.Empty) return;
+        var icon = _textures[_items[_hand.Id].Image];
+        gfx.Sb.Draw(icon, new Vector2(gfx.Mouse.X - icon.Width / 2, gfx.Mouse.Y - icon.Height / 2), Color.White);
     }
 
     // The tips of the object under the mouse: the text tip of the HUD widgets
-    // and the item tooltip of a slot or a quickslot cell. Drawn last, so a tip
-    // never hides under the bars or the quick slot caps.
-    private void DrawTips(int gx, int gy)
+    // and the item tooltip of a slot or a quickslot cell.
+    private void DrawTips(UiGfx gfx)
     {
-        var mouse = new Point(gx, gy);
-        if (_hovered?.Get<HoverTip>() is HoverTip text) text.DrawAt(_gfx, mouse);
-        if (_hand.Empty && _hovered?.Get<ItemTip>() is ItemTip item) DrawTip(item.Id(), mouse); // a held piece covers the cursor
+        if (gfx.Hovered?.Get<HoverTip>() is HoverTip text) text.DrawAt(gfx, gfx.Mouse); // Scene.Draw fills gfx.Hovered first
+        if (_hand.Empty && gfx.Hovered?.Get<ItemTip>() is ItemTip item) DrawTip(item.Id(), gfx.Mouse); // a held piece covers the cursor
     }
 
     // The item tooltip: the icon, the name, the bonuses and the description of

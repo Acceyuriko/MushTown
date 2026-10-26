@@ -36,7 +36,7 @@ public partial class MushTownGame
     {
         int x = _qmLay.Get("x", 284), y = _qmLay.Get("y", 729);
         int size = _qmLay.Get("size", 30), gap = _qmLay.Get("gap", 3);
-        var row = new GameObject();
+        var row = new GameObject { Z = HudTopZ }; // the top of the HUD band: the clicks land there
         for (int i = 0; i < QuickIcons.Length; i++)
         {
             var (icon, action, label) = QuickIcons[i];

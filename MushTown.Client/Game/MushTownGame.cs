@@ -126,6 +126,7 @@ public partial class MushTownGame : Game
         _shotDrop = shotDrop;
         _shotAiticks = shotAiticks;
         _shotWear = shotWear;
+        _panelHosts = new[] { _invHost, _statHost, _skillHost, _questHost, _settingsHost, _shopHost }; // the panel-id order the Z row and the hit lookups use
         _assetsDir = FindAssetsDir();
         _bgm = new BgmPlayer(Path.Combine(_assetsDir, "sound"), _shotPath != null);
         _audio.Add(_bgm);
@@ -414,8 +415,6 @@ public partial class MushTownGame : Game
         {
             SetupShotMobs();
             SyncHeroPlate(); // staging is done (wear/buff/quest all staged the demo); shots skip Update
-            SyncPanelScenes(); // staging (accept/open) runs after the scene build and shots skip Update
-            SyncWindows(); // the new windows (minimap, world map, key settings, MENU) build here
         }
     }
 
@@ -468,8 +467,8 @@ public partial class MushTownGame : Game
         {
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
-            if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; base.Update(gameTime); return; } // modal first: Esc closes talk before panels
-            if (EscCloseFront()) { PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the front window, else the front panel
+            if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
+            if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the front window, else the front panel
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
         // Talk needs presence: walking out of reach closes the modal.
@@ -477,6 +476,7 @@ public partial class MushTownGame : Game
             && Math.Abs(a.Spawn.X - _mover.X) <= QuestLog.TalkDx && Math.Abs(a.Spawn.Cy - _mover.Y) <= QuestLog.TalkDy))
         {
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+            _talkHost.Enabled = false; // the one early layer write: this frame's hover and click run later and would still see the modal
         }
         var ms = Mouse.GetState(); // one click edge for the HUD
         bool click = ClickEdge(ms);
@@ -888,6 +888,7 @@ public partial class MushTownGame : Game
             DrawMenu();
         if (_screen == Screen.Game)
         {
+            SyncLayers(); // whatever this frame changed (click, Esc, net, map, death) lands in the tree before the draw
             if (_menuWindow.Show) UpdateBlur(); // the frosted glass source, before the windows draw
             _spriteBatch.Begin(blendState: BlendState.NonPremultiplied);
             if (_shotPath == null)

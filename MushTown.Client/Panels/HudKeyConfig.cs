@@ -162,12 +162,12 @@ public sealed class KeyConfigWindow : UiWindow
 
     public override void Build()
     {
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect()));
         if (_quickSlots) BuildQuickSlots(root);
         else BuildCustom(root);
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // The custom page: the keyboard, the action grid and the buttons.

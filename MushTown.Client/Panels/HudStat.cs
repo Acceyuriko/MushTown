@@ -55,7 +55,7 @@ public partial class MushTownGame
         LoadStatArt();
         StatPlaceFirst();
         _statPos = ClampPanel(_statPos, StatW); // the window is wider than the old one: keep it on screen
-        _statScene = new Scene();
+        _statHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(StatRect())); // the body swallows the clicks, like the legacy fallthrough
         body.Add(new Picture("ui/stat_win.png")); // the official detail window
@@ -72,8 +72,8 @@ public partial class MushTownGame
         body.AddChild(PanelButton(StatTabRect(0), "", () => SetStatTab(0), ButtonKind.Click));
         body.AddChild(PanelButton(StatTabRect(1), "", () => SetStatTab(1), ButtonKind.Click));
         body.AddChild(PanelButton(StatXRect(), "x1", () => _showStat = false, ButtonKind.Click));
-        body.AddChild(PanelButton(StatDragRect(), "", () => _dragStat = _statScene.LastClick - _statPos));
-        _statScene.Add(body);
+        body.AddChild(PanelButton(StatDragRect(), "", () => _dragStat = _uiScene.LastClick - _statPos));
+        _statHost.AddChild(body);
     }
 
     // The tab changed: the page changed with it, so the scene is rebuilt.

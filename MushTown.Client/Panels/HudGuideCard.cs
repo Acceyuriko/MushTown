@@ -35,7 +35,7 @@ public sealed class GuideCardWindow : UiWindow
             foreach (string b in new[] { "max", "close", "left", "right" })
                 _game.LoadTexture($"ui/guide_small_{b}{s}.png");
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Picture("ui/guide_small_bg.png", 0, 0));
@@ -46,7 +46,7 @@ public sealed class GuideCardWindow : UiWindow
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MaxButton()); // the plus and the X sit on the title strip: they must be hit first
         root.AddChild(CloseButton());
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // The card of the open page: the main quest card opens the quest

@@ -45,7 +45,7 @@ public sealed class PartyWindow : UiWindow
         })
             _game.LoadTexture("ui/" + f);
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Picture("ui/party_frame.png", 0, 0));
@@ -86,7 +86,7 @@ public sealed class PartyWindow : UiWindow
 
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MushTownGame.ArtButton(new Rectangle(Pos.X + _lay.Get("closeX", 497), Pos.Y + _lay.Get("closeY", 4), 27, 27), "ui/party_close", () => Show = false));
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // The member rows: the official row art, the leader mark, the online
@@ -143,7 +143,7 @@ public sealed class PartySearchWindow : UiWindow
         })
             _game.LoadTexture("ui/" + f);
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect()));
         root.Add(new Picture("ui/party_search.png", 0, 0));
@@ -173,7 +173,7 @@ public sealed class PartySearchWindow : UiWindow
 
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(MushTownGame.ArtButton(new Rectangle(Pos.X + _lay.Get("searchCloseX", 473), Pos.Y + _lay.Get("searchCloseY", 4), 27, 27), "ui/party_close", () => Show = false));
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // The name and the level of a row: the official spots.
@@ -250,7 +250,7 @@ public sealed class PartyAskWindow : UiWindow
         })
             _game.LoadTexture("ui/" + f);
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect()));
         root.Add(new TalkFrame());
@@ -266,7 +266,7 @@ public sealed class PartyAskWindow : UiWindow
         no.Add(new Button { LegacyId = "partyask_no", Kind = ButtonKind.Click, OnClick = () => _game.PartyAnswer(false) });
         no.Add(new TalkButton("talk_dlg_btno", "", "partyask_no", () => _game.HoverId, 2));
         root.AddChild(no);
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 }
 

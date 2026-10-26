@@ -138,7 +138,7 @@ public partial class MushTownGame
     {
         LoadShopArt();
         ShopPlaceFirst();
-        _shopScene = new Scene();
+        _shopHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(ShopRect())); // no Button: the body swallows, like the legacy fallthrough
         body.Add(new Picture("ui/shop_backgrnd.png")); // the official frame, the rows are baked in
@@ -177,10 +177,10 @@ public partial class MushTownGame
         }
         // the drag strip at the top and the X
         body.AddChild(PanelButton(new Rectangle(_shopPos.X, _shopPos.Y, ShopW, _shopLay.Get("dragH", 30)),
-            "", () => _dragShop = _shopScene.LastClick - _shopPos)); // silent, like legacy
+            "", () => _dragShop = _uiScene.LastClick - _shopPos)); // silent, like legacy
         body.AddChild(ArtButton(new Rectangle(_shopPos.X + _shopLay.Get("closeX", 349), _shopPos.Y + _shopLay.Get("closeY", 2),
                 _shopLay.Get("closeW", 27), _shopLay.Get("closeH", 27)),
             "ui/shop_x", () => _showShop = false));
-        _shopScene.Add(body);
+        _shopHost.AddChild(body);
     }
 }

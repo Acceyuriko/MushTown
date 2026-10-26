@@ -77,7 +77,7 @@ public partial class MushTownGame
     {
         if (!_skillDragged) _skillPos = new Point(_skillLay.Get("x", 326), _skillLay.Get("y", 130));
         foreach (string f in SkillFiles) LoadTexture("ui/" + f);
-        _skillScene = new Scene();
+        _skillHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(SkillRect()));
         body.Add(new Picture("ui/skill_bg.png")); // the window frame (the SKILL title is baked in)
@@ -116,11 +116,11 @@ public partial class MushTownGame
         var max = PanelButton(SkillMaxRect(), "skillmax", () => { if (LearnSkillMax(SelectedSkillId)) PushBuild(); }, ButtonKind.Click);
         max.Add(new LiveTint(() => CanLearn(SelectedSkillId) ? ("MAX", new Color(120, 220, 120)) : ("MAX", new Color(150, 150, 160)), 0, 0));
         body.AddChild(max);
-        body.AddChild(PanelButton(SkillTitleRect(), "", () => { _skillDragged = true; _dragSkill = _skillScene.LastClick - _skillPos; })); // silent, like legacy
+        body.AddChild(PanelButton(SkillTitleRect(), "", () => { _skillDragged = true; _dragSkill = _uiScene.LastClick - _skillPos; })); // silent, like legacy
         var x = PanelButton(SkillXRect(), "x2", () => _showSkill = false, ButtonKind.Click);
         x.Add(new Picture("ui/hud_statx.png")); // the skill window has no X of its own in the WZ
         body.AddChild(x);
-        _skillScene.Add(body);
+        _skillHost.AddChild(body);
     }
 
     // Skill window job tabs (three Roman numerals under the title).

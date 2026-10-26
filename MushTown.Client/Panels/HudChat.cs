@@ -261,7 +261,7 @@ public sealed class ChatWindow : UiWindow
             foreach (string piece in new[] { "base_t", "base_c", "base_b" }) _game.LoadTexture($"ui/{stem}_{piece}.png");
         foreach (string piece in new[] { "thumb0", "thumb1", "thumb2" }) _game.LoadTexture($"ui/chat_scroll_{piece}.png");
 
-        Scene = new Scene();
+        Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Invoke(Draw));
@@ -274,7 +274,7 @@ public sealed class ChatWindow : UiWindow
             box.Add(new Button { Kind = ButtonKind.Click, OnClick = Restore });
             _minBox = box;
             root.AddChild(box);
-            Scene.Add(root);
+            Host.AddChild(root);
             return;
         }
 
@@ -347,7 +347,7 @@ public sealed class ChatWindow : UiWindow
         min.Add(new Image($"ui/{MinBtnStem}"));
         root.AddChild(min);
 
-        Scene.Add(root);
+        Host.AddChild(root);
     }
 
     // The whole chat: the frame, the tabs, the log and the input line.

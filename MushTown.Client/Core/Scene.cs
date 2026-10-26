@@ -16,6 +16,7 @@ public sealed class UiGfx
     public required Texture2D Pixel { get; init; }
     public Texture2D Blur = null!; // the screen at 1/4 size: the frosted glass source
     public bool Pressed;
+    public Point Mouse; // the pointer in frame coords, set by DrawHud only: the held piece and the tips follow it
     public GameObject? Hovered;
     public Button? HoverButton;
 }
@@ -50,7 +51,21 @@ public sealed class Scene
     public Button? HoverButton { get; private set; }
     public Point LastClick { get; private set; } // title drags anchor their offset here (first user: W4)
     public Button? ClickButton { get; private set; } // the pressed Button (ClickTree plays its Kind)
-    public void Add(GameObject root) => _roots.Add(root);
+    public void Add(GameObject root)
+    {
+        // Kept sorted by Z, ties by add order: Draw walks it forward,
+        // Hit walks it backward, so one list is the only z rule.
+        int i = _roots.Count;
+        while (i > 0 && _roots[i - 1].Z > root.Z) i--;
+        _roots.Insert(i, root);
+    }
+
+    // Repoint an added root at a new Z (a click brings a panel to front).
+    public void Move(GameObject root, int z)
+    {
+        root.Z = z;
+        if (_roots.Remove(root)) Add(root); // not in the tree yet: Add sorts it by this Z later
+    }
 
     // Topmost-first (last child wins); the first hit takes it. Presses the
     // hit Button and returns the hit object (null = miss). An open modal
@@ -58,22 +73,28 @@ public sealed class Scene
     public GameObject? Click(int gx, int gy)
     {
         LastClick = new Point(gx, gy);
-        var hit = Hit(_roots, gx, gy);
-        if (hit != null && AnyModal(_roots) && !InsideModal(hit)) hit = null;
+        var hit = TopAt(gx, gy);
         ClickButton = hit == null ? null : FindButton(hit);
         if (hit == null) return null;
         ClickButton?.Press();
         return hit;
     }
 
-    // Clears a stale hover (a swallowed scene shows no highlight).
+    // The topmost object at the point, nothing pressed: a button may rebuild
+    // its layer, so the caller reads the owner before the press detaches it.
+    public GameObject? TopAt(int gx, int gy)
+    {
+        var hit = Hit(_roots, gx, gy);
+        return hit != null && AnyModal(_roots) && !InsideModal(hit) ? null : hit;
+    }
+
+    // A closed layer must not keep a lit row: Esc drops the hover with it.
     public void ClearHover() { Hovered = null; HoverButton = null; }
 
     // Refreshes Hovered/HoverButton; returns the legacy hover id ("", none).
     public string Hover(int gx, int gy)
     {
-        var hit = Hit(_roots, gx, gy);
-        if (hit != null && AnyModal(_roots) && !InsideModal(hit)) hit = null;
+        var hit = TopAt(gx, gy);
         Hovered = hit;
         HoverButton = hit == null ? null : FindButton(hit);
         return HoverButton?.LegacyId ?? "";

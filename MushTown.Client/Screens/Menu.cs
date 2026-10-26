@@ -170,8 +170,8 @@ public partial class MushTownGame
             if (shotScreen is "stat" or "hud") _showStat = true;
             if (shotScreen == "equip") { _showStat = true; _statTab = 1; _statDetail = ItemData.LongSword; }
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
-            if (shotScreen == "quest") { _showQuest = true; _topPanel = 3; }
-            if (shotScreen == "settings") { _showSettings = true; _topPanel = 4; }
+            if (shotScreen == "quest") _showQuest = true;
+            if (shotScreen == "settings") _showSettings = true;
             if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
             if (shotScreen == "worldmap") ShowWindow(HotkeyAction.WorldMap);
             if (shotScreen == "keys") ShowWindow(HotkeyAction.KeyConfig);
@@ -648,7 +648,7 @@ public partial class MushTownGame
             case Screen.Chars: BuildCharsScene(); _scenes.Show(_menuScene); break;
             case Screen.Job: BuildJobScene(); _scenes.Show(_menuScene); break;
             case Screen.Setup: BuildSetupScene(); _scenes.Show(_menuScene); break;
-            case Screen.Game: BuildGameScene(); _scenes.Show(_gameScene); break;
+            case Screen.Game: BuildGameScene(); break;
             default: break;
         }
     }
@@ -698,7 +698,6 @@ public partial class MushTownGame
         ReseedPortalState(); // the arrival spot, not the old one
         _screen = Screen.Game;
         BuildGameScene();
-        _scenes.Show(_gameScene);
         PlayScreenBgm(); // the map's own track takes over from the login theme
     }
 
