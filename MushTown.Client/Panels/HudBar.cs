@@ -65,12 +65,11 @@ public partial class MushTownGame
     private Point _invPos = new(0, 0), _statPos = new(0, 0);
     private Point _skillPos = new(0, 0); // the skill window takes its spot from layouts/panel-skill.json
     private Point? _dragInv, _dragStat, _dragSkill, _dragQuest, _dragSettings, _dragShop; // title grab offsets while held
-    private readonly List<int> _panelOrder = new() { 0, 1, 2, 3, 4, 5 }; // panel ids back-to-front: the last one draws on top
+    private readonly List<GameObject> _raiseRow = new(); // every layer that can be raised (panels and windows): back to front
     // The Z bands: every layer keeps its own range, so one int decides draw and hit.
     private const int BalloonZ = -10;
-    private const int HudTopZ = 100; // above the HUD roots, under the panels
-    private const int PanelZ = 200;
-    private const int WindowZ = 300; // above every panel, below the talk modal
+    private const int HudTopZ = 100; // above the HUD roots, under the raise row
+    private const int RaiseZ = 200; // panels and windows share one row: the last raised draws last
     private const int TalkZ = 500; // the NPC dialog: above every window, under the hand and the tips
     private const int HeldZ = 600;
     private const int TipZ = 700; // the last thing drawn: no layer can cover a tip
@@ -88,7 +87,7 @@ public partial class MushTownGame
         QuickSlotKeyEdges(kb, _talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // 1-9, 0, - and = drink the bound potions
         if (hotkey != null && _talkNpc == 0 && (hotkey.Value == HotkeyAction.KeyConfig || !keyWindowOpen))
         {
-            if (hotkey.Value != HotkeyAction.Menu) _menuWindow.Close(); // a key opens a panel: the MENU window would cover it (its own key toggles it)
+            if (hotkey.Value != HotkeyAction.Menu) _menuWindow.Close(); // a key opens a layer: the MENU would stay open behind it and keep the keys (its own key toggles it)
             bool panelKey = true; // a panel key plays its click here; a window key plays it in ToggleWindow
             switch (hotkey.Value)
             {
@@ -99,7 +98,7 @@ public partial class MushTownGame
                 case HotkeyAction.Settings: if (_showSettings) CloseSettings(); else OpenSettings(); break;
                 case HotkeyAction.Menu: ToggleMenu(); break; // the close resets the pick, ToggleWindow would not
                 case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // the minimap is always on screen
-                default: panelKey = false; ToggleWindow(hotkey.Value); break; // a window key: the window band sits above the panels
+                default: panelKey = false; ToggleWindow(hotkey.Value); break; // a window key: the raise row decides its Z
             }
             if (panelKey) PlaySfx("click");
         }
@@ -142,17 +141,29 @@ public partial class MushTownGame
         UpdateHudClick(gx, gy); // click sounds play by Button Kind inside ClickTree (the flag funnel is gone)
     }
 
-    // The front panel: the last shown one in the raise order (its host holds
-    // the band top). -1 when nothing is open.
-    private int FrontPanel()
+    // Is this panel open? The order is the panel-id order.
+    private bool PanelOn(int id) => id switch
     {
-        bool[] shown = { _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop };
-        for (int i = _panelOrder.Count - 1; i >= 0; i--)
+        0 => _showInv,
+        1 => _showStat,
+        2 => _showSkill,
+        3 => _showQuest,
+        4 => _showSettings,
+        5 => _showShop,
+        _ => false,
+    };
+
+    // The front layer of the raise row: the last one that is on screen.
+    private GameObject? FrontHost()
+    {
+        for (int i = _raiseRow.Count - 1; i >= 0; i--)
         {
-            int id = _panelOrder[i];
-            if (shown[id]) return id;
+            var host = _raiseRow[i];
+            int id = PanelOf(host);
+            if (id >= 0) { if (PanelOn(id)) return host; continue; }
+            if (WindowOf(host) is UiWindow w && w.Show) return host;
         }
-        return -1;
+        return null;
     }
 
     // Hide one panel; hiding mid-drag drops the grab.
@@ -164,7 +175,7 @@ public partial class MushTownGame
             case 1: _showStat = false; _dragStat = null; break;
             case 2: _showSkill = false; _dragSkill = null; break;
             case 3: _showQuest = false; _dragQuest = null; break;
-            case 4: _showSettings = false; _dragSettings = null; break;
+            case 4: CloseSettings(); break; // the one close path for the options window
             case 5: _showShop = false; _dragShop = null; break;
         }
     }
@@ -180,22 +191,17 @@ public partial class MushTownGame
 
     private void UpdateHudClick(int gx, int gy)
     {
-        if (_talkNpc == 0) RaiseWindowAt(gx, gy); // the clicked window comes to the front before its button runs: a button may open another window on top
-        int panel = PanelOf(_uiScene.TopAt(gx, gy)); // the panel id before the press: a button may rebuild its own layer and detach the hit
-        if (panel >= 0) { RaisePanel(panel); _menuWindow.Close(); } // a panel click brings it to front and closes MENU, like a window
+        // What the click is about to hit, read before any button runs: a
+        // button may rebuild its own layer and detach the hit object.
+        var top = _uiScene.TopAt(gx, gy);
+        if (_talkNpc == 0)
+        {
+            int panel = PanelOf(top);
+            if (WindowOf(top) is UiWindow w && !Pinned(w)) Raise(w); // a window comes to the front, then its button runs
+            else if (panel >= 0) { RaisePanel(panel); } // a panel too: windows and panels share the row
+        }
         var hit = ClickTree(_uiScene, gx, gy); // one tree: the topmost object by Z takes the click
         if (hit == null && _talkNpc == 0) NpcClick(gx, gy); // no UI took it: the world gets the click (the open dialog swallows it)
-    }
-
-    // The topmost window under the point goes to the front (the click that
-    // follows lands on it, like the official client). Topmost by Z: the
-    // pinned windows sit at the bottom of the band, whatever the list says.
-    private void RaiseWindowAt(int gx, int gy)
-    {
-        UiWindow? top = null;
-        foreach (var w in UiWindow.List)
-            if (w.Show && !Pinned(w) && w.Rect().Contains(gx, gy) && (top == null || w.Host.Z > top.Host.Z)) top = w;
-        if (top != null) Raise(top);
     }
 
     // A click or Esc changed what is open: the draw runs right after Update,
@@ -356,13 +362,19 @@ public partial class MushTownGame
         return chara == null ? (0, 1) : (chara.Exp, Progression.ExpNext(chara.Level));
     }
 
-    // The panel band: one row, back to front. The last one raised draws last.
-    private void SyncPanelZ()
+    // The raise row: panels and windows, back to front. The row index is the
+    // whole Z of that band, so one list decides draw and hit.
+    private void RenumberRow()
     {
-        for (int i = 0; i < _panelOrder.Count; i++)
-        {
-            SetRootZ(_panelHosts[_panelOrder[i]], PanelZ + i); // the row index is the whole panel order
-        }
+        for (int i = 0; i < _raiseRow.Count; i++) SetRootZ(_raiseRow[i], RaiseZ + i);
+    }
+
+    // Put a layer on top of the row (a click, a hotkey or a window opening).
+    private void RaiseHost(GameObject host)
+    {
+        _raiseRow.Remove(host);
+        _raiseRow.Add(host);
+        RenumberRow();
     }
 
     // Repoint a root only when its Z moved: every Move is a remove + insert.
@@ -371,24 +383,22 @@ public partial class MushTownGame
         if (host.Z != z) _uiScene.Move(host, z);
     }
 
-    // A click or a hotkey opened a panel: it goes to the front of the row.
+    // A click or a hotkey opened a panel: it goes to the front of the row, and
+    // the MENU closes (it would stay open behind it and keep the keys).
     private void RaisePanel(int id)
     {
-        _panelOrder.Remove(id);
-        _panelOrder.Add(id);
-        SyncPanelZ();
+        if (_menuWindow.Show) _menuWindow.Close();
+        RaiseHost(_panelHosts[id]);
     }
 
     // Panel trees are pure functions of (pos, tab): rebuild when either
     // moves. Bag counts are static catalogs, so slots never reshape. Also
-    // the dialog root: its visibility follows the talk state, and the row
-    // order is the panel Z.
+    // the dialog root: its visibility follows the talk state.
     private void SyncPanels()
     {
         _invHost.Enabled = _showInv; _statHost.Enabled = _showStat; _skillHost.Enabled = _showSkill; // a hidden panel stays in the tree, it just stops drawing and hitting
         _questHost.Enabled = _showQuest; _settingsHost.Enabled = _showSettings; _shopHost.Enabled = _showShop;
         _talkHost.Enabled = _talkNpc != 0; // the dialog root is in the tree: showing it is all it takes
-        SyncPanelZ();
         if (_invPos != _invBuiltPos || _invTab != _invBuiltTab) { BuildInvScene(); _invBuiltPos = _invPos; _invBuiltTab = _invTab; }
         if (_statPos != _statBuiltPos) { BuildStatScene(); _statBuiltPos = _statPos; }
         if (_skillPos != _skillBuiltPos || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuiltPos = _skillPos; _skillBuiltTab = _skillTab; }

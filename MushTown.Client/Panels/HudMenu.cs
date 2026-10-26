@@ -238,11 +238,13 @@ public partial class MushTownGame
     // The MENU window (the HUD menu button opens it).
     private MenuWindow _menuWindow = null!;
 
-    // The hotkey and the hamburger of the quick menu row both toggle the MENU.
+    // The hotkey and the hamburger of the quick menu row both toggle the MENU:
+    // closed opens on top, open but behind comes to the front, in front closes.
     private void ToggleMenu()
     {
-        if (_menuWindow.Show) _menuWindow.Close();
-        else ShowWindow(HotkeyAction.Menu); // the build waits for the sync at the end of the click (or this frame's own sync)
+        if (!_menuWindow.Show) { ShowWindow(HotkeyAction.Menu); return; } // the build waits for the sync at the end of the click
+        if (FrontHost() == _menuWindow.Host) { _menuWindow.Close(); return; }
+        Raise(_menuWindow);
     }
 
     // The keys of the open MENU window: the official says at the bottom of

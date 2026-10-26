@@ -19,8 +19,8 @@ internal enum Feature
 
 public partial class MushTownGame
 {
-    // Open the feature. The MENU window closes first: the panels draw under
-    // the windows, so a panel would open unseen behind it.
+    // Open the feature. The MENU window closes first: it would stay open
+    // behind the feature and keep the keys.
     internal void OpenFeature(Feature feature)
     {
         _menuWindow.Close();

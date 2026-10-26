@@ -160,6 +160,12 @@ public partial class MushTownGame : Game
         _guideCardWindow = new GuideCardWindow(this);
         _menuWindow = new MenuWindow(this);
         _partyAskWindow = new PartyAskWindow(this); // the invite popup raises itself when it opens
+        // One raise row for everything that can come to the front: pinned
+        // windows at the bottom, then the panels, then the other windows.
+        foreach (var w in UiWindow.List) if (Pinned(w)) _raiseRow.Add(w.Host);
+        _raiseRow.AddRange(_panelHosts);
+        foreach (var w in UiWindow.List) if (!Pinned(w)) _raiseRow.Add(w.Host);
+        RenumberRow();
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
@@ -468,7 +474,7 @@ public partial class MushTownGame : Game
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
-            if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the front window, else the front panel
+            if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the top of the raise row
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
         // Talk needs presence: walking out of reach closes the modal.

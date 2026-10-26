@@ -40,10 +40,51 @@ public partial class MushTownGame
         for (int i = 0; i < QuickIcons.Length; i++)
         {
             var (icon, action, label) = QuickIcons[i];
-            row.AddChild(Cell(x + i * (size + gap), y, size, $"quickmenu_{icon}", $"quickmenu{icon}", label, () => OpenFeature(action)));
+            row.AddChild(Cell(x + i * (size + gap), y, size, $"quickmenu_{icon}", $"quickmenu{icon}", label, () => QuickFeature(action)));
         }
         row.AddChild(Cell(x + QuickIcons.Length * (size + gap), y, size, "quickmenu_hamburger", "quickmenuMenu", "Menu", ToggleMenu));
         return row;
+    }
+
+    // The quick icon toggles like the official one: closed opens on top, open
+    // but behind comes to the front, already in front closes.
+    private void QuickFeature(Feature feature)
+    {
+        int id = feature switch
+        {
+            Feature.Stat or Feature.Equip => 1, // the two icons share the stat window
+            Feature.Inventory => 0,
+            Feature.Skill => 2,
+            Feature.Quest => 3,
+            Feature.Settings => 4,
+            _ => -1,
+        };
+        if (id == 1 && _showStat && _statTab != (feature == Feature.Equip ? 1 : 0))
+        {
+            OpenFeature(feature); // the two icons are the two tabs of one window: switch, do not close
+            return;
+        }
+        if (id >= 0)
+        {
+            if (!PanelOn(id)) { OpenFeature(feature); return; } // closed: opens on top
+            if (FrontHost() == _panelHosts[id]) { HidePanel(id); return; } // already in front: closes
+            RaisePanel(id); // behind: comes to the front (RaisePanel closes MENU)
+            return;
+        }
+        HotkeyAction? action = feature switch
+        {
+            Feature.WorldMap => HotkeyAction.WorldMap,
+            Feature.Keys => HotkeyAction.KeyConfig,
+            _ => null,
+        };
+        if (action is HotkeyAction key && WindowFor(key) is UiWindow w && w.Show)
+        {
+            if (FrontHost() == w.Host) { w.OnClosed(); w.Show = false; return; } // already in front: closes
+            Raise(w); // behind: comes to the front
+            _menuWindow.Close();
+            return;
+        }
+        OpenFeature(feature);
     }
 
     // One cell: the hit rect and the click id (PanelButton), plus the official

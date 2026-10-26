@@ -5,8 +5,8 @@ namespace MushTown.Client;
 
 // The windows that use the UiWindow base class: the game opens them with
 // a key, and their hosts ride the one UI scene. A click moves the window to
-// the end of the list, and the Z is 300 + that order (pinned windows first),
-// so draw, hit and Esc all read the same order.
+// the end of the raise row (the panels ride it too), so draw, hit and Esc
+// all read that one order.
 public partial class MushTownGame
 {
     // The window a key opens, or null.
@@ -45,7 +45,7 @@ public partial class MushTownGame
         }
     }
 
-    // Build the visible windows, then give every host its Z.
+    // Build the visible windows (the Z is the raise row's, see RenumberRow).
     private void SyncWindows()
     {
         foreach (var w in UiWindow.List)
@@ -53,42 +53,37 @@ public partial class MushTownGame
             w.Host.Enabled = w.Show;
             if (w.Show) w.Sync();
         }
-        SyncWindowZ();
     }
 
-    // The host Z follows the list (pinned first): last in the list draws last and hits first.
-    // Pinned windows stay under the rest, in their own order, so a window
-    // opened later always lands above the chat and the minimap.
-    private void SyncWindowZ()
-    {
-        int z = WindowZ;
-        foreach (var w in UiWindow.List) if (Pinned(w)) SetRootZ(w.Host, z++);
-        foreach (var w in UiWindow.List) if (!Pinned(w)) SetRootZ(w.Host, z++);
-    }
-
-    // A click brings the window to the front.
-    private void Raise(UiWindow w)
-    {
-        UiWindow.List.Remove(w);
-        UiWindow.List.Add(w);
-        SyncWindowZ(); // the draw follows Update: the new order has to be in the tree now
-    }
+    // A click brings the window to the front: the same row the panels ride.
+    private void Raise(UiWindow w) => RaiseHost(w.Host);
 
     // The chat and the minimap are the HUD itself: they never come to the
-    // front and Esc never closes them. SyncWindowZ keeps them under the rest.
+    // front and Esc never closes them. The constructor puts them at the
+    // bottom of the raise row, so every window and panel opens above them.
     private bool Pinned(UiWindow w) => w == _chatWindow || w.Action == HotkeyAction.Minimap;
 
-    // Esc closes one layer: the front window, else the front panel of the
-    // HUD. The official client closes the topmost thing, not everything.
+    // The window a hit object belongs to, or null (a panel, the HUD). The hit
+    // is usually a child: every window box has a click catcher, so the root is
+    // what identifies the window.
+    private UiWindow? WindowOf(GameObject? o)
+    {
+        var host = RootOf(o);
+        return host == null ? null : UiWindow.List.FirstOrDefault(w => w.Host == host);
+    }
+
+    // Esc closes one layer: the top of the raise row, a panel or a window.
+    // The official client closes the topmost thing, not everything.
     private bool EscCloseFront()
     {
-        UiWindow? front = null; // by Z, like the draw and the hit: pinned windows never close, never win
-        foreach (var w in UiWindow.List)
-            if (w.Show && !Pinned(w) && (front == null || w.Host.Z > front.Host.Z)) front = w;
-        if (front != null) { front.OnClosed(); front.Show = false; return true; }
-        int panel = FrontPanel();
-        if (panel < 0) return false;
-        HidePanel(panel); // the raise order stays: the next open panel is now the front
+        var host = FrontHost(); // the top of the screen, the same lookup the quick icons use
+        if (host == null) return false;
+        if (WindowOf(host) is UiWindow w)
+        {
+            if (Pinned(w)) return false; // only pinned windows are open: nothing to close
+            w.OnClosed(); w.Show = false; return true;
+        }
+        HidePanel(PanelOf(host));
         return true;
     }
 }
