@@ -22,7 +22,7 @@ public partial class MushTownGame
     {
         _showSettings = true;
         _dragSettings = null;
-        RaisePanel(4);
+        RaisePanel(PanelId(Feature.Settings));
         _bgmAtOpen = _bgm.Volume;
         _sfxAtOpen = _sfxVol;
     }

@@ -15,6 +15,7 @@
 | `MushTown.Client` | MonoGame 主程序（窗口 / 渲染 / 输入；开房时托管 Server） |
 | `MushTown.Exporter` | 开发工具：把 WZ 资源导出成 PNG + JSON |
 | `MushTown.Tests` | MSTest 单元测试 |
+| `MushTown.Client.Tests` | MSTest：客户端无头逻辑（Scene 的 Z 排序与命中） |
 | `WzComparerR2/` | git 子模块，MIT 协议，WZ 解析库（WzLib） |
 
 ## 前置条件

@@ -1,7 +1,7 @@
 namespace MushTown.Client;
 
 // The features the game can open. The MENU window rows, the MENU window
-// bottom buttons and the quick menu icons all use this one list.
+// bottom buttons, the quick menu icons and the panel hotkeys all use this one list.
 internal enum Feature
 {
     None,       // the feature the game does not have yet

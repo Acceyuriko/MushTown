@@ -238,15 +238,6 @@ public partial class MushTownGame
     // The MENU window (the HUD menu button opens it).
     private MenuWindow _menuWindow = null!;
 
-    // The hotkey and the hamburger of the quick menu row both toggle the MENU:
-    // closed opens on top, open but behind comes to the front, in front closes.
-    private void ToggleMenu()
-    {
-        if (!_menuWindow.Show) { ShowWindow(HotkeyAction.Menu); return; } // the build waits for the sync at the end of the click
-        if (FrontHost() == _menuWindow.Host) { _menuWindow.Close(); return; }
-        Raise(_menuWindow);
-    }
-
     // The keys of the open MENU window: the official says at the bottom of
     // the menu that Tab and the arrows move between the menus (the arrows
     // also walk the rows inside one column).
@@ -274,28 +265,28 @@ public partial class MushTownGame
         SetStatTab(tab);
         _showStat = true;
         _dragStat = null;
-        RaisePanel(1);
+        RaisePanel(PanelId(Feature.Stat));
     }
 
     internal void OpenInventoryWindow()
     {
         _showInv = true;
         _dragInv = null;
-        RaisePanel(0);
+        RaisePanel(PanelId(Feature.Inventory));
     }
 
     internal void OpenSkillWindow()
     {
         _showSkill = true;
         _dragSkill = null;
-        RaisePanel(2);
+        RaisePanel(PanelId(Feature.Skill));
     }
 
     internal void OpenQuestWindow()
     {
         _showQuest = true;
         _dragQuest = null;
-        RaisePanel(3);
+        RaisePanel(PanelId(Feature.Quest));
     }
 
     // The key settings window (the options window opens it too).

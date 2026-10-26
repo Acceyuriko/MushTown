@@ -87,20 +87,18 @@ public partial class MushTownGame
         QuickSlotKeyEdges(kb, _talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // 1-9, 0, - and = drink the bound potions
         if (hotkey != null && _talkNpc == 0 && (hotkey.Value == HotkeyAction.KeyConfig || !keyWindowOpen))
         {
-            if (hotkey.Value != HotkeyAction.Menu) _menuWindow.Close(); // a key opens a layer: the MENU would stay open behind it and keep the keys (its own key toggles it)
-            bool panelKey = true; // a panel key plays its click here; a window key plays it in ToggleWindow
             switch (hotkey.Value)
             {
-                case HotkeyAction.Inventory: _showInv = !_showInv; _dragInv = null; if (_showInv) RaisePanel(0); break; // hiding mid-drag drops the grab
-                case HotkeyAction.Stat: _showStat = !_showStat; _dragStat = null; if (_showStat) RaisePanel(1); break;
-                case HotkeyAction.Skill: _showSkill = !_showSkill; _dragSkill = null; if (_showSkill) RaisePanel(2); break;
-                case HotkeyAction.Quest: _showQuest = !_showQuest; _dragQuest = null; if (_showQuest) RaisePanel(3); break; // the modal freezes panels
-                case HotkeyAction.Settings: if (_showSettings) CloseSettings(); else OpenSettings(); break;
-                case HotkeyAction.Menu: ToggleMenu(); break; // the close resets the pick, ToggleWindow would not
+                case HotkeyAction.Inventory: TogglePanel(Feature.Inventory); break;
+                case HotkeyAction.Stat: TogglePanel(Feature.Stat); break;
+                case HotkeyAction.Skill: TogglePanel(Feature.Skill); break;
+                case HotkeyAction.Quest: TogglePanel(Feature.Quest); break; // the modal freezes panels
+                case HotkeyAction.Settings: TogglePanel(Feature.Settings); break;
                 case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // the minimap is always on screen
-                default: panelKey = false; ToggleWindow(hotkey.Value); break; // a window key: the raise row decides its Z
+                default: ToggleWindow(hotkey.Value); break; // the MENU and the other windows: open, raise, close
             }
-            if (panelKey) PlaySfx("click");
+            if (hotkey.Value != HotkeyAction.Menu) _menuWindow.Close(); // the toggle runs first, so FrontHost sees the MENU and raises the layer behind it; the MENU then closes (a key dismisses the MENU, a mouse click does not)
+            PlaySfx("click");
         }
         // Title drag runs on held (down starts it in the chain below).
         if (_dragInv.HasValue)
@@ -139,6 +137,26 @@ public partial class MushTownGame
         SyncWindows(); // a window rebuilds when it moves or its state changed
         if (!click) return;
         UpdateHudClick(gx, gy); // click sounds play by Button Kind inside ClickTree (the flag funnel is gone)
+    }
+
+    // The panel a feature opens, or -1 when the feature opens a window or runs an action.
+    private static int PanelId(Feature feature) => feature switch
+    {
+        Feature.Inventory => 0,
+        Feature.Stat or Feature.Equip => 1, // the two icons share the stat window
+        Feature.Skill => 2,
+        Feature.Quest => 3,
+        Feature.Settings => 4,
+        _ => -1,
+    };
+
+    // A quick icon or a panel key: open on top, raise when behind, close when in front.
+    private void TogglePanel(Feature feature)
+    {
+        int id = PanelId(feature);
+        if (!PanelOn(id)) { OpenFeature(feature); return; }
+        if (FrontHost() == _panelHosts[id]) { HidePanel(id); return; }
+        RaisePanel(id);
     }
 
     // Is this panel open? The order is the panel-id order.

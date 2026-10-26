@@ -12,14 +12,14 @@ public partial class MushTownGame
     // The window a key opens, or null.
     private UiWindow? WindowFor(HotkeyAction action) => UiWindow.List.FirstOrDefault(w => w.Action == action);
 
-    // A key opened a window: flip it.
+    // A key or a menu icon opens a window, raises it when it is behind, closes it when it is in front.
     private void ToggleWindow(HotkeyAction action)
     {
         var w = WindowFor(action);
         if (w == null) return;
-        w.Show = !w.Show;
-        if (w.Show) { w.Dirty = true; if (!Pinned(w)) Raise(w); } // it opens on top, with fresh content
-        PlaySfx("click");
+        if (!w.Show) { ShowWindow(action); return; } // fresh content, on top of the ones already open
+        if (FrontHost() == w.Host) { w.OnClosed(); w.Show = false; return; }
+        if (!Pinned(w)) Raise(w);
     }
 
     // Open a window (the options window opens the key settings). The content
