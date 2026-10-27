@@ -51,7 +51,8 @@ public partial class MushTownGame
         bg.Add(new Picture("ui/setupbg.png", 0, 0));
         _menuScene.Add(bg);
         var preview = new GameObject { NoHit = true };
-        preview.Add(new Invoke(_ => DrawSetupAvatar()));
+        preview.Add(new Rect(new Rectangle(SetupLayout.Avatar.X, SetupLayout.Avatar.Y, 1, 1))); // the rect's top left is the doll's feet (NoHit keeps the 1x1 box out of hit-testing)
+        preview.Add(new AvatarPreview(this, "stand1", () => _setupFrame, true));
         _menuScene.Add(preview);
         var panel = new GameObject { NoHit = true };
         panel.Add(new Rect(PanelRect()));
@@ -161,18 +162,5 @@ public partial class MushTownGame
             if (created) _save!.Slots[_slot] = null;
             _error = ex.Message;
         }
-    }
-
-    // The setup preview stays code-drawn (doll pixels, like the chars
-    // strip): the tree only orders it above the backdrop.
-    private void DrawSetupAvatar()
-    {
-        // DrawAvatar speaks world pixels: park the camera while previewing on art
-        int camX = _camera.X, camY = _camera.Y;
-        _camera.X = 0;
-        _camera.Y = 0;
-        DrawAvatar(SetupLayout.Avatar.X, SetupLayout.Avatar.Y, "stand1", _setupFrame, true);
-        _camera.X = camX;
-        _camera.Y = camY;
     }
 }

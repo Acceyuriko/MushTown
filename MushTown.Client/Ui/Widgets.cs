@@ -52,6 +52,15 @@ public static class NineSlice
     }
 }
 
+// The official nine piece frame around the owner rect: the art names the
+// pieces, so a window frames any box with one line.
+public sealed class Box : Component, IDrawable
+{
+    private readonly string _stem;
+    public Box(string stem) => _stem = stem;
+    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, _stem, Owner.Get<Rect>()!.Box);
+}
+
 // Clickable rect: hit via Rect, action via OnClick. The Scene resolves
 // the hovered Button and plays the hover sfx (LegacyId bridges the old
 // _hoverId world; gone at the W5 cleanup).
@@ -454,8 +463,7 @@ public sealed class WhitePanel : Component, IDrawable
 }
 
 // Bridge: runs Menu draws inside the tree (game art the tree does not
-// own yet — the chars dolls now, job/setup previews next; gone when
-// the sim phase owns the doll).
+// own yet — the chars dolls now; gone when the sim phase owns the doll).
 public sealed class Invoke : Component, IDrawable
 {
     private readonly Action<UiGfx> _draw;

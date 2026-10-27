@@ -68,14 +68,6 @@ internal static class MapWindowParts
     }
 }
 
-// The nine piece frame of the minimap window (the official
-// UIMap.img/MiniMap/MinMap). The pieces keep their size, the edges and the
-// center stretch.
-public sealed class MinimapFrame : Component, IDrawable
-{
-    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, "mini_frame", Owner.Get<Rect>()!.Box);
-}
-
 // The minimap window: the official v1.2 frame with the map of the current
 // map, the player, the portals, the row of five buttons and the zoom pair.
 public sealed class MinimapWindow : UiWindow
@@ -117,7 +109,7 @@ public sealed class MinimapWindow : UiWindow
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window swallows the clicks inside it
         root.Add(new Invoke(Draw));  // the map, the dots and the names
-        root.Add(new MinimapFrame()); // the frame on top of the map
+        root.Add(new Box("mini_frame")); // the frame on top of the map
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         AddRow(root);
         AddZoom(root);

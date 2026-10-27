@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1 周已验收并提交；K1 第 2 周已验收并提交（键窗的快捷槽页按用户要求整个删掉）。N0 不用单独做（`NineSlice` 已有、`DrawAvatar` 已被 4 处共用），直接进 N5：键窗已经组件化（0 个 `new Invoke`），等验收。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已做、等验收。下一步 K2 第 2 周（动作池）；W1（`Rect` 父相对）重写在 §3.5，排在 K2 之后、N1 之前。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -185,13 +185,13 @@
 **原则**：组件只做一件事。分三层：
 
 1. **通用组件**（`Ui/Widgets.cs` 追加，**用到才加**）：
-   - `Box`（九宫格，包 `NineSlice.Draw`）：还没人需要，等第一个用它的窗口再加。
+   - `Box`（九宫格框，包 `NineSlice.Draw`，**已加**）：小地图框（`mini_frame`）和装备页的物品详情框（`tip`）已经用它；HUD 跟随鼠标的 tip、气泡、buff 框、聊天框还在自己的画法里直接调 `NineSlice.Draw`，等它们组件化时再换。
    - `Image(stem, on)`（已加，N5 用）：`on` 为真时常亮成 `_p`，预设钮和 Combo Key 钮用它。
    - 聊天片（N3）：`CaretText`（输入文字 + 光标闪烁）、`WrapText`（按宽度折行，复用 `UiText.Wrap`）。
    - 任务片（N6）：`TextLines`（多行文字，每行可不同颜色）。
    - GUIDE 片（N7）：`ClipPlayer`（序列帧播放，喂 `UiClip`）。
    - 现有 `Picture / Label / LiveLabel / Bar / Image / Round / Fill / InvSlot` 继续用。
-2. **共享画法**：`MergeParts` / `DrawAvatar`（[GameRender.cs:121-157](../MushTown.Client/Game/GameRender.cs#L121-L157)）**已经是一份画法**：世界玩家、其他玩家、选角格、创建角色预览 4 处都调它。不拆新文件、不加 `AvatarPreview` 组件（只有一个用户，属于过度设计）。
+2. **共享画法**（`Ui/AvatarArt.cs`，**已建**）：`MergeParts` / `DrawAvatar` / `DrawAvatarOnScreen`（把相机压到 0,0 再画，UI 上的娃娃都是屏幕像素）+ `AvatarPreview` 组件（owner 矩形的左上角 = 脚）。创建角色预览已用它；Character Info / Equip 里的娃娃等那个窗加 `dollX/dollY` 布局键再接一行（那时 `AvatarPreview` 才需要 `worn` 参数）。选角格一页 12 个娃娃和石柱/传送门交织，留给 N8。
 3. **专用组件**：放窗口自己的文件，不做成通用件。例如 `MinimapCanvas`（HudMap）、`KeyCap`（HudKeyConfig）、`ChatLog`（HudChat）、`Balloon`（HudBalloon）。
    - 专用组件清单（按窗口）：HUD 条 4 个、快捷栏 1 个、设置旋钮 1 个、聊天 3 个、小地图 1 个、大地图 1 个、键窗 5 个、任务 3 个、组队 2 个、GUIDE 1 个、选角/创建 3 个。
    - 不做"万能组件"：两个窗口画法不同就各留一个。
@@ -232,6 +232,30 @@
 - **技能组合技**：不做，留给技能大改。战神的"上/下 + 攻击"、"右 + 右"、"先趴下再攻击出巨熊"都归那一层。它拿控制器给的原始方向键和动作边，记几百毫秒的输入历史：攻击按下时看当前按住的方向和刚按过的方向，匹配到组合技就放组合技，否则普攻；一次攻击只出一个技能。单键（趴下）是移动键，按下立即生效，不等攻击。K1 只保证原始键可读、动作有 `Fresh`/`Down`、一帧能触发多个动作。
 - **窗口**：新窗口（星之力、潜能）用 3.2 的组件，缺什么加什么专用组件，不写 `Invoke`。
 
+### 3.5 `Rect` 改成父相对（W1，用户 2026-10-27 定）
+
+**现状**：`Rect : Component` 存的是**绝对屏幕矩形**（`Rectangle Box`）。于是：
+
+- 窗口一移动就是 `Pos` 变 → `UiWindow.Sync()` 调 `Build()` 把整棵树重建一次（拖标题栏时每帧重建几十个节点）。
+- 子节点不能跟着父节点走，窗口之间也不能嵌：娃娃预览塞进 Character Info，得自己算绝对坐标。
+- 布局文件（`layouts/*.json`）里的数字本来就是窗口局部的，代码却在每处 `Pos.X + x` 加回来：10 个窗口文件、`Pos.X +` 48 处、`Pos.Y +` 51 处。
+
+**改法**（照 Unity 的 `RectTransform`，只取有用的部分）：
+
+1. `Rect` 只存局部 `Offset` + `Size`（相对父节点；窗口的根节点原点 = 窗口 `Pos`，菜单/HUD 的根 = 屏幕原点）。
+2. 每帧开头 `Scene.Layout()` 走一次树，把算好的绝对屏幕矩形写进 `Rect.Screen`。命中（`Scene.TopAt`）、绘制（`TreeDraw.DrawObject`）、HUD 的悬停和格子查找（`UpdateHudHover`、`QslotCell`、键窗的 `KeyRect`/`CellRect`）统一读 `Screen`，不再各算一份。
+3. `UiWindow.Sync()` 只在 `Dirty` 时重建；`Pos` 变化只改根节点偏移，子节点自动跟。
+4. `Pos.X +` 48 处、`Pos.Y +` 51 处变回纯偏移；115 处 `new Rect(...)` 基本不动，只是不再加 `Pos`。
+5. `Picture(key, dx, dy)`、`Label`、`Image` 这类"owner 原点 + 偏移"的写法不变，原点由遍历给出。
+
+**不做**：anchors、pivot、layout group、缩放。画布固定 1366×768、布局数字手调，这些用不上。
+
+**位置**：K2 之后、N1 之前。W1 要改每个窗口的坐标写法，先改完，后面的窗口片（N1/N2/N3/N6/N7/N8）就只写一遍新写法。
+
+**验收**：全部 `--shot` 屏幕（27 个）逐字节一致；拖标题栏、拖任务窗时树不重建（临时在 `Build()` 里加计数验证后删掉）；`grep "Pos.X +"` 只剩"根就是屏幕"的菜单/HUD，或为 0。
+
+**风险**：半改造会让所有窗口坐标错位 → 一片一次做完、一个 commit；命中测试要走父链，`Hovered` 的逻辑不变。
+
 ## 4. 分片
 
 工期按每周约 10 小时估。每周一个 commit（用户规矩）；2 周的片第 1 周提交能 build + test 的中间态，第 2 周完成；每片结束停下验收，先 review 后提交。
@@ -255,8 +279,9 @@
 
 | 片 | 内容 | 工期 |
 |---|---|---|
-| N0 (P0) | `Box` + `AvatarArt`（其余通用组件在第一个用它的窗口片加）——**实际不用做**：`NineSlice` 已在 `Ui/Widgets.cs`，`DrawAvatar` 已被世界、选角、创建角色 4 处共用；`Box` 等第一个用它的窗口（K2 的键窗不带九宫格框） | 0 周 |
+| N0 (P0) | `Box` + `Ui/AvatarArt.cs` + `AvatarPreview`：**已做**（`Box` 用在小地图框和物品 tip 框；`AvatarPreview` 用在创建角色预览；`MergeParts`/`DrawAvatar` 搬进新文件并加了 `DrawAvatarOnScreen`） | 0.5 周 |
 | N5 (P0) | 键窗 7 处 `Invoke` 已删（和 K2 合并）：`KeyCap` / `ActionCell` / `FilterBox` / `FilterItem` / `HeldIcon` 五个窗口内私有组件，预设钮和 Combo Key 钮改用 `Image(stem, on)`；拖放松手改由 `UpdateHud` 的鼠标边沿驱动（`KeyConfigWindow.UpdateDrag`），Draw 不再轮询鼠标 | 已做 |
+| W1 (P0) | **`Rect` 改成父相对（Unity RectTransform 的形状）**：`Rect` 只存局部 offset + size；每帧开头 `Scene.Layout()` 走一次树把屏幕矩形写进 `Rect.Screen`；命中、绘制、HUD 悬停都读 `Screen`；`UiWindow.Sync()` 不再因为 `Pos` 变化重建；48 处 `Pos.X +`、51 处 `Pos.Y +` 变回纯偏移（10 个窗口文件）。不做 anchors / pivot / layout group。详见 §3.5 | 1 周 |
 | N1 (P1) | HUD 条：气泡、快捷栏角标、手拿、tips | 1 周 |
 | N2 (P1) | 快捷槽：4 个键提示 + 12 个物品格合成一套 16 个等价槽（内容先固定）+ 设置旋钮 | 1 周 |
 | N3 (P1) | 聊天窗（整块，最大） | 2 周 |
@@ -265,11 +290,11 @@
 | N7 (P2) | 组队 + GUIDE | 1.5 周 |
 | N8 (P2) | 选角 + 创建角色 | 2 周 |
 
-合计约 18 周（N0 缩到 0.5 周，S4 砍掉）。三块互不依赖，顺序可以换。
+合计约 19 周（N0 缩到 0.5 周，S4 砍掉，W1 加 1 周）。三块互不依赖，顺序可以换。
 
-**顺序（我定的）**：K1 → N0 → K2+N5 → S1 → S2 → S3 → N1 → N2 → N3 → N4 → N6 → N7 → N8。
+**顺序（我定的）**：K1 → N0 → K2+N5 → W1 → S1 → S2 → S3 → N1 → N2 → N3 → N4 → N6 → N7 → N8。
 
-理由：先把输入这条线走完（技能解耦 + 每角色绑定是一件事）；再做组件基础，紧接着把键窗改组件；然后用三个小的世界片验证"对象自己走"；最后啃大窗口。
+理由：先把输入这条线走完（技能解耦 + 每角色绑定是一件事）；再做组件基础，紧接着把键窗改组件；然后**先把 `Rect` 改成父相对**，再动世界和窗口——W1 要改每个窗口的坐标写法，放在 N1/N2/N3/N6/N7/N8 之前，那些窗口就只写一次新写法。
 
 ## 5. 每片的验收
 
@@ -281,6 +306,8 @@
 6. 输入片第 2 周：3 套 preset 预览 / Apply / Copy / Save 后重开仍生效；HUD 16 槽按表重画（Ctrl/Alt/I 有内容，C 空，12 个物品格按表）。技能头测（塞一条合成绑定，验证能触发 `CastSkill`）随 K2 的拖放和绑定一起做；实际游玩要等拖放片，这是已知代价。
 7. 代码检查：`grep "new Invoke"` 该文件为 0；**这 16 个**游戏输入字段为 0（`_altWasDown`、`_upWasDown`、`_ctrlWasDown` + 12 个技能键 + `_zWasDown` 拾取）；菜单的 `_escWasDown`、`_menuUpWasDown` 等系统键字段保留（不是绑定键）；`_qsWasDown` 已随快捷栏删掉；`settings.json` 里没有按键。
 8. 窗口片（N5 已做）：`grep "new Invoke" MushTown.Client/Panels/HudKeyConfig.cs` = 0；`--shot keys` 和改动前逐字节一致（组件化不许改像素）；手动拖一次动作到键上，图标跟手、松手落在那个键、拖出键盘外把键清掉。
+9. N0（已做）：`--shot chars/chars2/setup/equip/minimap/hud` 与改动前逐字节一致（`Box` 的 `mini_frame` 由 minimap 覆盖、`tip` 由 equip 页的物品详情框覆盖；`AvatarPreview` 由 setup 覆盖；`DrawAvatar` 由 hud 和 chars 覆盖）。
+10. W1（`Rect` 父相对）：全部 `--shot` 屏幕（27 个）逐字节一致；拖标题栏、拖任务窗不触发 `Build()`（临时计数验证后删）；`grep "Pos.X +"` 为 0 或只剩菜单/HUD 这类"根就是屏幕"的地方；那一帧的节点遍历只跑一次（`Scene.Layout`）。
 
 ## 6. 风险
 
@@ -296,7 +323,7 @@
 | 组件化改变像素 | 每片一张截图逐字节比；不顺手改数字 |
 | 世界相位变化 | 固定树序 + aiticks 对比 + 头测 |
 | 对象数增加（数字、特效各一个对象） | 目标 < 1000 个；池复用；树遍历 O(n) |
-| 18 周太长，中途插内容块 | 每片独立可交付；P2 可砍；每周一个 commit |
+| 19 周太长，中途插内容块 | 每片独立可交付；P2 可砍；每周一个 commit |
 
 ## 7. 不做（以及两个方向的说明）
 
@@ -345,7 +372,7 @@
 14. 表的大小 = 键数（最多约 100 条）；只为已绑定的目标建 `BoundAction`，技能数据几百个不进表。
 15. Space 可以绑（默认 Talk）；Esc、Enter、Tab、方向键不能绑。
 16. K1 就把 HUD 16 槽改成键槽：4 个提示格 + 12 个物品格都按固定键查表；C 空着。
-17. N0 不用做：`NineSlice` 和共用的 `DrawAvatar` 都已经在仓库里；`Box` / `AvatarPreview` 等真有第二个用户再加，`TextLines` / `WrapText` / `CaretText` / `ClipPlayer` 在第一个用它的窗口片加。
+17. N0 已做（用户 2026-10-27 改定）：`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`。`TextLines` / `WrapText` / `CaretText` / `ClipPlayer` 仍在第一个用它的窗口片加。
 18. S4 砍掉：相机不搬进树。
 19. K1 旧键窗继续能用，只把读写指向当前 preset；新 UI（拖放、Copy 弹窗、预览）在 K2。
 20. 同一帧按下多个绑定键，动作**都触发**（用户 2026-10-26：很常见）。

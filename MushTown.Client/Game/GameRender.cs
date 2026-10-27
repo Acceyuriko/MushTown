@@ -115,46 +115,8 @@ public partial class MushTownGame
         foreach (var item in _map.Backs) { if (item.Front) DrawBack(item); }
     }
 
-    // Worn-or-beginner parts for one frame: beginner parts minus each worn
-    // slot's beginner img, plus the worn gear files, re-sorted back-to-front
-    // (same stable order the exporter bakes). Unknown ids draw nothing.
-    private List<CharaPart> MergeParts(string action, int frame, List<int> worn)
-    {
-        var hide = new HashSet<string>();
-        var gearParts = new List<CharaPart>();
-        foreach (int id in worn)
-        {
-            if (!_items.TryGetValue(id, out var d) || d.Slot == null) continue; // hand-made saves may wear anything
-            var key = (id.ToString("D8"), action);
-            if (!_gear.TryGetValue(key, out var gear)) continue; // art-less gear (rings): nothing to draw or hide
-            hide.Add(ItemData.BeginnerImgs[d.Slot]); // boot load rejects art slots outside the table
-            gearParts.AddRange(gear.Frames[frame].Parts); // boot load guarantees art for art gear
-        }
-        var parts = new List<CharaPart>();
-        foreach (var p in _charas[action].Frames[frame].Parts)
-            if (!hide.Contains(p.Img)) parts.Add(p);
-        parts.AddRange(gearParts);
-        return parts.OrderByDescending(p => p.Z).ToList();
-    }
-
-    private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, List<int>? worn = null)
-    {
-        var parts = worn == null || worn.Count == 0
-            ? _charas[action].Frames[frame].Parts
-            : MergeParts(action, frame, worn);
-        foreach (var part in parts)
-        {
-            if (facingRight)
-            {
-                var tex = _textures[part.Image];
-                DrawTexture(part.Image, SceneMath.FlipDrawX(feetX, part.X, tex.Width), feetY + part.Y, true);
-            }
-            else
-            {
-                DrawTexture(part.Image, feetX + part.X, feetY + part.Y, false);
-            }
-        }
-    }
+    // Worn-or-beginner parts and the doll drawing live in Ui/AvatarArt.cs:
+    // the world and the menus share them.
 
     // One background: parallax on the axes that do not scroll, then tile it over the
     // camera rect.

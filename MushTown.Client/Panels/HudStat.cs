@@ -145,7 +145,7 @@ public partial class MushTownGame
         int iconSize = _statLay.Get("detailIconSize", 32);
         var box = new GameObject();
         box.Add(new Rect(new Rectangle(_statPos.X + x, _statPos.Y + y, w, h)));
-        box.Add(new ToolTipFrame());
+        box.Add(new Box("tip"));
         box.Add(new LiveLabel(() => data.Name, _statLay.Get("detailNameX", 48), _statLay.Get("detailNameY", 6), new Color(255, 220, 0)));
         int ly = _statLay.Get("detailLineY", 28);
         foreach (string line in ItemDetailLines(data))
@@ -303,11 +303,4 @@ public sealed class EquipIcon : Component, IDrawable
         var icon = gfx.Tex(_image);
         gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
     }
-}
-
-// The official item tooltip frame around the owner rect (the same nine pieces
-// as the item tooltip of the bag).
-public sealed class ToolTipFrame : Component, IDrawable
-{
-    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, "tip", Owner.Get<Rect>()!.Box);
 }
