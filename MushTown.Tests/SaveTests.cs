@@ -181,7 +181,7 @@ public class SaveTests
             var chara = store.CreateHero(0, 0, "hero");
             chara.KeyPresets = new List<Dictionary<string, string>>
             {
-                new() { ["I"] = "Inventory", ["D1"] = "Skill:1001005" },
+                new() { ["I"] = "Inventory", ["D1"] = "Skill:1001005", ["D2"] = "Item:2000000" },
                 new() { ["S"] = "Stat" },
                 new(),
             };
@@ -192,29 +192,8 @@ public class SaveTests
             Assert.AreEqual(1, slot.ActivePreset);
             Assert.AreEqual("Inventory", presets[0]["I"]);
             Assert.AreEqual("Skill:1001005", presets[0]["D1"]);
+            Assert.AreEqual("Item:2000000", presets[0]["D2"]);
             Assert.AreEqual("Stat", presets[1]["S"]);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [TestMethod]
-    public void Save_Load_RoundtripsQuickSlots()
-    {
-        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
-        try
-        {
-            var store = new SaveStore();
-            var chara = store.CreateHero(0, 0, "hero");
-            chara.QuickSlots = new List<int> { 2000000, 0, 2000001 };
-            store.Save(path);
-            var slot = SaveStore.Load(path).Saves[0]!.Slots[0]!;
-            Assert.AreEqual(3, slot.QuickSlots!.Count);
-            Assert.AreEqual(2000000, slot.QuickSlots[0]);
-            Assert.AreEqual(0, slot.QuickSlots[1]);
-            Assert.AreEqual(2000001, slot.QuickSlots[2]);
         }
         finally
         {

@@ -61,17 +61,6 @@ public static partial class Export
             for (int piece = 0; piece < 3; piece++)
                 if (!UiPng.Save(ui, $"Basic.img/ComboBox25/{state}/{piece}", Path.Combine(dir, $"keys_cbox_{suffix}{piece}.png"))) return false;
 
-        // the quick slots page: the second page of the key window
-        if (!UiPng.Save(ui, "StatusBar3.img/CustomDefaultKeyConfig/backgrnd", Path.Combine(dir, "keys_qs_bg.png"))) return false;
-        foreach (var (node, name) in new[]
-        {
-            ("StatusBar3.img/CustomDefaultKeyConfig/button:presetSave", "keys_qssave"),
-            ("StatusBar3.img/CustomDefaultKeyConfig/button:presetUndo", "keys_qscancel"),
-        })
-            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
-                if (!UiPng.Save(ui, $"{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
-        if (!UiPng.Save(ui, "StatusBar3.img/CustomDefaultKeyConfig/button:close/normal/0", Path.Combine(dir, "keys_qsclose.png"))) return false;
-
         // the action icons: the grid cells under the keyboard show them
         var icons = ui.Find("StatusBar3.img/KeyConfig/icon");
         if (icons == null)

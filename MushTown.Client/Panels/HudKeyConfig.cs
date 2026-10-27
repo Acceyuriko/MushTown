@@ -8,7 +8,6 @@ namespace MushTown.Client;
 // under the keyboard holds the game actions: the player presses an action
 // in its cell, drags it onto a key and saves. The official keyboard shows
 // the key letters, or the icon of the action a key has.
-// The window has two pages: the custom key bindings and the quick slots.
 public sealed class KeyConfigWindow : UiWindow
 {
     private readonly MushTownGame _game;
@@ -61,18 +60,6 @@ public sealed class KeyConfigWindow : UiWindow
         (HotkeyAction.Settings, 46),
     };
 
-    // The quick slot items: the HUD quick slot cells. The action is the
-    // hotkey the item opens. K1 stub: the I and C cells show the key the
-    // action is bound to today (Stat is on S by default), not the fixed C
-    // key the HUD cell shows; the K2 key window replaces this page.
-    private static readonly (string File, HotkeyAction? Action)[] QuickSlots =
-    {
-        ("hud_key_ctrl.png", null),
-        ("hud_key_alt.png", null),
-        ("hud_key_i.png", HotkeyAction.Inventory),
-        ("hud_key_c.png", HotkeyAction.Stat),
-    };
-
     // The pending bindings, the action the player holds and the picked
     // preset slot.
     private readonly Dictionary<HotkeyAction, string> _draft = new();
@@ -87,20 +74,11 @@ public sealed class KeyConfigWindow : UiWindow
     // The combo key mode: a drop gives the action a second key.
     private bool _comboMode;
 
-    // The quick slots page and the quick slot item that waits for a key.
-    private bool _quickSlots;
-    private int _qslot = -1;
-    private KeyboardState _keys; // the keys last frame
-
-    public override Rectangle Rect() => _quickSlots
-        ? new Rectangle(Pos.X, Pos.Y, _lay.Get("qsW", 660), _lay.Get("qsH", 735))
-        : new Rectangle(Pos.X, Pos.Y, _lay.Get("w", 660), _lay.Get("h", 624));
+    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 660), _lay.Get("h", 624));
 
     public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("titleH", 18));
 
-    public override Point LayoutPos() => _quickSlots
-        ? new Point(_lay.Get("qsX", 353), _lay.Get("qsY", 33))
-        : new Point(_lay.Get("x", 353), _lay.Get("y", 72));
+    public override Point LayoutPos() => new(_lay.Get("x", 353), _lay.Get("y", 72));
 
     // One key box of the official keyboard (the WZ keyPos spot).
     private Rectangle KeyRect(Spot s) => new(
@@ -117,15 +95,6 @@ public sealed class KeyConfigWindow : UiWindow
         return new Rectangle(Pos.X + x, Pos.Y + y, _lay.Get("cellW", 34), _lay.Get("cellH", 34));
     }
 
-    // One official quick slot cell (the quick slots page).
-    private Rectangle QSlotRect(int index)
-    {
-        int cols = _lay.Get("qsCols", 16);
-        int x = _lay.Get("qsCellX", 52) + (index % cols) * _lay.Get("qsCellPitchX", 36);
-        int y = _lay.Get("qsCellY", 572) + (index / cols) * _lay.Get("qsCellPitchY", 40);
-        return new Rectangle(Pos.X + x, Pos.Y + y, _lay.Get("qsCellW", 30), _lay.Get("qsCellH", 30));
-    }
-
     // Open the window: the draft starts from the picked preset (the active
     // one on open; the 1/2/3 buttons reload it).
     public void Open()
@@ -133,8 +102,6 @@ public sealed class KeyConfigWindow : UiWindow
         _slot = _game.ActivePreset;
         ReloadDraft();
         _held = null;
-        _quickSlots = false;
-        _qslot = -1;
         Pos = LayoutPos();
         _game.ShowWindow(HotkeyAction.KeyConfig);
     }
@@ -145,14 +112,6 @@ public sealed class KeyConfigWindow : UiWindow
         var preset = _game.HotkeyPreset(_slot);
         _draft.Clear();
         foreach (var (action, _) in Actions) _draft[action] = preset.GetValueOrDefault(action, "");
-    }
-
-    // Open the window on the quick slots page (the shot mode).
-    public void OpenQuickSlots()
-    {
-        Open();
-        _quickSlots = true;
-        Pos = LayoutPos();
     }
 
     // Close the window: the unsaved changes and the held action go away.
@@ -169,7 +128,6 @@ public sealed class KeyConfigWindow : UiWindow
         _held = null;
         _filterOpen = false;
         _comboMode = false;
-        _qslot = -1;
     }
 
     public override void Build()
@@ -177,14 +135,7 @@ public sealed class KeyConfigWindow : UiWindow
         Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect()));
-        if (_quickSlots) BuildQuickSlots(root);
-        else BuildCustom(root);
-        Host.AddChild(root);
-    }
 
-    // The custom page: the keyboard, the action grid and the buttons.
-    private void BuildCustom(GameObject root)
-    {
         _game.LoadTexture("ui/keys_bg.png");
         _game.LoadTexture("ui/keys_kb.png");
         _game.LoadTexture("ui/hud_statx.png");
@@ -259,9 +210,11 @@ public sealed class KeyConfigWindow : UiWindow
             root.AddChild(o);
         }
 
-        // The bottom buttons: combo key, quick slots, reset, skill, cancel, save.
+        // The bottom buttons: combo key, quick slots, reset, skill, cancel,
+        // save. The quick slots page comes with K2, so that button is a plain
+        // picture: the click does nothing.
         root.AddChild(ComboButton());
-        root.AddChild(ArtButton("ui/keys_qslot", _lay.Get("qslotX", 98), _lay.Get("qslotY", 568), 76, 27, ShowQuickSlots));
+        root.Add(new Picture("ui/keys_qslot_n.png", _lay.Get("qslotX", 98), _lay.Get("qslotY", 568)));
         root.AddChild(ArtButton("ui/keys_reset", _lay.Get("resetX", 176), _lay.Get("resetY", 568), 67, 27, Default));
         root.AddChild(ArtButton("ui/keys_skill", _lay.Get("skillX", 245), _lay.Get("skillY", 568), 67, 27, OpenSkill));
         root.AddChild(ArtButton("ui/keys_cancel", _lay.Get("cancelX", 474), _lay.Get("cancelY", 568), 87, 27, Cancel));
@@ -270,46 +223,7 @@ public sealed class KeyConfigWindow : UiWindow
 
         BuildTitleAndClose(root, "ui/hud_statx.png", _lay.Get("closeX", 636), _lay.Get("closeY", 4), 11);
         BuildDrag(root);
-    }
-
-    // The quick slots page: the official second page with the quick slot
-    // cells under the keyboard.
-    private void BuildQuickSlots(GameObject root)
-    {
-        _game.LoadTexture("ui/keys_qs_bg.png");
-        _game.LoadTexture("ui/keys_qsclose.png");
-        foreach (string stem in new[] { "ui/keys_qssave", "ui/keys_qscancel", "ui/keys_custom" })
-            foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
-                _game.LoadTexture(stem + state);
-        foreach (var q in QuickSlots)
-            if (q.Action == null) _game.LoadTexture("ui/" + q.File); // the fixed Ctrl/Alt art; the other cells draw the bound key cap
-        foreach (var s in Spots.Keys)
-            if (s.Cap != "") _game.LoadTexture("ui/" + s.Cap);
-
-        root.Add(new Picture("ui/keys_qs_bg.png"));
-
-        // Our quick slot items sit in the first cells. The other cells stay
-        // empty: we have nothing for them.
-        for (int i = 0; i < QuickSlots.Length; i++)
-        {
-            var q = QuickSlots[i];
-            int index = i;
-            var o = new GameObject();
-            o.Add(new Rect(QSlotRect(index)));
-            // Only the items with a hotkey can be rebound.
-            if (q.Action != null) o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickQuickSlot(index) });
-            o.Add(new Invoke(gfx => DrawQuickSlot(gfx, q, index)));
-            root.AddChild(o);
-        }
-
-        // Back to the custom page, cancel and save.
-        root.AddChild(ArtButton("ui/keys_custom", _lay.Get("qsCustomX", 280), _lay.Get("qsCustomY", 33), 103, 27, ShowCustom));
-        root.AddChild(ArtButton("ui/keys_qscancel", _lay.Get("qsCancelX", 474), _lay.Get("qsCancelY", 681), 87, 27, Cancel));
-        if (_game.Hero != null)
-            root.AddChild(ArtButton("ui/keys_qssave", _lay.Get("qsSaveX", 562), _lay.Get("qsSaveY", 681), 78, 27, Save));
-
-        BuildTitleAndClose(root, "ui/keys_qsclose.png", _lay.Get("qsCloseX", 643), _lay.Get("qsCloseY", 4), 13);
-        BuildDrag(root);
+        Host.AddChild(root);
     }
 
     // The title strip drags the window, the X closes it.
@@ -469,30 +383,10 @@ public sealed class KeyConfigWindow : UiWindow
         }
     }
 
-    // The quick slot: Ctrl and Alt draw their fixed key art; I and C draw
-    // the cap of the key the action is bound to (the K1 stub page).
-    private void DrawQuickSlot(UiGfx gfx, (string File, HotkeyAction? Action) q, int index)
-    {
-        var r = QSlotRect(index);
-        if (q.Action == null) // Ctrl, Alt: the fixed key art
-        {
-            var art = gfx.Tex("ui/" + q.File);
-            gfx.Sb.Draw(art, new Vector2(r.X + (r.Width - art.Width) / 2, r.Y + (r.Height - art.Height) / 2), Color.White);
-            return;
-        }
-        string cap = CapArt(_draft.GetValueOrDefault(q.Action.Value, ""));
-        if (cap == "") return;
-        var tex = gfx.Tex(cap);
-        gfx.Sb.Draw(tex, new Vector2(r.X + (r.Width - tex.Width) / 2, r.Y + (r.Height - tex.Height) / 2), Color.White);
-    }
-
     // The picked up action rides the mouse. Letting go of the mouse drops it
     // on the key under the cursor.
     private void DrawHeld(UiGfx gfx)
     {
-        // A quick slot item that waits for a key takes the key press.
-        if (_qslot >= 0) PickQuickSlotKey();
-
         if (_held == null) return;
         var ms = Mouse.GetState();
         var (gx, gy) = _game.MouseGamePos(ms);
@@ -556,7 +450,7 @@ public sealed class KeyConfigWindow : UiWindow
     // The action takes the key. The key is taken away from the other actions.
     private bool Bind(HotkeyAction action, string key)
     {
-        if (Reserved(key) || !InputController.TryParseKeys(key, out _)) return false; // 1..= and Esc/Enter/Tab/arrows/Z are reserved
+        if (Reserved(key) || !InputController.TryParseKeys(key, out _)) return false; // Esc/Enter/Tab/arrows/Z are not bindable
         TakeAway(key, action);
         _draft[action] = key;
         return true;
@@ -564,11 +458,11 @@ public sealed class KeyConfigWindow : UiWindow
 
     // K1 edits only the 8 visible actions: a key owned by a hidden UI action
     // (Attack, Jump, Talk, Equip, Guide, KeyConfig) must stay with it, or
-    // that action loses the key with no way back. Skill and item keys are
-    // K2's new key window.
+    // that action loses the key with no way back. Skill keys are K2's new
+    // key window. Item targets are not protected either: saving a draft takes
+    // their key too (K2 protects them with the drag).
     private bool Reserved(string key)
     {
-        if (MushTownGame.QuickSlotKey(key)) return true;
         var preset = _game.HotkeyPreset(_slot);
         return preset.Any(kv => !Actions.Any(a => a.Action == kv.Key)
             && kv.Value.Split('+', StringSplitOptions.RemoveEmptyEntries).Contains(key));
@@ -594,7 +488,6 @@ public sealed class KeyConfigWindow : UiWindow
     // the same; K2 makes Copy pick a source preset.
     private void Save()
     {
-        _qslot = -1;
         _game.SaveHotkeyPreset(_slot, _draft);
         ReloadDraft();
         Build();
@@ -606,7 +499,6 @@ public sealed class KeyConfigWindow : UiWindow
         _draft.Clear();
         var defaults = KeyBindings.Defaults();
         foreach (var (action, _) in Actions) _draft[action] = defaults.GetValueOrDefault(action, ""); // the 8 visible actions only: the hidden ones keep their keys
-        _qslot = -1;
         Build();
     }
 
@@ -615,14 +507,12 @@ public sealed class KeyConfigWindow : UiWindow
     {
         ReloadDraft();
         _held = null;
-        _qslot = -1;
         Build();
     }
 
     // Copy: the draft goes into the picked preset (K1: the same as Save).
     private void Copy()
     {
-        _qslot = -1;
         _game.SaveHotkeyPreset(_slot, _draft);
     }
 
@@ -656,51 +546,12 @@ public sealed class KeyConfigWindow : UiWindow
         Build();
     }
 
-    // The quick slots page.
-    private void ShowQuickSlots()
-    {
-        _quickSlots = true;
-        _qslot = -1;
-        Pos = LayoutPos();
-    }
-
-    // Back to the custom page.
-    private void ShowCustom()
-    {
-        _quickSlots = false;
-        _qslot = -1;
-        Pos = LayoutPos();
-    }
-
     // The skill button: the key window closes and the skill window opens.
     private void OpenSkill()
     {
         OnClosed(); // the same reset as Esc or the title X
         _game.OpenSkillWindow();
         Show = false;
-    }
-
-    // The player picks a quick slot item: it waits for a key.
-    private void PickQuickSlot(int index)
-    {
-        _qslot = index;
-        _keys = Keyboard.GetState(); // a held key does not count as the pick
-    }
-
-    // The quick slot item takes the key the player pressed.
-    private void PickQuickSlotKey()
-    {
-        var kb = Keyboard.GetState();
-        foreach (var key in kb.GetPressedKeys())
-        {
-            if (_keys.IsKeyDown(key)) continue;
-            _keys = kb;
-            var q = QuickSlots[_qslot];
-            if (q.Action != null && !Bind(q.Action.Value, key.ToString())) return; // a reserved key keeps waiting
-            _qslot = -1;
-            return;
-        }
-        _keys = kb;
     }
 
     // The action that has this key.
@@ -714,13 +565,16 @@ public sealed class KeyConfigWindow : UiWindow
 
     // The icon art of an action. The KeyConfig set has no settings icon (the
     // options are a row of the MENU window), so Settings shows the gear of the
-    // quick menu row.
-    private static string IconTex(HotkeyAction action) =>
+    // quick menu row. The HUD quick slot cells draw the same art.
+    internal static string IconTex(HotkeyAction action) =>
         action == HotkeyAction.Settings ? "ui/quickmenu_53_n.png" : $"ui/keys_icon_{IconOf(action)}.png";
 
-    // The official icon of an action.
+    // The official icon of an action. Attack and Jump are not in the grid
+    // (the key window cannot move them) but the HUD cells show them.
     internal static int IconOf(HotkeyAction action)
     {
+        if (action == HotkeyAction.Attack) return 52;
+        if (action == HotkeyAction.Jump) return 53;
         foreach (var a in Actions)
             if (a.Action == action) return a.Icon;
         return 0;
@@ -730,9 +584,10 @@ public sealed class KeyConfigWindow : UiWindow
     private static string KeyName(int code) => KeyNames.GetValueOrDefault(code, "");
 
     // The cap art of a key name ("ui/keys_cap_<scancode>.png"). A combo
-    // ("I+K") shows the cap of its first key.
+    // ("I+K") shows the cap of its first key. The HUD quick slot cells read
+    // their caps from here too, so the scancodes live in keys.json only.
     private static Dictionary<string, string>? _capArt;
-    private static string CapArt(string keyName)
+    internal static string CapArt(string keyName)
     {
         if (_capArt == null)
         {

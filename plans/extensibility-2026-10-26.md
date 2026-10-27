@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1 周已验收并提交；做 K1 第 2 周。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1 周已验收并提交；K1 第 2 周做完（键窗的快捷槽页按用户要求整个删掉），等验收。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -101,8 +101,8 @@
 - `Kind = Ui`：Id 是 `HotkeyAction`。
 - `Kind = Skill`：Id 是技能 id。
 - `Kind = Item`：Id 是物品 id。
-- 存档里目标写成字符串：`"Inventory"`、`"Attack"`、`"Skill:1001005"`；第 2 周加 `"Item:2000000"`。
-- 表的方向是 **键名 → 目标**：`"D1" → "Item:2000000"`（第 2 周）、`"I" → "Inventory"`。键名用游戏枚举名，不用裸数字。
+- 存档里目标写成字符串：`"Inventory"`、`"Attack"`、`"Skill:1001005"`、`"Item:2000000"`。
+- 表的方向是 **键名 → 目标**：`"D1" → "Item:2000000"`、`"I" → "Inventory"`。键名用游戏枚举名，不用裸数字。
 - 组合键的键名是 `"I+K"`，一段或两段；**两段按任一段触发（别名），不是同时按**；一个键最多一个目标，一个目标最多一个键。技能组合技不在这里，见 3.4。
 
 **数据（跟角色走）**：
@@ -146,22 +146,22 @@
 - 现有 15 个 UI 动作 + 新增 `Equip`、`Attack`、`Jump`、`Talk`。
 - Z 拾取仍是固定键，不在表里（计划外；要进表需加 `Pickup` 动作，数据模型小改，等用户定）。
 - 技能目标（`Kind = Skill`）在表里，但没有默认键，键窗也不列。
-- 物品目标（`Kind = Item`）在表里：药水就是 `Item(id) → 键`。**第 2 周才做**；第 1 周的 `InputController` 只解析 UI 和技能目标。
+- 物品目标（`Kind = Item`）在表里：药水就是 `Item(id) → 键`。键名和 `"Item:<id>"` 都能解析，HUD 按表画格子，按 1..= 喝对应的药。
 - 一个键最多一个目标，一个目标最多一个键；绑定时把目标从旧键删掉，把键上的旧目标删掉；组合键的每一段都算一个键。
 - 不能绑的键：Esc、Enter、Tab、方向键（系统键）、Z（拾取固定，见上）；Space 可以绑（默认 Talk）。
 - 键名用游戏里的枚举名（`D1`、`OemPipe`），不用裸数字 `"1"`；裸数字会被 `Enum.TryParse<Keys>` 当成枚举值，绑到错的键。
 
-**HUD 右下 16 个快捷槽（16 个固定键）**：键是 Ctrl、Alt、I、C、1-9、0、-、=。每个槽显示表里这个键绑的目标（官方图标 + 键帽）；没有绑定就空着。默认只有 Ctrl→Attack、Alt→Jump、I→Inventory 有内容；C 槽空着（Stat 默认在 S，S 不在这 16 个键里）；1..= 空着。不另存 `QuickSlots`：药水就是 `Item` 目标，绑定在 1..= 上。第 1 周只做 4 个提示格：键帽固定是 Ctrl、Alt、I、C；官方动作图标只在那个动作真的绑在该键上时显示（图标用 `StatusBar3.img/KeyConfig/icon`：Attack 52、Jump 53、Inventory 1、Stat 2），所以默认 C 格只有键帽、没有图标。**第 2 周**把 16 个槽都改成按固定键查目标（图标 + 键帽），12 个物品格一起；N2 只做组件化和拖放。第 2 周的 12 个物品格只显示，点格子不再绑定物品（编辑等 N2 的拖放）。
+**HUD 右下 16 个快捷槽（16 个固定键）**：键是 Ctrl、Alt、I、C、1-9、0、-、=。每个槽显示表里这个键绑的目标（官方图标 + 键帽）；没有绑定就空着。默认只有 Ctrl→Attack、Alt→Jump、I→Inventory 有内容；C 槽空着（Stat 默认在 S，S 不在这 16 个键里）；1..= 空着。不另存 `QuickSlots`：药水就是 `Item` 目标，绑定在 1..= 上。16 个格子都按固定键查表：有目标就画它的图标（动作图标用 `StatusBar3.img/KeyConfig/icon`：Attack 52、Jump 53；物品画物品图；技能画技能图），键帽永远画。4 个提示格的键帽在左上（`hintcap`/`hinticon` 两个偏移），12 个物品格的键帽在右下角，和原版一样。格子只显示，点格子不绑定（编辑等 N2 的拖放）。
 
 **键窗（K1 适配，K2 重做）**：
 
 - K1 不改键窗 UI，只加一层适配：`HotkeyKey(action)` / `SaveHotkeyPreset(slot, map)` 读写当前角色的当前 preset；3 个按钮对应 3 套 preset。点 1/2/3 切换选中的 preset 并重读 draft（K1 的预览）；Save 把 draft 写进选中的 preset；Apply 设 `ActivePreset`。K1 的 Save 和 Copy 是同一个操作（K2 把 Copy 换成选来源的弹窗）。Save/Apply/Copy 都会存角色（位置也存，和退出时一样：只写 preset 也要重写整个存档文件）。没有角色（--host/--join）时 Save/Apply/Copy 不显示。K1 的键窗只有 8 个动作：被隐藏动作（Attack、Jump、Talk、Equip、Guide、KeyConfig）占着的键不能被抢，否则那个动作永久丢键；技能和物品的键到 K2 的新键窗再保护。K2 新键窗放开。
-- K1 的快捷槽页仍是 4 格 stub：I/C 格显示这两个动作当前绑的键（Stat 默认在 S，所以 C 格画 S），不是 HUD 的固定 C 格；12 个槽键的编辑留到 K2。
+- 快捷槽页整个删了（用户 2026-10-27 验收时决定）：Quick Slots 按钮只画 `keys_qslot_n.png`，点了不动，不切页。`CustomDefaultKeyConfig` 的美术不再导出。
 - K2 才做下面的新交互。
 
 - 键格是固定的（官方键盘图），玩家把动作从下面的池子拖到键上；不是"点一个格子再按键"。
 - 动作池 = **所有系统动作**：面板动作、攻击、跳跃、装备、向导、快捷键、设置、MENU、聊天……（过滤分类照旧）。技能不在这里，技能从技能窗拖。Chat、Minimap、GuideCard 也要在 `UpdateHud` 里各有打开逻辑；Minimap 是常显窗口，只能 `ShowWindow`。
-- 快捷槽页（两行、每行 16 个固定键格；第一行 qwer1234567890up，第二行 asdf ctrl alt zxcvijklmn）属于以后"快捷槽可编辑"那片，K2 不做。
+- 快捷槽页（两行、每行 16 个固定键格；第一行 qwer1234567890up，第二行 asdf ctrl alt zxcvijklmn）属于以后"快捷槽可编辑"那片，K2 不做（页已删，要重做时照 `CustomDefaultKeyConfig` 重建）。
 - **3 个 preset 是三套完整配置**（用户 2026-10-26，参考官方 UI）：
   - 打开：选中 `ActivePreset`，draft = 它的拷贝。
   - 点 1/2/3：**预览**那一套（draft 换成它），不生效。
@@ -176,9 +176,9 @@
 **删除**：
 
 - `Hotkeys.cs` 的 `_hotkeys` / `_hotkeyPresets` / `FreshHotkey` / `SeedHotkeys` / 存取方法删掉；绑定改成角色的 3 套 preset；`settings.json` 的 Keys/Presets/KeyVersion 字段删掉。
-- 16 个 `_xWasDown`、13 次 `FreshKey`、技能 if 分支（进 `CastSkill`）；`SeedHotkeys` 换成控制器的 `Seed(kb)`（进游戏时灌一次上一帧集合）。`SeedGameKeys` 暂时保留：快捷栏边沿要它，第 2 周删 QuickSlots 时一起删。
-- **第 2 周**：保留 16 个槽键的常量（4 + 12），它们变成查表的键；删掉 `QuickSlots` 的物品列表、`QuickSlotKey` 拦截（1..= 现在是正常的可绑键）和 `ClickQuickSlot`（点格子绑定物品）；`DrinkQuickSlot` 的按键循环改成 `Item` 动作的消费者。
-- **第 2 周**：[Menu.cs:235](../MushTown.Client/Screens/Menu.cs#L235) 的 demo `QuickSlots` 种子删掉（`RedPotion, 0, BluePotion`）；demo 角色只灌默认表。
+- 16 个 `_xWasDown`、13 次 `FreshKey`、技能 if 分支（进 `CastSkill`）；`SeedHotkeys` 换成控制器的 `Seed(kb)`（进游戏时灌一次上一帧集合）。
+- 16 个槽键的常量（4 + 12）留下，它们现在是查表的键；`QuickSlots` 物品列表、`QuickSlotKey` 拦截（1..= 现在是正常的可绑键）、`ClickQuickSlot`（点格子绑定物品）、`SeedGameKeys` 都删了；喝药改成 `Item` 目标的消费者（`ItemEdges`）。
+- [Menu.cs:235](../MushTown.Client/Screens/Menu.cs#L235) 的 demo `QuickSlots` 种子删掉：两瓶药改成 preset 1 的 `D1`/`D3` 两条 `Item:` 绑定（截图仍能看到两个格子），preset 2/3 是默认表。
 
 ### 3.2 窗口 = 对象树 + 组件
 
@@ -241,7 +241,7 @@
 
 | 片 | 内容 | 工期 |
 |---|---|---|
-| K1 (P0) | **第 1 周**：`InputController` + `BoundAction`；绑定进角色（3 套 `KeyPresets` + `ActivePreset`）；KMS 默认键（10 个菜单动作 + 攻击/跳跃/Talk）；技能进表但**无默认键**；`CastSkill`；旧键窗适配到当前 preset（8 个可见动作）；技能窗去掉固定键文字（旧 Q/R/W… 已失效）。**第 2 周**：HUD 16 槽改成键槽（C 空）；Item 目标；删 `QuickSlots`/`QuickSlotKey`/demo QuickSlots 种子；旧键窗快捷槽 stub 改成新槽 | 2 周 |
+| K1 (P0) | **第 1 周**：`InputController` + `BoundAction`；绑定进角色（3 套 `KeyPresets` + `ActivePreset`）；KMS 默认键（10 个菜单动作 + 攻击/跳跃/Talk）；技能进表但**无默认键**；`CastSkill`；旧键窗适配到当前 preset（8 个可见动作）；技能窗去掉固定键文字（旧 Q/R/W… 已失效）。**第 2 周**（已做）：HUD 16 槽改成键槽（C 空）；Item 目标；删 `QuickSlots`/`QuickSlotKey`/demo QuickSlots 种子；旧键窗的快捷槽页整个删掉，Quick Slots 按钮只画图、点了不动 | 2 周 |
 | K2 (P0) | 键窗：每角色 preset、动作池 = 所有系统动作（含攻击/跳跃）、组件化（与 N5 合并）；键格固定、动作拖动；拖到 HUD 槽随 N2；不做快捷槽页 | 2 周 |
 
 ### 世界线
@@ -275,12 +275,12 @@
 ## 5. 每片的验收
 
 1. `dotnet format` 干净；`dotnet build` 0 警告 0 错误。
-2. 测试全过（K1 新增 15 条；当前 318）。
-3. 受影响的 `--shot` 截图与改动前逐字节一致；**例外**：输入片换了默认键（Stat C→S、Quest V→Q 等），**所有带 HUD 的游戏截图**（第 4 个提示格、MENU 角标）、键窗、keysqs 和**技能窗**（固定键文字已删）按新默认重拍，人工对照官方布局验收。
+2. 测试全过（K1 新增 16 条；当前 319）。
+3. 受影响的 `--shot` 截图与改动前逐字节一致；**例外**：输入片换了默认键（Stat C→S、Quest V→Q 等），**所有带 HUD 的游戏截图**（第 4 个提示格、MENU 角标）、键窗和**技能窗**（固定键文字已删）按新默认重拍，人工对照官方布局验收。
 4. 世界片：`--aiticks 40` 截图一致；新增头测覆盖"推帧 / 播完 / 回收"。
 5. 输入片第 1 周：手测 10 个菜单键、攻击、跳跃、Talk；换角色后按键跟着换；旧键窗的 Save/Apply/Copy/Default 在 3 套 preset 上生效（1/2/3 切换选中的 preset 并重读 draft，键格跟着换；新 UI 的预览是 K2）；`settings.json` 没有按键字段。
 6. 输入片第 2 周：3 套 preset 预览 / Apply / Copy / Save 后重开仍生效；HUD 16 槽按表重画（Ctrl/Alt/I 有内容，C 空，12 个物品格按表）。技能头测（塞一条合成绑定，验证能触发 `CastSkill`）随 K2 的拖放和绑定一起做；实际游玩要等拖放片，这是已知代价。
-7. 代码检查：`grep "new Invoke"` 该文件为 0；**这 16 个**游戏输入字段为 0（`_altWasDown`、`_upWasDown`、`_ctrlWasDown` + 12 个技能键 + `_zWasDown` 拾取）；菜单/快捷栏的 `_escWasDown`、`_qsWasDown` 等保留；`settings.json` 里没有按键。
+7. 代码检查：`grep "new Invoke"` 该文件为 0；**这 16 个**游戏输入字段为 0（`_altWasDown`、`_upWasDown`、`_ctrlWasDown` + 12 个技能键 + `_zWasDown` 拾取）；菜单的 `_escWasDown`、`_menuUpWasDown` 等系统键字段保留（不是绑定键）；`_qsWasDown` 已随快捷栏删掉；`settings.json` 里没有按键。
 
 ## 6. 风险
 
@@ -289,7 +289,7 @@
 | 输入一次改全，所有面板键都可能坏 | K1 只换读取，分发逻辑照旧；截图 + 手测逐键过 |
 | 老存档没有绑定字段 | 缺字段 = 默认表；用户已说明旧档删掉重建，不做迁移 |
 | 技能在拖放重做前不可用 | 用户在计划里接受；K1 只保证 `CastSkill` 的 id 校验和旧分支不变，实际触发等 K2 绑定 |
-| 默认键改了，截图基线变 | 输入片的**所有带 HUD 的游戏截图**、键窗/keysqs 和技能窗明确重拍；其余截图仍逐字节比 |
+| 默认键改了，截图基线变 | 输入片的**所有带 HUD 的游戏截图**、键窗和技能窗明确重拍；其余截图仍逐字节比 |
 | 键窗拖到 HUD 槽要跨两套槽 | 排到 N2：先把 4+12 合成 16 个等价槽，再接拖放 |
 | 截图模式没有真实角色 | 截图用 demo 角色，也要灌默认表；`--shot keys` 走 `Open()`，能开能画就是自检 |
 | 键窗拖放逻辑复杂（组合键、拿走） | K2 保留现有路径，只换目标类型；手测覆盖 |

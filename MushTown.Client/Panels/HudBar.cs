@@ -12,17 +12,15 @@ namespace MushTown.Client;
 // bars always draw full.
 public partial class MushTownGame
 {
-    // Must match the exporter: the HUD names come from ExportHud, the key
-    // icons from ExportKeyUi. Every name here must be exported, or
-    // LoadTexture throws.
+    // Must match the exporter: the HUD names come from ExportHud. Every
+    // name here must be exported, or LoadTexture throws. The quick slot caps
+    // and the action icons load when a cell draws (DrawSlot).
     private static readonly string[] HudFiles = new[]
     {
         "hud_plate.png", "hud_lvtag.png",
         "hud_hpbg.png", "hud_hpcover.png", "hud_hpfill.png", "hud_mpfill.png",
         "hud_expback.png", "hud_expcover.png", "hud_expgauge.png",
         "hud_qslot.png",
-        "hud_key_ctrl.png", "hud_key_alt.png", "hud_key_i.png", "hud_key_c.png",
-        "keys_icon_52.png", "keys_icon_53.png", "keys_icon_1.png", "keys_icon_2.png",
         "hud_coin.png", "hud_stathilong.png", "hud_statx.png",
     };
     private readonly Dictionary<int, ItemData> _items = new();
@@ -114,7 +112,7 @@ public partial class MushTownGame
         // it is open; Talk is blocked in the game update. The game still
         // reads the table; skills have no default keys until K2.
         bool keyWindowOpen = WindowFor(HotkeyAction.KeyConfig)?.Show == true;
-        QuickSlotKeyEdges(kb, _talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // 1-9, 0, - and = drink the QuickSlots potions (week 2 reads the table)
+        ItemEdges(_talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // the item keys drink their potion
         if (_talkNpc == 0 && (!keyWindowOpen || _input.Fresh(HotkeyAction.KeyConfig)))
         {
             bool any = false;
@@ -329,28 +327,8 @@ public partial class MushTownGame
         var qslot = new GameObject { NoHit = true };
         qslot.Add(new Rect(QslotRect()));
         qslot.Add(new Picture("ui/hud_qslot.png"));
-        (string icon, HotkeyAction hotkey, string key, string file)[] keys = new (string, HotkeyAction, string, string)[] { ("keys_icon_52.png", HotkeyAction.Attack, "LeftControl+RightControl", "hud_key_ctrl.png"), ("keys_icon_53.png", HotkeyAction.Jump, "LeftAlt+RightAlt", "hud_key_alt.png"), ("keys_icon_1.png", HotkeyAction.Inventory, "I", "hud_key_i.png"), ("keys_icon_2.png", HotkeyAction.Stat, "C", "hud_key_c.png") }; // fixed key cells: the official icon shows when its action is bound to any of the cell's keys (C is empty by default)
-        for (int i = 0; i < keys.Length; i++)
-        {
-            var s = QslotCell(i);
-            var icon = keys[i].icon; // the loop variable is shared: copy it for the lambda
-            var hotkey = keys[i].hotkey;
-            var fixedKey = keys[i].key;
-            var file = keys[i].file;
-            var cell = new GameObject(); // NoHit rides the qslot parent (Hit skips the whole subtree)
-            cell.Add(new Rect(s));
-            // Live: the official action icon only while the action is bound to
-            // this fixed key. The cap is always drawn, so C is not blank.
-            cell.Add(new Invoke(gfx =>
-            {
-                if (!IsBound(hotkey, fixedKey)) return;
-                gfx.Sb.Draw(gfx.Tex("ui/" + icon), new Vector2(s.X + Layout.HintIcon.X, s.Y + Layout.HintIcon.Y), Color.White);
-            }));
-            cell.Add(new Picture("ui/" + file, Layout.HintCap.X, Layout.HintCap.Y)); // the cap rides on top of the icon
-            qslot.AddChild(cell);
-        }
         _uiScene.Add(qslot); // the strip: the plain official cells, no gloss layer (the official cover is a second layer that has to keep its own 562x73 size and -2,-3 spot; the plain cells are the look we want)
-        _uiScene.Add(BuildQuickSlots()); // the twelve item cells of the same strip
+        _uiScene.Add(BuildQuickSlots()); // the sixteen key cells of the same strip
         _uiScene.Add(BuildQuestHelper()); // the quest helper bar: the count, the buttons, the quest list
         _uiScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
         var bossBar = new GameObject { NoHit = true };
@@ -587,12 +565,6 @@ public partial class MushTownGame
     }
 
     private static Rectangle QslotCell(int i) => new(QslotRect().X + i * 35, QslotRect().Y, 32, 32); // the official cells: 32x32, pitch 35
-
-    // The action is bound to any key of this cell ("LeftControl+RightControl"
-    // for the Ctrl cell: either side counts).
-    private bool IsBound(HotkeyAction action, string cellKeys) =>
-        HotkeyKey(action).Split('+', StringSplitOptions.RemoveEmptyEntries)
-            .Any(k => cellKeys.Split('+', StringSplitOptions.RemoveEmptyEntries).Contains(k));
 
     // Rounds the title strip's top corners in place (drawn stretched ~2x wide,
     // so the native ellipse is rx=2 by ry=3).

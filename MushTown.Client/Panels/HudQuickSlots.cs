@@ -4,96 +4,113 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The twelve item quickslots: the empty cells of the official bottom strip to
-// the right of the four key hints. One pick from the bag lands on a cell, the
-// number row then drinks it. The bindings live in the save (CharaSlot.QuickSlots).
+// The sixteen fixed cells of the official bottom strip. A cell is a key: the
+// four hints (Ctrl, Alt, I, C) then 1-9, 0, - and =. It draws the official cap
+// and the target the table binds to that key; nothing bound, only the cap.
+// A key with an Item target drinks its potion. The cells are display only:
+// the drag that binds them comes with the slot merge.
 public partial class MushTownGame
 {
-    // The keys of the cells, in the order of the strip: 1-9, 0, - and =.
-    // The cap text sits in the corner of each cell.
-    private static readonly (Keys Key, string Cap)[] QuickSlotKeys =
+    // The key of each cell, in strip order.
+    private static readonly Keys[] SlotKeys =
     {
-        (Keys.D1, "1"), (Keys.D2, "2"), (Keys.D3, "3"), (Keys.D4, "4"), (Keys.D5, "5"), (Keys.D6, "6"),
-        (Keys.D7, "7"), (Keys.D8, "8"), (Keys.D9, "9"), (Keys.D0, "0"), (Keys.OemMinus, "-"), (Keys.OemPlus, "="),
+        Keys.LeftControl, Keys.LeftAlt, Keys.I, Keys.C,
+        Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6,
+        Keys.D7, Keys.D8, Keys.D9, Keys.D0, Keys.OemMinus, Keys.OemPlus,
     };
 
-    private const int QuickSlotCount = 12;
-    private const int CapPad = 1;    // the cap keeps off the cell border
-    private const int CapShadow = 1; // the dark offset that keeps the cap readable on an icon
+    // The cap art of the cells, from the key window's table (keys.json).
+    // Built once: the strip draws sixteen caps every frame.
+    private static string[]? _slotCaps;
+    private static string[] SlotCaps =>
+        _slotCaps ??= SlotKeys.Select(k => KeyConfigWindow.CapArt(k.ToString())).ToArray();
 
-    private readonly bool[] _qsWasDown = new bool[QuickSlotCount];
+    private const int HintCells = 4; // the four key hints take the first four cells
+    private const int CapPad = 1;    // the item cap keeps off the cell border
+    private const int CapShadow = 1; // the dark offset that keeps the cap readable on an icon
 
     private GameObject BuildQuickSlots()
     {
         var root = new GameObject();
-        for (int k = 0; k < QuickSlotCount; k++)
+        for (int k = 0; k < SlotKeys.Length; k++)
         {
             int i = k; // the loop variable is shared: copy it for the lambdas
-            var s = QslotCell(4 + i); // the four key hints take the first four cells
+            var s = QslotCell(i);
+            var key = SlotKeys[i];
             var cell = new GameObject();
             cell.Add(new Rect(s));
-            // Silent: the click sound comes from ClickQuickSlot, and drinking is quiet.
-            cell.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => ClickQuickSlot(i) });
-            cell.Add(new ItemTip(() => QuickSlotItem(i))); // the same tooltip as a bag slot
-            cell.Add(new Invoke(gfx => DrawQuickSlot(gfx, i, s)));
+            cell.Add(new ItemTip(() => ItemOn(key))); // the tooltip of the bound item
+            cell.Add(new Invoke(gfx => DrawSlot(gfx, i, s)));
             root.AddChild(cell);
         }
         return root;
     }
 
-    // The picked item on the cell at its own size, the key in the corner.
-    private void DrawQuickSlot(UiGfx gfx, int k, Rectangle s)
+    // One cell: the icon of the target the table binds to the key, then the
+    // cap.
+    private void DrawSlot(UiGfx gfx, int index, Rectangle s)
     {
-        int id = QuickSlotItem(k);
-        if (id != 0)
+        if (_input.TargetOf(SlotKeys[index]) is { } target)
         {
-            var icon = gfx.Tex(_items[id].Image);
-            gfx.Sb.Draw(icon, new Vector2(s.X + (s.Width - icon.Width) / 2, s.Y + (s.Height - icon.Height) / 2), Color.White);
+            string art = TargetArt(target);
+            LoadTexture(art);
+            var icon = gfx.Tex(art);
+            // The hint cells take the layout offset; the item cells stay centered.
+            var nudge = index < HintCells ? Layout.HintIcon : default;
+            gfx.Sb.Draw(icon, new Vector2(
+                s.X + (s.Width - icon.Width) / 2 + nudge.X,
+                s.Y + (s.Height - icon.Height) / 2 + nudge.Y), Color.White);
         }
-        var cap = gfx.Ui.GetSmall(QuickSlotKeys[k].Cap);
-        var at = new Vector2(s.Right - cap.Width - CapPad, s.Bottom - cap.Height);
-        gfx.Sb.Draw(cap, at + new Vector2(CapShadow, CapShadow), Color.Black);
-        gfx.Sb.Draw(cap, at, new Color(200, 200, 200));
+        DrawCap(gfx, index, s);
     }
 
-    // A click binds the held potion, or drinks what the cell already has.
-    private void ClickQuickSlot(int k)
+    // The four hints keep their cap in the top left (the layout offset); the
+    // twelve item cells put it in the bottom right, like the official strip.
+    private void DrawCap(UiGfx gfx, int index, Rectangle s)
+    {
+        string art = SlotCaps[index];
+        LoadTexture(art);
+        var tex = gfx.Tex(art);
+        if (index < HintCells)
+        {
+            gfx.Sb.Draw(tex, new Vector2(s.X + Layout.HintCap.X, s.Y + Layout.HintCap.Y), Color.White);
+            return;
+        }
+        var at = new Vector2(s.Right - tex.Width - CapPad, s.Bottom - tex.Height);
+        gfx.Sb.Draw(tex, at + new Vector2(CapShadow, CapShadow), Color.Black);
+        gfx.Sb.Draw(tex, at, new Color(200, 200, 200));
+    }
+
+    // The art of a bound target: the item picture, the skill icon, or the
+    // official icon of the action.
+    private string TargetArt(BindTarget target) => target.Kind switch
+    {
+        BindKind.Item => _items[target.Id].Image,
+        BindKind.Skill => _skills[target.Id].Icon,
+        _ => KeyConfigWindow.IconTex((HotkeyAction)target.Id),
+    };
+
+    // The item on a cell, 0 when the cell holds no item.
+    private int ItemOn(Keys key)
+    {
+        var target = _input.TargetOf(key);
+        return target is { } t && t.Kind == BindKind.Item ? t.Id : 0;
+    }
+
+    // An Item target drinks its potion on a fresh key. The edges stay fresh
+    // every frame; the drink waits for a screen that can take it.
+    private void ItemEdges(bool canDrink)
+    {
+        if (!canDrink) return;
+        foreach (var action in _input.Actions)
+            if (action.Target.Kind == BindKind.Item && action.Fresh) DrinkItem(action.Target.Id);
+    }
+
+    private void DrinkItem(int id)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return;
-        if (_hand.Empty) { DrinkQuickSlot(k); return; }
-        if (_hand.Kind != "use") return; // only potions can be drunk by a key
-        chara.QuickSlots ??= new List<int>();
-        while (chara.QuickSlots.Count < QuickSlotCount) chara.QuickSlots.Add(0);
-        chara.QuickSlots[k] = _hand.Id;
-        _hand.Return(chara);
-        PlaySfx("click");
-    }
-
-    private void DrinkQuickSlot(int k)
-    {
-        var chara = _save?.Slots[_slot];
-        int id = QuickSlotItem(k);
-        if (chara == null || id == 0) return;
         var item = _items[id];
         Progression.UsePotion(chara, id, item.Hp, item.Mp, OwnHpPct());
     }
-
-    // The edges stay fresh every frame; the drink waits for a screen that can take it.
-    private void QuickSlotKeyEdges(KeyboardState kb, bool canDrink)
-    {
-        for (int k = 0; k < QuickSlotCount; k++)
-            if (FreshKey(kb, QuickSlotKeys[k].Key, ref _qsWasDown[k]) && canDrink) DrinkQuickSlot(k);
-    }
-
-    // The item bound to one cell, 0 when the cell is empty.
-    private int QuickSlotItem(int k)
-    {
-        var qs = _save?.Slots[_slot]?.QuickSlots;
-        return qs != null && k < qs.Count ? qs[k] : 0;
-    }
-
-    // True for the keys of the strip: the key window must not bind them to
-    // anything else, or one press would both act and drink.
-    internal static bool QuickSlotKey(string name) => QuickSlotKeys.Any(q => q.Key.ToString() == name);
 }

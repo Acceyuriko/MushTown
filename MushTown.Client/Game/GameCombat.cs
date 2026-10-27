@@ -185,19 +185,13 @@ public partial class MushTownGame
         return chara.SkillLv.TryGetValue(id, out int lv) ? lv : 0;
     }
 
-    // One fresh edge for a key (Esc, the MENU arrows, the quick slots).
+    // One fresh edge for a key (Esc, the MENU arrows).
     private static bool FreshKey(KeyboardState kb, Keys key, ref bool was)
     {
         bool down = kb.IsKeyDown(key);
         bool fresh = down && !was;
         was = down;
         return fresh;
-    }
-
-    // Menu trips don't track game keys: seed the quick slot edges from live state.
-    private void SeedGameKeys(KeyboardState kb)
-    {
-        for (int k = 0; k < QuickSlotCount; k++) _qsWasDown[k] = kb.IsKeyDown(QuickSlotKeys[k].Key);
     }
 
     // One skill, whatever its shape: the binding table only says which skill

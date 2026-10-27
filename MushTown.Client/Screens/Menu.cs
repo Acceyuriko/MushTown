@@ -162,7 +162,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "keysqs" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
+                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
                 _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
@@ -175,7 +175,6 @@ public partial class MushTownGame
             if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
             if (shotScreen == "worldmap") ShowWindow(HotkeyAction.WorldMap);
             if (shotScreen == "keys") KeyWindow?.Open();
-            if (shotScreen == "keysqs") KeyWindow?.OpenQuickSlots();
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
             if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);
@@ -232,8 +231,18 @@ public partial class MushTownGame
         SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
         Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
         EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },
-        QuickSlots = new List<int> { ItemData.RedPotion, 0, ItemData.BluePotion }, // the shot shows two bound cells
+        KeyPresets = DemoPresets(),
     };
+
+    // The demo bindings: the KMS defaults, plus the two potions on the item
+    // cells of the first preset (the bottom strip shows two bound cells).
+    private static List<Dictionary<string, string>> DemoPresets()
+    {
+        var first = KeyDefaults.Table();
+        first["D1"] = $"Item:{ItemData.RedPotion}";
+        first["D3"] = $"Item:{ItemData.BluePotion}";
+        return new List<Dictionary<string, string>> { first, KeyDefaults.Table(), KeyDefaults.Table() };
+    }
 
     // Item defs (Initialize phase: the doll art loop needs the roster before
     // LoadContent runs). The scan is the roster: every item/*.json loads,
@@ -693,7 +702,6 @@ public partial class MushTownGame
         GameLog($"{chara.Name} entered the game ({mode})");
         _localWorld = null; ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); _fighter.Cooldowns.Clear(); _fighter.Buffs.Clear(); _fighter.Orbs = 0; // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
-        SeedGameKeys(kb);
         _input.Seed(kb);
         ReseedPortalState(); // the arrival spot, not the old one
         _screen = Screen.Game;

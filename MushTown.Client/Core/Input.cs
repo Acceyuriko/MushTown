@@ -3,11 +3,12 @@ using Microsoft.Xna.Framework.Input;
 
 namespace MushTown.Client;
 
-// What a key can be bound to: a UI action or a skill.
+// What a key can be bound to: a UI action, a skill or an item.
 public enum BindKind
 {
     Ui,
     Skill,
+    Item,
 }
 
 public readonly record struct BindTarget(BindKind Kind, int Id)
@@ -16,8 +17,8 @@ public readonly record struct BindTarget(BindKind Kind, int Id)
 
     public bool IsUi(HotkeyAction action) => Kind == BindKind.Ui && Id == (int)action;
 
-    // "Inventory" or "Skill:1001005". Only the exact enum names parse: a
-    // numeric string is not an action.
+    // "Inventory", "Skill:1001005" or "Item:2000000". Only the exact enum
+    // names parse: a numeric string is not an action.
     public static bool TryParse(string text, out BindTarget target)
     {
         target = default;
@@ -25,6 +26,12 @@ public readonly record struct BindTarget(BindKind Kind, int Id)
         {
             if (!int.TryParse(text.AsSpan(6), out int skill)) return false;
             target = new(BindKind.Skill, skill);
+            return true;
+        }
+        if (text.StartsWith("Item:", StringComparison.Ordinal))
+        {
+            if (!int.TryParse(text.AsSpan(5), out int item)) return false;
+            target = new(BindKind.Item, item);
             return true;
         }
         if (!Enum.TryParse<HotkeyAction>(text, out var action) || Enum.GetName(action) != text) return false;
@@ -129,6 +136,16 @@ public sealed class InputController
     public bool Down(BindTarget target) => Action(target)?.Down ?? false;
     public bool Fresh(HotkeyAction action) => Fresh(BindTarget.Ui(action));
     public bool Down(HotkeyAction action) => Down(BindTarget.Ui(action));
+
+    // The target on one key; a combo part counts (either Ctrl side shows
+    // the Attack cell). Null when the key has nothing.
+    public BindTarget? TargetOf(Keys key)
+    {
+        foreach (var action in _actions)
+            foreach (var bound in action.Keys)
+                if (bound == key) return action.Target;
+        return null;
+    }
 
     // A key name ("D1", "OemPipe", "LeftControl"). A combo joins names
     // with '+'. Only exact enum names parse (a bare "1" is not "D1").

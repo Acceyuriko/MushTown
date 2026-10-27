@@ -171,8 +171,8 @@ public partial class MushTownGame
         return KeyBindings.UiMap(chara.KeyPresets![slot]);
     }
 
-    // Write the given actions into one preset. Other targets (skills; items
-    // arrive in week 2) stay; the live table follows when this preset is active.
+    // Write the given actions into one preset. Other targets (skills and
+    // items) stay; the live table follows when this preset is active.
     public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map)
     {
         var chara = Hero!; // the key window hides Save/Copy without a character

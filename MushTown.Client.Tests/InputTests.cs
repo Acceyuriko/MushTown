@@ -72,11 +72,34 @@ public class InputTests
     [TestMethod]
     public void Install_SkipsBadKeysAndTargets()
     {
-        // "1" is not Keys.D1 and "Escape" is not bindable; "Item:" is not a
-        // target (items come in week 2).
+        // "1" is not Keys.D1 and "Escape" is not bindable; "Item:" has no id.
         var c = Installed(("Nope", "Inventory"), ("I", "Nope"), ("", "Inventory"),
-            ("1", "Inventory"), ("Escape", "Inventory"), ("D2", "Item:2000000"));
+            ("1", "Inventory"), ("Escape", "Inventory"), ("D2", "Item:"));
         Assert.AreEqual(0, c.Actions.Count);
+    }
+
+    [TestMethod]
+    public void Install_ParsesItemTarget()
+    {
+        var c = Installed(("D1", "Item:2000000"));
+        Assert.AreEqual(new BindTarget(BindKind.Item, 2000000), c.Actions.Single().Target);
+        Assert.IsFalse(BindTarget.TryParse("Item:x", out _));
+    }
+
+    [TestMethod]
+    public void TargetOf_TheStripCellsReadTheDefaultTable()
+    {
+        // The HUD strip: Ctrl is Attack, Alt is Jump, I is Inventory, C is
+        // empty (Stat sits on S, which is not a strip cell). D1 is the potion.
+        var table = KeyDefaults.Table();
+        table["D1"] = "Item:2000000";
+        var c = Installed(table.Select(kv => (kv.Key, kv.Value)).ToArray());
+        Assert.AreEqual(BindTarget.Ui(HotkeyAction.Attack), c.TargetOf(Keys.LeftControl));
+        Assert.AreEqual(BindTarget.Ui(HotkeyAction.Attack), c.TargetOf(Keys.RightControl));
+        Assert.AreEqual(BindTarget.Ui(HotkeyAction.Jump), c.TargetOf(Keys.LeftAlt));
+        Assert.AreEqual(BindTarget.Ui(HotkeyAction.Inventory), c.TargetOf(Keys.I));
+        Assert.AreEqual(new BindTarget(BindKind.Item, 2000000), c.TargetOf(Keys.D1));
+        Assert.IsNull(c.TargetOf(Keys.C));
     }
 
     [TestMethod]
@@ -164,11 +187,12 @@ public class InputTests
     }
 
     [TestMethod]
-    public void Apply_KeepsTheSkillEntries()
+    public void Apply_KeepsTheSkillAndItemEntries()
     {
-        var table = new Dictionary<string, string> { ["D1"] = "Skill:1001005" };
+        var table = new Dictionary<string, string> { ["D1"] = "Skill:1001005", ["D2"] = "Item:2000000" };
         KeyBindings.Apply(table, new() { [HotkeyAction.Inventory] = "I" });
         Assert.AreEqual("Skill:1001005", table["D1"]);
+        Assert.AreEqual("Item:2000000", table["D2"]);
         Assert.AreEqual("Inventory", table["I"]);
     }
 
