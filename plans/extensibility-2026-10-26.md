@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1 周已验收并提交；K1 第 2 周做完（键窗的快捷槽页按用户要求整个删掉），等验收。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1 周已验收并提交；K1 第 2 周已验收并提交（键窗的快捷槽页按用户要求整个删掉）。N0 不用单独做（`NineSlice` 已有、`DrawAvatar` 已被 4 处共用），直接进 N5：键窗已经组件化（0 个 `new Invoke`），等验收。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -185,14 +185,13 @@
 **原则**：组件只做一件事。分三层：
 
 1. **通用组件**（`Ui/Widgets.cs` 追加，**用到才加**）：
-   - N0：`Box`（九宫格，包 `NineSlice.Draw`）。
+   - `Box`（九宫格，包 `NineSlice.Draw`）：还没人需要，等第一个用它的窗口再加。
+   - `Image(stem, on)`（已加，N5 用）：`on` 为真时常亮成 `_p`，预设钮和 Combo Key 钮用它。
    - 聊天片（N3）：`CaretText`（输入文字 + 光标闪烁）、`WrapText`（按宽度折行，复用 `UiText.Wrap`）。
    - 任务片（N6）：`TextLines`（多行文字，每行可不同颜色）。
    - GUIDE 片（N7）：`ClipPlayer`（序列帧播放，喂 `UiClip`）。
    - 现有 `Picture / Label / LiveLabel / Bar / Image / Round / Fill / InvSlot` 继续用。
-2. **共享画法**（新文件 `Ui/AvatarArt.cs`）：
-   - 把 `MergeParts` / `DrawAvatar`（[GameRender.cs:121-157](../MushTown.Client/Game/GameRender.cs#L121-L157)）和选角格里的娃娃画法收到一处。
-   - `AvatarPreview` 组件调它。世界绘制也调它：一份画法，两个地方用。
+2. **共享画法**：`MergeParts` / `DrawAvatar`（[GameRender.cs:121-157](../MushTown.Client/Game/GameRender.cs#L121-L157)）**已经是一份画法**：世界玩家、其他玩家、选角格、创建角色预览 4 处都调它。不拆新文件、不加 `AvatarPreview` 组件（只有一个用户，属于过度设计）。
 3. **专用组件**：放窗口自己的文件，不做成通用件。例如 `MinimapCanvas`（HudMap）、`KeyCap`（HudKeyConfig）、`ChatLog`（HudChat）、`Balloon`（HudBalloon）。
    - 专用组件清单（按窗口）：HUD 条 4 个、快捷栏 1 个、设置旋钮 1 个、聊天 3 个、小地图 1 个、大地图 1 个、键窗 5 个、任务 3 个、组队 2 个、GUIDE 1 个、选角/创建 3 个。
    - 不做"万能组件"：两个窗口画法不同就各留一个。
@@ -256,8 +255,8 @@
 
 | 片 | 内容 | 工期 |
 |---|---|---|
-| N0 (P0) | `Box` + `AvatarArt`（其余通用组件在第一个用它的窗口片加） | 0.5 周 |
-| N5 (P0) | 键窗 8 处（和 K2 合并） | 合在 K2 |
+| N0 (P0) | `Box` + `AvatarArt`（其余通用组件在第一个用它的窗口片加）——**实际不用做**：`NineSlice` 已在 `Ui/Widgets.cs`，`DrawAvatar` 已被世界、选角、创建角色 4 处共用；`Box` 等第一个用它的窗口（K2 的键窗不带九宫格框） | 0 周 |
+| N5 (P0) | 键窗 7 处 `Invoke` 已删（和 K2 合并）：`KeyCap` / `ActionCell` / `FilterBox` / `FilterItem` / `HeldIcon` 五个窗口内私有组件，预设钮和 Combo Key 钮改用 `Image(stem, on)`；拖放松手改由 `UpdateHud` 的鼠标边沿驱动（`KeyConfigWindow.UpdateDrag`），Draw 不再轮询鼠标 | 已做 |
 | N1 (P1) | HUD 条：气泡、快捷栏角标、手拿、tips | 1 周 |
 | N2 (P1) | 快捷槽：4 个键提示 + 12 个物品格合成一套 16 个等价槽（内容先固定）+ 设置旋钮 | 1 周 |
 | N3 (P1) | 聊天窗（整块，最大） | 2 周 |
@@ -281,6 +280,7 @@
 5. 输入片第 1 周：手测 10 个菜单键、攻击、跳跃、Talk；换角色后按键跟着换；旧键窗的 Save/Apply/Copy/Default 在 3 套 preset 上生效（1/2/3 切换选中的 preset 并重读 draft，键格跟着换；新 UI 的预览是 K2）；`settings.json` 没有按键字段。
 6. 输入片第 2 周：3 套 preset 预览 / Apply / Copy / Save 后重开仍生效；HUD 16 槽按表重画（Ctrl/Alt/I 有内容，C 空，12 个物品格按表）。技能头测（塞一条合成绑定，验证能触发 `CastSkill`）随 K2 的拖放和绑定一起做；实际游玩要等拖放片，这是已知代价。
 7. 代码检查：`grep "new Invoke"` 该文件为 0；**这 16 个**游戏输入字段为 0（`_altWasDown`、`_upWasDown`、`_ctrlWasDown` + 12 个技能键 + `_zWasDown` 拾取）；菜单的 `_escWasDown`、`_menuUpWasDown` 等系统键字段保留（不是绑定键）；`_qsWasDown` 已随快捷栏删掉；`settings.json` 里没有按键。
+8. 窗口片（N5 已做）：`grep "new Invoke" MushTown.Client/Panels/HudKeyConfig.cs` = 0；`--shot keys` 和改动前逐字节一致（组件化不许改像素）；手动拖一次动作到键上，图标跟手、松手落在那个键、拖出键盘外把键清掉。
 
 ## 6. 风险
 
@@ -345,7 +345,7 @@
 14. 表的大小 = 键数（最多约 100 条）；只为已绑定的目标建 `BoundAction`，技能数据几百个不进表。
 15. Space 可以绑（默认 Talk）；Esc、Enter、Tab、方向键不能绑。
 16. K1 就把 HUD 16 槽改成键槽：4 个提示格 + 12 个物品格都按固定键查表；C 空着。
-17. N0 只做 `Box` + `AvatarArt`；`TextLines` / `WrapText` / `CaretText` / `ClipPlayer` 在第一个用它的窗口片加。
+17. N0 不用做：`NineSlice` 和共用的 `DrawAvatar` 都已经在仓库里；`Box` / `AvatarPreview` 等真有第二个用户再加，`TextLines` / `WrapText` / `CaretText` / `ClipPlayer` 在第一个用它的窗口片加。
 18. S4 砍掉：相机不搬进树。
 19. K1 旧键窗继续能用，只把读写指向当前 preset；新 UI（拖放、Copy 弹窗、预览）在 K2。
 20. 同一帧按下多个绑定键，动作**都触发**（用户 2026-10-26：很常见）。

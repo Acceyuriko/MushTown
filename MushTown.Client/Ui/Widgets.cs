@@ -73,13 +73,16 @@ internal static class MenuAlpha
 
 // State art: stem + _n/_h/_p by hover/pressed (the HUD buttons moved here from DrawHudButton).
 // Stretches to the rect: callers size rects from the _n art, so a future art resize would stretch, not overflow.
+// A widget with an "on" flag stays in the pressed look while the flag is set (a picked preset, a mode).
 public sealed class Image : Component, IDrawable
 {
     private readonly string _stem;
-    public Image(string stem) => _stem = stem;
+    private readonly Func<bool>? _on;
+    public Image(string stem, Func<bool>? on = null) { _stem = stem; _on = on; }
     public void Draw(UiGfx gfx)
     {
-        string key = _stem + (gfx.Hovered == Owner ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png");
+        string key = _on?.Invoke() == true ? _stem + "_p.png"
+            : _stem + (gfx.Hovered == Owner ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png");
         gfx.Sb.Draw(gfx.Tex(key), Owner.Get<Rect>()!.Box, Color.White);
     }
 }

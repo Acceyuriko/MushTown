@@ -111,7 +111,9 @@ public partial class MushTownGame
         // The key window is modal for the HUD: only its own key works while
         // it is open; Talk is blocked in the game update. The game still
         // reads the table; skills have no default keys until K2.
-        bool keyWindowOpen = WindowFor(HotkeyAction.KeyConfig)?.Show == true;
+        var keyWin = WindowFor(HotkeyAction.KeyConfig) as KeyConfigWindow;
+        bool keyWindowOpen = keyWin?.Show == true;
+        if (keyWindowOpen) keyWin!.UpdateDrag(held, gx, gy); // the drop reads the same mouse edge the HUD uses
         ItemEdges(_talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // the item keys drink their potion
         if (_talkNpc == 0 && (!keyWindowOpen || _input.Fresh(HotkeyAction.KeyConfig)))
         {

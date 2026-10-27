@@ -1,5 +1,4 @@
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -155,10 +154,9 @@ public sealed class KeyConfigWindow : UiWindow
         // The keys: the official letter, or the icon of the action on it.
         foreach (var spot in Spots.Keys)
         {
-            var s = spot;
             var o = new GameObject();
-            o.Add(new Rect(KeyRect(s)));
-            o.Add(new Invoke(gfx => DrawKey(gfx, s)));
+            o.Add(new Rect(KeyRect(spot)));
+            o.Add(new KeyCap(this, spot));
             root.AddChild(o);
         }
 
@@ -172,7 +170,7 @@ public sealed class KeyConfigWindow : UiWindow
             var o = new GameObject();
             o.Add(new Rect(CellRect(index)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(a.Action) });
-            o.Add(new Invoke(gfx => DrawCell(gfx, a, index)));
+            o.Add(new ActionCell(this, a.Action));
             root.AddChild(o);
         }
 
@@ -199,14 +197,7 @@ public sealed class KeyConfigWindow : UiWindow
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 12, 12)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _slot = slot; ReloadDraft(); Build(); } }); // the draft and the action grid follow the picked preset
-            // The picked slot is drawn pressed, so the player sees it.
-            o.Add(new Invoke(gfx =>
-            {
-                string art = _slot == slot ? stem + "_p.png"
-                    : gfx.Hovered == o ? (gfx.Pressed ? stem + "_p.png" : stem + "_h.png")
-                    : stem + "_n.png";
-                gfx.Sb.Draw(gfx.Tex(art), new Vector2(Pos.X + x, Pos.Y + y), Color.White);
-            }));
+            o.Add(new Image(stem, () => _slot == slot)); // the picked slot stays lit, so the player sees it
             root.AddChild(o);
         }
 
@@ -241,11 +232,12 @@ public sealed class KeyConfigWindow : UiWindow
         root.AddChild(close);
     }
 
-    // The held action rides the mouse.
+    // The held action rides the mouse. Letting go of the mouse drops it on the
+    // key under the cursor: the HUD passes the same click edge it uses itself.
     private void BuildDrag(GameObject root)
     {
         var drag = new GameObject();
-        drag.Add(new Invoke(DrawHeld));
+        drag.Add(new HeldIcon(this));
         root.AddChild(drag);
     }
 
@@ -266,13 +258,7 @@ public sealed class KeyConfigWindow : UiWindow
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 76, 27)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = ToggleComboMode });
-        o.Add(new Invoke(gfx =>
-        {
-            string art = _comboMode ? "ui/keys_combo_p.png"
-                : gfx.Hovered == o ? "ui/keys_combo_h.png"
-                : "ui/keys_combo_n.png";
-            gfx.Sb.Draw(gfx.Tex(art), new Vector2(Pos.X + x, Pos.Y + y), Color.White);
-        }));
+        o.Add(new Image("ui/keys_combo", () => _comboMode));
         return o;
     }
 
@@ -284,7 +270,7 @@ public sealed class KeyConfigWindow : UiWindow
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, w, h)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = ToggleFilter });
-        o.Add(new Invoke(gfx => DrawComboBox(gfx, x, y, w, h)));
+        o.Add(new FilterBox(this));
         o.Add(new Label(FilterName(_filter), _lay.Get("filterTextX", 7), _lay.Get("filterTextY", 5)));
         root.AddChild(o);
 
@@ -305,24 +291,9 @@ public sealed class KeyConfigWindow : UiWindow
             var item = new GameObject();
             item.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + itemY, listW, itemH)));
             item.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickFilter(index) });
-            item.Add(new Invoke(gfx =>
-            {
-                if (gfx.Hovered == item)
-                    gfx.Sb.Draw(gfx.Pixel, new Rectangle(Pos.X + x, Pos.Y + itemY, listW, itemH), new Color(167, 167, 167));
-                gfx.Sb.Draw(gfx.Ui.GetSmall(FilterName(index)), new Vector2(Pos.X + x + _lay.Get("filterTextX", 7), Pos.Y + itemY + _lay.Get("filterTextY", 5)), Color.Black);
-            }));
+            item.Add(new FilterItem(index));
             root.AddChild(item);
         }
-    }
-
-    // The combo box: the left, middle and right pieces of the official art.
-    private void DrawComboBox(UiGfx gfx, int x, int y, int w, int h)
-    {
-        string set = _filterOpen ? "p" : "n";
-        gfx.Sb.Draw(gfx.Tex($"ui/keys_cbox_{set}0.png"), new Vector2(Pos.X + x, Pos.Y + y), Color.White);
-        gfx.Sb.Draw(gfx.Tex($"ui/keys_cbox_{set}2.png"), new Vector2(Pos.X + x + w - 31, Pos.Y + y), Color.White);
-        // the middle piece stretches between the two ends
-        gfx.Sb.Draw(gfx.Tex($"ui/keys_cbox_{set}1.png"), new Rectangle(Pos.X + x + 3, Pos.Y + y, w - 34, h), Color.White);
     }
 
     private void LoadComboBox()
@@ -345,58 +316,104 @@ public sealed class KeyConfigWindow : UiWindow
         return category + 1 == _filter;
     }
 
-    // One key: the official letter, or the icon of the action on the key.
-    private void DrawKey(UiGfx gfx, Spot s)
+    // One key of the official keyboard: the official letter, or the icon of
+    // the action the draft binds to that key.
+    private sealed class KeyCap : Component, IDrawable
     {
-        var r = KeyRect(s);
-        var action = ActionFor(KeyName(s.Code));
-        if (action != null)
+        private readonly KeyConfigWindow _w;
+        private readonly Spot _spot;
+        public KeyCap(KeyConfigWindow w, Spot spot) { _w = w; _spot = spot; }
+        public void Draw(UiGfx gfx)
         {
-            var icon = gfx.Tex(IconTex(action.Value));
-            gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
-            return;
+            var r = Owner.Get<Rect>()!.Box;
+            if (_w.ActionFor(KeyName(_spot.Code)) is { } action)
+            {
+                var icon = gfx.Tex(IconTex(action));
+                gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
+                return;
+            }
+            if (_spot.Cap == "") return;
+            var cap = gfx.Tex("ui/" + _spot.Cap);
+            gfx.Sb.Draw(cap, new Vector2(r.X + (r.Width - cap.Width) / 2, r.Y + (r.Height - cap.Height) / 2), Color.White);
         }
-        if (s.Cap == "") return;
-        var cap = gfx.Tex("ui/" + s.Cap);
-        gfx.Sb.Draw(cap, new Vector2(r.X + (r.Width - cap.Width) / 2, r.Y + (r.Height - cap.Height) / 2), Color.White);
     }
 
     // The action in its official grid cell. A combo action shows both keys.
-    private void DrawCell(UiGfx gfx, (HotkeyAction Action, int Icon) a, int index)
+    private sealed class ActionCell : Component, IDrawable
     {
-        var r = CellRect(index);
-        var icon = gfx.Tex(IconTex(a.Action));
-        gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
-        var parts = Keys(a.Action);
-        if (parts.Length < 2) return;
-        // The two caps sit at the bottom of the cell, so they do not hide
-        // the icon of the action.
-        int x = r.X + _lay.Get("comboCapX", 2);
-        int y = r.Y + _lay.Get("comboCapY", 18);
-        foreach (var part in parts)
+        private readonly KeyConfigWindow _w;
+        private readonly HotkeyAction _action;
+        public ActionCell(KeyConfigWindow w, HotkeyAction action) { _w = w; _action = action; }
+        public void Draw(UiGfx gfx)
         {
-            string cap = CapArt(part);
-            if (cap == "") continue;
-            var tex = gfx.Tex(cap);
-            gfx.Sb.Draw(tex, new Vector2(x, y), Color.White);
-            x += tex.Width + 1;
+            var r = Owner.Get<Rect>()!.Box;
+            var icon = gfx.Tex(IconTex(_action));
+            gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
+            var parts = _w.Keys(_action);
+            if (parts.Length < 2) return;
+            // The two caps sit at the bottom of the cell, so they do not hide
+            // the icon of the action.
+            int x = r.X + _lay.Get("comboCapX", 2);
+            int y = r.Y + _lay.Get("comboCapY", 18);
+            foreach (var part in parts)
+            {
+                string cap = CapArt(part);
+                if (cap == "") continue;
+                var tex = gfx.Tex(cap);
+                gfx.Sb.Draw(tex, new Vector2(x, y), Color.White);
+                x += tex.Width + 1;
+            }
         }
     }
 
-    // The picked up action rides the mouse. Letting go of the mouse drops it
-    // on the key under the cursor.
-    private void DrawHeld(UiGfx gfx)
+    // The filter box: the left, middle and right pieces of the official art.
+    private sealed class FilterBox : Component, IDrawable
     {
-        if (_held == null) return;
-        var ms = Mouse.GetState();
-        var (gx, gy) = _game.MouseGamePos(ms);
-        if (ms.LeftButton != ButtonState.Pressed)
+        private readonly KeyConfigWindow _w;
+        public FilterBox(KeyConfigWindow w) => _w = w;
+        public void Draw(UiGfx gfx)
         {
-            Drop(_held.Value, gx, gy);
-            return;
+            var r = Owner.Get<Rect>()!.Box;
+            string set = _w._filterOpen ? "p" : "n";
+            gfx.Sb.Draw(gfx.Tex($"ui/keys_cbox_{set}0.png"), new Vector2(r.X, r.Y), Color.White);
+            gfx.Sb.Draw(gfx.Tex($"ui/keys_cbox_{set}2.png"), new Vector2(r.X + r.Width - 31, r.Y), Color.White);
+            // the middle piece stretches between the two ends
+            gfx.Sb.Draw(gfx.Tex($"ui/keys_cbox_{set}1.png"), new Rectangle(r.X + 3, r.Y, r.Width - 34, r.Height), Color.White);
         }
-        var icon = gfx.Tex(IconTex(_held.Value));
-        gfx.Sb.Draw(icon, new Vector2(gx - icon.Width / 2, gy - icon.Height / 2), Color.White);
+    }
+
+    // One row of the open filter list: the hover fill and the name.
+    private sealed class FilterItem : Component, IDrawable
+    {
+        private readonly int _index;
+        public FilterItem(int index) => _index = index;
+        public void Draw(UiGfx gfx)
+        {
+            var r = Owner.Get<Rect>()!.Box;
+            if (gfx.Hovered == Owner) gfx.Sb.Draw(gfx.Pixel, r, new Color(167, 167, 167));
+            gfx.Sb.Draw(gfx.Ui.GetSmall(FilterName(_index)), new Vector2(r.X + _lay.Get("filterTextX", 7), r.Y + _lay.Get("filterTextY", 5)), Color.Black);
+        }
+    }
+
+    // The action the player picked up rides the cursor.
+    private sealed class HeldIcon : Component, IDrawable
+    {
+        private readonly KeyConfigWindow _w;
+        public HeldIcon(KeyConfigWindow w) => _w = w;
+        public void Draw(UiGfx gfx)
+        {
+            if (_w._held is not { } action) return;
+            var icon = gfx.Tex(IconTex(action));
+            gfx.Sb.Draw(icon, new Vector2(gfx.Mouse.X - icon.Width / 2, gfx.Mouse.Y - icon.Height / 2), Color.White);
+        }
+    }
+
+    // The HUD passes its own mouse edge: letting go drops the held action on
+    // the key under the cursor.
+    public void UpdateDrag(bool held, int gx, int gy)
+    {
+        if (_held is not { } action || held) return;
+        Drop(action, gx, gy);
     }
 
     // The player presses an action cell: it sticks to the mouse.
