@@ -664,6 +664,7 @@ public sealed class MenuKeyBadge : Component, IDrawable
             ["OemSemicolon"] = 39,
             ["OemQuotes"] = 40,
             ["OemTilde"] = 41,
+            ["OemPipe"] = 43,
             ["LeftShift"] = 42,
             ["RightShift"] = 42,
             ["Up"] = 43,

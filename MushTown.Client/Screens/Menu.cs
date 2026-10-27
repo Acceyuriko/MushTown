@@ -174,7 +174,7 @@ public partial class MushTownGame
             if (shotScreen == "settings") _showSettings = true;
             if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
             if (shotScreen == "worldmap") ShowWindow(HotkeyAction.WorldMap);
-            if (shotScreen == "keys") ShowWindow(HotkeyAction.KeyConfig);
+            if (shotScreen == "keys") KeyWindow?.Open();
             if (shotScreen == "keysqs") KeyWindow?.OpenQuickSlots();
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
@@ -320,8 +320,8 @@ public partial class MushTownGame
     }
 
     // Skill defs (Initialize phase, same reason). Tabs keep their own roster
-    // (window placement + hotkeys); a tabbed skill without a def fails loud
-    // instead of drawing blank.
+    // (window placement); a tabbed skill without a def fails loud instead of
+    // drawing blank.
     private void LoadSkillDefs()
     {
         string dir = Path.Combine(_assetsDir, "skill");
@@ -332,7 +332,7 @@ public partial class MushTownGame
             _skills[skill.SkillId] = skill;
         }
         foreach (var tab in SkillTabs)
-            foreach ((int id, string? _) in tab)
+            foreach (int id in tab)
                 if (!_skills.ContainsKey(id))
                     throw new InvalidDataException($"skill tab lists {id} with no exported def");
         foreach (int id in _manifest.Skills)
@@ -694,7 +694,7 @@ public partial class MushTownGame
         _localWorld = null; ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); _fighter.Cooldowns.Clear(); _fighter.Buffs.Clear(); _fighter.Orbs = 0; // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         SeedGameKeys(kb);
-        SeedHotkeys(kb);
+        _input.Seed(kb);
         ReseedPortalState(); // the arrival spot, not the old one
         _screen = Screen.Game;
         BuildGameScene();
@@ -748,6 +748,8 @@ public partial class MushTownGame
         foreach (var w in UiWindow.List) { w.Show = false; w.OnClosed(); }
     }
 
+    // Write the character snapshot at the current position. The key window's
+    // Save uses it too: a preset cannot be written without the whole file.
     private void SaveChara()
     {
         // CLI bypass has no save; menus never entered the game either:

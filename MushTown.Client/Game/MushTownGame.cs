@@ -69,8 +69,6 @@ public partial class MushTownGame : Game
     private string _shownAction = "stand1"; // last action the frames advanced on (resets the frame on change)
     private int _frame;
     private float _timerMs;
-    private bool _altWasDown, _upWasDown, _ctrlWasDown;
-    private bool _qWasDown, _wWasDown, _eWasDown, _rWasDown, _tWasDown, _yWasDown, _uWasDown, _fWasDown, _gWasDown, _hWasDown, _jWasDown, _lWasDown, _zWasDown;
     private readonly Fighter _fighter = new(); // combat clocks, ticked at frame-top (never in the world step)
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
@@ -459,7 +457,6 @@ public partial class MushTownGame : Game
         }
 
         var kb = Keyboard.GetState();
-        var keys = kb; // the real keyboard: the chat and the MENU window blank the keys
         // One layer per press: the edge is taken here, before the chat empties
         // the keyboard, so a held Esc closes once and the chat press is spent.
         bool esc = FreshKey(kb, Keys.Escape, ref _escWasDown);
@@ -478,8 +475,7 @@ public partial class MushTownGame : Game
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
         // Talk needs presence: walking out of reach closes the modal.
-        if (_talkNpc != 0 && !_npcArts.Any(a => a.Spawn.NpcId == _talkNpc
-            && Math.Abs(a.Spawn.X - _mover.X) <= QuestLog.TalkDx && Math.Abs(a.Spawn.Cy - _mover.Y) <= QuestLog.TalkDy))
+        if (_talkNpc != 0 && !_npcArts.Any(a => a.Spawn.NpcId == _talkNpc && InTalkReach(a)))
         {
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
             _talkHost.Enabled = false; // the one early layer write: this frame's hover and click run later and would still see the modal
@@ -487,7 +483,13 @@ public partial class MushTownGame : Game
         var ms = Mouse.GetState(); // one click edge for the HUD
         bool click = ClickEdge(ms);
         var (mx, my) = MouseGamePos(ms);
+        InstallPendingKeys(); // a key window Save/Apply waits for this frame's poll
+        _input.Poll(kb, new Point(mx, my), click, ms.LeftButton == ButtonState.Pressed, ms.ScrollWheelValue);
         UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
+        // Talk runs after the HUD: a same-frame panel key and Talk both fire
+        // (the HUD's guards see _talkNpc still 0; the MENU is modal and blocks Talk).
+        if (_talkNpc == 0 && !_menuWindow.Show && WindowFor(HotkeyAction.KeyConfig)?.Show != true
+            && _input.Fresh(HotkeyAction.Talk)) TalkNearest();
         if (_menuWindow.Show) kb = new KeyboardState(); // while the MENU is open the character ignores the keys
         SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;
@@ -503,34 +505,13 @@ public partial class MushTownGame : Game
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
         // (portal also fires on walking in with Up held; grab and jump use held keys)
-        bool alt = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
-        bool freshAlt = alt && !_altWasDown;
-        _altWasDown = alt;
+        bool menuOpen = _menuWindow.Show;
+        bool alt = !menuOpen && _input.Down(HotkeyAction.Jump);
+        bool freshAlt = alt && _input.Fresh(HotkeyAction.Jump);
         bool up = kb.IsKeyDown(Keys.Up);
-        bool freshUp = up && !_upWasDown;
-        _upWasDown = up;
+        bool freshUp = up && _input.Fresh(Keys.Up);
         bool down = kb.IsKeyDown(Keys.Down);
-        bool ctrl = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
-        bool freshCtrl = ctrl && !_ctrlWasDown;
-        _ctrlWasDown = ctrl;
-        // Skill keys (Q/W/E/R/T/Y/U/F/G/H/J/L): one fresh edge each.
-        bool freshQ = FreshKey(kb, Keys.Q, ref _qWasDown);
-        bool freshW = FreshKey(kb, Keys.W, ref _wWasDown);
-        bool freshE = FreshKey(kb, Keys.E, ref _eWasDown);
-        bool freshR = FreshKey(kb, Keys.R, ref _rWasDown);
-        bool freshT = FreshKey(kb, Keys.T, ref _tWasDown);
-        bool freshY = FreshKey(kb, Keys.Y, ref _yWasDown);
-        bool freshU = FreshKey(kb, Keys.U, ref _uWasDown);
-        bool freshF = FreshKey(kb, Keys.F, ref _fWasDown);
-        bool freshG = FreshKey(kb, Keys.G, ref _gWasDown);
-        bool freshH = FreshKey(kb, Keys.H, ref _hWasDown);
-        bool freshJ = FreshKey(kb, Keys.J, ref _jWasDown);
-        bool freshL = FreshKey(kb, Keys.L, ref _lWasDown);
-        bool freshZ = FreshKey(kb, Keys.Z, ref _zWasDown);
-
-        // The MENU window blanks the keys, so the edges above saw nothing held:
-        // a key still down when the menu closes must not count as a fresh press.
-        if (_menuWindow.Show) SeedGameKeys(keys);
+        bool freshZ = !menuOpen && _input.Fresh(Keys.Z);
 
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
@@ -540,7 +521,7 @@ public partial class MushTownGame : Game
         // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (freshCtrl && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge())
+        if (!menuOpen && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge())
         {
             _fighter.AttackLock = _delays["swingO1"].Sum();
             PlaySfx(SwingKey());
@@ -578,60 +559,14 @@ public partial class MushTownGame : Game
             }
         }
 
-        // Plain rings (Q Slash, T Brandish, G Intrepid, H Beam, L Scarring):
-        // same judge gate as a swing, and the cast locks movement like one
-        // (the pose follows from the lock). TryPaySkill runs last: no
-        // judge, no charge.
-        foreach ((bool fresh, int skill) in new[]
-        {
-            (freshQ, SkillData.SlashBlast), (freshT, SkillData.Brandish), (freshG, SkillData.IntrepidSlash),
-            (freshH, SkillData.BeamBlade), (freshL, SkillData.ScarringSword),
-        })
-            if (fresh && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && TryPaySkill(skill))
-                CastActive(skill);
-
-        // W leaps again mid-air (never on the ground or a ladder): once per
-        // airtime plus the cooldown, full jump velocity, drift unchanged.
-        // No attack-lock check on purpose: the leap stays available mid-swing.
-        if (freshW && _mover.Ground == null && _mover.Climb == null && _canLeap && TryPaySkill(SkillData.WarLeap))
-        {
-            _mover.Vy = OwnJump();
-            _canLeap = false;
-            PlaySfx("jump");
-            SpawnCastFx(SkillData.WarLeap, _mover.X, _mover.Y, _mover.FacingRight);
-            if (_net != null && _net.Connected) _net.SendSkillCast(SkillData.WarLeap, 0);
-        }
-
-        // E slams down from mid-air (never grounded): needs a platform in
-        // range below, rings at once, then dives (drift steers the landing).
-        if (freshE && _mover.Ground == null && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() &&
-            DiveGround() && TryPaySkill(SkillData.LeapAttack))
-        {
-            _mover.Vy = DiveV;
-            CastActive(SkillData.LeapAttack);
-        }
-
-        // R/U buff (Iron Body, Spirit Blade): client-side timer + stats, the
-        // cast relays for peers. Recast refreshes. No judge needed: landing
-        // the buff never touches a mob.
-        foreach ((bool fresh, int skill) in new[] { (freshR, SkillData.IronBody), (freshU, SkillData.SpiritBlade) })
-            if (fresh && _mover.Climb == null && _fighter.AttackLock <= 0 && TryPaySkill(skill))
-                CastBuff(skill);
-
-        // F toggles Combo Attack: recast cancels free (orbs drop with it).
-        if (freshF && _mover.Climb == null && _fighter.AttackLock <= 0)
-        {
-            if (_fighter.Buffs.ContainsKey(SkillData.ComboAttack)) EndBuff(SkillData.ComboAttack);
-            else if (TryPaySkill(SkillData.ComboAttack)) CastBuff(SkillData.ComboAttack);
-        }
-
-        // Y/J dash then ring at the landing (Flash Blade, Rush).
-        foreach ((bool fresh, int skill) in new[] { (freshY, SkillData.FlashBlade), (freshJ, SkillData.Rush) })
-            if (fresh && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && TryPaySkill(skill))
-            {
-                Dash();
-                CastActive(skill);
-            }
+        // A skill casts through the binding table: no hardcoded keys. The
+        // skills have no default bindings, so this loop is idle until K2's
+        // drag binds one. K2 casts in the skill window's fixed id order,
+        // not in this table's insertion order.
+        if (!menuOpen)
+            foreach (var action in _input.Actions)
+                if (action.Target.Kind == BindKind.Skill && action.Fresh)
+                    CastSkill(action.Target.Id);
 
         // The feet step in Shared: snapshot in, outputs drained after. Skills
         // above already poked the state (leaps, dashes); travel and respawn
@@ -954,28 +889,6 @@ public partial class MushTownGame : Game
         _spriteBatch.Begin(samplerState: SamplerState.LinearClamp);
         _spriteBatch.Draw(_scene, new Rectangle(bx, by, w, h), Color.White);
         _spriteBatch.End();
-    }
-
-    // Click an NPC in talk reach: the talk panel opens (too far: nothing).
-    private void NpcClick(int gx, int gy)
-    {
-        foreach (var a in _npcArts.OrderByDescending(a => a.Spawn.Cy)) // draw order: high feet on top, clicks match
-        {
-            var n = a.Spawn;
-            var data = _npcs[n.NpcId];
-            var tex = _textures[$"npc/{n.NpcId}.png"];
-            int feet = n.X;
-            int x = n.FacingRight ? SceneMath.FlipDrawX(feet, -data.OriginX, tex.Width) : feet - data.OriginX;
-            var rect = new Rectangle(x - _camera.X, n.Cy - data.OriginY - _camera.Y,
-                tex.Width, tex.Height);
-            if (!HitRect(rect, gx, gy)) continue;
-            if (Math.Abs(n.X - _mover.X) > QuestLog.TalkDx || Math.Abs(n.Cy - _mover.Y) > QuestLog.TalkDy) continue; // an overlapped NPC behind may be in reach
-            _talkNpc = n.NpcId;
-            _talkQuest = 0;
-            _talkPage = 0;
-            PlaySfx("click");
-            return;
-        }
     }
 
     internal static T LoadJson<T>(string path)

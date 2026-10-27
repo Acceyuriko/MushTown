@@ -185,7 +185,7 @@ public partial class MushTownGame
         return chara.SkillLv.TryGetValue(id, out int lv) ? lv : 0;
     }
 
-    // One fresh edge per skill key (twelve now: a helper, not twelve blocks).
+    // One fresh edge for a key (Esc, the MENU arrows, the quick slots).
     private static bool FreshKey(KeyboardState kb, Keys key, ref bool was)
     {
         bool down = kb.IsKeyDown(key);
@@ -194,26 +194,69 @@ public partial class MushTownGame
         return fresh;
     }
 
-    // Menu trips don't track game keys: seed every game edge from live state.
+    // Menu trips don't track game keys: seed the quick slot edges from live state.
     private void SeedGameKeys(KeyboardState kb)
     {
-        _altWasDown = kb.IsKeyDown(Keys.LeftAlt) || kb.IsKeyDown(Keys.RightAlt);
-        _upWasDown = kb.IsKeyDown(Keys.Up);
-        _ctrlWasDown = kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
-        _zWasDown = kb.IsKeyDown(Keys.Z);
         for (int k = 0; k < QuickSlotCount; k++) _qsWasDown[k] = kb.IsKeyDown(QuickSlotKeys[k].Key);
-        _qWasDown = kb.IsKeyDown(Keys.Q);
-        _wWasDown = kb.IsKeyDown(Keys.W);
-        _eWasDown = kb.IsKeyDown(Keys.E);
-        _rWasDown = kb.IsKeyDown(Keys.R);
-        _tWasDown = kb.IsKeyDown(Keys.T);
-        _yWasDown = kb.IsKeyDown(Keys.Y);
-        _uWasDown = kb.IsKeyDown(Keys.U);
-        _fWasDown = kb.IsKeyDown(Keys.F);
-        _gWasDown = kb.IsKeyDown(Keys.G);
-        _hWasDown = kb.IsKeyDown(Keys.H);
-        _jWasDown = kb.IsKeyDown(Keys.J);
-        _lWasDown = kb.IsKeyDown(Keys.L);
+    }
+
+    // One skill, whatever its shape: the binding table only says which skill
+    // fired; the conditions stay here (the old per-key branches, id-keyed).
+    private void CastSkill(int id)
+    {
+        switch (id)
+        {
+            case SkillData.WarLeap:
+                // Once per airtime, mid-swing allowed (no attack-lock check).
+                if (_mover.Ground == null && _mover.Climb == null && _canLeap && TryPaySkill(id))
+                {
+                    _mover.Vy = OwnJump();
+                    _canLeap = false;
+                    PlaySfx("jump");
+                    SpawnCastFx(id, _mover.X, _mover.Y, _mover.FacingRight);
+                    if (_net != null && _net.Connected) _net.SendSkillCast(id, 0);
+                }
+                return;
+            case SkillData.LeapAttack:
+                if (_mover.Ground == null && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge()
+                    && DiveGround() && TryPaySkill(id))
+                {
+                    _mover.Vy = DiveV;
+                    CastActive(id);
+                }
+                return;
+            case SkillData.IronBody:
+            case SkillData.SpiritBlade:
+                if (_mover.Climb == null && _fighter.AttackLock <= 0 && TryPaySkill(id)) CastBuff(id);
+                return;
+            case SkillData.ComboAttack:
+                if (_mover.Climb != null || _fighter.AttackLock > 0) return;
+                if (_fighter.Buffs.ContainsKey(id)) EndBuff(id);
+                else if (TryPaySkill(id)) CastBuff(id);
+                return;
+            case SkillData.FlashBlade:
+            case SkillData.Rush:
+                if (_mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && TryPaySkill(id))
+                {
+                    Dash();
+                    CastActive(id);
+                }
+                return;
+            default:
+                // A bound passive is ignored and a bound buff casts as a
+                // buff: only an active skill may strike (the server's
+                // SkillStrike rejects zero mob count / range).
+                if (!_skills.TryGetValue(id, out var data)) return;
+                if (data.Kind == SkillData.KindPassive) return;
+                if (data.Kind == SkillData.KindBuff)
+                {
+                    if (_mover.Climb == null && _fighter.AttackLock <= 0 && TryPaySkill(id)) CastBuff(id);
+                    return;
+                }
+                if (_mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && TryPaySkill(id))
+                    CastActive(id);
+                return;
+        }
     }
 
     // A paid damaging cast: lock the pose, play the effect, judge (local) or

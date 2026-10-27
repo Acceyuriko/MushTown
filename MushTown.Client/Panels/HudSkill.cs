@@ -32,28 +32,13 @@ public partial class MushTownGame
     private int _skillSel;
     private bool _skillDragged;
 
-    // Skill window tabs (one per job) + rows: skill id + fixed cast key
-    // (null = passive, no key; rebinds wait for the settings week).
+    // Skill window tabs (one per job) + rows: the skill ids.
     private static readonly string[] SkillTabNames = { "Warrior", "Fighter", "Crusader" };
-    private static readonly (int id, string? key)[][] SkillTabs = new[]
+    private static readonly int[][] SkillTabs = new[]
     {
-        new (int id, string? key)[]
-        {
-            (SkillData.SlashBlast, "Q"), (SkillData.IronBody, "R"), (SkillData.WarLeap, "W"),
-            (SkillData.WarriorMastery, null), (SkillData.LeapAttack, "E"), (SkillData.GuardianArmor, null),
-        },
-        new (int id, string? key)[]
-        {
-            (SkillData.Brandish, "T"), (SkillData.WeaponMastery, null), (SkillData.SpiritBlade, "U"),
-            (SkillData.ComboAttack, "F"), (SkillData.FlashBlade, "Y"), (SkillData.AgileArms, null),
-            (SkillData.FinalAttack, null), (SkillData.PhysicalTraining, null),
-        },
-        new (int id, string? key)[]
-        {
-            (SkillData.IntrepidSlash, "G"), (SkillData.BeamBlade, "H"), (SkillData.Rush, "J"),
-            (SkillData.ScarringSword, "L"), (SkillData.ComboSynergy, null), (SkillData.SelfRecovery, null),
-            (SkillData.ChanceAttack, null), (SkillData.Endure, null),
-        },
+        new[] { SkillData.SlashBlast, SkillData.IronBody, SkillData.WarLeap, SkillData.WarriorMastery, SkillData.LeapAttack, SkillData.GuardianArmor },
+        new[] { SkillData.Brandish, SkillData.WeaponMastery, SkillData.SpiritBlade, SkillData.ComboAttack, SkillData.FlashBlade, SkillData.AgileArms, SkillData.FinalAttack, SkillData.PhysicalTraining },
+        new[] { SkillData.IntrepidSlash, SkillData.BeamBlade, SkillData.Rush, SkillData.ScarringSword, SkillData.ComboSynergy, SkillData.SelfRecovery, SkillData.ChanceAttack, SkillData.Endure },
     };
     // One-line passive blurbs (per skill level): the window's only help text.
     private static readonly Dictionary<int, string> PassiveBlurb = new()
@@ -98,17 +83,17 @@ public partial class MushTownGame
         for (int row = 0; row < tab.Length; row++)
         {
             int i = row; // for-loop variables capture shared: copy per row
-            int id = tab[i].id;
+            int id = tab[i];
             var line = new GameObject();
             line.Add(new Rect(SkillRowRect(i)));
             line.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _skillSel = i }); // no LegacyId: the rows stay silent
-            line.Add(new SkillListRow(_skills[id], tab[i].key, PassiveBlurb.TryGetValue(id, out string? b) ? b : "", () => _skillSel == i, () => SkillLiveOf(id)));
+            line.Add(new SkillListRow(_skills[id], PassiveBlurb.TryGetValue(id, out string? b) ? b : "", () => _skillSel == i, () => SkillLiveOf(id)));
             body.AddChild(line);
         }
         var detail = new GameObject();
         detail.Add(new Rect(SkillDetailRect()));
         detail.Add(new SkillTipFrame()); // the official skill info frame
-        detail.Add(new SkillDetailBox(() => _skills[SelectedSkillId], () => SelectedBlurb, () => SkillLiveOf(SelectedSkillId), () => SelectedKey));
+        detail.Add(new SkillDetailBox(() => _skills[SelectedSkillId], () => SelectedBlurb, () => SkillLiveOf(SelectedSkillId)));
         body.AddChild(detail);
         var plus = PanelButton(SkillPlusRect(), "skillplus", () => { if (LearnSkill(SelectedSkillId)) PushBuild(); }, ButtonKind.Click);
         plus.Add(new SkillPlusArt(() => CanLearn(SelectedSkillId)));
@@ -168,9 +153,8 @@ public partial class MushTownGame
     }
 
     // The picked skill and its numbers.
-    private int SelectedSkillId => SkillTabs[_skillTab][_skillSel].id;
+    private int SelectedSkillId => SkillTabs[_skillTab][_skillSel];
     private string SelectedBlurb => PassiveBlurb.TryGetValue(SelectedSkillId, out string? b) ? b : "";
-    private string SelectedKey => SkillTabs[_skillTab][_skillSel].key ?? "";
 
     // The live numbers of one skill (level, SP, cooldown, buff, orbs).
     private SkillLive SkillLiveOf(int id)
@@ -229,13 +213,12 @@ public sealed class SkillTabArt : Component, IDrawable
 public sealed class SkillListRow : Component, IDrawable
 {
     private readonly SkillData _skill;
-    private readonly string? _key;
     private readonly string _blurb;
     private readonly Func<bool> _selected;
     private readonly Func<SkillLive> _live;
-    public SkillListRow(SkillData skill, string? key, string blurb, Func<bool> selected, Func<SkillLive> live)
+    public SkillListRow(SkillData skill, string blurb, Func<bool> selected, Func<SkillLive> live)
     {
-        _skill = skill; _key = key; _blurb = blurb; _selected = selected; _live = live;
+        _skill = skill; _blurb = blurb; _selected = selected; _live = live;
     }
     public void Draw(UiGfx gfx)
     {
@@ -250,10 +233,10 @@ public sealed class SkillListRow : Component, IDrawable
         gfx.Sb.Draw(gfx.Tex(locked || cooling ? _skill.Disabled : _skill.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
         var ink = locked ? new Color(140, 140, 150) : new Color(30, 30, 40);
         gfx.Sb.Draw(gfx.Ui.GetSmall(_skill.Name), new Vector2(r.X + lay.Get("rowNameX", 38), r.Y + lay.Get("rowNameY", 3)), ink);
-        // The sub line: the level and the cast key (a passive shows its blurb).
+        // The sub line: the level (a passive shows its blurb).
         string sub = _skill.Kind == SkillData.KindPassive
             ? _blurb
-            : $"Lv.{s.Lv}/{_skill.MaxLevel}  " + (_key ?? "");
+            : $"Lv.{s.Lv}/{_skill.MaxLevel}";
         gfx.Sb.Draw(gfx.Ui.GetSmall(sub), new Vector2(r.X + lay.Get("rowSubX", 38), r.Y + lay.Get("rowSubY", 19)), new Color(105, 105, 115));
         // The right of the sub line: what the skill is doing right now.
         // A passive shows its blurb there, so it has no room for this.
@@ -317,10 +300,9 @@ public sealed class SkillDetailBox : Component, IDrawable
     private readonly Func<SkillData> _skill;
     private readonly Func<string> _blurb;
     private readonly Func<SkillLive> _live;
-    private readonly Func<string> _key;
-    public SkillDetailBox(Func<SkillData> skill, Func<string> blurb, Func<SkillLive> live, Func<string> key)
+    public SkillDetailBox(Func<SkillData> skill, Func<string> blurb, Func<SkillLive> live)
     {
-        _skill = skill; _blurb = blurb; _live = live; _key = key;
+        _skill = skill; _blurb = blurb; _live = live;
     }
     public void Draw(UiGfx gfx)
     {
@@ -352,7 +334,6 @@ public sealed class SkillDetailBox : Component, IDrawable
             else Line($"Buff {skill.BuffMs / 1000}s", new Color(235, 235, 240));
         }
         if (skill.SkillId == SkillData.ComboAttack) Line($"{s.Orbs} orbs", new Color(255, 200, 80));
-        if (_key() != "") Line($"Key {_key()}", new Color(180, 180, 190));
     }
 }
 

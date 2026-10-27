@@ -188,11 +188,13 @@ public sealed class MenuWindow : UiWindow
     private static HotkeyAction? KeyOf(Feature action) => action switch
     {
         Feature.Stat => HotkeyAction.Stat,
+        Feature.Equip => HotkeyAction.Equip,
         Feature.Inventory => HotkeyAction.Inventory,
         Feature.Skill => HotkeyAction.Skill,
         Feature.Quest => HotkeyAction.Quest,
         Feature.WorldMap => HotkeyAction.WorldMap,
         Feature.Settings => HotkeyAction.Settings,
+        Feature.Keys => HotkeyAction.KeyConfig,
         _ => null,
     };
 

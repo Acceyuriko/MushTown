@@ -13,6 +13,8 @@ public static class Layout
     public static (int X, int Y) Plate = (0, 723);
     public static (int X, int Y) HpMp = (584, 715);
     public static (int X, int Y) Qslot = (810, 691);
+    public static (int X, int Y) HintCap = (4, 4); // the cap offset inside a 32x32 hint cell
+    public static (int X, int Y) HintIcon = (0, 0); // the action icon offset inside the same cell
 
     public static void Load(string path)
     {
@@ -22,6 +24,8 @@ public static class Layout
         var plate = GetPoint(root, "plate", Plate);
         var hpmp = GetPoint(root, "hpmp", HpMp);
         var qslot = GetPoint(root, "qslot", Qslot);
-        Plate = plate; HpMp = hpmp; Qslot = qslot;
+        var hintCap = GetPoint(root, "hintcap", HintCap);
+        var hintIcon = GetPoint(root, "hinticon", HintIcon);
+        Plate = plate; HpMp = hpmp; Qslot = qslot; HintCap = hintCap; HintIcon = hintIcon;
     }
 }

@@ -168,6 +168,8 @@ public sealed class CharaSlot
     public int Luk { get; set; } = 4;
     public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
     public Dictionary<int, int>? EquipBag { get; set; } // itemId -> count (EQUIP tab bag)
+    public List<Dictionary<string, string>>? KeyPresets { get; set; } // three key -> target maps (null = defaults)
+    public int ActivePreset { get; set; } // which of the three is live (0..2)
     public List<int>? QuickSlots { get; set; } // the twelve quickslot item ids (0 = empty; null = pre-W18 saves)
     public List<int>? Equips { get; set; } // worn equip ids (null = beginner set)
     public Dictionary<int, int> SkillLv { get; set; } = new();

@@ -12,14 +12,17 @@ namespace MushTown.Client;
 // bars always draw full.
 public partial class MushTownGame
 {
-    // Must match Export.cs ExportHud: every name here must be exported, or LoadTexture throws.
+    // Must match the exporter: the HUD names come from ExportHud, the key
+    // icons from ExportKeyUi. Every name here must be exported, or
+    // LoadTexture throws.
     private static readonly string[] HudFiles = new[]
     {
         "hud_plate.png", "hud_lvtag.png",
         "hud_hpbg.png", "hud_hpcover.png", "hud_hpfill.png", "hud_mpfill.png",
         "hud_expback.png", "hud_expcover.png", "hud_expgauge.png",
-        "hud_qslot.png", "hud_qslotcover.png",
+        "hud_qslot.png",
         "hud_key_ctrl.png", "hud_key_alt.png", "hud_key_i.png", "hud_key_c.png",
+        "keys_icon_52.png", "keys_icon_53.png", "keys_icon_1.png", "keys_icon_2.png",
         "hud_coin.png", "hud_stathilong.png", "hud_statx.png",
     };
     private readonly Dictionary<int, ItemData> _items = new();
@@ -74,6 +77,32 @@ public partial class MushTownGame
     private const int HeldZ = 600;
     private const int TipZ = 700; // the last thing drawn: no layer can cover a tip
 
+    // The UI actions the HUD consults, in one fixed order.
+    private static readonly HotkeyAction[] UiHotkeyOrder =
+    {
+        HotkeyAction.Inventory, HotkeyAction.Stat, HotkeyAction.Equip, HotkeyAction.Skill,
+        HotkeyAction.Quest, HotkeyAction.Settings, HotkeyAction.WorldMap,
+        HotkeyAction.Party, HotkeyAction.KeyConfig, HotkeyAction.Guide, HotkeyAction.Menu,
+    };
+
+    private void HandleHotkey(HotkeyAction action)
+    {
+        switch (action)
+        {
+            case HotkeyAction.Inventory: TogglePanel(Feature.Inventory); break;
+            case HotkeyAction.Stat: QuickFeature(Feature.Stat); break; // the other page of the stat window switches; the same page closes
+            case HotkeyAction.Equip: QuickFeature(Feature.Equip); break;
+            case HotkeyAction.Skill: TogglePanel(Feature.Skill); break;
+            case HotkeyAction.Quest: TogglePanel(Feature.Quest); break;
+            case HotkeyAction.Settings: TogglePanel(Feature.Settings); break;
+            case HotkeyAction.KeyConfig:
+                if (WindowFor(HotkeyAction.KeyConfig) is { Show: true }) ToggleWindow(HotkeyAction.KeyConfig);
+                else OpenKeyWindow();
+                break;
+            default: ToggleWindow(action); break;
+        }
+    }
+
     private Texture2D Tex(string file) => _textures["ui/" + file];
 
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
@@ -81,24 +110,23 @@ public partial class MushTownGame
         var hoverSlot = UpdateHudHover(gx, gy); // every frame (clicks return early below)
         _hoverItem = hoverSlot != null;
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
-        var hotkey = FreshHotkey(kb);
-        // The key window is modal: while it is open, only its own key works.
+        // The key window is modal for the HUD: only its own key works while
+        // it is open; Talk is blocked in the game update. The game still
+        // reads the table; skills have no default keys until K2.
         bool keyWindowOpen = WindowFor(HotkeyAction.KeyConfig)?.Show == true;
-        QuickSlotKeyEdges(kb, _talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // 1-9, 0, - and = drink the bound potions
-        if (hotkey != null && _talkNpc == 0 && (hotkey.Value == HotkeyAction.KeyConfig || !keyWindowOpen))
+        QuickSlotKeyEdges(kb, _talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // 1-9, 0, - and = drink the QuickSlots potions (week 2 reads the table)
+        if (_talkNpc == 0 && (!keyWindowOpen || _input.Fresh(HotkeyAction.KeyConfig)))
         {
-            switch (hotkey.Value)
+            bool any = false;
+            foreach (var action in UiHotkeyOrder)
             {
-                case HotkeyAction.Inventory: TogglePanel(Feature.Inventory); break;
-                case HotkeyAction.Stat: TogglePanel(Feature.Stat); break;
-                case HotkeyAction.Skill: TogglePanel(Feature.Skill); break;
-                case HotkeyAction.Quest: TogglePanel(Feature.Quest); break; // the modal freezes panels
-                case HotkeyAction.Settings: TogglePanel(Feature.Settings); break;
-                case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // the minimap is always on screen
-                default: ToggleWindow(hotkey.Value); break; // the MENU and the other windows: open, raise, close
+                if (keyWindowOpen && action != HotkeyAction.KeyConfig) continue;
+                if (!_input.Fresh(action)) continue;
+                HandleHotkey(action);
+                any = true;
+                if (action != HotkeyAction.Menu) _menuWindow.Close();
             }
-            if (hotkey.Value != HotkeyAction.Menu) _menuWindow.Close(); // the toggle runs first, so FrontHost sees the MENU and raises the layer behind it; the MENU then closes (a key dismisses the MENU, a mouse click does not)
-            PlaySfx("click");
+            if (any) PlaySfx("click");
         }
         // Title drag runs on held (down starts it in the chain below).
         if (_dragInv.HasValue)
@@ -262,6 +290,7 @@ public partial class MushTownGame
     // load, rebuilt on layout reload.
     private void BuildGameScene()
     {
+        InstallInput();
         _uiScene = new Scene(); // a reload starts over: no stale hover, click or root list
         var balloon = new GameObject { NoHit = true, Z = BalloonZ }; // the speech bubble over the character: under every HUD piece
         balloon.Add(new Invoke(DrawBalloon));
@@ -300,25 +329,27 @@ public partial class MushTownGame
         var qslot = new GameObject { NoHit = true };
         qslot.Add(new Rect(QslotRect()));
         qslot.Add(new Picture("ui/hud_qslot.png"));
-        (string file, string action, HotkeyAction? hotkey)[] keys = new (string, string, HotkeyAction?)[] { ("hud_key_ctrl.png", "Attack", null), ("hud_key_alt.png", "Jump", null), ("hud_key_i.png", "Items", HotkeyAction.Inventory), ("hud_key_c.png", "Stats", HotkeyAction.Stat) }; // official key art top-left; the rebindable ones show the cap of the current binding
-        KeyConfigWindow.LoadCaps(this);
+        (string icon, HotkeyAction hotkey, string key, string file)[] keys = new (string, HotkeyAction, string, string)[] { ("keys_icon_52.png", HotkeyAction.Attack, "LeftControl+RightControl", "hud_key_ctrl.png"), ("keys_icon_53.png", HotkeyAction.Jump, "LeftAlt+RightAlt", "hud_key_alt.png"), ("keys_icon_1.png", HotkeyAction.Inventory, "I", "hud_key_i.png"), ("keys_icon_2.png", HotkeyAction.Stat, "C", "hud_key_c.png") }; // fixed key cells: the official icon shows when its action is bound to any of the cell's keys (C is empty by default)
         for (int i = 0; i < keys.Length; i++)
         {
             var s = QslotCell(i);
-            var file = keys[i].file; // the loop variable is shared: copy it for the lambda
+            var icon = keys[i].icon; // the loop variable is shared: copy it for the lambda
+            var hotkey = keys[i].hotkey;
+            var fixedKey = keys[i].key;
+            var file = keys[i].file;
             var cell = new GameObject(); // NoHit rides the qslot parent (Hit skips the whole subtree)
             cell.Add(new Rect(s));
-            if (keys[i].hotkey is HotkeyAction hk) cell.Add(new Invoke(gfx => DrawQuickslotCap(gfx, s, hk, file)));
-            else cell.Add(new Picture("ui/" + file, 2, 2));
-            var a = _ui.GetSmall(keys[i].action);
-            cell.Add(new Label(keys[i].action, (s.Width - a.Width) / 2, 2 + Tex(file).Height) { Tint = Color.Gray });
+            // Live: the official action icon only while the action is bound to
+            // this fixed key. The cap is always drawn, so C is not blank.
+            cell.Add(new Invoke(gfx =>
+            {
+                if (!IsBound(hotkey, fixedKey)) return;
+                gfx.Sb.Draw(gfx.Tex("ui/" + icon), new Vector2(s.X + Layout.HintIcon.X, s.Y + Layout.HintIcon.Y), Color.White);
+            }));
+            cell.Add(new Picture("ui/" + file, Layout.HintCap.X, Layout.HintCap.Y)); // the cap rides on top of the icon
             qslot.AddChild(cell);
         }
-        var gloss = new GameObject(); // NoHit rides the qslot parent (Hit skips the whole subtree)
-        gloss.Add(new Rect(QslotRect()));
-        gloss.Add(new Picture("ui/hud_qslotcover.png")); // gloss stretched onto the cells: bottom flush with EXP top
-        qslot.AddChild(gloss);
-        _uiScene.Add(qslot);
+        _uiScene.Add(qslot); // the strip: the plain official cells, no gloss layer (the official cover is a second layer that has to keep its own 562x73 size and -2,-3 spot; the plain cells are the look we want)
         _uiScene.Add(BuildQuickSlots()); // the twelve item cells of the same strip
         _uiScene.Add(BuildQuestHelper()); // the quest helper bar: the count, the buttons, the quest list
         _uiScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
@@ -557,14 +588,11 @@ public partial class MushTownGame
 
     private static Rectangle QslotCell(int i) => new(QslotRect().X + i * 35, QslotRect().Y, 32, 32); // the official cells: 32x32, pitch 35
 
-    // The quick slot shows the official cap of the key the action has now
-    // (the player can rebind it in the key settings window).
-    private void DrawQuickslotCap(UiGfx gfx, Rectangle s, HotkeyAction action, string fallback)
-    {
-        string cap = KeyConfigWindow.CapArt(HotkeyKey(action));
-        var tex = gfx.Tex(cap != "" ? cap : "ui/" + fallback);
-        gfx.Sb.Draw(tex, new Vector2(s.X + 2, s.Y + 2), Color.White);
-    }
+    // The action is bound to any key of this cell ("LeftControl+RightControl"
+    // for the Ctrl cell: either side counts).
+    private bool IsBound(HotkeyAction action, string cellKeys) =>
+        HotkeyKey(action).Split('+', StringSplitOptions.RemoveEmptyEntries)
+            .Any(k => cellKeys.Split('+', StringSplitOptions.RemoveEmptyEntries).Contains(k));
 
     // Rounds the title strip's top corners in place (drawn stretched ~2x wide,
     // so the native ellipse is rx=2 by ry=3).

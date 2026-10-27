@@ -172,6 +172,35 @@ public class SaveTests
     }
 
     [TestMethod]
+    public void Save_Load_RoundtripsKeyPresets()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            var chara = store.CreateHero(0, 0, "hero");
+            chara.KeyPresets = new List<Dictionary<string, string>>
+            {
+                new() { ["I"] = "Inventory", ["D1"] = "Skill:1001005" },
+                new() { ["S"] = "Stat" },
+                new(),
+            };
+            chara.ActivePreset = 1;
+            store.Save(path);
+            var slot = SaveStore.Load(path).Saves[0]!.Slots[0]!;
+            var presets = slot.KeyPresets!;
+            Assert.AreEqual(1, slot.ActivePreset);
+            Assert.AreEqual("Inventory", presets[0]["I"]);
+            Assert.AreEqual("Skill:1001005", presets[0]["D1"]);
+            Assert.AreEqual("Stat", presets[1]["S"]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void Save_Load_RoundtripsQuickSlots()
     {
         string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");

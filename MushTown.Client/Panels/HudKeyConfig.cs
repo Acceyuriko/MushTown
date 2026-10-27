@@ -62,7 +62,9 @@ public sealed class KeyConfigWindow : UiWindow
     };
 
     // The quick slot items: the HUD quick slot cells. The action is the
-    // hotkey the item opens.
+    // hotkey the item opens. K1 stub: the I and C cells show the key the
+    // action is bound to today (Stat is on S by default), not the fixed C
+    // key the HUD cell shows; the K2 key window replaces this page.
     private static readonly (string File, HotkeyAction? Action)[] QuickSlots =
     {
         ("hud_key_ctrl.png", null),
@@ -124,15 +126,25 @@ public sealed class KeyConfigWindow : UiWindow
         return new Rectangle(Pos.X + x, Pos.Y + y, _lay.Get("qsCellW", 30), _lay.Get("qsCellH", 30));
     }
 
-    // Open the window: the draft starts from the saved bindings.
+    // Open the window: the draft starts from the picked preset (the active
+    // one on open; the 1/2/3 buttons reload it).
     public void Open()
     {
-        _draft.Clear();
-        foreach (var (action, _) in Actions) _draft[action] = _game.HotkeyKey(action);
+        _slot = _game.ActivePreset;
+        ReloadDraft();
         _held = null;
         _quickSlots = false;
+        _qslot = -1;
         Pos = LayoutPos();
         _game.ShowWindow(HotkeyAction.KeyConfig);
+    }
+
+    // The eight visible actions, read back from the picked preset.
+    private void ReloadDraft()
+    {
+        var preset = _game.HotkeyPreset(_slot);
+        _draft.Clear();
+        foreach (var (action, _) in Actions) _draft[action] = preset.GetValueOrDefault(action, "");
     }
 
     // Open the window on the quick slots page (the shot mode).
@@ -185,11 +197,7 @@ public sealed class KeyConfigWindow : UiWindow
         foreach (var a in Actions) _game.LoadTexture(IconTex(a.Action));
         LoadComboBox();
 
-        // The draft starts from the saved bindings (a window built without
-        // Open, the shot mode).
-        if (_draft.Count == 0)
-            foreach (var (action, _) in Actions) _draft[action] = _game.HotkeyKey(action);
-
+        // Open fills the draft; the tree reads it when drawing.
         root.Add(new Picture("ui/keys_bg.png"));
         root.Add(new Picture("ui/keys_kb.png", _lay.Get("kbX", 20), _lay.Get("kbY", 100)));
 
@@ -224,9 +232,14 @@ public sealed class KeyConfigWindow : UiWindow
         // no hover.
         root.Add(new Picture("ui/keys_custom_p.png", _lay.Get("customX", 19), _lay.Get("customY", 66)));
 
-        // The presets: copy the draft into the slot, apply the slot.
-        root.AddChild(ArtButton("ui/keys_copy", _lay.Get("copyX", 380), _lay.Get("copyY", 73), 67, 19, Copy));
-        root.AddChild(ArtButton("ui/keys_apply", _lay.Get("applyX", 573), _lay.Get("applyY", 73), 67, 19, Apply));
+        // The presets: copy the draft into the slot, apply the slot. No
+        // character (--host/--join): there is no preset to write, so the
+        // three buttons do not show.
+        if (_game.Hero != null)
+        {
+            root.AddChild(ArtButton("ui/keys_copy", _lay.Get("copyX", 380), _lay.Get("copyY", 73), 67, 19, Copy));
+            root.AddChild(ArtButton("ui/keys_apply", _lay.Get("applyX", 573), _lay.Get("applyY", 73), 67, 19, Apply));
+        }
         for (int i = 0; i < 3; i++)
         {
             int slot = i;
@@ -234,7 +247,7 @@ public sealed class KeyConfigWindow : UiWindow
             int x = _lay.Get($"pg{i + 1}X", 505 + 20 * i), y = _lay.Get($"pg{i + 1}Y", 76);
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 12, 12)));
-            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _slot = slot });
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _slot = slot; ReloadDraft(); Build(); } }); // the draft and the action grid follow the picked preset
             // The picked slot is drawn pressed, so the player sees it.
             o.Add(new Invoke(gfx =>
             {
@@ -252,7 +265,8 @@ public sealed class KeyConfigWindow : UiWindow
         root.AddChild(ArtButton("ui/keys_reset", _lay.Get("resetX", 176), _lay.Get("resetY", 568), 67, 27, Default));
         root.AddChild(ArtButton("ui/keys_skill", _lay.Get("skillX", 245), _lay.Get("skillY", 568), 67, 27, OpenSkill));
         root.AddChild(ArtButton("ui/keys_cancel", _lay.Get("cancelX", 474), _lay.Get("cancelY", 568), 87, 27, Cancel));
-        root.AddChild(ArtButton("ui/keys_save", _lay.Get("saveX", 562), _lay.Get("saveY", 568), 78, 27, Save));
+        if (_game.Hero != null)
+            root.AddChild(ArtButton("ui/keys_save", _lay.Get("saveX", 562), _lay.Get("saveY", 568), 78, 27, Save));
 
         BuildTitleAndClose(root, "ui/hud_statx.png", _lay.Get("closeX", 636), _lay.Get("closeY", 4), 11);
         BuildDrag(root);
@@ -267,7 +281,8 @@ public sealed class KeyConfigWindow : UiWindow
         foreach (string stem in new[] { "ui/keys_qssave", "ui/keys_qscancel", "ui/keys_custom" })
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
                 _game.LoadTexture(stem + state);
-        foreach (var q in QuickSlots) _game.LoadTexture("ui/" + q.File);
+        foreach (var q in QuickSlots)
+            if (q.Action == null) _game.LoadTexture("ui/" + q.File); // the fixed Ctrl/Alt art; the other cells draw the bound key cap
         foreach (var s in Spots.Keys)
             if (s.Cap != "") _game.LoadTexture("ui/" + s.Cap);
 
@@ -290,7 +305,8 @@ public sealed class KeyConfigWindow : UiWindow
         // Back to the custom page, cancel and save.
         root.AddChild(ArtButton("ui/keys_custom", _lay.Get("qsCustomX", 280), _lay.Get("qsCustomY", 33), 103, 27, ShowCustom));
         root.AddChild(ArtButton("ui/keys_qscancel", _lay.Get("qsCancelX", 474), _lay.Get("qsCancelY", 681), 87, 27, Cancel));
-        root.AddChild(ArtButton("ui/keys_qssave", _lay.Get("qsSaveX", 562), _lay.Get("qsSaveY", 681), 78, 27, Save));
+        if (_game.Hero != null)
+            root.AddChild(ArtButton("ui/keys_qssave", _lay.Get("qsSaveX", 562), _lay.Get("qsSaveY", 681), 78, 27, Save));
 
         BuildTitleAndClose(root, "ui/keys_qsclose.png", _lay.Get("qsCloseX", 643), _lay.Get("qsCloseY", 4), 13);
         BuildDrag(root);
@@ -453,13 +469,17 @@ public sealed class KeyConfigWindow : UiWindow
         }
     }
 
-    // One quick slot item: the official item art and the key it has.
+    // The quick slot: Ctrl and Alt draw their fixed key art; I and C draw
+    // the cap of the key the action is bound to (the K1 stub page).
     private void DrawQuickSlot(UiGfx gfx, (string File, HotkeyAction? Action) q, int index)
     {
         var r = QSlotRect(index);
-        var art = gfx.Tex("ui/" + q.File);
-        gfx.Sb.Draw(art, new Vector2(r.X + (r.Width - art.Width) / 2, r.Y + (r.Height - art.Height) / 2), Color.White);
-        if (q.Action == null) return;
+        if (q.Action == null) // Ctrl, Alt: the fixed key art
+        {
+            var art = gfx.Tex("ui/" + q.File);
+            gfx.Sb.Draw(art, new Vector2(r.X + (r.Width - art.Width) / 2, r.Y + (r.Height - art.Height) / 2), Color.White);
+            return;
+        }
         string cap = CapArt(_draft.GetValueOrDefault(q.Action.Value, ""));
         if (cap == "") return;
         var tex = gfx.Tex(cap);
@@ -523,7 +543,7 @@ public sealed class KeyConfigWindow : UiWindow
     // ("I+K"). The action then fires on either key.
     private void AddKey(HotkeyAction action, string key)
     {
-        if (MushTownGame.QuickSlotKey(key)) return; // the strip keeps its own keys
+        if (Reserved(key) || !InputController.TryParseKeys(key, out _)) return;
         var parts = Keys(action);
         if (parts.Length == 0) { Bind(action, key); return; }
         if (parts.Contains(key)) return;
@@ -534,11 +554,24 @@ public sealed class KeyConfigWindow : UiWindow
     }
 
     // The action takes the key. The key is taken away from the other actions.
-    private void Bind(HotkeyAction action, string key)
+    private bool Bind(HotkeyAction action, string key)
     {
-        if (key == "" || MushTownGame.QuickSlotKey(key)) return; // the strip keeps its own keys
+        if (Reserved(key) || !InputController.TryParseKeys(key, out _)) return false; // 1..= and Esc/Enter/Tab/arrows/Z are reserved
         TakeAway(key, action);
         _draft[action] = key;
+        return true;
+    }
+
+    // K1 edits only the 8 visible actions: a key owned by a hidden UI action
+    // (Attack, Jump, Talk, Equip, Guide, KeyConfig) must stay with it, or
+    // that action loses the key with no way back. Skill and item keys are
+    // K2's new key window.
+    private bool Reserved(string key)
+    {
+        if (MushTownGame.QuickSlotKey(key)) return true;
+        var preset = _game.HotkeyPreset(_slot);
+        return preset.Any(kv => !Actions.Any(a => a.Action == kv.Key)
+            && kv.Value.Split('+', StringSplitOptions.RemoveEmptyEntries).Contains(key));
     }
 
     // The key goes away from the other actions (part by part).
@@ -557,45 +590,48 @@ public sealed class KeyConfigWindow : UiWindow
     private string[] Keys(HotkeyAction action) =>
         _draft.GetValueOrDefault(action, "").Split('+', StringSplitOptions.RemoveEmptyEntries);
 
-    // Save: the game writes the whole map and saves it once. The KeyConfig
-    // action has no cell in the window, so its current key is kept.
+    // Save: the draft goes into the picked preset. K1: Save and Copy do
+    // the same; K2 makes Copy pick a source preset.
     private void Save()
     {
-        var map = new Dictionary<HotkeyAction, string>(_draft)
-        {
-            [HotkeyAction.KeyConfig] = _game.HotkeyKey(HotkeyAction.KeyConfig),
-        };
-        _game.SetHotkeys(map);
+        _qslot = -1;
+        _game.SaveHotkeyPreset(_slot, _draft);
+        ReloadDraft();
+        Build();
     }
 
     // Default: the official bindings come back (the button art says Default).
     private void Default()
     {
         _draft.Clear();
-        foreach (var (action, key) in _game.HotkeyDefaults())
-            if (action != HotkeyAction.KeyConfig) _draft[action] = key;
+        var defaults = KeyBindings.Defaults();
+        foreach (var (action, _) in Actions) _draft[action] = defaults.GetValueOrDefault(action, ""); // the 8 visible actions only: the hidden ones keep their keys
+        _qslot = -1;
+        Build();
     }
 
-    // Cancel: the draft goes back to the saved bindings (the changes are lost).
+    // Cancel: the draft goes back to the picked preset's bindings.
     private void Cancel()
     {
-        _draft.Clear();
-        foreach (var (action, _) in Actions) _draft[action] = _game.HotkeyKey(action);
+        ReloadDraft();
         _held = null;
+        _qslot = -1;
+        Build();
     }
 
-    // Copy: the draft goes into the picked preset slot.
-    private void Copy() => _game.SaveHotkeyPreset(_slot, _draft);
+    // Copy: the draft goes into the picked preset (K1: the same as Save).
+    private void Copy()
+    {
+        _qslot = -1;
+        _game.SaveHotkeyPreset(_slot, _draft);
+    }
 
-    // Apply: the picked preset slot comes into the draft (the player can
-    // still press Save). An empty slot has no bindings, so the official
-    // client ignores it: the draft keeps its keys.
+    // Apply: the picked preset becomes the live one.
     private void Apply()
     {
-        var slot = _game.HotkeyPreset(_slot);
-        if (slot.Count == 0) return;
-        _draft.Clear();
-        foreach (var (action, _) in Actions) _draft[action] = slot.GetValueOrDefault(action, "");
+        ReloadDraft();
+        _game.SetActivePreset(_slot);
+        Build();
     }
 
     // The filter button: the list opens and closes.
@@ -624,6 +660,7 @@ public sealed class KeyConfigWindow : UiWindow
     private void ShowQuickSlots()
     {
         _quickSlots = true;
+        _qslot = -1;
         Pos = LayoutPos();
     }
 
@@ -631,18 +668,24 @@ public sealed class KeyConfigWindow : UiWindow
     private void ShowCustom()
     {
         _quickSlots = false;
+        _qslot = -1;
         Pos = LayoutPos();
     }
 
-    // The skill button: the skill window opens.
+    // The skill button: the key window closes and the skill window opens.
     private void OpenSkill()
     {
+        OnClosed(); // the same reset as Esc or the title X
         _game.OpenSkillWindow();
-        Show = false; // the skill window is under the key window
+        Show = false;
     }
 
     // The player picks a quick slot item: it waits for a key.
-    private void PickQuickSlot(int index) => _qslot = index;
+    private void PickQuickSlot(int index)
+    {
+        _qslot = index;
+        _keys = Keyboard.GetState(); // a held key does not count as the pick
+    }
 
     // The quick slot item takes the key the player pressed.
     private void PickQuickSlotKey()
@@ -653,7 +696,7 @@ public sealed class KeyConfigWindow : UiWindow
             if (_keys.IsKeyDown(key)) continue;
             _keys = kb;
             var q = QuickSlots[_qslot];
-            if (q.Action != null) Bind(q.Action.Value, key.ToString());
+            if (q.Action != null && !Bind(q.Action.Value, key.ToString())) return; // a reserved key keeps waiting
             _qslot = -1;
             return;
         }
@@ -689,7 +732,7 @@ public sealed class KeyConfigWindow : UiWindow
     // The cap art of a key name ("ui/keys_cap_<scancode>.png"). A combo
     // ("I+K") shows the cap of its first key.
     private static Dictionary<string, string>? _capArt;
-    public static string CapArt(string keyName)
+    private static string CapArt(string keyName)
     {
         if (_capArt == null)
         {
@@ -699,13 +742,6 @@ public sealed class KeyConfigWindow : UiWindow
         }
         string first = keyName.Split('+', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
         return _capArt.GetValueOrDefault(first, "");
-    }
-
-    // Load the cap art (the quick slot can show any bound key).
-    public static void LoadCaps(MushTownGame game)
-    {
-        foreach (var s in Spots.Keys)
-            if (s.Cap != "") game.LoadTexture("ui/" + s.Cap);
     }
 
     private static readonly Dictionary<int, string> KeyNames = BuildKeyNames();

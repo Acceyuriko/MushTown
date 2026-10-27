@@ -1,190 +1,193 @@
-using Microsoft.Xna.Framework.Input;
+using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The keys that open the panels. The player can rebind them in the key
-// settings panel; the defaults are the official client's.
+// Every action a key can open. The key window lists the panel actions;
+// Attack, Jump, Talk, Equip, Guide and KeyConfig are bound but not listed.
 public enum HotkeyAction
 {
-    Inventory,
-    Stat,
-    Skill,
-    Quest,
-    Minimap,
-    WorldMap,
-    Party,      // the party window
+    Inventory,   // I
+    Stat,        // S: the stat page of the stat window
+    Skill,       // K
+    Quest,       // Q
+    Minimap,     // no key: always on screen
+    WorldMap,    // W
+    Party,       // P
     PartySearch, // no key: the party window opens the search window
-    PartyAsk,   // no key: the server sends the invite
-    Settings,
-    KeyConfig, // no key by default: the options window opens it
-    Menu,      // no default key: the key window binds it
-    Chat,      // no key: the chat input is clicked
-    Guide,     // no key: the green plus of the small guide opens the big guide
-    GuideCard, // no key: the MENU window opens the small guide
+    PartyAsk,    // no key: the server sends the invite
+    Settings,    // no default key: the options window is opened from the MENU
+    KeyConfig,   // OemPipe (\)
+    Menu,        // L
+    Chat,        // no key: the chat input is clicked
+    Guide,       // U: the big guide (the small guide's green plus also opens it)
+    GuideCard,   // no key: the MENU window opens the small guide
+    Equip,       // E: the equipment page of the stat window
+    Attack,      // Ctrl: the basic swing
+    Jump,        // Alt: the jump
+    Talk,        // Space: talk to the nearest NPC
+}
+
+// The official KMS defaults: key name -> target. Ctrl/Alt are aliases of
+// both sides; a combo fires on either key.
+public static class KeyDefaults
+{
+    public static Dictionary<string, string> Table() => new()
+    {
+        ["S"] = "Stat",
+        ["E"] = "Equip",
+        ["I"] = "Inventory",
+        ["K"] = "Skill",
+        ["Q"] = "Quest",
+        ["W"] = "WorldMap",
+        ["U"] = "Guide",
+        ["OemPipe"] = "KeyConfig",
+        ["P"] = "Party",
+        ["L"] = "Menu",
+        ["LeftControl+RightControl"] = "Attack",
+        ["LeftAlt+RightAlt"] = "Jump",
+        ["Space"] = "Talk",
+    };
+}
+
+// The table operations, testable without a game instance.
+public static class KeyBindings
+{
+    // A character without the field (the old save) starts from the defaults.
+    public static void Ensure(CharaSlot chara)
+    {
+        if (chara.KeyPresets == null)
+            chara.KeyPresets = new List<Dictionary<string, string>>
+            {
+                KeyDefaults.Table(), KeyDefaults.Table(), KeyDefaults.Table(),
+            };
+    }
+
+    // The default action -> key map (the key window's Default button).
+    public static Dictionary<HotkeyAction, string> Defaults()
+    {
+        var map = UiMap(KeyDefaults.Table());
+        foreach (var action in Enum.GetValues<HotkeyAction>()) map.TryAdd(action, "");
+        return map;
+    }
+
+    // The UI targets of a table as action -> key.
+    public static Dictionary<HotkeyAction, string> UiMap(Dictionary<string, string> table)
+    {
+        var map = new Dictionary<HotkeyAction, string>();
+        foreach (var (key, text) in table)
+            if (BindTarget.TryParse(text, out var target) && target.Kind == BindKind.Ui)
+                map[(HotkeyAction)target.Id] = key;
+        return map;
+    }
+
+    // The key bound to a UI action, or "".
+    public static string FindKey(Dictionary<string, string> table, HotkeyAction action)
+    {
+        foreach (var (key, text) in table)
+            if (BindTarget.TryParse(text, out var target) && target.IsUi(action)) return key;
+        return "";
+    }
+
+    // Write the given actions into one table. A key (or a combo part) taken
+    // here leaves the target it came from; a target left with no key goes.
+    public static void Apply(Dictionary<string, string> table, Dictionary<HotkeyAction, string> map)
+    {
+        foreach (var (action, key) in map)
+        {
+            string target = action.ToString();
+            foreach (string old in table.Where(kv => kv.Value == target).Select(kv => kv.Key).ToList())
+                table.Remove(old);
+            if (key == "") continue;
+            foreach (string part in key.Split('+', StringSplitOptions.RemoveEmptyEntries))
+                RemoveKeyPart(table, part);
+            table[key] = target;
+        }
+    }
+
+    // Take one key out of every entry (a combo loses the part; an empty
+    // combo goes). "LeftControl" also leaves "LeftControl+RightControl"
+    // as just "RightControl". A shortened key that is already taken means
+    // the table was invalid (two targets on one key); the last write wins.
+    private static void RemoveKeyPart(Dictionary<string, string> table, string part)
+    {
+        foreach (var (key, target) in table.ToList())
+        {
+            var parts = key.Split('+', StringSplitOptions.RemoveEmptyEntries);
+            if (!parts.Contains(part)) continue;
+            var left = parts.Where(p => p != part).ToArray();
+            table.Remove(key);
+            if (left.Length > 0) table[string.Join('+', left)] = target;
+        }
+    }
 }
 
 public partial class MushTownGame
 {
-    // The version of the key set: the settings file says which one it was
-    // written for. A file from an older build has no version and holds the
-    // old keys, so the defaults are used instead.
-    private const int KeyVersion = 1;
+    // The live table when there is no character (--host/--join): read by
+    // the HUD every frame, so it is built once and never written.
+    private static readonly Dictionary<string, string> DefaultKeys = KeyDefaults.Table();
+    private bool _keysDirty; // the key window wrote a preset mid-frame
 
-    // action -> key name. The key settings panel edits this and saves it.
-    private readonly Dictionary<HotkeyAction, string> _hotkeys = new()
+    // The key window's Save/Apply rebuilds the input table at the next
+    // Update, before Poll, so the rest of this frame still uses the old one.
+    private void InstallPendingKeys()
     {
-        [HotkeyAction.Inventory] = "I",
-        [HotkeyAction.Stat] = "C",
-        [HotkeyAction.Skill] = "K",
-        [HotkeyAction.Quest] = "V",
-        [HotkeyAction.Minimap] = "",   // the minimap is always on the screen
-        [HotkeyAction.WorldMap] = "M",
-        [HotkeyAction.Party] = "P",
-        [HotkeyAction.Settings] = "O",
-        [HotkeyAction.Menu] = "",
-        [HotkeyAction.KeyConfig] = "",
-    };
+        if (!_keysDirty) return;
+        _keysDirty = false;
+        InstallInput();
+    }
 
-    // The keys held last frame.
-    private readonly HashSet<string> _hotkeysDown = new();
-
-    // The keys that are down this frame (the set is reused every frame).
-    private readonly HashSet<string> _hotkeysNow = new();
-
-    // The action whose key went down this frame (null when none did).
-    // One key can only open one panel: the first action in the list wins.
-    // A combo binding ("I+K") fires on either key.
-    private HotkeyAction? FreshHotkey(KeyboardState kb)
+    public int ActivePreset
     {
-        HotkeyAction? hit = null;
-        _hotkeysNow.Clear();
-        foreach (var (action, key) in _hotkeys)
+        get
         {
-            foreach (var part in key.Split('+', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (!Enum.TryParse<Keys>(part, out var k) || !kb.IsKeyDown(k)) continue;
-                _hotkeysNow.Add(part);
-                if (!_hotkeysDown.Contains(part) && hit == null) hit = action;
-            }
+            var chara = Hero;
+            return chara == null ? 0 : chara.ActivePreset;
         }
-        _hotkeysDown.Clear();
-        foreach (var key in _hotkeysNow) _hotkeysDown.Add(key);
-        return hit;
     }
 
-    // The menu seeds the key edges: a key held while the menu is open must
-    // not open a panel in the game.
-    private void SeedHotkeys(KeyboardState kb)
+    private Dictionary<string, string> LiveKeys
     {
-        _hotkeysDown.Clear();
-        foreach (var (action, key) in _hotkeys)
-            foreach (var part in key.Split('+', StringSplitOptions.RemoveEmptyEntries))
-                if (Enum.TryParse<Keys>(part, out var k) && kb.IsKeyDown(k)) _hotkeysDown.Add(part);
+        get
+        {
+            var chara = Hero;
+            if (chara == null) return DefaultKeys;
+            KeyBindings.Ensure(chara);
+            return chara.KeyPresets![chara.ActivePreset];
+        }
     }
 
-    // Apply the whole binding map at once and save it once. The key
-    // settings panel uses this, so a save can not lose a binding.
-    // The panel takes a key away from the other actions itself.
-    public void SetHotkeys(Dictionary<HotkeyAction, string> map)
+    private void InstallInput() => _input.Install(LiveKeys);
+
+    public string HotkeyKey(HotkeyAction action) => KeyBindings.FindKey(LiveKeys, action);
+
+    // One preset as an action -> key map (the key window). No character
+    // (--host/--join) shows the defaults, like the live table.
+    public Dictionary<HotkeyAction, string> HotkeyPreset(int slot)
     {
-        foreach (var action in _hotkeys.Keys.ToList())
-            _hotkeys[action] = map.GetValueOrDefault(action, "");
-        SaveSettings();
+        var chara = Hero;
+        if (chara == null) return KeyBindings.Defaults();
+        KeyBindings.Ensure(chara);
+        return KeyBindings.UiMap(chara.KeyPresets![slot]);
     }
 
-    // The default bindings (the key settings panel restores them).
-    public Dictionary<HotkeyAction, string> HotkeyDefaults() => new()
-    {
-        [HotkeyAction.Inventory] = "I",
-        [HotkeyAction.Stat] = "C",
-        [HotkeyAction.Skill] = "K",
-        [HotkeyAction.Quest] = "V",
-        [HotkeyAction.Minimap] = "",   // the minimap is always on the screen
-        [HotkeyAction.WorldMap] = "M",
-        [HotkeyAction.Party] = "P",
-        [HotkeyAction.Settings] = "O",
-        [HotkeyAction.Menu] = "",
-        [HotkeyAction.KeyConfig] = "",
-    };
-
-    // The three saved binding sets (the key window's preset slots).
-    private readonly List<Dictionary<HotkeyAction, string>> _hotkeyPresets = new()
-    {
-        new(), new(), new(),
-    };
-
-    // The bindings in a preset slot. An empty slot gives an empty map.
-    public Dictionary<HotkeyAction, string> HotkeyPreset(int slot) =>
-        slot >= 0 && slot < _hotkeyPresets.Count
-            ? new Dictionary<HotkeyAction, string>(_hotkeyPresets[slot])
-            : new Dictionary<HotkeyAction, string>();
-
-    // Save a binding set into a preset slot.
+    // Write the given actions into one preset. Other targets (skills; items
+    // arrive in week 2) stay; the live table follows when this preset is active.
     public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map)
     {
-        if (slot < 0 || slot >= _hotkeyPresets.Count) return;
-        _hotkeyPresets[slot] = new Dictionary<HotkeyAction, string>(map);
-        SaveSettings();
+        var chara = Hero!; // the key window hides Save/Copy without a character
+        KeyBindings.Ensure(chara);
+        KeyBindings.Apply(chara.KeyPresets![slot], map);
+        if (slot == chara.ActivePreset) _keysDirty = true;
+        SaveChara();
     }
 
-    // The key bound to an action, or "" when it has none.
-    public string HotkeyKey(HotkeyAction action) => _hotkeys.GetValueOrDefault(action) ?? "";
-
-    // Load the saved bindings (a missing file keeps the defaults).
-    // A binding is one key ("I") or a combo of two ("I+K").
-    // The version says which key set the file was written for: an old file
-    // holds the old keys (the party key would fight with the old settings
-    // key) and an old key cannot be told from a key the player picked, so
-    // an old file keeps the defaults.
-    private void LoadHotkeys(Dictionary<string, string>? saved, int version)
+    public void SetActivePreset(int slot)
     {
-        if (saved == null || version != KeyVersion) return;
-        foreach (var (action, key) in saved)
-            if (Enum.TryParse<HotkeyAction>(action, out var a))
-            {
-                if (!IsKeyName(key)) continue;
-                _hotkeys[a] = key;
-            }
-    }
-
-    // A key name, or a combo of key names joined by "+".
-    private static bool IsKeyName(string key) =>
-        key == "" || key.Split('+', StringSplitOptions.RemoveEmptyEntries).All(p => Enum.TryParse<Keys>(p, out _));
-
-    // The bindings for the settings file. Every action is written, an
-    // action without a key gets an empty value.
-    private Dictionary<string, string> SaveHotkeys()
-    {
-        var map = new Dictionary<string, string>();
-        foreach (var (action, key) in _hotkeys)
-            map[action.ToString()] = key;
-        return map;
-    }
-
-    // Load the saved preset slots (a missing list keeps the empty slots).
-    private void LoadHotkeyPresets(List<Dictionary<string, string>>? saved, int version)
-    {
-        if (saved == null || version != KeyVersion) return;
-        for (int i = 0; i < _hotkeyPresets.Count && i < saved.Count; i++)
-        {
-            var slot = new Dictionary<HotkeyAction, string>();
-            foreach (var (action, key) in saved[i])
-                if (Enum.TryParse<HotkeyAction>(action, out var a)) slot[a] = key;
-            _hotkeyPresets[i] = slot;
-        }
-    }
-
-    // The preset slots for the settings file.
-    private List<Dictionary<string, string>> SaveHotkeyPresets()
-    {
-        var list = new List<Dictionary<string, string>>();
-        foreach (var slot in _hotkeyPresets)
-        {
-            var map = new Dictionary<string, string>();
-            foreach (var (action, key) in slot)
-                map[action.ToString()] = key;
-            list.Add(map);
-        }
-        return list;
+        var chara = Hero!; // the key window hides Apply without a character
+        KeyBindings.Ensure(chara);
+        chara.ActivePreset = slot;
+        _keysDirty = true;
+        SaveChara();
     }
 }
