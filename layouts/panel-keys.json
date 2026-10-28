@@ -1,5 +1,5 @@
 {
-  "_help": "Key settings window (UI/StatusBar3.img/KeyConfig art). x/y = the window spot in 1366x768 game pixels, w/h = the window size (it must match the art). titleH = the title strip height. kbX/kbY = the official keyboard art (backgrnd3) spot. keyW/keyH = one key box on the official keyPos grid, keyDx/keyDy = the box offset from the official spot. grid* = the official cell grid under the keyboard (the art draws the cells, the actions sit in the first ones): gridX/gridY = the first cell, gridCols = the cells per row, cellW/cellH = the cell size, cellPitchX/cellPitchY = the cell step. comboCapX/comboCapY = the two key caps of a combo action inside its cell. custom*/copy*/apply*/pg1*/pg2*/pg3*/combo*/qslot*/reset*/skill*/cancel*/save*/close* = the buttons. filter* = the Not Added dropdown (the official combo box at the bottom right): filterX/filterY = the box spot, filterW/filterH = the box size, filterTextX/filterTextY = the text spot in the box, filterItemH = the height of one list item, filterListW = the width of the open list.",
+  "_help": "Key settings window (UI/StatusBar3.img/KeyConfig art). x/y = the window spot in 1366x768 game pixels, w/h = the window size (it must match the art). titleH = the title strip height. kbX/kbY = the official keyboard art (backgrnd3) spot. keyW/keyH = one key box on the official keyPos grid, keyDx/keyDy = the box offset from the official spot. grid* = the official cell grid under the keyboard (the art draws the cells, the actions sit in the first ones): gridX/gridY = the first cell, gridCols = the cells per row, cellW/cellH = the cell size, cellPitchX/cellPitchY = the cell step. comboCapX/comboCapY = the two key caps of a combo action inside its cell. custom*/copy*/apply*/pg1*/pg2*/pg3*/combo*/qslot*/reset*/skill*/cancel*/save*/close* = the buttons. filter* = the Not Added dropdown (the official combo box at the bottom right): filterX/filterY = the box spot, filterW/filterH = the box size, filterTextX/filterTextY = the text spot in the box, filterItemH = the height of one list item, filterListW = the width of the open list. pcX/pcY/pcW/pcH = the copy dialog box (UI/KeyConfig/presetCopy art). pcCopyX/pcCopyY/pcCancelX/pcCancelY = the two dialog buttons, pcBtnW/pcBtnH = their size. pcPg1X/pcPg2X/pcPg3X/pcPgY/pcPgW/pcPgH = the three source preset picks. pcNowX/pcNowY/pcNowW/pcNowH = the blank the art leaves for the preset number.",
   "x": 353,
   "y": 72,
   "w": 660,
@@ -53,5 +53,25 @@
   "filterItemH": 23,
   "filterListW": 108,
   "comboCapX": 2,
-  "comboCapY": 18
+  "comboCapY": 18,
+  "pcX": 164,
+  "pcY": 184,
+  "pcW": 332,
+  "pcH": 256,
+  "pcCopyX": 81,
+  "pcCopyY": 207,
+  "pcCancelX": 169,
+  "pcCancelY": 207,
+  "pcBtnW": 83,
+  "pcBtnH": 26,
+  "pcPg1X": 207,
+  "pcPg2X": 240,
+  "pcPg3X": 273,
+  "pcPgY": 152,
+  "pcPgW": 18,
+  "pcPgH": 18,
+  "pcNowX": 216,
+  "pcNowY": 82,
+  "pcNowW": 20,
+  "pcNowH": 14
 }

@@ -50,6 +50,15 @@ public class InputTests
     }
 
     [TestMethod]
+    public void Fresh_ASkillTargetFiresFromItsKey()
+    {
+        var c = Installed(("D1", "Skill:1001005"));
+        c.Poll(new KeyboardState(Keys.D1), default, false, false, 0);
+        Assert.IsTrue(c.Fresh(new BindTarget(BindKind.Skill, 1001005)));
+        Assert.IsFalse(c.Fresh(new BindTarget(BindKind.Skill, 1001006))); // the other skill has no key
+    }
+
+    [TestMethod]
     public void Install_ParsesSkillTargetAndKey()
     {
         var c = Installed(("D1", "Skill:1001005"));
@@ -121,6 +130,7 @@ public class InputTests
             ["LeftControl+RightControl"] = "Attack",
             ["LeftAlt+RightAlt"] = "Jump",
             ["Space"] = "Talk",
+            ["Z"] = "Pickup",
         };
         CollectionAssert.AreEquivalent(expected, table);
         foreach (var (key, text) in table)
@@ -132,7 +142,8 @@ public class InputTests
         Assert.AreEqual(2, ctrl.Length);
         Assert.IsFalse(InputController.TryParseKeys("1", out _)); // the key is D1
         Assert.IsFalse(InputController.TryParseKeys("Escape", out _)); // the Esc layer
-        Assert.IsFalse(InputController.TryParseKeys("Z", out _)); // the fixed pickup
+        Assert.IsFalse(InputController.TryParseKeys("Up", out _)); // the game reads the arrows
+        Assert.IsTrue(InputController.TryParseKeys("Z", out _)); // the pickup is a normal action now
         Assert.IsFalse(BindTarget.TryParse("1", out _)); // an action name, not a number
     }
 
@@ -166,8 +177,8 @@ public class InputTests
         Assert.IsFalse(table.ContainsKey("K"));
     }
 
-    // Table level: Apply takes the key from any target. The K1 key window
-    // keeps hidden targets' keys out of reach (Reserved); K2 allows this.
+    // Table level: Apply takes the key from any target, the hidden ones
+    // included (the K1 "Reserved" guard is gone).
     [TestMethod]
     public void Apply_AVisibleActionTakesTheKeyConfigKey()
     {
@@ -194,6 +205,60 @@ public class InputTests
         Assert.AreEqual("Skill:1001005", table["D1"]);
         Assert.AreEqual("Item:2000000", table["D2"]);
         Assert.AreEqual("Inventory", table["I"]);
+    }
+
+    [TestMethod]
+    public void ApplySkills_WritesTheSkillTarget()
+    {
+        var table = new Dictionary<string, string>();
+        KeyBindings.ApplySkills(table, new() { [1001005] = "K" });
+        Assert.AreEqual("Skill:1001005", table["K"]);
+    }
+
+    [TestMethod]
+    public void ApplySkills_ASkillTakesTheKeyFromAnAction()
+    {
+        var table = new Dictionary<string, string> { ["K"] = "Skill" };
+        KeyBindings.ApplySkills(table, new() { [1001005] = "K" });
+        Assert.AreEqual("Skill:1001005", table["K"]);
+    }
+
+    [TestMethod]
+    public void Apply_AnActionTakesTheKeyFromASkill()
+    {
+        var table = new Dictionary<string, string> { ["K"] = "Skill:1001005" };
+        KeyBindings.Apply(table, new() { [HotkeyAction.Inventory] = "K" });
+        Assert.AreEqual("Inventory", table["K"]);
+    }
+
+    [TestMethod]
+    public void ApplySkills_AnEmptyKeyClearsTheSkill()
+    {
+        var table = new Dictionary<string, string> { ["K"] = "Skill:1001005" };
+        KeyBindings.ApplySkills(table, new() { [1001005] = "" });
+        Assert.IsFalse(table.ContainsKey("K")); // Default: the skill loses its key
+    }
+
+    [TestMethod]
+    public void ApplySkills_ASkillSplitsAComboPart()
+    {
+        var table = new Dictionary<string, string> { ["I+K"] = "Inventory" };
+        KeyBindings.ApplySkills(table, new() { [1001005] = "K" });
+        Assert.AreEqual("Inventory", table["I"]); // the combo keeps its other key
+        Assert.AreEqual("Skill:1001005", table["K"]);
+    }
+
+    [TestMethod]
+    public void RemoveKind_OnlyDropsThatKind()
+    {
+        var table = new Dictionary<string, string>
+        {
+            ["D1"] = "Item:2000000",
+            ["D2"] = "Skill:1001005",
+            ["I"] = "Inventory",
+        };
+        KeyBindings.RemoveKind(table, BindKind.Item);
+        CollectionAssert.AreEquivalent(new[] { "D2", "I" }, table.Keys.ToList());
     }
 
     [TestMethod]

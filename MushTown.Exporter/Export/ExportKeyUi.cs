@@ -55,6 +55,25 @@ public static partial class Export
         })
             foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
                 if (!UiPng.Save(ui, $"{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
+        // the preset page the player is on is lit green by the checked art
+        foreach (int page in new[] { 1, 2, 3 })
+            if (!UiPng.Save(ui, $"StatusBar3.img/KeyConfig/button:presetPage{page}/checked/0", Path.Combine(dir, $"keys_pg{page}_c.png"))) return false;
+
+        // the copy dialog: the whole background (its title, the text and the
+        // PRESET bar are baked in), the two buttons and the three preset picks
+        if (!UiPng.Save(ui, "StatusBar3.img/KeyConfig/presetCopy/backgrnd", Path.Combine(dir, "keys_pcopy_bg.png"))) return false;
+        foreach (var (node, name) in new[]
+        {
+            ("StatusBar3.img/KeyConfig/presetCopy/button:copy", "keys_pcopy_copy"),
+            ("StatusBar3.img/KeyConfig/presetCopy/button:cancel", "keys_pcopy_cancel"),
+            ("StatusBar3.img/KeyConfig/presetCopy/button:presetPage1", "keys_pcopy_pg1"),
+            ("StatusBar3.img/KeyConfig/presetCopy/button:presetPage2", "keys_pcopy_pg2"),
+            ("StatusBar3.img/KeyConfig/presetCopy/button:presetPage3", "keys_pcopy_pg3"),
+        })
+            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
+                if (!UiPng.Save(ui, $"{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
+        foreach (int page in new[] { 1, 2, 3 })
+            if (!UiPng.Save(ui, $"StatusBar3.img/KeyConfig/presetCopy/button:presetPage{page}/checked/0", Path.Combine(dir, $"keys_pcopy_pg{page}_c.png"))) return false;
 
         // the filter dropdown: the combo box is three pieces (left, middle, right)
         foreach (var (state, suffix) in new[] { ("normal", "n"), ("pressed", "p") })

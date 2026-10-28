@@ -149,8 +149,8 @@ public sealed class InputController
 
     // A key name ("D1", "OemPipe", "LeftControl"). A combo joins names
     // with '+'. Only exact enum names parse (a bare "1" is not "D1").
-    // Esc, Enter, Tab and the arrows are not bindable; Z is the fixed
-    // pickup in K1, so the key window rejects it too.
+    // Esc, Enter, Tab and the arrows are not bindable: the game itself
+    // reads them.
     public static bool TryParseKeys(string text, out Keys[] keys)
     {
         var parts = text.Split('+', StringSplitOptions.RemoveEmptyEntries);
@@ -168,7 +168,7 @@ public sealed class InputController
 
     public static bool IsBindable(Keys key) =>
         key is not (Keys.None or Keys.Escape or Keys.Enter or Keys.Tab
-            or Keys.Up or Keys.Down or Keys.Left or Keys.Right or Keys.Z);
+            or Keys.Up or Keys.Down or Keys.Left or Keys.Right);
 }
 
 public partial class MushTownGame

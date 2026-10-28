@@ -61,7 +61,7 @@ public sealed class ChatWindow : UiWindow
     private int _wheel; // the wheel value of the last frame
     private GameObject? _minBox; // the minimised box (the hover changes its art)
 
-    // The chat has no key of its own: the input line is clicked.
+    // The chat opens from the input line or from the Chat key.
     public ChatWindow(MushTownGame game, Action<string> send) : base(HotkeyAction.Chat)
     {
         _game = game;
@@ -132,6 +132,17 @@ public sealed class ChatWindow : UiWindow
 
     // True while the input has the focus: the game gives the keys to the chat.
     public bool Focused => _focused;
+
+    // The chat key: unfold the window if it is minimised (the input row is
+    // not drawn there), and seed the held keys so the key that opened the
+    // input is not typed into it on the next frame.
+    public void FocusInput(KeyboardState kb)
+    {
+        if (_minimised) Restore();
+        _focused = true;
+        _down.Clear();
+        foreach (var key in kb.GetPressedKeys()) _down.Add(key);
+    }
 
     // The chat target: the line goes to the party instead of the world.
     public bool PartyTarget => _partyTarget;
@@ -311,7 +322,7 @@ public sealed class ChatWindow : UiWindow
         // the input line: a click focuses it
         var input = new GameObject();
         input.Add(new Rect(InputRect()));
-        input.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _focused = true });
+        input.Add(new Button { Kind = ButtonKind.Click, OnClick = () => FocusInput(Keyboard.GetState()) });
         root.AddChild(input);
 
         // the chat target button: it shows where the line goes now (the

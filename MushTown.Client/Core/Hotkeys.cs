@@ -1,9 +1,13 @@
+using Microsoft.Xna.Framework;
 using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Every action a key can open. The key window lists the panel actions;
-// Attack, Jump, Talk, Equip, Guide and KeyConfig are bound but not listed.
+// Every action a key can open. The key window lists every official icon of
+// the KeyConfig art, implemented or not: an action with no window behind it
+// simply does nothing when its key fires, so the pool doubles as the list of
+// what is still missing. PartySearch, PartyAsk, GuideCard and Settings have
+// no icon of their own, so the pool has no cell for them.
 public enum HotkeyAction
 {
     Inventory,   // I
@@ -18,13 +22,80 @@ public enum HotkeyAction
     Settings,    // no default key: the options window is opened from the MENU
     KeyConfig,   // OemPipe (\)
     Menu,        // L
-    Chat,        // no key: the chat input is clicked
+    Chat,        // no key: the input line is clicked, and the key focuses it
     Guide,       // U: the big guide (the small guide's green plus also opens it)
     GuideCard,   // no key: the MENU window opens the small guide
     Equip,       // E: the equipment page of the stat window
     Attack,      // Ctrl: the basic swing
     Jump,        // Alt: the jump
     Talk,        // Space: talk to the nearest NPC
+    Pickup,      // Z: pick the nearest drop up
+
+    // The official icons without a window behind them yet: the key window
+    // lists them, a key bound to one does nothing. They stay in the enum
+    // because the saved table stores the name, so a save with one of these
+    // on a key still reads back after the action lands.
+    Friends,
+    MapleChat,
+    ToAll,
+    Whisper,
+    ToParty,
+    ToBuddy,
+    QuickSlots,
+    Guild,
+    ToGuild,
+    QuestHelper,
+    MapleNews,
+    CashShop,
+    ToAlliance,
+    Legion,
+    Medals,
+    Bosses,
+    Profession,
+    Events,
+    BattleAnalysis,
+    EnhanceEquip,
+    MonsterCollection,
+    SoulWeapon,
+    ChangeChannel,
+    Screenshot,
+    PictureMode,
+    Achievements,
+    Sit,
+    ToTown,
+    GoHome,
+    Mup,
+    StorageRoom,
+    QuickMove,
+    Archive,
+    SoulCollection,
+    Emoticon1,
+    Emoticon2,
+    Emoticon3,
+    Emoticon4,
+    Emoticon5,
+    Emoticon6,
+    Emoticon7,
+    MapleStorage,
+    SafeMode,
+    MuteGame,
+    Emoticons,
+    KeySettings1,
+    KeySettings2,
+    KeySettings3,
+    ComboKey,
+    SolErda,
+    CharPreset,
+    SwapPreset,
+    Planner,
+    Sequence,
+    Decorations,
+    AutoHarvest,
+    BuffShopper,
+    Familiar,
+    ToSpouse,
+    TraceResto,
+    MapleRelay,
 }
 
 // The official KMS defaults: key name -> target. Ctrl/Alt are aliases of
@@ -46,6 +117,7 @@ public static class KeyDefaults
         ["LeftControl+RightControl"] = "Attack",
         ["LeftAlt+RightAlt"] = "Jump",
         ["Space"] = "Talk",
+        ["Z"] = "Pickup",
     };
 }
 
@@ -90,11 +162,26 @@ public static class KeyBindings
 
     // Write the given actions into one table. A key (or a combo part) taken
     // here leaves the target it came from; a target left with no key goes.
-    public static void Apply(Dictionary<string, string> table, Dictionary<HotkeyAction, string> map)
+    public static void Apply(Dictionary<string, string> table, Dictionary<HotkeyAction, string> map) =>
+        Write(table, map.Select(kv => new KeyValuePair<string, string>(kv.Key.ToString(), kv.Value)));
+
+    // The same for the skills the key window binds ("Skill:<id>"). Skills
+    // and actions share one table, so a key moves between them.
+    public static void ApplySkills(Dictionary<string, string> table, Dictionary<int, string> skills) =>
+        Write(table, skills.Select(kv => new KeyValuePair<string, string>($"Skill:{kv.Key}", kv.Value)));
+
+    // Drop every target of one kind (Default clears the item keys: the
+    // official table has none, and the draft cannot say "no items").
+    public static void RemoveKind(Dictionary<string, string> table, BindKind kind)
     {
-        foreach (var (action, key) in map)
+        foreach (var (key, text) in table.ToList())
+            if (BindTarget.TryParse(text, out var target) && target.Kind == kind) table.Remove(key);
+    }
+
+    private static void Write(Dictionary<string, string> table, IEnumerable<KeyValuePair<string, string>> targets)
+    {
+        foreach (var (target, key) in targets)
         {
-            string target = action.ToString();
             foreach (string old in table.Where(kv => kv.Value == target).Select(kv => kv.Key).ToList())
                 table.Remove(old);
             if (key == "") continue;
@@ -161,6 +248,22 @@ public partial class MushTownGame
 
     public string HotkeyKey(HotkeyAction action) => KeyBindings.FindKey(LiveKeys, action);
 
+    // The skill the player picked up in the skill window: the key window
+    // drops it on a key. 0 = nothing held. HeldAt is where the press landed,
+    // so a plain click on the skill row is not a drag onto the keys under it.
+    public int HeldSkill { get; private set; }
+    public Point HeldSkillAt { get; private set; }
+    public void HoldSkill(int id, Point at)
+    {
+        HeldSkill = id;
+        HeldSkillAt = at;
+    }
+    public void ClearHeldSkill() => HeldSkill = 0;
+
+    // The icon art of a skill id, or "" when it is not a skill of this
+    // character (the key window draws the skill the draft put on a key).
+    internal string SkillIconTex(int id) => _skills.TryGetValue(id, out var s) ? s.Icon : "";
+
     // One preset as an action -> key map (the key window). No character
     // (--host/--join) shows the defaults, like the live table.
     public Dictionary<HotkeyAction, string> HotkeyPreset(int slot)
@@ -171,14 +274,44 @@ public partial class MushTownGame
         return KeyBindings.UiMap(chara.KeyPresets![slot]);
     }
 
-    // Write the given actions into one preset. Other targets (skills and
-    // items) stay; the live table follows when this preset is active.
-    public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map)
+    // The skills a preset binds, read back as skill id -> key (the key
+    // window's draft). Items and anything else stay out: the pool has no
+    // cell for them.
+    public Dictionary<int, string> HotkeySkills(int slot)
+    {
+        var map = new Dictionary<int, string>();
+        var chara = Hero;
+        if (chara == null) return map;
+        KeyBindings.Ensure(chara);
+        foreach (var (key, text) in chara.KeyPresets![slot])
+            if (BindTarget.TryParse(text, out var target) && target.Kind == BindKind.Skill)
+                map[target.Id] = key;
+        return map;
+    }
+
+    // Write the given actions and skills into one preset. Item targets stay,
+    // unless the draft came from Default (dropItems): the official table has
+    // no item keys. The live table follows when this preset is active.
+    public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map, Dictionary<int, string> skills, bool dropItems)
     {
         var chara = Hero!; // the key window hides Save/Copy without a character
         KeyBindings.Ensure(chara);
-        KeyBindings.Apply(chara.KeyPresets![slot], map);
+        var table = chara.KeyPresets![slot];
+        if (dropItems) KeyBindings.RemoveKind(table, BindKind.Item);
+        KeyBindings.Apply(table, map);
+        KeyBindings.ApplySkills(table, skills);
         if (slot == chara.ActivePreset) _keysDirty = true;
+        SaveChara();
+    }
+
+    // Copy: the source preset covers the picked one whole (skills and items
+    // come along). The live table follows when the picked one is active.
+    public void CopyHotkeyPreset(int from, int to)
+    {
+        var chara = Hero!; // the key window hides Copy without a character
+        KeyBindings.Ensure(chara);
+        chara.KeyPresets![to] = new Dictionary<string, string>(chara.KeyPresets[from]);
+        if (to == chara.ActivePreset) _keysDirty = true;
         SaveChara();
     }
 

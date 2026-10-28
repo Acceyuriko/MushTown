@@ -486,11 +486,13 @@ public partial class MushTownGame : Game
         InstallPendingKeys(); // a key window Save/Apply waits for this frame's poll
         _input.Poll(kb, new Point(mx, my), click, ms.LeftButton == ButtonState.Pressed, ms.ScrollWheelValue);
         UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
+        // The key window is modal for the whole game, like the MENU: while it
+        // is open the character ignores the keys (it is for assigning them).
+        bool blocked = _menuWindow.Show || KeyWindowOpen;
         // Talk runs after the HUD: a same-frame panel key and Talk both fire
-        // (the HUD's guards see _talkNpc still 0; the MENU is modal and blocks Talk).
-        if (_talkNpc == 0 && !_menuWindow.Show && WindowFor(HotkeyAction.KeyConfig)?.Show != true
-            && _input.Fresh(HotkeyAction.Talk)) TalkNearest();
-        if (_menuWindow.Show) kb = new KeyboardState(); // while the MENU is open the character ignores the keys
+        // (the HUD's guards see _talkNpc still 0; a modal window blocks Talk).
+        if (_talkNpc == 0 && !blocked && _input.Fresh(HotkeyAction.Talk)) TalkNearest();
+        if (blocked) kb = new KeyboardState();
         SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;
 
@@ -505,13 +507,14 @@ public partial class MushTownGame : Game
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
         // (portal also fires on walking in with Up held; grab and jump use held keys)
-        bool menuOpen = _menuWindow.Show;
-        bool alt = !menuOpen && _input.Down(HotkeyAction.Jump);
+        bool alt = !blocked && _input.Down(HotkeyAction.Jump);
         bool freshAlt = alt && _input.Fresh(HotkeyAction.Jump);
         bool up = kb.IsKeyDown(Keys.Up);
         bool freshUp = up && _input.Fresh(Keys.Up);
         bool down = kb.IsKeyDown(Keys.Down);
-        bool freshZ = !menuOpen && _input.Fresh(Keys.Z);
+        // The pickup is a bindable action like the attack; a modal window
+        // takes the keys, so Z does not pick a drop up there.
+        bool freshZ = !blocked && _input.Fresh(HotkeyAction.Pickup);
 
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
@@ -521,7 +524,7 @@ public partial class MushTownGame : Game
         // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (!menuOpen && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge())
+        if (!blocked && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge())
         {
             _fighter.AttackLock = _delays["swingO1"].Sum();
             PlaySfx(SwingKey());
@@ -560,13 +563,20 @@ public partial class MushTownGame : Game
         }
 
         // A skill casts through the binding table: no hardcoded keys. The
-        // skills have no default bindings, so this loop is idle until K2's
-        // drag binds one. K2 casts in the skill window's fixed id order,
-        // not in this table's insertion order.
-        if (!menuOpen)
+        // skills have no default bindings, so this loop is idle until a key
+        // is bound to one. Two skills on the same frame cast in ascending id
+        // order, not in the table's insertion order.
+        if (!blocked)
+        {
+            List<int>? fresh = null;
             foreach (var action in _input.Actions)
-                if (action.Target.Kind == BindKind.Skill && action.Fresh)
-                    CastSkill(action.Target.Id);
+                if (action.Target.Kind == BindKind.Skill && action.Fresh) (fresh ??= new()).Add(action.Target.Id);
+            if (fresh != null)
+            {
+                fresh.Sort();
+                foreach (int id in fresh) CastSkill(id);
+            }
+        }
 
         // The feet step in Shared: snapshot in, outputs drained after. Skills
         // above already poked the state (leaps, dashes); travel and respawn

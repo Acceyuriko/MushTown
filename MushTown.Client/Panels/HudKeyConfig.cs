@@ -45,30 +45,120 @@ public sealed class KeyConfigWindow : UiWindow
     private static FilterFile Filters => _filterFile ??= MushTownGame.LoadJson<FilterFile>(
         Path.Combine(Path.GetDirectoryName(MushTownGame.LayoutsDir)!, "assets", "ui", "keys_filter.json"));
 
-    // The game actions in the grid: the action and the official icon.
-    // The minimap is not here: it is always on the screen, it has no key.
+    // The game actions in the grid: every icon of the official KeyConfig art,
+    // in its icon order. An action with no window behind it is still here on
+    // purpose: pressing its key does nothing, and the pool then tells the
+    // player (and us) what is not built yet. GuideCard, PartySearch and
+    // PartyAsk have no icon of their own, so they are not in the pool.
     private static readonly (HotkeyAction Action, int Icon)[] Actions =
     {
+        (HotkeyAction.Equip, 0),
         (HotkeyAction.Inventory, 1),
         (HotkeyAction.Stat, 2),
         (HotkeyAction.Skill, 3),
-        (HotkeyAction.Quest, 8),
+        (HotkeyAction.Friends, 4),
         (HotkeyAction.WorldMap, 5),
+        (HotkeyAction.MapleChat, 6),
+        (HotkeyAction.Minimap, 7),
+        (HotkeyAction.Quest, 8),
+        (HotkeyAction.KeyConfig, 9),
+        (HotkeyAction.ToAll, 10),
+        (HotkeyAction.Whisper, 11),
+        (HotkeyAction.ToParty, 12),
+        (HotkeyAction.ToBuddy, 13),
+        (HotkeyAction.QuickSlots, 15),
+        (HotkeyAction.Chat, 16),
+        (HotkeyAction.Guild, 17),
+        (HotkeyAction.ToGuild, 18),
         (HotkeyAction.Party, 19),
+        (HotkeyAction.QuestHelper, 20),
+        (HotkeyAction.MapleNews, 21),
+        (HotkeyAction.CashShop, 22),
+        (HotkeyAction.ToAlliance, 23),
+        (HotkeyAction.Legion, 25),
+        (HotkeyAction.Medals, 26),
+        (HotkeyAction.Bosses, 27),
+        (HotkeyAction.Profession, 29),
+        (HotkeyAction.Events, 31),
+        (HotkeyAction.BattleAnalysis, 35),
+        (HotkeyAction.Guide, 39),
+        (HotkeyAction.EnhanceEquip, 41),
+        (HotkeyAction.MonsterCollection, 42),
+        (HotkeyAction.SoulWeapon, 43),
+        (HotkeyAction.ChangeChannel, 45),
         (HotkeyAction.Menu, 46),
-        (HotkeyAction.Settings, 46),
+        (HotkeyAction.Screenshot, 47),
+        (HotkeyAction.PictureMode, 48),
+        (HotkeyAction.Achievements, 49),
+        (HotkeyAction.Pickup, 50),
+        (HotkeyAction.Sit, 51),
+        (HotkeyAction.Attack, 52),
+        (HotkeyAction.Jump, 53),
+        (HotkeyAction.Talk, 54),
+        (HotkeyAction.ToTown, 55),
+        (HotkeyAction.GoHome, 56),
+        (HotkeyAction.Mup, 57),
+        (HotkeyAction.StorageRoom, 58),
+        (HotkeyAction.QuickMove, 59),
+        (HotkeyAction.Archive, 60),
+        (HotkeyAction.SoulCollection, 61),
+        (HotkeyAction.Emoticon1, 100),
+        (HotkeyAction.Emoticon2, 101),
+        (HotkeyAction.Emoticon3, 102),
+        (HotkeyAction.Emoticon4, 103),
+        (HotkeyAction.Emoticon5, 104),
+        (HotkeyAction.Emoticon6, 105),
+        (HotkeyAction.Emoticon7, 106),
+        (HotkeyAction.MapleStorage, 200),
+        (HotkeyAction.SafeMode, 201),
+        (HotkeyAction.MuteGame, 202),
+        (HotkeyAction.Emoticons, 203),
+        (HotkeyAction.KeySettings1, 204),
+        (HotkeyAction.KeySettings2, 205),
+        (HotkeyAction.KeySettings3, 206),
+        (HotkeyAction.ComboKey, 207),
+        (HotkeyAction.SolErda, 210),
+        (HotkeyAction.CharPreset, 212),
+        (HotkeyAction.SwapPreset, 213),
+        (HotkeyAction.Planner, 214),
+        (HotkeyAction.Sequence, 215),
+        (HotkeyAction.Decorations, 216),
+        (HotkeyAction.AutoHarvest, 217),
+        (HotkeyAction.BuffShopper, 218),
+        (HotkeyAction.Familiar, 219),
+        (HotkeyAction.ToSpouse, 220),
+        (HotkeyAction.TraceResto, 221),
+        (HotkeyAction.MapleRelay, 300),
     };
 
     // The pending bindings, the action the player holds and the picked
     // preset slot.
     private readonly Dictionary<HotkeyAction, string> _draft = new();
+    private readonly Dictionary<int, string> _draftSkills = new(); // the skills the draft bound (from the skill window)
     private HotkeyAction? _held;
     private Point _pickAt; // where the action was picked up
     private int _slot;
 
-    // The filter dropdown: the picked filter and the open list.
-    private int _filter = 1;
+    // Key -> what sits on it, built once per Build: the 73 key caps read it
+    // every frame, and walking the draft 73 times would split a string 73
+    // times a frame for every action.
+    private readonly Dictionary<string, HotkeyAction> _keyAction = new();
+    private readonly Dictionary<string, int> _keySkill = new();
+
+    private const int DragSlop = 8; // a press that moves less than this is a click, not a drag
+
+    // Default was pressed: the official table has no item keys either, so Save
+    // drops them (the draft only carries actions and skills).
+    private bool _dropItems;
+
+    // The filter dropdown: the picked filter and the open list. Open() puts
+    // the filter back to Not Added, so the window shows what is still free.
+    private int _filter;
     private bool _filterOpen;
+
+    // The copy dialog: open, and the source preset it points at.
+    private bool _copyOpen;
+    private int _copyFrom;
 
     // The combo key mode: a drop gives the action a second key.
     private bool _comboMode;
@@ -101,16 +191,20 @@ public sealed class KeyConfigWindow : UiWindow
         _slot = _game.ActivePreset;
         ReloadDraft();
         _held = null;
+        _filter = 0; // Not Added: the window always opens on the actions that are still free
         Pos = LayoutPos();
         _game.ShowWindow(HotkeyAction.KeyConfig);
     }
 
-    // The eight visible actions, read back from the picked preset.
+    // The pool actions, read back from the picked preset.
     private void ReloadDraft()
     {
         var preset = _game.HotkeyPreset(_slot);
         _draft.Clear();
         foreach (var (action, _) in Actions) _draft[action] = preset.GetValueOrDefault(action, "");
+        _draftSkills.Clear();
+        foreach (var (id, key) in _game.HotkeySkills(_slot)) _draftSkills[id] = key;
+        _dropItems = false; // the draft is the preset again: nothing left over from a Default
     }
 
     // Close the window: the unsaved changes and the held action go away.
@@ -124,14 +218,18 @@ public sealed class KeyConfigWindow : UiWindow
     public override void OnClosed()
     {
         _draft.Clear();
+        _draftSkills.Clear();
         _held = null;
+        _game.ClearHeldSkill(); // a skill picked in the skill window would follow the mouse with no window to drop it on
         _filterOpen = false;
         _comboMode = false;
+        _copyOpen = false;
     }
 
     public override void Build()
     {
         Host.Clear();
+        RebuildLookup();
         var root = new GameObject();
         root.Add(new Rect(Rect()));
 
@@ -139,24 +237,32 @@ public sealed class KeyConfigWindow : UiWindow
         _game.LoadTexture("ui/keys_kb.png");
         _game.LoadTexture("ui/hud_statx.png");
         _game.LoadTexture("ui/keys_custom_p.png");
-        foreach (string stem in new[] { "ui/keys_save", "ui/keys_reset", "ui/keys_cancel", "ui/keys_copy", "ui/keys_apply", "ui/keys_skill", "ui/keys_qslot", "ui/keys_combo", "ui/keys_pg1", "ui/keys_pg2", "ui/keys_pg3" })
+        foreach (string stem in new[] { "ui/keys_save", "ui/keys_reset", "ui/keys_cancel", "ui/keys_copy", "ui/keys_apply", "ui/keys_skill", "ui/keys_qslot", "ui/keys_combo" })
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
+                _game.LoadTexture(stem + state);
+        foreach (string stem in new[] { "ui/keys_pg1", "ui/keys_pg2", "ui/keys_pg3" })
+            foreach (string state in new[] { "_n.png", "_h.png", "_p.png", "_c.png" })
                 _game.LoadTexture(stem + state);
         foreach (var s in Spots.Keys)
             if (s.Cap != "") _game.LoadTexture("ui/" + s.Cap);
         foreach (var a in Actions) _game.LoadTexture(IconTex(a.Action));
+        if (_copyOpen) LoadCopyDialog(); // the dialog art is only needed while it shows
         LoadComboBox();
 
         // Open fills the draft; the tree reads it when drawing.
         root.Add(new Picture("ui/keys_bg.png"));
         root.Add(new Picture("ui/keys_kb.png", _lay.Get("kbX", 20), _lay.Get("kbY", 100)));
 
-        // The keys: the official letter, or the icon of the action on it.
+        // The keys: the official letter, or the icon of the action on it. A
+        // key with an action on it can be picked up again, so an action that
+        // left the pool is not stuck on the keyboard forever.
         foreach (var spot in Spots.Keys)
         {
             var o = new GameObject();
             o.Add(new Rect(KeyRect(spot)));
             o.Add(new KeyCap(this, spot));
+            int code = spot.Code;
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickKey(code) });
             root.AddChild(o);
         }
 
@@ -166,7 +272,7 @@ public sealed class KeyConfigWindow : UiWindow
         {
             var a = Actions[i];
             int index = i;
-            if (!FilterShows(a.Action)) continue;
+            if (!FilterShows(a.Action, a.Icon)) continue;
             var o = new GameObject();
             o.Add(new Rect(CellRect(index)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(a.Action) });
@@ -181,9 +287,9 @@ public sealed class KeyConfigWindow : UiWindow
         // no hover.
         root.Add(new Picture("ui/keys_custom_p.png", _lay.Get("customX", 19), _lay.Get("customY", 66)));
 
-        // The presets: copy the draft into the slot, apply the slot. No
-        // character (--host/--join): there is no preset to write, so the
-        // three buttons do not show.
+        // The preset buttons: Copy opens the source dialog, Apply makes the
+        // picked preset the live one. No character (--host/--join): there is
+        // no preset to write, so the buttons do not show.
         if (_game.Hero != null)
         {
             root.AddChild(ArtButton("ui/keys_copy", _lay.Get("copyX", 380), _lay.Get("copyY", 73), 67, 19, Copy));
@@ -197,12 +303,12 @@ public sealed class KeyConfigWindow : UiWindow
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 12, 12)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _slot = slot; ReloadDraft(); Build(); } }); // the draft and the action grid follow the picked preset
-            o.Add(new Image(stem, () => _slot == slot)); // the picked slot stays lit, so the player sees it
+            o.Add(new Image(stem, () => _slot == slot, "_c")); // the picked page is lit green by the checked art
             root.AddChild(o);
         }
 
         // The bottom buttons: combo key, quick slots, reset, skill, cancel,
-        // save. The quick slots page comes with K2, so that button is a plain
+        // save. The quick slots page is gone, so that button is a plain
         // picture: the click does nothing.
         root.AddChild(ComboButton());
         root.Add(new Picture("ui/keys_qslot_n.png", _lay.Get("qslotX", 98), _lay.Get("qslotY", 568)));
@@ -214,6 +320,7 @@ public sealed class KeyConfigWindow : UiWindow
 
         BuildTitleAndClose(root, "ui/hud_statx.png", _lay.Get("closeX", 636), _lay.Get("closeY", 4), 11);
         BuildDrag(root);
+        if (_copyOpen) BuildCopyDialog(root); // the dialog sits above everything, the drop icon included
         Host.AddChild(root);
     }
 
@@ -282,6 +389,7 @@ public sealed class KeyConfigWindow : UiWindow
         var bg = new GameObject();
         bg.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + top, listW, itemH * Filters.Filters.Count)));
         bg.Add(new Fill(new Color(238, 238, 238), 0));
+        bg.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _filterOpen = false; Build(); } }); // a click on the list but not on an item closes it
         root.AddChild(bg);
 
         for (int i = 0; i < Filters.Filters.Count; i++)
@@ -303,21 +411,87 @@ public sealed class KeyConfigWindow : UiWindow
                 _game.LoadTexture($"ui/keys_cbox_{set}{piece}.png");
     }
 
+    // The copy dialog art: the background, the two buttons and the three
+    // preset picks (the picked one shows its checked look).
+    private void LoadCopyDialog()
+    {
+        _game.LoadTexture("ui/keys_pcopy_bg.png");
+        foreach (string stem in new[] { "ui/keys_pcopy_copy", "ui/keys_pcopy_cancel", "ui/keys_pcopy_pg1", "ui/keys_pcopy_pg2", "ui/keys_pcopy_pg3" })
+            foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
+                _game.LoadTexture(stem + state);
+        for (int page = 1; page <= 3; page++) _game.LoadTexture($"ui/keys_pcopy_pg{page}_c.png");
+    }
+
+    // The copy dialog: the official art spells the question, so the player
+    // only picks the source preset and presses Copy. The dialog is modal:
+    // a click outside it lands on the catcher and does nothing.
+    private void BuildCopyDialog(GameObject root)
+    {
+        int x = _lay.Get("pcX", 164), y = _lay.Get("pcY", 184);
+        int w = _lay.Get("pcW", 332), h = _lay.Get("pcH", 256);
+
+        // The whole screen, not just the window: the dialog is modal, a click
+        // on the HUD behind it must not land.
+        var block = new GameObject();
+        block.Add(new Rect(new Rectangle(0, 0, MushTownGame.GameWidth, MushTownGame.GameHeight)));
+        block.Add(new Button { Kind = ButtonKind.Silent });
+        root.AddChild(block);
+
+        var dlg = new GameObject();
+        dlg.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, w, h)));
+        dlg.Add(new Picture("ui/keys_pcopy_bg.png"));
+        root.AddChild(dlg);
+
+        for (int i = 0; i < 3; i++)
+        {
+            int from = i;
+            var o = new GameObject();
+            o.Add(new Rect(new Rectangle(
+                Pos.X + x + _lay.Get($"pcPg{i + 1}X", 207 + 33 * i), Pos.Y + y + _lay.Get("pcPgY", 152),
+                _lay.Get("pcPgW", 18), _lay.Get("pcPgH", 18))));
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _copyFrom = from; Build(); } });
+            o.Add(new Image($"ui/keys_pcopy_pg{i + 1}", () => _copyFrom == from, "_c"));
+            dlg.AddChild(o);
+        }
+
+        var now = new GameObject(); // the preset the player is on: the art leaves a blank for it
+        now.Add(new Rect(new Rectangle(Pos.X + x + _lay.Get("pcNowX", 216), Pos.Y + y + _lay.Get("pcNowY", 82),
+            _lay.Get("pcNowW", 20), _lay.Get("pcNowH", 14))));
+        now.Add(new Label((_slot + 1).ToString(), 0, 0));
+        dlg.AddChild(now);
+
+        dlg.AddChild(DialogButton("ui/keys_pcopy_copy", _lay.Get("pcCopyX", 81), _lay.Get("pcCopyY", 207), CopyNow));
+        dlg.AddChild(DialogButton("ui/keys_pcopy_cancel", _lay.Get("pcCancelX", 169), _lay.Get("pcCancelY", 207), CloseCopy));
+    }
+
+    // One button of the copy dialog, placed inside the dialog box.
+    private GameObject DialogButton(string stem, int dx, int dy, Action onClick)
+    {
+        int x = _lay.Get("pcX", 164) + dx, y = _lay.Get("pcY", 184) + dy;
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, _lay.Get("pcBtnW", 83), _lay.Get("pcBtnH", 26))));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+        o.Add(new Image(stem));
+        return o;
+    }
+
     // The filter names (the official combo box items).
     private static string FilterName(int index) =>
         index >= 0 && index < Filters.Filters.Count ? Filters.Filters[index] : "";
 
     // The filter picks the actions that show: "Not Added" shows the actions
     // with no key, the other filters show one category of actions.
-    private bool FilterShows(HotkeyAction action)
+    private bool FilterShows(HotkeyAction action, int icon)
     {
-        if (_filter == 0) return _draft.GetValueOrDefault(action, "") == "";
-        int category = Filters.Categories.GetValueOrDefault(IconOf(action), 0);
-        return category + 1 == _filter;
+        // A bound action leaves the pool: its cell stays where it is and goes
+        // blank, so the grid never shuffles under the mouse.
+        if (_draft.GetValueOrDefault(action, "") != "") return false;
+        if (_filter == 0) return true;
+        return Filters.Categories.GetValueOrDefault(icon, 0) + 1 == _filter;
     }
 
     // One key of the official keyboard: the official letter, or the icon of
-    // the action the draft binds to that key.
+    // the action or skill the draft binds to that key.
     private sealed class KeyCap : Component, IDrawable
     {
         private readonly KeyConfigWindow _w;
@@ -326,15 +500,26 @@ public sealed class KeyConfigWindow : UiWindow
         public void Draw(UiGfx gfx)
         {
             var r = Owner.Get<Rect>()!.Box;
-            if (_w.ActionFor(KeyName(_spot.Code)) is { } action)
+            string key = KeyName(_spot.Code);
+            if (_w._keyAction.TryGetValue(key, out var action))
             {
-                var icon = gfx.Tex(IconTex(action));
-                gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
+                DrawCentered(gfx, r, IconTex(action));
+                return;
+            }
+            if (_w._keySkill.TryGetValue(key, out int skill))
+            {
+                DrawCentered(gfx, r, _w._game.SkillIconTex(skill));
                 return;
             }
             if (_spot.Cap == "") return;
-            var cap = gfx.Tex("ui/" + _spot.Cap);
-            gfx.Sb.Draw(cap, new Vector2(r.X + (r.Width - cap.Width) / 2, r.Y + (r.Height - cap.Height) / 2), Color.White);
+            DrawCentered(gfx, r, "ui/" + _spot.Cap);
+        }
+
+        private static void DrawCentered(UiGfx gfx, Rectangle r, string tex)
+        {
+            if (tex == "") return;
+            var icon = gfx.Tex(tex);
+            gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
         }
     }
 
@@ -395,7 +580,8 @@ public sealed class KeyConfigWindow : UiWindow
         }
     }
 
-    // The action the player picked up rides the cursor.
+    // The action the player picked up rides the cursor (a skill picked up in
+    // the skill window rides it too, and the skill window draws that one).
     private sealed class HeldIcon : Component, IDrawable
     {
         private readonly KeyConfigWindow _w;
@@ -408,11 +594,19 @@ public sealed class KeyConfigWindow : UiWindow
         }
     }
 
-    // The HUD passes its own mouse edge: letting go drops the held action on
-    // the key under the cursor.
+    // The HUD passes its own mouse edge: letting go drops the held action or
+    // the held skill on the key under the cursor.
     public void UpdateDrag(bool held, int gx, int gy)
     {
-        if (_held is not { } action || held) return;
+        if (held) return;
+        if (_game.HeldSkill != 0)
+        {
+            int skill = _game.HeldSkill;
+            _game.ClearHeldSkill();
+            DropSkill(skill, gx, gy);
+            return;
+        }
+        if (_held is not { } action) return;
         Drop(action, gx, gy);
     }
 
@@ -423,38 +617,84 @@ public sealed class KeyConfigWindow : UiWindow
         _pickAt = Scene.LastClick;
     }
 
-    // The player lets go: the action takes the key under the mouse. An icon
-    // that is dragged off the keyboard takes the key away from the action.
+    // The player presses a key that has an action on it: the action comes off
+    // the keyboard and follows the mouse, so a bound action is not stuck.
+    private void PickKey(int code)
+    {
+        if (ActionFor(KeyName(code)) is not { } action) return;
+        Pick(action);
+    }
+
+    // The player lets go: the action takes the key under the mouse, or loses
+    // its key when it is let go on the action pool. Anywhere else (the title
+    // bar, a button, the gap between two keys) changes nothing.
     private void Drop(HotkeyAction action, int gx, int gy)
     {
         _held = null;
+        if (Math.Abs(gx - _pickAt.X) + Math.Abs(gy - _pickAt.Y) < DragSlop) return; // a click, not a drag
         foreach (var s in Spots.Keys)
         {
             if (!KeyRect(s).Contains(gx, gy)) continue;
+            if (!OnKeyWindow(gx, gy)) return; // another window covers that key
             string key = KeyName(s.Code);
             if (_comboMode) AddKey(action, key);
             else Bind(action, key);
+            Build(); // the pool hides the bound action: its cells are built from the draft
             return;
         }
         if (_comboMode) return;
-        int cell = CellIndex(action);
-        if (cell >= 0 && CellRect(cell).Contains(gx, gy)) return; // dropped on itself
-        if (Math.Abs(gx - _pickAt.X) + Math.Abs(gy - _pickAt.Y) < 8) return; // a click, not a drag
-        _draft[action] = "";
+        // Not the pool, or the open filter list covering it: the binding stays.
+        if (!PoolRect().Contains(gx, gy) || _filterOpen) return;
+        _draft[action] = ""; // let go on the pool: the action loses its key
+        Build();
     }
 
-    // The cell of an action in the grid (-1 when the action is not there).
-    private static int CellIndex(HotkeyAction action)
+    // The black action pool under the keyboard: the cells the draft binds.
+    private Rectangle PoolRect()
     {
-        for (int i = 0; i < Actions.Length; i++) if (Actions[i].Action == action) return i;
-        return -1;
+        int cols = _lay.Get("gridCols", 17);
+        int rows = (Actions.Length + cols - 1) / cols;
+        return new Rectangle(
+            Pos.X + _lay.Get("gridX", 25), Pos.Y + _lay.Get("gridY", 374),
+            cols * _lay.Get("cellPitchX", 36), rows * _lay.Get("cellPitchY", 36));
+    }
+
+    // True when the topmost object under the point belongs to the key window:
+    // a key hidden behind another window must not take a drop.
+    private bool OnKeyWindow(int gx, int gy)
+    {
+        for (var o = Scene.TopAt(gx, gy); o != null; o = o.Parent)
+            if (o == Host) return true;
+        return false;
+    }
+
+    // A skill from the skill window lands on one key of the keyboard. It does
+    // not take a combo (the action combo mode is for actions only) and a drop
+    // off the keyboard leaves the draft alone: the skill pool is not here. A
+    // plain click on the skill row is not a drop, and a key another window
+    // covers does not take it either.
+    private void DropSkill(int skill, int gx, int gy)
+    {
+        var at = _game.HeldSkillAt;
+        if (Math.Abs(gx - at.X) + Math.Abs(gy - at.Y) < DragSlop) return; // a click on the skill row, not a drag
+        foreach (var s in Spots.Keys)
+        {
+            if (!KeyRect(s).Contains(gx, gy)) continue;
+            if (!OnKeyWindow(gx, gy)) return; // the skill window covers that key
+            string key = KeyName(s.Code);
+            if (!InputController.TryParseKeys(key, out _)) return;
+            TakeAway(key, null);
+            _draftSkills[skill] = key;
+            Build();
+            return;
+        }
     }
 
     // The combo key mode: the action keeps its key and gets a second one
     // ("I+K"). The action then fires on either key.
     private void AddKey(HotkeyAction action, string key)
     {
-        if (Reserved(key) || !InputController.TryParseKeys(key, out _)) return;
+        if (!InputController.TryParseKeys(key, out _)) return;
         var parts = Keys(action);
         if (parts.Length == 0) { Bind(action, key); return; }
         if (parts.Contains(key)) return;
@@ -464,29 +704,18 @@ public sealed class KeyConfigWindow : UiWindow
         _draft[action] = string.Join("+", parts);
     }
 
-    // The action takes the key. The key is taken away from the other actions.
-    private bool Bind(HotkeyAction action, string key)
+    // The action takes the key. The key is taken away from the other actions;
+    // a key that a skill or an item holds leaves it when the draft is saved.
+    private void Bind(HotkeyAction action, string key)
     {
-        if (Reserved(key) || !InputController.TryParseKeys(key, out _)) return false; // Esc/Enter/Tab/arrows/Z are not bindable
+        if (!InputController.TryParseKeys(key, out _)) return; // Esc/Enter/Tab/arrows are not bindable
         TakeAway(key, action);
         _draft[action] = key;
-        return true;
     }
 
-    // K1 edits only the 8 visible actions: a key owned by a hidden UI action
-    // (Attack, Jump, Talk, Equip, Guide, KeyConfig) must stay with it, or
-    // that action loses the key with no way back. Skill keys are K2's new
-    // key window. Item targets are not protected either: saving a draft takes
-    // their key too (K2 protects them with the drag).
-    private bool Reserved(string key)
-    {
-        var preset = _game.HotkeyPreset(_slot);
-        return preset.Any(kv => !Actions.Any(a => a.Action == kv.Key)
-            && kv.Value.Split('+', StringSplitOptions.RemoveEmptyEntries).Contains(key));
-    }
-
-    // The key goes away from the other actions (part by part).
-    private void TakeAway(string key, HotkeyAction keep)
+    // The key goes away from the other actions and the bound skills (part by
+    // part). A null keep means the new owner is a skill.
+    private void TakeAway(string key, HotkeyAction? keep)
     {
         foreach (var other in _draft.Keys.ToList())
         {
@@ -495,17 +724,22 @@ public sealed class KeyConfigWindow : UiWindow
             if (!parts.Contains(key)) continue;
             _draft[other] = string.Join("+", parts.Where(p => p != key));
         }
+        foreach (var id in _draftSkills.Keys.ToList())
+        {
+            var parts = _draftSkills[id].Split('+', StringSplitOptions.RemoveEmptyEntries);
+            if (!parts.Contains(key)) continue;
+            _draftSkills[id] = string.Join("+", parts.Where(p => p != key));
+        }
     }
 
     // The keys of an action: one key, or the two of a combo.
     private string[] Keys(HotkeyAction action) =>
         _draft.GetValueOrDefault(action, "").Split('+', StringSplitOptions.RemoveEmptyEntries);
 
-    // Save: the draft goes into the picked preset. K1: Save and Copy do
-    // the same; K2 makes Copy pick a source preset.
+    // Save: the draft goes into the picked preset.
     private void Save()
     {
-        _game.SaveHotkeyPreset(_slot, _draft);
+        _game.SaveHotkeyPreset(_slot, _draft, _draftSkills, _dropItems);
         ReloadDraft();
         Build();
     }
@@ -514,8 +748,14 @@ public sealed class KeyConfigWindow : UiWindow
     private void Default()
     {
         _draft.Clear();
+        // The defaults have no skill keys. Blank every skill the draft knows
+        // instead of dropping them: Save writes the blank out, so a saved
+        // preset really loses its skill keys. Items are not in the draft at
+        // all, so Save drops them by kind.
+        foreach (var id in _draftSkills.Keys.ToList()) _draftSkills[id] = "";
+        _dropItems = true;
         var defaults = KeyBindings.Defaults();
-        foreach (var (action, _) in Actions) _draft[action] = defaults.GetValueOrDefault(action, ""); // the 8 visible actions only: the hidden ones keep their keys
+        foreach (var (action, _) in Actions) _draft[action] = defaults.GetValueOrDefault(action, ""); // the pool only: the sub-windows keep whatever they have
         Build();
     }
 
@@ -527,10 +767,30 @@ public sealed class KeyConfigWindow : UiWindow
         Build();
     }
 
-    // Copy: the draft goes into the picked preset (K1: the same as Save).
+    // Copy: the official dialog asks which preset the current one takes its
+    // bindings from. The picked preset starts as the source, so a Copy press
+    // that was not followed by a pick changes nothing.
     private void Copy()
     {
-        _game.SaveHotkeyPreset(_slot, _draft);
+        _copyOpen = true;
+        _copyFrom = _slot;
+        Build();
+    }
+
+    // Copy in the dialog: the source preset covers the picked one.
+    private void CopyNow()
+    {
+        if (_copyFrom != _slot) _game.CopyHotkeyPreset(_copyFrom, _slot); // copying a preset onto itself is a no-op
+        _copyOpen = false;
+        ReloadDraft();
+        Build();
+    }
+
+    // Cancel in the dialog: nothing changes.
+    private void CloseCopy()
+    {
+        _copyOpen = false;
+        Build();
     }
 
     // Apply: the picked preset becomes the live one.
@@ -563,38 +823,43 @@ public sealed class KeyConfigWindow : UiWindow
         Build();
     }
 
-    // The skill button: the key window closes and the skill window opens.
-    private void OpenSkill()
+    // The skill button: the skill window opens above this one, so the player
+    // drags a skill row onto a key. The key window stays open.
+    private void OpenSkill() => _game.OpenSkillWindow();
+
+    // The action that has this key (the pool only: the sub-windows have no
+    // cell to pick from).
+    private HotkeyAction? ActionFor(string key) => _keyAction.TryGetValue(key, out var action) ? action : null;
+
+    // Key -> action and key -> skill, rebuilt whenever the tree is: the key
+    // caps read it every frame.
+    private void RebuildLookup()
     {
-        OnClosed(); // the same reset as Esc or the title X
-        _game.OpenSkillWindow();
-        Show = false;
+        _keyAction.Clear();
+        foreach (var (action, keys) in _draft)
+            foreach (var key in keys.Split('+', StringSplitOptions.RemoveEmptyEntries))
+                _keyAction.TryAdd(key, action);
+        _keySkill.Clear();
+        foreach (var (id, keys) in _draftSkills)
+            foreach (var key in keys.Split('+', StringSplitOptions.RemoveEmptyEntries))
+                _keySkill.TryAdd(key, id);
     }
 
-    // The action that has this key.
-    private HotkeyAction? ActionFor(string key)
+    // The icon art of an action, "" when the action has no official icon.
+    // The HUD quick slot cells draw the same art.
+    internal static string IconTex(HotkeyAction action)
     {
-        if (key == "") return null;
-        foreach (var a in Actions)
-            if (Keys(a.Action).Contains(key)) return a.Action;
-        return null;
+        int icon = IconOf(action);
+        return icon < 0 ? "" : $"ui/keys_icon_{icon}.png";
     }
 
-    // The icon art of an action. The KeyConfig set has no settings icon (the
-    // options are a row of the MENU window), so Settings shows the gear of the
-    // quick menu row. The HUD quick slot cells draw the same art.
-    internal static string IconTex(HotkeyAction action) =>
-        action == HotkeyAction.Settings ? "ui/quickmenu_53_n.png" : $"ui/keys_icon_{IconOf(action)}.png";
-
-    // The official icon of an action. Attack and Jump are not in the grid
-    // (the key window cannot move them) but the HUD cells show them.
+    // The official icon of an action; -1 for the actions that are not in the
+    // pool (Settings, the sub-windows): they have no cell and no art.
     internal static int IconOf(HotkeyAction action)
     {
-        if (action == HotkeyAction.Attack) return 52;
-        if (action == HotkeyAction.Jump) return 53;
         foreach (var a in Actions)
             if (a.Action == action) return a.Icon;
-        return 0;
+        return -1;
     }
 
     // The WZ cap id is the PC scancode; this is the MonoGame key name.

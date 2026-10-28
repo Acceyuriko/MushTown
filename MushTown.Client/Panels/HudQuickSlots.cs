@@ -53,13 +53,16 @@ public partial class MushTownGame
         if (_input.TargetOf(SlotKeys[index]) is { } target)
         {
             string art = TargetArt(target);
-            LoadTexture(art);
-            var icon = gfx.Tex(art);
-            // The hint cells take the layout offset; the item cells stay centered.
-            var nudge = index < HintCells ? Layout.HintIcon : default;
-            gfx.Sb.Draw(icon, new Vector2(
-                s.X + (s.Width - icon.Width) / 2 + nudge.X,
-                s.Y + (s.Height - icon.Height) / 2 + nudge.Y), Color.White);
+            if (art != "") // an action with no official icon (Settings, the sub-windows) draws nothing
+            {
+                LoadTexture(art);
+                var icon = gfx.Tex(art);
+                // The hint cells take the layout offset; the item cells stay centered.
+                var nudge = index < HintCells ? Layout.HintIcon : default;
+                gfx.Sb.Draw(icon, new Vector2(
+                    s.X + (s.Width - icon.Width) / 2 + nudge.X,
+                    s.Y + (s.Height - icon.Height) / 2 + nudge.Y), Color.White);
+            }
         }
         DrawCap(gfx, index, s);
     }

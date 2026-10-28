@@ -86,7 +86,7 @@ public partial class MushTownGame
             int id = tab[i];
             var line = new GameObject();
             line.Add(new Rect(SkillRowRect(i)));
-            line.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _skillSel = i }); // no LegacyId: the rows stay silent
+            line.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _skillSel = i; if (KeyWindowOpen) HoldSkill(id, _uiScene.LastClick); } }); // no LegacyId: the rows stay silent
             line.Add(new SkillListRow(_skills[id], PassiveBlurb.TryGetValue(id, out string? b) ? b : "", () => _skillSel == i, () => SkillLiveOf(id)));
             body.AddChild(line);
         }
@@ -102,10 +102,24 @@ public partial class MushTownGame
         max.Add(new LiveTint(() => CanLearn(SelectedSkillId) ? ("MAX", new Color(120, 220, 120)) : ("MAX", new Color(150, 150, 160)), 0, 0));
         body.AddChild(max);
         body.AddChild(PanelButton(SkillTitleRect(), "", () => { _skillDragged = true; _dragSkill = _uiScene.LastClick - _skillPos; })); // silent, like legacy
-        var x = PanelButton(SkillXRect(), "x2", () => _showSkill = false, ButtonKind.Click);
+        var x = PanelButton(SkillXRect(), "x2", CloseSkillWindow, ButtonKind.Click);
         x.Add(new Picture("ui/hud_statx.png")); // the skill window has no X of its own in the WZ
         body.AddChild(x);
         _skillHost.AddChild(body);
+        var held = new GameObject();
+        held.Add(new SkillHeldIcon(this)); // a skill picked for the key window rides the mouse above everything
+        _skillHost.AddChild(held);
+    }
+
+    // The key window is open: pressing a skill row picks the skill up for the drop.
+    private bool KeyWindowOpen => WindowFor(HotkeyAction.KeyConfig) is { Show: true };
+
+    // The skill window closes: a skill picked for the key window goes with it.
+    private void CloseSkillWindow()
+    {
+        _showSkill = false;
+        _dragSkill = null;
+        ClearHeldSkill();
     }
 
     // Skill window job tabs (three Roman numerals under the title).
@@ -349,5 +363,20 @@ public sealed class SkillPlusArt : Component, IDrawable
             : gfx.Hovered == Owner ? gfx.Pressed ? "ui/skill_spup_p.png" : "ui/skill_spup_h.png"
             : "ui/skill_spup_n.png";
         gfx.Sb.Draw(gfx.Tex(key), new Vector2(r.X, r.Y), Color.White);
+    }
+}
+
+// The skill icon that rides the mouse while the key window waits for the drop.
+// It lives in the skill window, so it is hidden while another window covers it.
+public sealed class SkillHeldIcon : Component, IDrawable
+{
+    private readonly MushTownGame _game;
+    public SkillHeldIcon(MushTownGame game) => _game = game;
+    public void Draw(UiGfx gfx)
+    {
+        string tex = _game.SkillIconTex(_game.HeldSkill);
+        if (tex == "") return;
+        var t = gfx.Tex(tex);
+        gfx.Sb.Draw(t, new Vector2(gfx.Mouse.X - t.Width / 2, gfx.Mouse.Y - t.Height / 2), Color.White);
     }
 }

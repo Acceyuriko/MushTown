@@ -81,9 +81,10 @@ public partial class MushTownGame
         HotkeyAction.Inventory, HotkeyAction.Stat, HotkeyAction.Equip, HotkeyAction.Skill,
         HotkeyAction.Quest, HotkeyAction.Settings, HotkeyAction.WorldMap,
         HotkeyAction.Party, HotkeyAction.KeyConfig, HotkeyAction.Guide, HotkeyAction.Menu,
+        HotkeyAction.Chat, HotkeyAction.Minimap,
     };
 
-    private void HandleHotkey(HotkeyAction action)
+    private void HandleHotkey(HotkeyAction action, KeyboardState kb)
     {
         switch (action)
         {
@@ -93,8 +94,10 @@ public partial class MushTownGame
             case HotkeyAction.Skill: TogglePanel(Feature.Skill); break;
             case HotkeyAction.Quest: TogglePanel(Feature.Quest); break;
             case HotkeyAction.Settings: TogglePanel(Feature.Settings); break;
+            case HotkeyAction.Chat: _chatWindow.FocusInput(kb); break; // the input line takes the keys from here
+            case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // always on the screen: a key only brings it back
             case HotkeyAction.KeyConfig:
-                if (WindowFor(HotkeyAction.KeyConfig) is { Show: true }) ToggleWindow(HotkeyAction.KeyConfig);
+                if (KeyWindowOpen) ToggleWindow(HotkeyAction.KeyConfig);
                 else OpenKeyWindow();
                 break;
             default: ToggleWindow(action); break;
@@ -108,11 +111,11 @@ public partial class MushTownGame
         var hoverSlot = UpdateHudHover(gx, gy); // every frame (clicks return early below)
         _hoverItem = hoverSlot != null;
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
-        // The key window is modal for the HUD: only its own key works while
-        // it is open; Talk is blocked in the game update. The game still
-        // reads the table; skills have no default keys until K2.
+        // The key window is modal for the HUD and for the game: only its own
+        // key works while it is open. The game update zeroes the keyboard for
+        // the character, so talk, the pickup, the swing and the skills wait.
         var keyWin = WindowFor(HotkeyAction.KeyConfig) as KeyConfigWindow;
-        bool keyWindowOpen = keyWin?.Show == true;
+        bool keyWindowOpen = KeyWindowOpen;
         if (keyWindowOpen) keyWin!.UpdateDrag(held, gx, gy); // the drop reads the same mouse edge the HUD uses
         ItemEdges(_talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // the item keys drink their potion
         if (_talkNpc == 0 && (!keyWindowOpen || _input.Fresh(HotkeyAction.KeyConfig)))
@@ -122,7 +125,7 @@ public partial class MushTownGame
             {
                 if (keyWindowOpen && action != HotkeyAction.KeyConfig) continue;
                 if (!_input.Fresh(action)) continue;
-                HandleHotkey(action);
+                HandleHotkey(action, kb);
                 any = true;
                 if (action != HotkeyAction.Menu) _menuWindow.Close();
             }
@@ -219,7 +222,7 @@ public partial class MushTownGame
         {
             case 0: _showInv = false; _dragInv = null; break;
             case 1: _showStat = false; _dragStat = null; break;
-            case 2: _showSkill = false; _dragSkill = null; break;
+            case 2: CloseSkillWindow(); break;
             case 3: _showQuest = false; _dragQuest = null; break;
             case 4: CloseSettings(); break; // the one close path for the options window
             case 5: _showShop = false; _dragShop = null; break;
