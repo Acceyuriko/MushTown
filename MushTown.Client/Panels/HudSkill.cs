@@ -55,8 +55,8 @@ public partial class MushTownGame
         [SkillData.Endure] = "+Max HP/DEF",
     };
 
-    private Rectangle SkillRect() => new(_skillPos.X, _skillPos.Y, SkillW, SkillBodyH);
-    private Rectangle SkillTitleRect() => new(_skillPos.X, _skillPos.Y, SkillW, _skillLay.Get("titleH", 20));
+    private Rectangle SkillRect() => new(0, 0, SkillW, SkillBodyH);
+    private Rectangle SkillTitleRect() => new(0, 0, SkillW, _skillLay.Get("titleH", 20));
 
     private void BuildSkillScene()
     {
@@ -123,25 +123,20 @@ public partial class MushTownGame
     }
 
     // Skill window job tabs (three Roman numerals under the title).
-    private Rectangle SkillTabRect(int t)
-    {
-        var r = SkillRect();
-        return new Rectangle(r.X + _skillLay.Get("tabX", 10) + t * _skillLay.Get("tabStep", 26), r.Y + _skillLay.Get("tabY", 27), 25, 20);
-    }
+    private Rectangle SkillTabRect(int t) => new(_skillLay.Get("tabX", 10) + t * _skillLay.Get("tabStep", 26),
+        _skillLay.Get("tabY", 27), 25, 20);
 
     // One skill row of the list (the row art is cut to this height).
     private Rectangle SkillRowRect(int i)
     {
-        var r = SkillRect();
         int pitch = _skillLay.Get("rowPitch", 32);
-        return new Rectangle(r.X + _skillLay.Get("listX", 8), r.Y + _skillLay.Get("listY", 92) + i * pitch, 140, pitch);
+        return new Rectangle(_skillLay.Get("listX", 8), _skillLay.Get("listY", 92) + i * pitch, 140, pitch);
     }
 
     // The skill info box of the picked skill (right of the list).
     private Rectangle SkillDetailRect()
     {
-        var r = SkillRect();
-        return new Rectangle(r.X + _skillLay.Get("detailX", 160), r.Y + _skillLay.Get("detailY", 98),
+        return new Rectangle(_skillLay.Get("detailX", 160), _skillLay.Get("detailY", 98),
             _skillLay.Get("detailW", 150), _skillLay.Get("detailH", 200));
     }
 
@@ -160,11 +155,8 @@ public partial class MushTownGame
             _skillLay.Get("maxW", 34), _skillLay.Get("maxH", 14));
     }
 
-    private Rectangle SkillXRect()
-    {
-        var r = SkillRect();
-        return new Rectangle(r.X + r.Width - _skillLay.Get("closeX", 15) - 11, r.Y + _skillLay.Get("closeY", 2), 11, 11);
-    }
+    private Rectangle SkillXRect() => new(SkillRect().Width - _skillLay.Get("closeX", 15) - 11,
+        _skillLay.Get("closeY", 2), 11, 11);
 
     // The picked skill and its numbers.
     private int SelectedSkillId => SkillTabs[_skillTab][_skillSel];
@@ -214,7 +206,7 @@ public sealed class SkillTabArt : Component, IDrawable
     public SkillTabArt(int index, Func<bool> selected) { _index = index; _selected = selected; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         bool sel = _selected();
         gfx.Sb.Draw(gfx.Tex(sel ? $"ui/skill_tabsel{_index}.png" : $"ui/skill_tab{_index}.png"),
             new Vector2(r.X, r.Y + (sel ? 0 : MushTownGame._skillLay.Get("tabArtY", 2))), Color.White);
@@ -237,7 +229,7 @@ public sealed class SkillListRow : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         var lay = MushTownGame._skillLay;
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var s = _live();
         bool locked = s.Level < _skill.ReqLevel;
         bool cooling = !locked && s.CdMs > 0;
@@ -275,7 +267,7 @@ public sealed class SkillPickBar : Component, IDrawable
         var lay = MushTownGame._skillLay;
         var skill = _skill();
         var s = _live();
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Tex(s.Level < skill.ReqLevel ? skill.Disabled : skill.Icon), new Vector2(r.X + lay.Get("pickIconX", 12), r.Y + lay.Get("pickIconY", 51)), Color.White);
         gfx.Sb.Draw(gfx.Ui.GetSmall(skill.Name), new Vector2(r.X + lay.Get("pickNameX", 46), r.Y + lay.Get("pickNameY", 60)), Color.White);
         var t = gfx.Ui.GetSmall($"Lv.{s.Lv}/{skill.MaxLevel}");
@@ -289,7 +281,7 @@ public sealed class SkillTipFrame : Component, IDrawable
 {
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var nw = gfx.Tex("ui/skill_tip_nw.png"); var ne = gfx.Tex("ui/skill_tip_ne.png");
         var sw = gfx.Tex("ui/skill_tip_sw.png"); var se = gfx.Tex("ui/skill_tip_se.png");
         var n = gfx.Tex("ui/skill_tip_n.png"); var s = gfx.Tex("ui/skill_tip_s.png");
@@ -323,7 +315,7 @@ public sealed class SkillDetailBox : Component, IDrawable
         var lay = MushTownGame._skillLay;
         var skill = _skill();
         var s = _live();
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         int y = r.Y + lay.Get("textY", 16);
         int step = lay.Get("detailLine", 16);
         void Line(string text, Color ink)
@@ -358,7 +350,7 @@ public sealed class SkillPlusArt : Component, IDrawable
     public SkillPlusArt(Func<bool> enabled) => _enabled = enabled;
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         string key = !_enabled() ? "ui/skill_spup_d.png"
             : gfx.Hovered == Owner ? gfx.Pressed ? "ui/skill_spup_p.png" : "ui/skill_spup_h.png"
             : "ui/skill_spup_n.png";

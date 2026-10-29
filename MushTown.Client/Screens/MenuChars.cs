@@ -47,6 +47,7 @@ public partial class MushTownGame
         return new Rectangle(x0, bg.Y, bg.X + (int)(cell * pitch) - x0, bg.Height);
     }
     private static Rectangle DeletePanelRect() => new(CharLayout.DelPanel.X, CharLayout.DelPanel.Y, CharLayout.DelSize.X, CharLayout.DelSize.Y);
+
     private Rectangle DeleteYesRect() => UiRect("cs_delyes_n.png", CharLayout.DelYes.X, CharLayout.DelYes.Y);
     private Rectangle DeleteNoRect() => UiRect("cs_delno_n.png", CharLayout.DelNo.X, CharLayout.DelNo.Y);
 
@@ -125,12 +126,11 @@ public partial class MushTownGame
         err.Add(new CenterText(() => _error, 683, CharLayout.ErrorY, ErrRed));
         _menuScene.Add(err);
         _csDeleteModal = new GameObject { Modal = true };
-        _csDeleteModal.Add(new Rect(DeletePanelRect())); // panel hits (not buttons): the box stays open, like legacy
         var dim = new GameObject { NoHit = true };
         dim.Add(new Dim(120));
         _csDeleteModal.AddChild(dim);
-        var panel = new GameObject { NoHit = true };
-        panel.Add(new Rect(DeletePanelRect()));
+        var panel = new GameObject();
+        panel.Add(new Rect(DeletePanelRect())); // panel hits (not buttons): the box stays open, like legacy
         panel.Add(new WhitePanel());
         _csDeleteModal.AddChild(panel);
         var dt = new GameObject(); // no Rect: draws, never hits

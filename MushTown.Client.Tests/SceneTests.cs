@@ -100,4 +100,68 @@ public class SceneTests
         Assert.IsNull(scene.TopAt(50, 50)); // the modal swallows the world behind it
         Assert.AreSame(modal, scene.TopAt(5, 5));
     }
+
+    // The rects a tree holds are local: Layout adds the parents' offsets.
+    [TestMethod]
+    public void Layout_NestsTheOffsets()
+    {
+        var scene = new Scene();
+        var outer = new GameObject();
+        outer.Add(new Rect(new Rectangle(100, 50, 80, 60)));
+        var mid = new GameObject();
+        mid.Add(new Rect(new Rectangle(10, 5, 40, 30)));
+        var leaf = new GameObject();
+        leaf.Add(new Rect(new Rectangle(2, 3, 4, 5)));
+        outer.AddChild(mid);
+        mid.AddChild(leaf);
+        scene.Add(outer);
+        scene.Layout();
+        Assert.AreEqual(new Rectangle(112, 58, 4, 5), leaf.Get<Rect>()!.Screen);
+        Assert.AreSame(leaf, scene.TopAt(113, 59)); // the hit test reads the screen box
+    }
+
+    // A window that only counts its builds.
+    private sealed class StubWindow : UiWindow
+    {
+        public int Builds;
+        public StubWindow() : base(HotkeyAction.Stat) { }
+        public override Rectangle Rect() => new(0, 0, 40, 30);
+        public override Rectangle TitleRect() => new(0, 0, 40, 10);
+        public override Point LayoutPos() => new(0, 0);
+        public override void Build()
+        {
+            Builds++;
+            var child = new GameObject();
+            child.Add(new Rect(new Rectangle(5, 5, 10, 10)));
+            Host.AddChild(child);
+        }
+    }
+
+    // A move repoints the host rect: the tree stays as it was built.
+    [TestMethod]
+    public void Sync_MoveDoesNotRebuild()
+    {
+        var scene = new Scene();
+        var w = new StubWindow { Pos = new Point(10, 10) };
+        try
+        {
+            scene.Add(w.Host);
+            w.Sync();
+            scene.Layout();
+            Assert.AreEqual(1, w.Builds);
+            Assert.AreEqual(new Rectangle(10, 10, 40, 30), w.Host.Get<Rect>()!.Screen);
+            var child = w.Host.Children[0];
+            Assert.AreEqual(new Rectangle(15, 15, 10, 10), child.Get<Rect>()!.Screen);
+            w.Pos = new Point(60, 20);
+            w.Sync();
+            scene.Layout();
+            Assert.AreEqual(1, w.Builds); // no rebuild on a move
+            Assert.AreEqual(new Rectangle(60, 20, 40, 30), w.Host.Get<Rect>()!.Screen);
+            Assert.AreEqual(new Rectangle(65, 25, 10, 10), child.Get<Rect>()!.Screen);
+        }
+        finally
+        {
+            UiWindow.List.Remove(w); // the constructor registers: the game walks this list
+        }
+    }
 }

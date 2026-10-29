@@ -69,7 +69,7 @@ public sealed class BuffBarArt : Component, IDrawable
         var lay = MushTownGame._buffLay;
         var buffs = _buffs();
         if (buffs.Count == 0) return; // no buff, no bar
-        var box = Owner.Get<Rect>()!.Box;
+        var box = Owner.Get<Rect>()!.Screen;
         int pad = MushTownGame.BuffFramePad; // the border of the frame art
         int size = MushTownGame.BuffIconSize; // the skill icon is 32x32
         int pitch = lay.Get("iconPitch", 39);

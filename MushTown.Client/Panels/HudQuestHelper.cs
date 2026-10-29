@@ -21,7 +21,6 @@ public partial class MushTownGame
     private bool _qhHidden; // the X hid the bar
     private bool _qhListOpen = true; // the chevron shows the quest list
     private int _qhCount; // the quests of the last frame
-    private GameObject _qhArt = null!; // the bar art: it never catches a click
     private GameObject _qhClose = null!; // the X button
     private GameObject _qhChevron = null!; // the chevron button
     private GameObject _qhList = null!; // the quest lines under the bar
@@ -47,7 +46,6 @@ public partial class MushTownGame
         var list = new GameObject { NoHit = true }; // the lines only: no clicks on them
         list.Add(new Tracker(TrackerLines, _qhLay.Get("listRight", 1358), _qhLay.Get("listTop", 74)));
         bar.AddChild(list);
-        _qhArt = art;
         _qhList = list;
         return bar;
     }
@@ -67,29 +65,39 @@ public partial class MushTownGame
     // The state of the quest helper: the quests in the list, the hidden flag
     // and the list open. A new quest brings a hidden bar back. The bar stays
     // away when there is no quest at all (that is what the official does).
+    // It never moves a Rect: Draw runs after Layout, so a write here would
+    // leave this frame reading a stale Screen.
     private (int Count, bool Hidden, bool ListOpen) QuestHelperState()
     {
         int count = QuestCount();
         if (count > _qhCount) _qhHidden = false; // a new quest: the bar comes back
         _qhCount = count;
         bool hidden = _qhHidden || count == 0;
-        _qhArt.Get<Rect>()!.Box = hidden ? Rectangle.Empty : QuestHelperBarRect();
         _qhClose.Enabled = !hidden;
         _qhChevron.Enabled = !hidden;
-        var bar = QuestHelperBarRect();
-        _qhChevron.Get<Rect>()!.Box = new Rectangle(bar.X + _qhLay.Get("chevronDx", 184), bar.Y + ChevronDy(),
-            HelperButtonSize, HelperButtonSize);
         _qhList.Enabled = !hidden && _qhListOpen;
         return (count, hidden, _qhListOpen);
     }
+
+    // Where a spot of the bar sits on the screen. The bar root has no Rect, so
+    // its children carry the screen spot themselves.
+    private Point BarSpot(int dx, int dy)
+    {
+        var bar = QuestHelperBarRect();
+        return new Point(bar.X + dx, bar.Y + dy);
+    }
+
+    // The chevron sits on the bar at the WZ spot for the state it shows: the
+    // up chevron is one pixel higher than the down one. Only the spot moves,
+    // the box never changes.
+    private void MoveChevron() => _qhChevron.Get<Rect>()!.Offset = BarSpot(_qhLay.Get("chevronDx", 184), ChevronDy());
 
     // One button of the quest helper: the X or the chevron. The art sits
     // where the WZ puts it inside the bar.
     private GameObject HelperButton(int dx, int dy, Action onClick, Func<bool, bool, string> art)
     {
-        var bar = QuestHelperBarRect();
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(bar.X + dx, bar.Y + dy, HelperButtonSize, HelperButtonSize)));
+        o.Add(new Rect(new Rectangle(BarSpot(dx, dy), new Point(HelperButtonSize, HelperButtonSize))));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
         o.Add(new QuestHelperButtonArt(art));
         return o;
@@ -99,7 +107,11 @@ public partial class MushTownGame
     private void HideQuestHelper() => _qhHidden = true;
 
     // The chevron opens or closes the quest list.
-    private void ToggleQuestHelperList() => _qhListOpen = !_qhListOpen;
+    private void ToggleQuestHelperList()
+    {
+        _qhListOpen = !_qhListOpen;
+        MoveChevron(); // the up and the down chevron sit one pixel apart
+    }
 
     // The X art: the official close button of the helper.
     private string QuestHelperCloseArt(bool hover, bool press) =>
@@ -141,7 +153,7 @@ public sealed class QuestHelperBarArt : Component, IDrawable
     {
         var (count, hidden, listOpen) = _state();
         if (hidden) return;
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Tex(listOpen ? "ui/qhelper_topopen.png" : "ui/qhelper_top.png"), new Vector2(r.X, r.Y), Color.White);
         string text = count.ToString();
         int x = r.X + NumSpot(text.Length);
@@ -170,7 +182,7 @@ public sealed class QuestHelperButtonArt : Component, IDrawable
     public QuestHelperButtonArt(Func<bool, bool, string> art) { _art = art; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var tex = gfx.Tex(_art(gfx.Hovered == Owner, gfx.Pressed));
         gfx.Sb.Draw(tex, new Vector2(r.X + (r.Width - tex.Width) / 2, r.Y + (r.Height - tex.Height) / 2), Color.White);
     }

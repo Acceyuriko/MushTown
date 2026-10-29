@@ -44,12 +44,12 @@ public partial class MushTownGame
 
     private bool _questDragged; // the player dragged the window: the file spot does not win
 
-    private Rectangle QuestRect() => new(_questPos.X, _questPos.Y, QuestW, QuestBodyH);
-    private Rectangle QuestListRect() => new(_questPos.X, _questPos.Y, QuestListW, QuestBodyH);
-    private Rectangle QuestDetailRect() => new(_questPos.X + QuestListW, _questPos.Y, QuestDetailW, QuestBodyH);
+    private Rectangle QuestRect() => new(0, 0, QuestW, QuestBodyH);
+    private Rectangle QuestListRect() => new(0, 0, QuestListW, QuestBodyH);
+    private Rectangle QuestDetailRect() => new(QuestListW, 0, QuestDetailW, QuestBodyH);
 
     // The QUEST strip on the list panel drags the window.
-    private Rectangle QuestTitleRect() => new(_questPos.X, _questPos.Y, QuestListW, _questLay.Get("titleH", 20));
+    private Rectangle QuestTitleRect() => new(0, 0, QuestListW, _questLay.Get("titleH", 20));
     private Rectangle QuestXRect()
     {
         var r = QuestDetailRect();
@@ -99,9 +99,9 @@ public partial class MushTownGame
             rb.Add(new Invoke(gfx =>
             {
                 if (gfx.HoverButton != btn) return;
-                gfx.Sb.Draw(gfx.Pixel, rr, new Color(90, 140, 200, 70));
+                gfx.Sb.Draw(gfx.Pixel, rb.Get<Rect>()!.Screen, new Color(90, 140, 200, 70));
             }));
-            rb.Add(new Invoke(gfx => DrawQuestIcon(gfx, rr, qid)));
+            rb.Add(new Invoke(gfx => DrawQuestIcon(gfx, rb.Get<Rect>()!.Screen, qid)));
             rb.Add(new LiveTint(() => QuestRowInk(qid), _questLay.Get("nameX", 22), _questLay.Get("nameY", 2)));
             rb.Add(new RightLabel((ui, t) => ui.GetSmall(t), () => QuestLevelText(qid), rr.Width - _questLay.Get("levelX", 8), _questLay.Get("levelY", 3), new Color(120, 130, 145)));
             rb.Add(new LiveLabel(() => QuestRowProgress(qid), _questLay.Get("nameX", 22), _questLay.Get("progY", 17), new Color(130, 140, 155)));
@@ -114,12 +114,12 @@ public partial class MushTownGame
         head.Add(new Rect(dr));
         head.Add(new LiveLabel(() => QuestDetail()?.Name ?? "", _questLay.Get("headX", 30), _questLay.Get("headY", 32), Color.White, LabelFont.Mid));
         head.Add(new LiveLabel(() => QuestDetail()?.Level ?? "", _questLay.Get("headX", 30), _questLay.Get("headLevelY", 58), new Color(195, 215, 235)));
-        head.Add(new Invoke(gfx => DrawQuestGauge(gfx, dr)));
+        head.Add(new Invoke(gfx => DrawQuestGauge(gfx, head.Get<Rect>()!.Screen)));
         body.AddChild(head);
 
         var text = new GameObject { NoHit = true };
         text.Add(new Rect(QuestRect()));
-        text.Add(new Invoke(gfx => DrawQuestBody(gfx)));
+        text.Add(new Invoke(gfx => DrawQuestBody(gfx, text.Get<Rect>()!.Screen.Location)));
         body.AddChild(text);
 
         body.AddChild(PanelButton(QuestTitleRect(), "", () => { _questDragged = true; _dragQuest = _uiScene.LastClick - _questPos; })); // silent, like legacy
@@ -231,12 +231,13 @@ public partial class MushTownGame
     // The body of the detail panel: the official section titles with the
     // description, the kills, the reward and the turn-in line. It stops at
     // the bottom bar, so a long quest does not draw over the buttons.
-    private void DrawQuestBody(UiGfx gfx)
+    // origin = the window's screen corner: the body is hand drawn.
+    private void DrawQuestBody(UiGfx gfx, Point origin)
     {
         var d = QuestDetail();
         if (d == null) return;
-        int x = _questPos.X + QuestListW + _questLay.Get("bodyX", 14);
-        int y = _questPos.Y + _questLay.Get("bodyY", 124);
+        int x = origin.X + QuestListW + _questLay.Get("bodyX", 14);
+        int y = origin.Y + _questLay.Get("bodyY", 124);
         int lh = _questLay.Get("lineH", 16);
         int bottom = y + _questLay.Get("bodyH", 240);
         var ink = new Color(45, 50, 60);
@@ -286,6 +287,10 @@ public partial class MushTownGame
     {
         foreach (string f in TalkFiles) LoadTexture("ui/" + f);
         _talkHost.Clear();
+        // The dialogue spot: the body under it is local. The rect is reused, so
+        // a rebuild for another NPC moves the modal box instead of stacking one.
+        var box = TalkBox();
+        PlaceHost(_talkHost, box.Location, box.Size.X, box.Size.Y);
         var body = new GameObject();
         body.Add(new Rect(TalkRect())); // no Button: talk swallows every click, like the legacy guard
         body.Add(new TalkFrame());
@@ -345,14 +350,18 @@ public partial class MushTownGame
         _ => 57,
     };
 
-    // The dialogue box: the top piece, the text rows and the bottom piece.
-    private Rectangle TalkRect()
+    // The dialogue box on the screen: the top piece, the text rows and the
+    // bottom piece. The body inside it is local.
+    private Rectangle TalkBox()
     {
         int rows = TalkLines().Count + (_talkQuest == 0 ? TalkEntries(_talkNpc).Count : 0)
             + (_talkQuest == 0 && NpcHasShop(_talkNpc) ? 1 : 0); // the Shop row in menu mode
         int h = TalkTopH + rows * _talkLay.Get("lineStep", 13) + TalkBottomH;
         return new Rectangle((MushTownGame.GameWidth - TalkW) / 2, _talkLay.Get("centerY", 340) - h / 2, TalkW, h);
     }
+
+    // The dialogue box inside the talk root.
+    private Rectangle TalkRect() => new(0, 0, TalkW, TalkBox().Height);
 
     private List<string> TalkLines()
     {

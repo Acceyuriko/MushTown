@@ -163,16 +163,16 @@ public sealed class KeyConfigWindow : UiWindow
     // The combo key mode: a drop gives the action a second key.
     private bool _comboMode;
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 660), _lay.Get("h", 624));
+    public override Rectangle Rect() => new(0, 0, _lay.Get("w", 660), _lay.Get("h", 624));
 
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("titleH", 18));
+    public override Rectangle TitleRect() => new(0, 0, Rect().Width, _lay.Get("titleH", 18));
 
     public override Point LayoutPos() => new(_lay.Get("x", 353), _lay.Get("y", 72));
 
     // One key box of the official keyboard (the WZ keyPos spot).
     private Rectangle KeyRect(Spot s) => new(
-        Pos.X + s.X + _lay.Get("keyDx", 0),
-        Pos.Y + s.Y + _lay.Get("keyDy", 33),
+        s.X + _lay.Get("keyDx", 0),
+        s.Y + _lay.Get("keyDy", 33),
         _lay.Get("keyW", 32), _lay.Get("keyH", 32));
 
     // One official grid cell (the art draws the cells, the actions sit in them).
@@ -181,7 +181,7 @@ public sealed class KeyConfigWindow : UiWindow
         int cols = _lay.Get("gridCols", 17);
         int x = _lay.Get("gridX", 25) + (index % cols) * _lay.Get("cellPitchX", 36);
         int y = _lay.Get("gridY", 374) + (index / cols) * _lay.Get("cellPitchY", 36);
-        return new Rectangle(Pos.X + x, Pos.Y + y, _lay.Get("cellW", 34), _lay.Get("cellH", 34));
+        return new Rectangle(x, y, _lay.Get("cellW", 34), _lay.Get("cellH", 34));
     }
 
     // Open the window: the draft starts from the picked preset (the active
@@ -301,7 +301,7 @@ public sealed class KeyConfigWindow : UiWindow
             string stem = $"ui/keys_pg{i + 1}";
             int x = _lay.Get($"pg{i + 1}X", 505 + 20 * i), y = _lay.Get($"pg{i + 1}Y", 76);
             var o = new GameObject();
-            o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 12, 12)));
+            o.Add(new Rect(new Rectangle(x, y, 12, 12)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _slot = slot; ReloadDraft(); Build(); } }); // the draft and the action grid follow the picked preset
             o.Add(new Image(stem, () => _slot == slot, "_c")); // the picked page is lit green by the checked art
             root.AddChild(o);
@@ -333,7 +333,7 @@ public sealed class KeyConfigWindow : UiWindow
         root.AddChild(title);
 
         var close = new GameObject();
-        close.Add(new Rect(new Rectangle(Pos.X + closeX, Pos.Y + closeY, closeSize, closeSize)));
+        close.Add(new Rect(new Rectangle(closeX, closeY, closeSize, closeSize)));
         close.Add(new Button { Kind = ButtonKind.Click, OnClick = Close });
         close.Add(new Picture(closeArt));
         root.AddChild(close);
@@ -352,7 +352,7 @@ public sealed class KeyConfigWindow : UiWindow
     private GameObject ArtButton(string stem, int dx, int dy, int w, int h, Action onClick)
     {
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + dx, Pos.Y + dy, w, h)));
+        o.Add(new Rect(new Rectangle(dx, dy, w, h)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
         o.Add(new Image(stem));
         return o;
@@ -363,7 +363,7 @@ public sealed class KeyConfigWindow : UiWindow
     {
         int x = _lay.Get("comboX", 20), y = _lay.Get("comboY", 568);
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 76, 27)));
+        o.Add(new Rect(new Rectangle(x, y, 76, 27)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = ToggleComboMode });
         o.Add(new Image("ui/keys_combo", () => _comboMode));
         return o;
@@ -375,7 +375,7 @@ public sealed class KeyConfigWindow : UiWindow
         int x = _lay.Get("filterX", 529), y = _lay.Get("filterY", 337);
         int w = _lay.Get("filterW", 108), h = _lay.Get("filterH", 25);
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, w, h)));
+        o.Add(new Rect(new Rectangle(x, y, w, h)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = ToggleFilter });
         o.Add(new FilterBox(this));
         o.Add(new Label(FilterName(_filter), _lay.Get("filterTextX", 7), _lay.Get("filterTextY", 5)));
@@ -387,7 +387,7 @@ public sealed class KeyConfigWindow : UiWindow
         int top = y + h;
 
         var bg = new GameObject();
-        bg.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + top, listW, itemH * Filters.Filters.Count)));
+        bg.Add(new Rect(new Rectangle(x, top, listW, itemH * Filters.Filters.Count)));
         bg.Add(new Fill(new Color(238, 238, 238), 0));
         bg.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _filterOpen = false; Build(); } }); // a click on the list but not on an item closes it
         root.AddChild(bg);
@@ -397,7 +397,7 @@ public sealed class KeyConfigWindow : UiWindow
             int index = i;
             int itemY = top + index * itemH;
             var item = new GameObject();
-            item.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + itemY, listW, itemH)));
+            item.Add(new Rect(new Rectangle(x, itemY, listW, itemH)));
             item.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickFilter(index) });
             item.Add(new FilterItem(index));
             root.AddChild(item);
@@ -431,23 +431,29 @@ public sealed class KeyConfigWindow : UiWindow
         int w = _lay.Get("pcW", 332), h = _lay.Get("pcH", 256);
 
         // The whole screen, not just the window: the dialog is modal, a click
-        // on the HUD behind it must not land.
+        // on the HUD behind it must not land. The block is a child of the
+        // window, so it starts at the negative window spot to cover the screen.
+        // The offset is read once here, which holds because the block also
+        // covers the title strip: the window cannot be dragged while this
+        // dialog is open, so Pos cannot move under it.
         var block = new GameObject();
-        block.Add(new Rect(new Rectangle(0, 0, MushTownGame.GameWidth, MushTownGame.GameHeight)));
+        block.Add(new Rect(new Rectangle(-Pos.X, -Pos.Y, MushTownGame.GameWidth, MushTownGame.GameHeight)));
         block.Add(new Button { Kind = ButtonKind.Silent });
         root.AddChild(block);
 
         var dlg = new GameObject();
-        dlg.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, w, h)));
+        dlg.Add(new Rect(new Rectangle(x, y, w, h)));
         dlg.Add(new Picture("ui/keys_pcopy_bg.png"));
         root.AddChild(dlg);
 
+        // Everything under the dialog is local to it: the box already sits at
+        // (x, y) inside the window.
         for (int i = 0; i < 3; i++)
         {
             int from = i;
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(
-                Pos.X + x + _lay.Get($"pcPg{i + 1}X", 207 + 33 * i), Pos.Y + y + _lay.Get("pcPgY", 152),
+                _lay.Get($"pcPg{i + 1}X", 207 + 33 * i), _lay.Get("pcPgY", 152),
                 _lay.Get("pcPgW", 18), _lay.Get("pcPgH", 18))));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _copyFrom = from; Build(); } });
             o.Add(new Image($"ui/keys_pcopy_pg{i + 1}", () => _copyFrom == from, "_c"));
@@ -455,7 +461,7 @@ public sealed class KeyConfigWindow : UiWindow
         }
 
         var now = new GameObject(); // the preset the player is on: the art leaves a blank for it
-        now.Add(new Rect(new Rectangle(Pos.X + x + _lay.Get("pcNowX", 216), Pos.Y + y + _lay.Get("pcNowY", 82),
+        now.Add(new Rect(new Rectangle(_lay.Get("pcNowX", 216), _lay.Get("pcNowY", 82),
             _lay.Get("pcNowW", 20), _lay.Get("pcNowH", 14))));
         now.Add(new Label((_slot + 1).ToString(), 0, 0));
         dlg.AddChild(now);
@@ -467,9 +473,8 @@ public sealed class KeyConfigWindow : UiWindow
     // One button of the copy dialog, placed inside the dialog box.
     private GameObject DialogButton(string stem, int dx, int dy, Action onClick)
     {
-        int x = _lay.Get("pcX", 164) + dx, y = _lay.Get("pcY", 184) + dy;
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, _lay.Get("pcBtnW", 83), _lay.Get("pcBtnH", 26))));
+        o.Add(new Rect(new Rectangle(dx, dy, _lay.Get("pcBtnW", 83), _lay.Get("pcBtnH", 26))));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
         o.Add(new Image(stem));
         return o;
@@ -499,7 +504,7 @@ public sealed class KeyConfigWindow : UiWindow
         public KeyCap(KeyConfigWindow w, Spot spot) { _w = w; _spot = spot; }
         public void Draw(UiGfx gfx)
         {
-            var r = Owner.Get<Rect>()!.Box;
+            var r = Owner.Get<Rect>()!.Screen;
             string key = KeyName(_spot.Code);
             if (_w._keyAction.TryGetValue(key, out var action))
             {
@@ -531,7 +536,7 @@ public sealed class KeyConfigWindow : UiWindow
         public ActionCell(KeyConfigWindow w, HotkeyAction action) { _w = w; _action = action; }
         public void Draw(UiGfx gfx)
         {
-            var r = Owner.Get<Rect>()!.Box;
+            var r = Owner.Get<Rect>()!.Screen;
             var icon = gfx.Tex(IconTex(_action));
             gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
             var parts = _w.Keys(_action);
@@ -558,7 +563,7 @@ public sealed class KeyConfigWindow : UiWindow
         public FilterBox(KeyConfigWindow w) => _w = w;
         public void Draw(UiGfx gfx)
         {
-            var r = Owner.Get<Rect>()!.Box;
+            var r = Owner.Get<Rect>()!.Screen;
             string set = _w._filterOpen ? "p" : "n";
             gfx.Sb.Draw(gfx.Tex($"ui/keys_cbox_{set}0.png"), new Vector2(r.X, r.Y), Color.White);
             gfx.Sb.Draw(gfx.Tex($"ui/keys_cbox_{set}2.png"), new Vector2(r.X + r.Width - 31, r.Y), Color.White);
@@ -574,7 +579,7 @@ public sealed class KeyConfigWindow : UiWindow
         public FilterItem(int index) => _index = index;
         public void Draw(UiGfx gfx)
         {
-            var r = Owner.Get<Rect>()!.Box;
+            var r = Owner.Get<Rect>()!.Screen;
             if (gfx.Hovered == Owner) gfx.Sb.Draw(gfx.Pixel, r, new Color(167, 167, 167));
             gfx.Sb.Draw(gfx.Ui.GetSmall(FilterName(_index)), new Vector2(r.X + _lay.Get("filterTextX", 7), r.Y + _lay.Get("filterTextY", 5)), Color.Black);
         }
@@ -634,7 +639,7 @@ public sealed class KeyConfigWindow : UiWindow
         if (Math.Abs(gx - _pickAt.X) + Math.Abs(gy - _pickAt.Y) < DragSlop) return; // a click, not a drag
         foreach (var s in Spots.Keys)
         {
-            if (!KeyRect(s).Contains(gx, gy)) continue;
+            if (!OnScreen(KeyRect(s)).Contains(gx, gy)) continue;
             if (!OnKeyWindow(gx, gy)) return; // another window covers that key
             string key = KeyName(s.Code);
             if (_comboMode) AddKey(action, key);
@@ -644,7 +649,7 @@ public sealed class KeyConfigWindow : UiWindow
         }
         if (_comboMode) return;
         // Not the pool, or the open filter list covering it: the binding stays.
-        if (!PoolRect().Contains(gx, gy) || _filterOpen) return;
+        if (!OnScreen(PoolRect()).Contains(gx, gy) || _filterOpen) return;
         _draft[action] = ""; // let go on the pool: the action loses its key
         Build();
     }
@@ -655,7 +660,7 @@ public sealed class KeyConfigWindow : UiWindow
         int cols = _lay.Get("gridCols", 17);
         int rows = (Actions.Length + cols - 1) / cols;
         return new Rectangle(
-            Pos.X + _lay.Get("gridX", 25), Pos.Y + _lay.Get("gridY", 374),
+            _lay.Get("gridX", 25), _lay.Get("gridY", 374),
             cols * _lay.Get("cellPitchX", 36), rows * _lay.Get("cellPitchY", 36));
     }
 
@@ -679,7 +684,7 @@ public sealed class KeyConfigWindow : UiWindow
         if (Math.Abs(gx - at.X) + Math.Abs(gy - at.Y) < DragSlop) return; // a click on the skill row, not a drag
         foreach (var s in Spots.Keys)
         {
-            if (!KeyRect(s).Contains(gx, gy)) continue;
+            if (!OnScreen(KeyRect(s)).Contains(gx, gy)) continue;
             if (!OnKeyWindow(gx, gy)) return; // the skill window covers that key
             string key = KeyName(s.Code);
             if (!InputController.TryParseKeys(key, out _)) return;

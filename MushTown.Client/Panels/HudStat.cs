@@ -22,12 +22,12 @@ public partial class MushTownGame
     private int StatH => _statLay.Get("h", 479);
     private int StatBodyX => _statLay.Get("bodyX", 12);
     private int StatBodyY => _statLay.Get("bodyY", 38);
-    private Rectangle StatRect() => new(_statPos.X, _statPos.Y, StatW, StatH);
+    private Rectangle StatRect() => new(0, 0, StatW, StatH);
     private Rectangle StatTabRect(int tab) => new(
-        _statPos.X + _statLay.Get("tabX", 11) + tab * _statLay.Get("tabGap", 113),
-        _statPos.Y + _statLay.Get("tabY", 12), 111, 20);
-    private Rectangle StatXRect() => new(_statPos.X + StatW - 23, _statPos.Y + _statLay.Get("tabY", 12), 11, 11);
-    private Rectangle StatDragRect() => new(StatTabRect(1).Right + 4, _statPos.Y, StatXRect().X - StatTabRect(1).Right - 8, 32);
+        _statLay.Get("tabX", 11) + tab * _statLay.Get("tabGap", 113),
+        _statLay.Get("tabY", 12), 111, 20);
+    private Rectangle StatXRect() => new(StatW - 23, _statLay.Get("tabY", 12), 11, 11);
+    private Rectangle StatDragRect() => new(StatTabRect(1).Right + 4, 0, StatXRect().X - StatTabRect(1).Right - 8, 32); // y 0 = the window top edge
 
     // The window takes the spot from the layout file the first time it opens.
     private void StatPlaceFirst()
@@ -65,7 +65,7 @@ public partial class MushTownGame
         int tabX = _statLay.Get("tabX", 11), tabY = _statLay.Get("tabY", 12);
         body.Add(new Picture(_statTab == 0 ? "ui/stat_tab_stat_s.png" : "ui/stat_tab_stat_n.png", tabX, tabY));
         body.Add(new Picture(_statTab == 1 ? "ui/stat_tab_equip_s.png" : "ui/stat_tab_equip_n.png", tabX + _statLay.Get("tabGap", 113), tabY));
-        body.Add(new Picture("ui/stat_x.png", StatXRect().X - _statPos.X, StatXRect().Y - _statPos.Y));
+        body.Add(new Picture("ui/stat_x.png", StatXRect().X, StatXRect().Y));
         // the name and level sit on the free strip right of the tabs
         body.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => $"{_save?.Slots[_slot]?.Name ?? ""}  Lv.{_save?.Slots[_slot]?.Level ?? 1}",
             _statLay.Get("nameX", 440), _statLay.Get("nameY", 8), new Color(200, 220, 0)));
@@ -82,7 +82,6 @@ public partial class MushTownGame
         _statTab = tab;
         _statDetail = 0;
         BuildStatScene();
-        _statBuiltPos = _statPos;
     }
 
     // The stats page: the official panel art with the live numbers.
@@ -101,7 +100,7 @@ public partial class MushTownGame
             var row = rows[i];
             int index = i; // the label reads the value later, so the index must be its own copy
             var o = new GameObject();
-            o.Add(new Rect(new Rectangle(_statPos.X + bx + row.X, _statPos.Y + by + row.Y, row.W, 16)));
+            o.Add(new Rect(new Rectangle(bx + row.X, by + row.Y, row.W, 16)));
             o.Add(new Button { Kind = ButtonKind.Silent }); // the row only takes the hover
             o.Add(new StatHighlight(row.Long ? "ui/stat_hl_long.png" : "ui/stat_hl_short.png"));
             o.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(index), row.Vx - row.X, row.Vy - row.Y, Color.White));
@@ -120,7 +119,7 @@ public partial class MushTownGame
             var box = EquipSlotBox(data.Slot);
             if (box.X < 0) continue; // a kind the official page has no slot for
             var slot = new GameObject();
-            slot.Add(new Rect(new Rectangle(_statPos.X + bx + box.X, _statPos.Y + by + box.Y, 42, 42)));
+            slot.Add(new Rect(new Rectangle(bx + box.X, by + box.Y, 42, 42)));
             slot.Add(new Button { Kind = ButtonKind.Click, OnClick = () => ShowStatDetail(id) });
             slot.Add(new EquipIcon(data.Image));
             body.AddChild(slot);
@@ -133,7 +132,6 @@ public partial class MushTownGame
     {
         _statDetail = _statDetail == id ? 0 : id;
         BuildStatScene();
-        _statBuiltPos = _statPos;
     }
 
     // The item detail box: the official tooltip frame around the item.
@@ -144,7 +142,7 @@ public partial class MushTownGame
         int w = _statLay.Get("detailW", 200), h = _statLay.Get("detailH", 160);
         int iconSize = _statLay.Get("detailIconSize", 32);
         var box = new GameObject();
-        box.Add(new Rect(new Rectangle(_statPos.X + x, _statPos.Y + y, w, h)));
+        box.Add(new Rect(new Rectangle(x, y, w, h)));
         box.Add(new Box("tip"));
         box.Add(new LiveLabel(() => data.Name, _statLay.Get("detailNameX", 48), _statLay.Get("detailNameY", 6), new Color(255, 220, 0)));
         int ly = _statLay.Get("detailLineY", 28);
@@ -155,7 +153,7 @@ public partial class MushTownGame
         }
         body.AddChild(box);
         var icon = new GameObject();
-        icon.Add(new Rect(new Rectangle(_statPos.X + x + _statLay.Get("detailIconX", 8), _statPos.Y + y + _statLay.Get("detailIconY", 8), iconSize, iconSize)));
+        icon.Add(new Rect(new Rectangle(x + _statLay.Get("detailIconX", 8), y + _statLay.Get("detailIconY", 8), iconSize, iconSize)));
         icon.Add(new EquipIcon(data.Image));
         body.AddChild(icon);
     }
@@ -287,7 +285,7 @@ public sealed class StatHighlight : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         if (gfx.Hovered != Owner) return;
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Tex(_art), new Rectangle(r.X, r.Y, r.Width, r.Height), Color.White);
     }
 }
@@ -299,7 +297,7 @@ public sealed class EquipIcon : Component, IDrawable
     public EquipIcon(string image) => _image = image;
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var icon = gfx.Tex(_image);
         gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
     }

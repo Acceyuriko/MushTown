@@ -84,8 +84,29 @@ public sealed class Scene
     // its layer, so the caller reads the owner before the press detaches it.
     public GameObject? TopAt(int gx, int gy)
     {
+        Layout(); // the hit test reads Screen: a build since the last frame must not leave it stale
         var hit = Hit(_roots, gx, gy);
         return hit != null && AnyModal(_roots) && !InsideModal(hit) ? null : hit;
+    }
+
+    // Fills every Rect.Screen from the tree: one walk, the parent's origin plus
+    // the local offset. Hit, hover and draw all read Screen, so a moved window
+    // is a moved root, not a rebuilt tree.
+    public void Layout() => Layout(_roots, 0, 0);
+
+    private static void Layout(IReadOnlyList<GameObject> objs, int ox, int oy)
+    {
+        foreach (var o in objs)
+        {
+            int x = ox, y = oy;
+            if (o.Get<Rect>() is { } r)
+            {
+                r.Screen = new Rectangle(ox + r.Offset.X, oy + r.Offset.Y, r.Size.X, r.Size.Y);
+                x = r.Screen.X;
+                y = r.Screen.Y;
+            }
+            Layout(o.Children, x, y);
+        }
     }
 
     // A closed layer must not keep a lit row: Esc drops the hover with it.
@@ -102,6 +123,7 @@ public sealed class Scene
 
     public void Draw(UiGfx gfx)
     {
+        Layout(); // the draw reads Screen too
         gfx.Hovered = Hovered;
         gfx.HoverButton = HoverButton;
         foreach (var r in _roots) TreeDraw.DrawObject(r, gfx);

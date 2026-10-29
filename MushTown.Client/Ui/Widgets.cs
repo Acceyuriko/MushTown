@@ -4,13 +4,17 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Hit + layout rect. Numbers are copied from the legacy rect helpers
-// (pixel parity first); the helpers stay the single source.
+// Hit + layout rect. Offset is relative to the parent's origin, Size is the
+// box, and Scene.Layout fills Screen on every layout pass (more than once a
+// frame, see §8 #35 of the plan): hit, hover and draw all read Screen, so a
+// window that moves only repoints its root.
 public sealed class Rect : Component
 {
-    public Rectangle Box;
-    public Rect(Rectangle box) => Box = box;
-    public bool Contains(int gx, int gy) => Box.Contains(gx, gy);
+    public Point Offset;
+    public Point Size;
+    public Rectangle Screen;
+    public Rect(Rectangle box) { Offset = box.Location; Size = box.Size; }
+    public bool Contains(int gx, int gy) => Screen.Contains(gx, gy);
 }
 
 // 3-slice stretched background. Children (added after) draw on top.
@@ -20,7 +24,7 @@ public sealed class Panel : Component, IDrawable
     public Panel(string top, string mid, string bot) { _top = top; _mid = mid; _bot = bot; }
     public void Draw(UiGfx gfx)
     {
-        var p = Owner.Get<Rect>()!.Box;
+        var p = Owner.Get<Rect>()!.Screen;
         var t0 = gfx.Tex(_top); var t1 = gfx.Tex(_mid); var t2 = gfx.Tex(_bot);
         gfx.Sb.Draw(t0, new Vector2(p.X, p.Y), Color.White);
         gfx.Sb.Draw(t1, new Rectangle(p.X, p.Y + t0.Height, p.Width, p.Height - t0.Height - t2.Height), Color.White);
@@ -58,7 +62,7 @@ public sealed class Box : Component, IDrawable
 {
     private readonly string _stem;
     public Box(string stem) => _stem = stem;
-    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, _stem, Owner.Get<Rect>()!.Box);
+    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, _stem, Owner.Get<Rect>()!.Screen);
 }
 
 // Clickable rect: hit via Rect, action via OnClick. The Scene resolves
@@ -94,7 +98,7 @@ public sealed class Image : Component, IDrawable
     {
         string key = _on?.Invoke() == true ? _stem + _onSuffix + ".png"
             : _stem + (gfx.Hovered == Owner ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png");
-        gfx.Sb.Draw(gfx.Tex(key), Owner.Get<Rect>()!.Box, Color.White);
+        gfx.Sb.Draw(gfx.Tex(key), Owner.Get<Rect>()!.Screen, Color.White);
     }
 }
 
@@ -110,7 +114,7 @@ public sealed class Bar : Component, IDrawable
     }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Tex(_back), r, Color.White);
         var f = gfx.Tex(_fill);
         var (v, m) = _amount();
@@ -135,7 +139,7 @@ public sealed class Picture : Component, IDrawable
     public Picture(Texture2D tex, int dx, int dy) { _tex = tex; _dx = dx; _dy = dy; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         float a = gfx.Hovered == Owner ? gfx.Pressed ? PressAlpha : HoverAlpha : 1f;
         var c = Tint * a;
         if (_stretch) gfx.Sb.Draw(gfx.Tex(_key!), r, c);
@@ -157,7 +161,7 @@ public sealed class LiveLabel : Component, IDrawable
     public LiveLabel(Func<string> text, int dx, int dy, Color color, LabelFont font = LabelFont.Small) { _text = text; _dx = dx; _dy = dy; _color = color; _font = font; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var tex = _font switch
         {
             LabelFont.Mid => gfx.Ui.GetMid(_text()),
@@ -174,7 +178,7 @@ public sealed class PlateLevel : Component, IDrawable
     public PlateLevel(Func<int> level) => _level = level;
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         int x = r.X + 28; // WZ levelPos; digits step 10 (numInterval)
         foreach (char ch in _level().ToString())
         {
@@ -193,7 +197,7 @@ public sealed class BarNumber : Component, IDrawable
     public BarNumber(Func<string> text, int centerDx, int dy) { _text = text; _centerDx = centerDx; _dy = dy; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         string text = _text();
         int dh = gfx.Tex("ui/hud_num0.png").Height;
         int w = 0;
@@ -276,7 +280,7 @@ public sealed class Label : Component, IDrawable
     public Label(string text, int dx, int dy) { _text = text; _dx = dx; _dy = dy; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Ui.GetSmall(_text), new Vector2(r.X + _dx, r.Y + _dy), Tint);
     }
 }
@@ -323,7 +327,7 @@ public sealed class ServerRow : Component, IDrawable
     public ServerRow(string name, string ip, Color ink, Color gray) { _name = name; _ip = ip; _ink = ink; _gray = gray; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         float a = gfx.Hovered == Owner ? gfx.Pressed ? MenuAlpha.Pressed : MenuAlpha.Hover : 1f;
         gfx.Sb.Draw(gfx.Tex("menu/btn_blank.png"), r, Color.White * a);
         var tr = gfx.Ui.GetList(_ip);
@@ -348,7 +352,7 @@ public sealed class CancelRow : Component, IDrawable
     public CancelRow(Color ink) { _ink = ink; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         float a = gfx.Hovered == Owner ? gfx.Pressed ? MenuAlpha.Pressed : MenuAlpha.Hover : 1f;
         gfx.Sb.Draw(gfx.Tex("menu/btn_blank.png"), r, Color.White * a);
         var t = gfx.Ui.GetListCancel("Cancel");
@@ -382,7 +386,7 @@ public sealed class PagerCell : Component, IDrawable
     public PagerCell(string stem, bool current, bool centered) { _stem = stem; _current = current; _centered = centered; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         string st = _current ? "p" : gfx.Hovered == Owner ? gfx.Pressed ? "p" : "h" : "n";
         if (_current) Round.Fill(gfx, new Rectangle(r.X + (r.Width - 30) / 2, r.Y + (r.Height - 30) / 2, 30, 30), 7, new Color(63, 195, 220));
         var t = gfx.Tex($"ui/cs_{_stem}_{st}.png");
@@ -398,7 +402,7 @@ public sealed class Round : Component, IDrawable
     private readonly int _radius;
     private readonly Color _color;
     public Round(int radius, Color color) { _radius = radius; _color = color; }
-    public void Draw(UiGfx gfx) => Fill(gfx, Owner.Get<Rect>()!.Box, _radius, _color);
+    public void Draw(UiGfx gfx) => Fill(gfx, Owner.Get<Rect>()!.Screen, _radius, _color);
     public static void Fill(UiGfx gfx, Rectangle r, int radius, Color color)
     {
         for (int y = 0; y < r.Height; y++)
@@ -458,7 +462,7 @@ public sealed class WhitePanel : Component, IDrawable
 {
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Pixel, r, Color.White);
         Border.Draw(gfx, r, new Color(150, 150, 150));
     }
@@ -499,7 +503,7 @@ public sealed class RightLabel : Component, IDrawable
     }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var t = _bake(gfx.Ui, _text());
         gfx.Sb.Draw(t, new Vector2(r.X + _dx - t.Width, r.Y + _dy), _color);
     }
@@ -522,7 +526,7 @@ public sealed class InvSlot : Component, IDrawable
     {
         int n = _count();
         if (n <= 0) return;
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         if (_worn) gfx.Sb.Draw(gfx.Pixel, r, new Color(255, 220, 0, 60));
         var icon = gfx.Tex(_image);
         gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
@@ -540,7 +544,7 @@ public sealed class Fill : Component, IDrawable
     public Fill(Color color, int top) { _color = color; _top = top; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(r.X, r.Y + _top, r.Width, r.Height - _top), _color);
     }
 }
@@ -554,7 +558,7 @@ public sealed class LiveTint : Component, IDrawable
     public LiveTint(Func<(string Text, Color Ink)> row, int dx, int dy) { _row = row; _dx = dx; _dy = dy; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var (text, ink) = _row();
         gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(r.X + _dx, r.Y + _dy), ink);
     }
@@ -568,7 +572,7 @@ public sealed class TalkBody : Component, IDrawable
     public TalkBody(Func<List<string>> lines, int dx, int dy, int step) { _lines = lines; _dx = dx; _dy = dy; _step = step; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         int y = r.Y + _dy;
         foreach (string line in _lines())
         {
@@ -585,7 +589,7 @@ public sealed class TalkFrame : Component, IDrawable
 {
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var top = gfx.Tex("ui/talk_dlg_top.png");
         var mid = gfx.Tex("ui/talk_dlg_mid.png");
         var bottom = gfx.Tex("ui/talk_dlg_bottom.png");
@@ -611,7 +615,7 @@ public sealed class TalkButton : Component, IDrawable
     public TalkButton(string stem, string label, string id, Func<string> hover, int dy) { _stem = stem; _label = label; _id = id; _hover = hover; _dy = dy; }
     public void Draw(UiGfx gfx)
     {
-        var b = Owner.Get<Rect>()!.Box;
+        var b = Owner.Get<Rect>()!.Screen;
         string state = _hover() == _id ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
         gfx.Sb.Draw(gfx.Tex($"ui/{_stem}{state}"), new Vector2(b.X, b.Y), Color.White);
         var t = gfx.Ui.GetSmall(_label);
@@ -630,7 +634,7 @@ public sealed class MenuKeyBadge : Component, IDrawable
     {
         string art = Art(_key());
         if (art == "") return;
-        gfx.Sb.Draw(gfx.Tex(art), Owner.Get<Rect>()!.Box, Color.White);
+        gfx.Sb.Draw(gfx.Tex(art), Owner.Get<Rect>()!.Screen, Color.White);
     }
 
     // The badge art of a key name ("" when the key has no badge).
@@ -721,7 +725,7 @@ public sealed class ChatScrollBar : Component, IDrawable
     public ChatScrollBar(Func<float> position, Func<bool> enabled) { _position = position; _enabled = enabled; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         string stem = _enabled() ? "ui/chat_scroll" : "ui/chat_scroll_off";
         var top = gfx.Tex(stem + "_base_t.png");
         var mid = gfx.Tex(stem + "_base_c.png");

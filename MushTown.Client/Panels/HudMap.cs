@@ -88,12 +88,12 @@ public sealed class MinimapWindow : UiWindow
     // Every number of this window lives in layouts/panel-minimap.json.
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-minimap.json"));
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 185), _lay.Get("h", 160));
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, TopH);
+    public override Rectangle Rect() => new(0, 0, _lay.Get("w", 185), _lay.Get("h", 160));
+    public override Rectangle TitleRect() => new(0, 0, Rect().Width, TopH);
     public override Point LayoutPos() => new(_lay.Get("x", 0), _lay.Get("y", 0));
 
     // The map area inside the frame.
-    private Rectangle Well() => new(Pos.X + BorderX, Pos.Y + TopH,
+    private Rectangle Well() => new(BorderX, TopH,
         Rect().Width - BorderX * 2, Rect().Height - TopH - BottomH);
 
     public override void Build()
@@ -107,8 +107,8 @@ public sealed class MinimapWindow : UiWindow
 
         Host.Clear();
         var root = new GameObject();
-        root.Add(new Rect(Rect())); // the window swallows the clicks inside it
-        root.Add(new Invoke(Draw));  // the map, the dots and the names
+        root.Add(new Rect(Rect())); // the window box: the children ride it
+        root.Add(new Invoke(gfx => Draw(gfx, root.Get<Rect>()!.Screen.Location)));  // the map, the dots and the names
         root.Add(new Box("mini_frame")); // the frame on top of the map
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         AddRow(root);
@@ -126,8 +126,8 @@ public sealed class MinimapWindow : UiWindow
         for (int i = 0; i < names.Length; i++)
         {
             var b = new GameObject();
-            b.Add(new Rect(new Rectangle(Pos.X + _lay.Get("rowX", 61) + i * _lay.Get("rowPitch", 22),
-                Pos.Y + _lay.Get("rowY", 4), BtnSize, BtnSize)));
+            b.Add(new Rect(new Rectangle(_lay.Get("rowX", 61) + i * _lay.Get("rowPitch", 22),
+                _lay.Get("rowY", 4), BtnSize, BtnSize)));
             if (names[i] == "map")
             {
                 b.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _game.ShowWindow(HotkeyAction.WorldMap) });
@@ -141,7 +141,7 @@ public sealed class MinimapWindow : UiWindow
     // The zoom pair on the top bar: the minus and the plus.
     private void AddZoom(GameObject root)
     {
-        int x = Pos.X + _lay.Get("zoomX", 15), y = Pos.Y + _lay.Get("zoomY", 4);
+        int x = _lay.Get("zoomX", 15), y = _lay.Get("zoomY", 4);
         int pitch = _lay.Get("zoomPitch", 22);
         var minus = new GameObject();
         minus.Add(new Rect(new Rectangle(x, y, BtnSize, BtnSize)));
@@ -167,9 +167,10 @@ public sealed class MinimapWindow : UiWindow
     }
 
     // The map art in the well, the dots and the names.
-    private void Draw(UiGfx gfx)
+    private void Draw(UiGfx gfx, Point origin)
     {
         var well = Well();
+        well.Offset(origin);
         var map = _game.GameMap;
         var tex = gfx.Tex(map.MiniMap.Image);
         var src = Source(tex.Width, tex.Height);
@@ -216,15 +217,16 @@ public sealed class WorldMapWindow : UiWindow
     // The regions with a map of ours: their dots are the live ones.
     private readonly HashSet<WorldRegionUi> _live = new();
     // The maps of the shown region: the official name wrapped over the
-    // lines it needs, and the spot of every line on the screen.
-    private readonly List<(MapNameUi Map, string Text, int Y)> _lines = new();
+    // lines it needs, and the Y of every line inside the list box.
+    private readonly List<(MapNameUi Map, string Text, int Y)> _lines = new(); // Y is local to the list box
     // The list scrolls like the official panel: the first line on screen,
     // the lines that do not fit and the wheel that moves the list.
     private int _scroll;    // the first line on screen
     private int _hidden;    // the lines that do not fit
     private int _wheel;     // the wheel value of the last frame
     private bool _toEnd;    // the shot mode wants the end of the list
-    // The rows of the list: their buttons, their maps and the box on screen.
+    // The rows of the list: their buttons, their maps and the box inside the
+    // list (local to the window, like every other rect it makes).
     // The picked map travels only when the Go button is pressed.
     private readonly List<(Button Btn, MapNameUi Map, Rectangle Box)> _rows = new();
     private MapNameUi? _sel;
@@ -233,8 +235,8 @@ public sealed class WorldMapWindow : UiWindow
 
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-map.json"));
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("ww", 852), _lay.Get("wh", 561));
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("titleH", 30));
+    public override Rectangle Rect() => new(0, 0, _lay.Get("ww", 852), _lay.Get("wh", 561));
+    public override Rectangle TitleRect() => new(0, 0, Rect().Width, _lay.Get("titleH", 30));
     public override Point LayoutPos() => new(_lay.Get("wx", 250), _lay.Get("wy", 30));
 
     public override void Build()
@@ -247,7 +249,7 @@ public sealed class WorldMapWindow : UiWindow
 
         Host.Clear();
         var root = new GameObject();
-        root.Add(new Rect(Rect()));
+        root.Add(new Rect(Rect())); // the window box: the children ride it
         root.Add(new Picture("ui/wm_frame.png"));
         root.Add(new Picture(MapUi.Data.World.Image, _lay.Get("worldX", 198), _lay.Get("worldY", 75)));
         // the regions: a dot each, with a click box on it
@@ -278,13 +280,13 @@ public sealed class WorldMapWindow : UiWindow
         _rows.Clear();
         if (_shown != null && maps.TryGetValue(_shown, out var shown))
             BuildList(root, shown);
-        root.Add(new Invoke(Draw));
+        root.Add(new Invoke(gfx => Draw(gfx, root.Get<Rect>()!.Screen)));
         var go = new GameObject();
         go.Add(new Rect(GoRect()));
         go.Add(new Button { Kind = ButtonKind.Silent, OnClick = GoPicked }); // the travel plays the portal sound
         root.AddChild(go);
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
-        root.AddChild(MapWindowParts.Close(this, new Rectangle(Pos.X + _lay.Get("wcloseX", 829), Pos.Y + _lay.Get("wcloseY", 12), 11, 11)));
+        root.AddChild(MapWindowParts.Close(this, new Rectangle(_lay.Get("wcloseX", 829), _lay.Get("wcloseY", 12), 11, 11)));
         Host.AddChild(root);
     }
 
@@ -317,7 +319,7 @@ public sealed class WorldMapWindow : UiWindow
             {
                 int line = start + i;
                 if (line < _scroll || line >= _scroll + visible) continue; // this line is off screen
-                _lines.Add((map, lines[i], listY + (line - _scroll) * listStep));
+                _lines.Add((map, lines[i], (line - _scroll) * listStep)); // local to the list box
             }
             if (map.Id == _game.GameMap.MapId) continue; // the map we stand on: nowhere to go
             var o = new GameObject();
@@ -345,10 +347,10 @@ public sealed class WorldMapWindow : UiWindow
         return list;
     }
 
-    // Where a region's dot sits on the map art.
+    // Where a region's dot sits on the map art (local to the window).
     private Point RegionSpot(WorldRegionUi region) => new(
-        Rect().X + _lay.Get("worldX", 198) + region.X,
-        Rect().Y + _lay.Get("worldY", 75) + region.Y);
+        _lay.Get("worldX", 198) + region.X,
+        _lay.Get("worldY", 75) + region.Y);
 
     // The player picks a region: the map list shows its maps.
     private void Pick(WorldRegionUi region)
@@ -365,7 +367,7 @@ public sealed class WorldMapWindow : UiWindow
     }
 
     // The Go button: the picked map travels only when it is pressed.
-    private Rectangle GoRect() => new(Rect().X + _lay.Get("goX", 16), Rect().Y + _lay.Get("goY", 420),
+    private Rectangle GoRect() => new(_lay.Get("goX", 16), _lay.Get("goY", 420),
         _lay.Get("goW", 64), _lay.Get("goH", 22));
 
     private void GoPicked()
@@ -380,9 +382,9 @@ public sealed class WorldMapWindow : UiWindow
     public void OnMapChanged() => Dirty = true;
 
     // The region marks on the world map and the maps of the shown region.
-    private void Draw(UiGfx gfx)
+    private void Draw(UiGfx gfx, Rectangle screen)
     {
-        var r = Rect();
+        var r = screen;
         int mapId = _game.GameMap.MapId;
         var here = MapUi.Region(mapId);
         int dotW = _lay.Get("dotW", 7), dotH = _lay.Get("dotH", 7);
@@ -392,6 +394,8 @@ public sealed class WorldMapWindow : UiWindow
                 : region == _shown ? Color.White
                 : _live.Contains(region) ? new Color(120, 160, 200) : new Color(80, 95, 110);
             var spot = RegionSpot(region);
+            spot.X += screen.X;
+            spot.Y += screen.Y;
             gfx.Sb.Draw(gfx.Pixel, new Rectangle(spot.X - (dotW - 1) / 2, spot.Y - (dotH - 1) / 2, dotW, dotH), ink);
         }
         if (_shown == null) return;
@@ -404,8 +408,10 @@ public sealed class WorldMapWindow : UiWindow
         var info = _sel ?? hovered;
         foreach (var (_, map, box) in _rows)
         {
-            if (map == _sel) Border.Draw(gfx, box, HoverBlue);
-            else if (map == hovered) gfx.Sb.Draw(gfx.Pixel, box, new Color(123, 204, 224, 50));
+            var row = box;
+            row.Offset(screen.Location);
+            if (map == _sel) Border.Draw(gfx, row, HoverBlue);
+            else if (map == hovered) gfx.Sb.Draw(gfx.Pixel, row, new Color(123, 204, 224, 50));
         }
         // The info line keeps one line: a long name is cut at a word and marked,
         // the framed row right below it carries the whole of it.
@@ -419,17 +425,19 @@ public sealed class WorldMapWindow : UiWindow
             info != null ? new Color(255, 220, 0) : Color.White);
         // The Go button: grey until a row is picked.
         var go = GoRect();
+        go.Offset(screen.Location);
         Border.Draw(gfx, go, _sel != null ? HoverBlue : new Color(90, 100, 110));
         var goText = gfx.Ui.GetSmall("GO");
         gfx.Sb.Draw(goText, new Vector2(go.X + (go.Width - goText.Width) / 2, go.Y + (go.Height - goText.Height) / 2),
             _sel != null ? Color.White : new Color(120, 130, 140));
         var list = ListRect();
+        list.Offset(screen.Location);
         foreach (var (map, text, y) in _lines)
         {
             var ink = map.Id == mapId ? new Color(255, 220, 0) : Color.White;
-            gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(list.X, y), ink);
+            gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(list.X, list.Y + y), ink);
         }
-        if (_hidden > 0) ScrollBar(gfx);
+        if (_hidden > 0) ScrollBar(gfx, screen);
     }
 
     // The wheel scrolls the list (the official panel scrolls it too). Runs
@@ -444,7 +452,9 @@ public sealed class WorldMapWindow : UiWindow
         _wheel = ms.ScrollWheelValue; // every frame, so the next delta is a step
         if (!Show || delta == 0 || _hidden == 0) return;
         var (gx, gy) = _game.MouseGamePos(ms);
-        if (!ListRect().Contains(gx, gy)) return;
+        var list = ListRect();
+        list.Offset(ScreenBox().Location);
+        if (!list.Contains(gx, gy)) return;
         int steps = delta / 120; // one notch is 120, like the chat log
         if (steps == 0) return;
         // The wheel up (delta > 0) shows the earlier names, so the first
@@ -458,18 +468,18 @@ public sealed class WorldMapWindow : UiWindow
     // The box the list sits in: the names and the rows that fit.
     private Rectangle ListRect()
     {
-        var r = Rect();
-        return new Rectangle(r.X + _lay.Get("listX", 16), r.Y + _lay.Get("listY", 75),
+        return new Rectangle(_lay.Get("listX", 16), _lay.Get("listY", 75),
             _lay.Get("listW", 146), _lay.Get("listH", 340));
     }
 
     // The official scroll bar of the list: the track and the cursor on it.
     // The track spans the rows of the list, so it uses the list numbers.
     // The thumb is the official art at its own size (the texture size).
-    private void ScrollBar(UiGfx gfx)
+    private void ScrollBar(UiGfx gfx, Rectangle screen)
     {
         var box = ListRect();
-        int x = Rect().X + _lay.Get("scrollX", 165);
+        box.Offset(screen.Location);
+        int x = screen.X + _lay.Get("scrollX", 165);
         int top = box.Y;
         int len = box.Height;
         var thumb = gfx.Tex("ui/wm_scroll_thumb.png");

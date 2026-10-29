@@ -77,7 +77,7 @@ public sealed class AvatarPreview : Component, IDrawable
 
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         _game.DrawAvatarOnScreen(r.X, r.Y, _action, _frame(), _faceRight);
     }
 }

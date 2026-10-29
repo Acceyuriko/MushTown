@@ -14,7 +14,7 @@ public sealed class BlurBackdrop : Component, IDrawable
 
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         var src = new Rectangle(r.X / Scale, r.Y / Scale, r.Width / Scale, r.Height / Scale);
         gfx.Sb.Draw(gfx.Blur, r, src, Color.White); // destination, then source
     }

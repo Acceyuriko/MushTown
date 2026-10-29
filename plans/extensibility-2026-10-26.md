@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 的功能部分用户已确认可用，代码审查后修了 3 个 P0（键格可抓、Combo Key 可做、技能落键加门槛和顶层判断）和一批 P1/P2；第二轮审查又修了 2 个 P0（取消区只算黑色动作池、删掉永远不执行的技能图标预加载）和一批 P1/P2，等验收。下一步 K3（点击式拖放 + `Cursor/5` 抓手，§3.6）和 W1（`Rect` 父相对，§3.5），顺序待定。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）做完等验收：27 个 `--shot` 逐字节一致，客户端测试 30 → 32。下一步 K3（点击式拖放 + `Cursor/5` 抓手，§3.6）。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -245,7 +245,7 @@
 **改法**（照 Unity 的 `RectTransform`，只取有用的部分）：
 
 1. `Rect` 只存局部 `Offset` + `Size`（相对父节点；窗口的根节点原点 = 窗口 `Pos`，菜单/HUD 的根 = 屏幕原点）。
-2. 每帧开头 `Scene.Layout()` 走一次树，把算好的绝对屏幕矩形写进 `Rect.Screen`。命中（`Scene.TopAt`）、绘制（`TreeDraw.DrawObject`）、HUD 的悬停和格子查找（`UpdateHudHover`、`QslotCell`、键窗的 `KeyRect`/`CellRect`）统一读 `Screen`，不再各算一份。
+2. 每帧开头 `Scene.Layout()` 走一次树，把算好的绝对屏幕矩形写进 `Rect.Screen`。命中（`Scene.TopAt`）、绘制（`TreeDraw.DrawObject`）、HUD 的悬停统一读 `Screen`，不再各算一份；`QslotCell`/`KeyRect`/`CellRect` 这类是**建树时**算局部盒子的函数（HUD 根没有 `Rect`，所以它们的值正好等于屏幕坐标），命中仍然走节点的 `Screen`。
 3. `UiWindow.Sync()` 只在 `Dirty` 时重建；`Pos` 变化只改根节点偏移，子节点自动跟。
 4. `Pos.X +` 48 处、`Pos.Y +` 51 处变回纯偏移；115 处 `new Rect(...)` 基本不动，只是不再加 `Pos`。
 5. `Picture(key, dx, dy)`、`Label`、`Image` 这类"owner 原点 + 偏移"的写法不变，原点由遍历给出。
@@ -254,7 +254,21 @@
 
 **位置**：K2 之后、N1 之前。W1 要改每个窗口的坐标写法，先改完，后面的窗口片（N1/N2/N3/N6/N7/N8）就只写一遍新写法。
 
-**验收**：全部 `--shot` 屏幕（27 个）逐字节一致；拖标题栏、拖任务窗时树不重建（临时在 `Build()` 里加计数验证后删掉）；`grep "Pos.X +"` 只剩"根就是屏幕"的菜单/HUD，或为 0。
+**验收**：全部 `--shot` 屏幕（27 个）逐字节一致；拖标题栏、拖任务窗时树不重建（临时在 `Build()` 里加计数验证后删掉）；`grep "Pos.X\|Pos.Y"` 只剩三处：窗口基类的 `OnScreen`、`StartDrag`，和复制对话框的全屏拦截块（它必须抵消窗口偏移才能盖满屏幕）。
+
+**结果（2026-10-29）**：做完了，等验收。
+
+- `Rect` 只存 `Offset` + `Size`，`Scene.Layout()` 每帧填 `Screen`，`Hit`/`Draw`/各组件都读 `Screen`。
+- `UiWindow.Sync()` 只在没建过或 `Dirty` 时重建，`Pos` 变化只改根节点 `Offset`；HUD 面板同理（`PlaceHost` + 六个"建过一次"的开关）。
+- 27 个 `--shot` 屏幕逐字节一致（基线在 `logs/w1_before/`）。
+- `grep "Pos.X\|Pos.Y"` 只剩三处：`UiWindow.OnScreen()`、`UiWindow.StartDrag()`，和复制对话框的全屏拦截块（块的父节点在窗口里，要写成负的窗口点才盖满屏幕）。窗口自己画的/自己命中的地方（聊天窗、键窗、世界地图、组队行、任务正文）都用 `OnScreen` 把局部矩形换成屏幕矩形。
+- 新加 2 个测试（`SceneTests`）：`Layout_NestsTheOffsets`、`Sync_MoveDoesNotRebuild`（后者就是"拖窗口不重建"的常驻验证，替掉临时计数）。客户端测试 30 → 32。
+- 热重载（`ReloadLayout`）要把六个"建过一次"的开关一起复位，否则面板被钉在左上角（`PlaceFirst` 不跑）。
+- 一帧的遍历次数不是 1：`TopAt` 和 `Draw` 各自兜底调一次（普通帧 2 次、点击帧 3 次）。取舍见 §8。
+- 手画的地方要自己拿屏幕原点：`Draw`/`DrawMembers`/`DrawRow` 收一个屏幕矩形或原点参数；窗口加 `ScreenBox()`（直接用 `Pos`，不依赖遍历），设置面板加 `SettingsScreen()`。
+- 谈话框（`HudQuest.TalkBox/TalkRect`）跟着改成"根在屏幕、body 局部"；根上的 `Rect` 是复用的，不重复堆。
+- 审查（5 轮，自主模式）修掉的真问题：`ReloadLayout` 没复位六个"建过一次"开关（面板钉在左上角）；`QuestHelperState` 在 Draw 里写 `Rect`（条子闪一帧）；复制对话框的全屏拦截块没抵消窗口偏移（左上两条带子的点击漏到 HUD，还会走 `NpcClick`）；任务助手条一行文本被写坏（整条不画）。删除弹窗改成"根不挂 `Rect`、`panel` 拿盒"，去掉了 `InDelete` 那层屏幕→局部的换算。
+- 截图比对必须先删旧文件再逐张查退出码：`--shot` 崩了不写 png，旧文件留着，哈希照样一致（上面那个"整条不画"就是这么被放过的）。
 
 **风险**：半改造会让所有窗口坐标错位 → 一片一次做完、一个 commit；命中测试要走父链，`Hovered` 的逻辑不变。
 
@@ -307,7 +321,7 @@
 |---|---|---|
 | N0 (P0) | `Box` + `Ui/AvatarArt.cs` + `AvatarPreview`：**已做**（`Box` 用在小地图框和物品 tip 框；`AvatarPreview` 用在创建角色预览；`MergeParts`/`DrawAvatar` 搬进新文件并加了 `DrawAvatarOnScreen`） | 0.5 周 |
 | N5 (P0) | 键窗 7 处 `Invoke` 已删（和 K2 合并）：`KeyCap` / `ActionCell` / `FilterBox` / `FilterItem` / `HeldIcon` 五个窗口内私有组件，预设钮和 Combo Key 钮改用 `Image(stem, on)`；拖放松手改由 `UpdateHud` 的鼠标边沿驱动（`KeyConfigWindow.UpdateDrag`），Draw 不再轮询鼠标 | 已做 |
-| W1 (P0) | **`Rect` 改成父相对（Unity RectTransform 的形状）**：`Rect` 只存局部 offset + size；每帧开头 `Scene.Layout()` 走一次树把屏幕矩形写进 `Rect.Screen`；命中、绘制、HUD 悬停都读 `Screen`；`UiWindow.Sync()` 不再因为 `Pos` 变化重建；48 处 `Pos.X +`、51 处 `Pos.Y +` 变回纯偏移（10 个窗口文件）。不做 anchors / pivot / layout group。详见 §3.5 | 1 周 |
+| W1 (P0) | **`Rect` 改成父相对（Unity RectTransform 的形状）**：`Rect` 只存局部 offset + size；每帧开头 `Scene.Layout()` 走一次树把屏幕矩形写进 `Rect.Screen`；命中、绘制、HUD 悬停都读 `Screen`；`UiWindow.Sync()` 不再因为 `Pos` 变化重建；48 处 `Pos.X +`、51 处 `Pos.Y +` 变回纯偏移（10 个窗口文件）。不做 anchors / pivot / layout group。详见 §3.5 | 1 周（已完成，等验收） |
 | N1 (P1) | HUD 条：气泡、快捷栏角标、手拿、tips | 1 周 |
 | N2 (P1) | 快捷槽：4 个键提示 + 12 个物品格合成一套 16 个等价槽（内容先固定）+ 设置旋钮 | 1 周 |
 | N3 (P1) | 聊天窗（整块，最大） | 2 周 |
@@ -333,7 +347,7 @@
 7. 代码检查：`grep "new Invoke"` 该文件为 0；**这 16 个**游戏输入字段为 0（`_altWasDown`、`_upWasDown`、`_ctrlWasDown` + 12 个技能键 + `_zWasDown` 拾取）；菜单的 `_escWasDown`、`_menuUpWasDown` 等系统键字段保留（不是绑定键）；`_qsWasDown` 已随快捷栏删掉；`settings.json` 里没有按键。
 8. 窗口片（N5 已做）：`grep "new Invoke" MushTown.Client/Panels/HudKeyConfig.cs` = 0；`--shot keys` 和改动前逐字节一致（组件化不许改像素）；手动拖一次动作到键上，图标跟手、松手落在那个键、拖到黑色动作池上把键清掉。
 9. N0（已做）：`--shot chars/chars2/setup/equip/minimap/hud` 与改动前逐字节一致（`Box` 的 `mini_frame` 由 minimap 覆盖、`tip` 由 equip 页的物品详情框覆盖；`AvatarPreview` 由 setup 覆盖；`DrawAvatar` 由 hud 和 chars 覆盖）。
-10. W1（`Rect` 父相对）：全部 `--shot` 屏幕（27 个）逐字节一致；拖标题栏、拖任务窗不触发 `Build()`（临时计数验证后删）；`grep "Pos.X +"` 为 0 或只剩菜单/HUD 这类"根就是屏幕"的地方；那一帧的节点遍历只跑一次（`Scene.Layout`）。
+10. W1（`Rect` 父相对）：全部 `--shot` 屏幕（27 个）逐字节一致；拖标题栏、拖任务窗不触发 `Build()`（临时计数验证后删）；`grep "Pos.X\|Pos.Y"` 只剩 `OnScreen`、`StartDrag` 和复制对话框的全屏拦截块；一帧里的节点遍历最多 3 次，理由见 §8 第 35 条。
 11. K2 动作池（已做）：键窗打开时默认是 Not Added 组，列出 63 个没绑键的动作（官方 icon 全部 77 张图，一张一格；默认表占 14 个）；9 个过滤项（Not Added + 8 个分类）逐组点开都能看到对应图标；键盘上 E 画 EQUIP、U 画 MAPLE GUIDE、`\` 画 KEY BINDINGS、Z 画 PICK UP、Ctrl/Alt 画 ATTACK/JUMP；Chat 键点开聊天输入、Minimap 键只是重建小地图；把 Attack 从键上抓起来、拖到黑色动作池上松手、Save 后攻击真的没键了（K1 的 `Reserved` 保护已删，键格本身可以抓；松手在标题栏、按钮或键缝上什么都不改）；把 `Legion`（没实现）拖到键上 Save，按键什么都不发生；Combo Key 模式下按住第一个已绑的键、拖到第二个键上松手，做成 `I+K`（点一下拿不起来，那是 K3）。`--shot keys` 的像素变化是预期的（池子变大），不用和旧基线比。
 12. K3 点击式拖放：见 §3.6 的验收段。拿起时按 Esc 丢掉手上的东西、不改任何东西；池子只列没绑的动作，绑一个少一格、取消一个多一格。
 
@@ -418,3 +432,6 @@
 32. 取消区只有黑色动作池（2026-10-29 审查 P0-2）：松手在标题栏、按钮、PRESETS 行或键缝上什么都不改。键盘图上的 Tab / Enter / 方向键不在 `keys.json` 里，按「不是键格就解绑」会把动作静默丢掉。过滤下拉列表展开时不接受取消（列表盖在池子上，松开算「什么都不改」）。
 33. 键上的技能拿不起来（2026-10-29 审查 P1-2）：`_held` 是 `HotkeyAction?`，装不下技能。要单独清掉一个技能键，现在只能 Default。放进 K3，和 `Cursor/5` 抓手一起改（`_held` 换成「动作或技能」的联合体）。
 34. 老存档的 preset 表没有 `Z -> Pickup`（2026-10-29 审查 P0）：拾取从硬编码 `Keys.Z` 改成查表，`Ensure` 只在 `KeyPresets == null` 时播种，所以 K1 时期建的表里没有这条，切到那套 preset 后 Z 不捡东西。**按 §8 的既有决定不写迁移代码**：删档重建，或在键窗里按一次 Default。理由：自动补种会让「解绑拾取」在重开游戏后失效，那是新功能的真 bug。窗口里能看见 Z 格是空的、Not Added 组里列着 Pickup，不是静默坏掉。
+35. W1 的 Scene.Layout() 由 TopAt 和 Draw 各自兜底调用（2026-10-29 审查 P1-1 驳回）：普通帧 2 次、点击帧 3 次。驳回收成一处的理由：命中要读到本帧刚 Build 出来的树（按一次按钮就重建面板，那一帧的点击必须落在新树上），而 Draw 在 Update 之后跑，只留 Draw 里那一次会让命中永远落后一帧。遍历是几百个节点的整数加法，比这个风险便宜。
+36. 面板/窗口的「根在屏幕、子节点局部」是 W1 的唯一写法（2026-10-29）：手画的部件拿不到遍历给的原点，统一用 UiWindow.OnScreen(local)（Pos 始终是最新的，不需要遍历）。
+37. 任务助手的条和 chevron 不在 Draw 里改 Rect（2026-10-29 审查 P1-2）：Draw 跑在 Layout 之后，改了本帧读到的 Screen 还是旧值，条子会闪一帧。位置改在 Build 和 chevron 点击时写。

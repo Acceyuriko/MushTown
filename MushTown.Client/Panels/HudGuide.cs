@@ -27,8 +27,8 @@ public sealed class GuideWindow : UiWindow
     // The art sizes of the guide window (the official frame is 642x627).
     private const int GuideW = 642, GuideH = 627;
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, GuideW, GuideH);
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("titleH", 60));
+    public override Rectangle Rect() => new(0, 0, GuideW, GuideH);
+    public override Rectangle TitleRect() => new(0, 0, Rect().Width, _lay.Get("titleH", 60));
     public override Point LayoutPos() => new(_lay.Get("x", 362), _lay.Get("y", 70));
 
     public override void Build()
@@ -50,9 +50,9 @@ public sealed class GuideWindow : UiWindow
 
         Host.Clear();
         var root = new GameObject();
-        root.Add(new Rect(Rect())); // the window swallows the clicks inside it
+        root.Add(new Rect(Rect())); // the window box: the children ride it
         root.Add(new Picture("ui/guide_bg.png"));
-        root.Add(new Invoke(gfx => Draw(gfx, Rect())));
+        root.Add(new Invoke(gfx => Draw(gfx, root.Get<Rect>()!.Screen)));
         for (int i = 0; i < 3; i++) root.AddChild(Tab(i));
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(CloseButton()); // the X sits on the title strip: it must be hit first
@@ -68,7 +68,7 @@ public sealed class GuideWindow : UiWindow
         int x = i == 0 ? _lay.Get("tab0X", 18) : i == 1 ? _lay.Get("tab1X", 222) : _lay.Get("tab2X", 426);
         int y = _lay.Get("tabY", 75);
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, 196, 27)));
+        o.Add(new Rect(new Rectangle(x, y, 196, 27)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _tab = i });
         o.Add(new GuideTabArt(i, () => _tab));
         return o;
@@ -78,7 +78,7 @@ public sealed class GuideWindow : UiWindow
     private GameObject CloseButton()
     {
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(Pos.X + _lay.Get("closeX", 620), Pos.Y + _lay.Get("closeY", 4), 13, 13)));
+        o.Add(new Rect(new Rectangle(_lay.Get("closeX", 620), _lay.Get("closeY", 4), 13, 13)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Show = false });
         o.Add(new Image("ui/guide_close"));
         return o;
@@ -89,7 +89,7 @@ public sealed class GuideWindow : UiWindow
     private GameObject DisabledButton(string name, int x, int y, int w, int h)
     {
         var o = new GameObject { NoHit = true };
-        o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, w, h)));
+        o.Add(new Rect(new Rectangle(x, y, w, h)));
         o.Add(new Picture($"ui/guide_{name}_d.png", 0, 0)); // the art keeps its own size
         return o;
     }
@@ -150,7 +150,7 @@ public sealed class GuideTabArt : Component, IDrawable
     public GuideTabArt(int tab, Func<int> open) { _tab = tab; _open = open; }
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Tex($"ui/guide_tab{(_open() == _tab ? "sel" : "")}_{_tab}.png"), new Vector2(r.X, r.Y), Color.White);
     }
 }

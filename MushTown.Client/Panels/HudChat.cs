@@ -77,13 +77,13 @@ public sealed class ChatWindow : UiWindow
 
     // The minimised chat is a small box at the same spot.
     public override Rectangle Rect() => _minimised
-        ? new Rectangle(Pos.X, Pos.Y, _lay.Get("minW", 60), _lay.Get("minH", 20))
-        : new Rectangle(Pos.X, Pos.Y, _lay.Get("w", 315), _lay.Get("h", 150));
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, 0); // the chat has no title bar
+        ? new Rectangle(0, 0, _lay.Get("minW", 60), _lay.Get("minH", 20))
+        : new Rectangle(0, 0, _lay.Get("w", 315), _lay.Get("h", 150));
+    public override Rectangle TitleRect() => new(0, 0, Rect().Width, 0); // the chat has no title bar
     public override Point LayoutPos() => new(_lay.Get("x", 6), _lay.Get("y", 566));
 
     // The log frame: the official nine piece slice under the tabs.
-    private Rectangle LogRect() => new(Pos.X, Pos.Y + _lay.Get("logY", 22), _lay.Get("w", 315), _lay.Get("logH", 100));
+    private Rectangle LogRect() => new(0, _lay.Get("logY", 22), _lay.Get("w", 315), _lay.Get("logH", 100));
 
     // The scroll bar of the log: on the right of the log, inside the frame.
     private Rectangle ScrollRect()
@@ -104,31 +104,31 @@ public sealed class ChatWindow : UiWindow
     // The input field starts after the chat target button (the official
     // spot: the target button is 60 wide at x=6, the field at x=71).
     private int FieldX() => _lay.Get("fieldX", 71);
-    private Rectangle InputRect() => new(Pos.X, Pos.Y + _lay.Get("inputY", 125), BarW(), _lay.Get("inputH", 25));
-    private Rectangle SettingsRect() => new(Pos.X + BarW(), Pos.Y + _lay.Get("inputY", 125), _lay.Get("btnW", 24), _lay.Get("inputH", 25));
+    private Rectangle InputRect() => new(0, _lay.Get("inputY", 125), BarW(), _lay.Get("inputH", 25));
+    private Rectangle SettingsRect() => new(BarW(), _lay.Get("inputY", 125), _lay.Get("btnW", 24), _lay.Get("inputH", 25));
 
     // The chat target button: it says where the line goes when it is
     // clicked (the world or the party).
-    private Rectangle TargetRect() => new(Pos.X + _lay.Get("targetX", 6), Pos.Y + _lay.Get("inputY", 125) + _lay.Get("targetY", 1), 60, 24);
+    private Rectangle TargetRect() => new(_lay.Get("targetX", 6), _lay.Get("inputY", 125) + _lay.Get("targetY", 1), 60, 24);
 
     // The window buttons follow the settings button, the minimise last.
     private Rectangle WinArtRect(int i)
     {
         int x = SettingsRect().Right + _lay.Get("btnGap", 1);
         for (int k = 0; k < i; k++) x += WinArtBtns[k].W + _lay.Get("btnGap", 1);
-        return new(x, Pos.Y + _lay.Get("inputY", 125) + (_lay.Get("inputH", 25) - WinArtBtns[i].H) / 2, WinArtBtns[i].W, WinArtBtns[i].H);
+        return new(x, _lay.Get("inputY", 125) + (_lay.Get("inputH", 25) - WinArtBtns[i].H) / 2, WinArtBtns[i].W, WinArtBtns[i].H);
     }
     private Rectangle MinBtnRect() => new(WinArtRect(WinArtBtns.Length - 1).Right + _lay.Get("btnGap", 1),
-        Pos.Y + _lay.Get("inputY", 125) + (_lay.Get("inputH", 25) - MinBtnH) / 2, MinBtnW, MinBtnH);
+        _lay.Get("inputY", 125) + (_lay.Get("inputH", 25) - MinBtnH) / 2, MinBtnW, MinBtnH);
 
     // One filter tab.
-    private Rectangle TabRect(int i) => new(Pos.X + i * (_lay.Get("tabW", 54) + _lay.Get("tabGap", 3)), Pos.Y + _lay.Get("tabY", 0),
+    private Rectangle TabRect(int i) => new(i * (_lay.Get("tabW", 54) + _lay.Get("tabGap", 3)), _lay.Get("tabY", 0),
         _lay.Get("tabW", 54), _lay.Get("tabH", 20));
 
     // The empty tab slot: the official plain tab, the same size as the
     // text tabs. It stands for the tabs this game does not have.
-    private Rectangle EmptyTabRect() => new(Pos.X + TabStems.Length * (_lay.Get("tabW", 54) + _lay.Get("tabGap", 3)),
-        Pos.Y + _lay.Get("tabY", 0), _lay.Get("tabW", 54), _lay.Get("tabH", 20));
+    private Rectangle EmptyTabRect() => new(TabStems.Length * (_lay.Get("tabW", 54) + _lay.Get("tabGap", 3)),
+        _lay.Get("tabY", 0), _lay.Get("tabW", 54), _lay.Get("tabH", 20));
 
     // True while the input has the focus: the game gives the keys to the chat.
     public bool Focused => _focused;
@@ -193,7 +193,7 @@ public sealed class ChatWindow : UiWindow
         if (click && !_mouseDown)
         {
             var (gx, gy) = _game.MouseGamePos(ms);
-            if (!InputRect().Contains(gx, gy)) _focused = false;
+            if (!OnScreen(InputRect()).Contains(gx, gy)) _focused = false;
         }
         _mouseDown = click;
 
@@ -371,7 +371,7 @@ public sealed class ChatWindow : UiWindow
             DrawMinimised(gfx);
             return;
         }
-        DrawFrame(gfx, LogRect());
+        DrawFrame(gfx, OnScreen(LogRect()));
         DrawTabs(gfx);
         DrawLog(gfx);
         DrawInput(gfx);
@@ -385,7 +385,7 @@ public sealed class ChatWindow : UiWindow
     private void DrawMinimised(UiGfx gfx)
     {
         bool over = gfx.Hovered == _minBox;
-        NineSlice.Draw(gfx, over ? "chat_frame_min1" : "chat_frame_min", Rect());
+        NineSlice.Draw(gfx, over ? "chat_frame_min1" : "chat_frame_min", OnScreen(Rect()));
     }
 
     // The filter tabs: All and Etc. carry their text in the official art.
@@ -395,7 +395,7 @@ public sealed class ChatWindow : UiWindow
     {
         for (int i = 0; i < TabStems.Length; i++)
         {
-            var r = TabRect(i);
+            var r = OnScreen(TabRect(i));
             bool over = gfx.Hovered == _tabObjs[i];
             string state = over ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
             gfx.Sb.Draw(gfx.Tex($"ui/{TabStems[i]}{state}"), new Vector2(r.X, r.Y), Color.White);
@@ -406,7 +406,7 @@ public sealed class ChatWindow : UiWindow
     // scrolled up from the newest line.
     private void DrawLog(UiGfx gfx)
     {
-        var box = LogRect();
+        var box = OnScreen(LogRect());
         int x = box.X + _lay.Get("logPadX", 10);
         int y = box.Y + _lay.Get("logPadY", 9);
         int lineH = _lay.Get("lineH", 14);
@@ -432,7 +432,7 @@ public sealed class ChatWindow : UiWindow
     // typed text and the caret.
     private void DrawInput(UiGfx gfx)
     {
-        var bar = InputRect();
+        var bar = OnScreen(InputRect());
         int cap = _lay.Get("capW", 7); // the width of the left and right cap
         gfx.Sb.Draw(gfx.Tex("ui/chat_input_w.png"), new Vector2(bar.X, bar.Y), Color.White);
         gfx.Sb.Draw(gfx.Tex("ui/chat_input_c.png"), new Rectangle(bar.X + cap, bar.Y, bar.Width - 2 * cap, bar.Height), Color.White);
@@ -476,7 +476,7 @@ public sealed class ChatWindow : UiWindow
         _wheel = ms.ScrollWheelValue;
         if (delta == 0 || _minimised) return;
         var (gx, gy) = _game.MouseGamePos(ms);
-        if (!LogRect().Contains(gx, gy)) return;
+        if (!OnScreen(LogRect()).Contains(gx, gy)) return;
         _scroll = Math.Clamp(_scroll + delta / 120, 0, MaxScroll());
     }
 

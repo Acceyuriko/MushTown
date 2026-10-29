@@ -17,12 +17,12 @@ public sealed class PartyWindow : UiWindow
 
     public PartyWindow(MushTownGame game) : base(HotkeyAction.Party) { _game = game; }
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, W, H);
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, W, _lay.Get("titleH", 26));
+    public override Rectangle Rect() => new(0, 0, W, H);
+    public override Rectangle TitleRect() => new(0, 0, W, _lay.Get("titleH", 26));
     public override Point LayoutPos() => new(_lay.Get("x", 780), _lay.Get("y", 60));
 
     // The party panel inside the window (the WZ partyWnd).
-    private Point Wnd() => new(Pos.X + _lay.Get("wndX", 12), Pos.Y + _lay.Get("wndY", 63));
+    private Point Wnd() => new(_lay.Get("wndX", 12), _lay.Get("wndY", 63));
 
     // One member row: the official spot of the list.
     private Rectangle RowRect(int i)
@@ -47,20 +47,20 @@ public sealed class PartyWindow : UiWindow
 
         Host.Clear();
         var root = new GameObject();
-        root.Add(new Rect(Rect())); // the window swallows the clicks inside it
+        root.Add(new Rect(Rect())); // the window box: the children ride it
         root.Add(new Picture("ui/party_frame.png", 0, 0));
         var wnd = Wnd();
-        root.Add(new Picture("ui/party_list.png", wnd.X - Pos.X, wnd.Y - Pos.Y));
+        root.Add(new Picture("ui/party_list.png", wnd.X, wnd.Y));
         // the party name: the leader's name (the official default, the name
         // itself cannot be edited yet)
         root.Add(new LiveLabel(() => _game.PartyMembers.Length > 0 ? _game.PartyMembers[0].Name : "",
-            wnd.X - Pos.X + _lay.Get("partyNameX", 52), wnd.Y - Pos.Y + _lay.Get("partyNameY", 18),
+            wnd.X + _lay.Get("partyNameX", 52), wnd.Y + _lay.Get("partyNameY", 18),
             Color.White, LabelFont.Mid));
         // the member counter: the count and the size of a full party
-        root.Add(new LiveLabel(() => _game.PartyMembers.Length.ToString(), wnd.X - Pos.X + _lay.Get("numX", 85), wnd.Y - Pos.Y + _lay.Get("numY", 107), new Color(51, 51, 51)));
-        root.Add(new LiveLabel(() => PartyWorld.MaxMembers.ToString(), wnd.X - Pos.X + _lay.Get("num2X", 103), wnd.Y - Pos.Y + _lay.Get("numY", 107), new Color(51, 51, 51)));
+        root.Add(new LiveLabel(() => _game.PartyMembers.Length.ToString(), wnd.X + _lay.Get("numX", 85), wnd.Y + _lay.Get("numY", 107), new Color(51, 51, 51)));
+        root.Add(new LiveLabel(() => PartyWorld.MaxMembers.ToString(), wnd.X + _lay.Get("num2X", 103), wnd.Y + _lay.Get("numY", 107), new Color(51, 51, 51)));
         if (_game.PartyMembers.Length == 0)
-            root.Add(new Picture("ui/party_none.png", wnd.X - Pos.X + _lay.Get("noneDx", -1), wnd.Y - Pos.Y + _lay.Get("noneDy", -1)));
+            root.Add(new Picture("ui/party_none.png", wnd.X + _lay.Get("noneDx", -1), wnd.Y + _lay.Get("noneDy", -1)));
         root.AddChild(Members());
 
         // the buttons: alone we make a party, in a party we leave or invite
@@ -81,11 +81,11 @@ public sealed class PartyWindow : UiWindow
             if (_game.PartyLeader && _game.PartyMembers.Length < PartyWorld.MaxMembers)
                 root.AddChild(MushTownGame.ArtButton(invite, "ui/party_btn_invite", _game.OpenPartySearch));
             else
-                root.Add(new Picture("ui/party_btn_invite_d.png", invite.X - Pos.X, invite.Y - Pos.Y));
+                root.Add(new Picture("ui/party_btn_invite_d.png", invite.X, invite.Y));
         }
 
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
-        root.AddChild(MushTownGame.ArtButton(new Rectangle(Pos.X + _lay.Get("closeX", 497), Pos.Y + _lay.Get("closeY", 4), 27, 27), "ui/party_close", () => Show = false));
+        root.AddChild(MushTownGame.ArtButton(new Rectangle(_lay.Get("closeX", 497), _lay.Get("closeY", 4), 27, 27), "ui/party_close", () => Show = false));
         Host.AddChild(root);
     }
 
@@ -104,6 +104,7 @@ public sealed class PartyWindow : UiWindow
         for (int i = 0; i < members.Length && i < PartyWorld.MaxMembers; i++)
         {
             var r = RowRect(i);
+            r.Offset(ScreenBox().Location);
             gfx.Sb.Draw(gfx.Tex("ui/party_row.png"), new Vector2(r.X, r.Y), Color.White);
             if (i == 0) // the first member is the leader
                 gfx.Sb.Draw(gfx.Tex("ui/party_leader.png"), new Vector2(r.X + _lay.Get("leaderX", 25), r.Y + _lay.Get("leaderY", 11)), Color.White);
@@ -125,13 +126,13 @@ public sealed class PartySearchWindow : UiWindow
 
     public PartySearchWindow(MushTownGame game) : base(HotkeyAction.PartySearch) { _game = game; }
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, W, H);
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, W, _lay.Get("titleH", 26));
+    public override Rectangle Rect() => new(0, 0, W, H);
+    public override Rectangle TitleRect() => new(0, 0, W, _lay.Get("titleH", 26));
     public override Point LayoutPos() => new(_lay.Get("searchX", 240), _lay.Get("searchY", 60));
 
     // One row of the list: the official spot (the list window of the WZ).
-    private Rectangle RowRect(int i) => new(Pos.X + _lay.Get("searchListX", 14),
-        Pos.Y + _lay.Get("searchListY", 154) + i * _lay.Get("rowPitch", 42), 468, 39);
+    private Rectangle RowRect(int i) => new(_lay.Get("searchListX", 14),
+        _lay.Get("searchListY", 154) + i * _lay.Get("rowPitch", 42), 468, 39);
 
     public override void Build()
     {
@@ -145,7 +146,7 @@ public sealed class PartySearchWindow : UiWindow
 
         Host.Clear();
         var root = new GameObject();
-        root.Add(new Rect(Rect()));
+        root.Add(new Rect(Rect())); // the window box: the children ride it
         root.Add(new Picture("ui/party_search.png", 0, 0));
         // the tab of the page we show: the players of the map
         root.Add(new Picture("ui/party_search_tab.png", _lay.Get("searchTabX", 15), _lay.Get("searchTabY", 78)));
@@ -160,11 +161,11 @@ public sealed class PartySearchWindow : UiWindow
             var row = new GameObject();
             row.Add(new Rect(r));
             row.Add(new Picture("ui/party_search_row.png", 0, 0));
-            row.Add(new Invoke(gfx => DrawRow(gfx, r, players[n])));
+            row.Add(new Invoke(gfx => DrawRow(gfx, row.Get<Rect>()!.Screen, players[n])));
 
             // the invite button of the row
             var btn = new GameObject();
-            btn.Add(new Rect(new Rectangle(r.X + _lay.Get("searchInviteX", 430), r.Y + _lay.Get("searchInviteY", 5), 27, 28)));
+            btn.Add(new Rect(new Rectangle(_lay.Get("searchInviteX", 430), _lay.Get("searchInviteY", 5), 27, 28)));
             btn.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _game.PartyInvite(players[n].Id) });
             btn.Add(new Image("ui/party_btn_invite_row"));
             row.AddChild(btn);
@@ -172,7 +173,7 @@ public sealed class PartySearchWindow : UiWindow
         }
 
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
-        root.AddChild(MushTownGame.ArtButton(new Rectangle(Pos.X + _lay.Get("searchCloseX", 473), Pos.Y + _lay.Get("searchCloseY", 4), 27, 27), "ui/party_close", () => Show = false));
+        root.AddChild(MushTownGame.ArtButton(new Rectangle(_lay.Get("searchCloseX", 473), _lay.Get("searchCloseY", 4), 27, 27), "ui/party_close", () => Show = false));
         Host.AddChild(root);
     }
 
@@ -219,9 +220,9 @@ public sealed class PartyAskWindow : UiWindow
     public override Rectangle Rect()
     {
         int h = TopH + Lines().Count * _lay.Get("askLineStep", 13) + BottomH;
-        return new Rectangle(Pos.X, Pos.Y, W, h);
+        return new Rectangle(0, 0, W, h);
     }
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, 0); // the popup has no title bar
+    public override Rectangle TitleRect() => new(0, 0, Rect().Width, 0); // the popup has no title bar
     public override Point LayoutPos() => new(_lay.Get("askX", 130), _lay.Get("askY", 460));
 
     // The popup closes without an answer: that is a decline.
@@ -252,7 +253,7 @@ public sealed class PartyAskWindow : UiWindow
 
         Host.Clear();
         var root = new GameObject();
-        root.Add(new Rect(Rect()));
+        root.Add(new Rect(Rect())); // the window box: the children ride it
         root.Add(new TalkFrame());
         root.Add(new Label(_game.PartyAskName(), _lay.Get("askNameDx", 14), _lay.Get("askNameDy", 5)) { Tint = new Color(60, 60, 60) });
         root.Add(new TalkBody(Lines, _lay.Get("askTextDx", 295), _lay.Get("askTextDy", 28), _lay.Get("askLineStep", 13)));

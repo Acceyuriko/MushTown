@@ -19,8 +19,8 @@ public partial class MushTownGame
 
     private int InvW => _invWide ? _invLay.Get("wExpanded", 800) : _invLay.Get("w", 242);
     private int InvH => _invWide ? _invLay.Get("hExpanded", 546) : _invLay.Get("h", 593);
-    private Rectangle InvRect() => new(_invPos.X, _invPos.Y, InvW, InvH);
-    private Rectangle InvTitleRect() => new(_invPos.X, _invPos.Y, InvW, _invLay.Get("titleH", 28));
+    private Rectangle InvRect() => new(0, 0, InvW, InvH);
+    private Rectangle InvTitleRect() => new(0, 0, InvW, _invLay.Get("titleH", 28));
 
     // The official slot grid (measured on the art): 36px cells, pitch 46,
     // the first cell at (31,101). The small window shows 4 columns, the
@@ -28,11 +28,10 @@ public partial class MushTownGame
     private int InvCols => _invWide ? _invLay.Get("colsWide", 16) : _invLay.Get("cols", 4);
     private Rectangle InvCell(int cell)
     {
-        var r = InvRect();
         int pitch = _invLay.Get("cellPitch", 46);
         int size = _invLay.Get("cellSize", 36);
-        return new Rectangle(r.X + _invLay.Get("gridX", 31) + (cell % InvCols) * pitch,
-            r.Y + _invLay.Get("gridY", 101) + (cell / InvCols) * pitch, size, size);
+        return new Rectangle(_invLay.Get("gridX", 31) + (cell % InvCols) * pitch,
+            _invLay.Get("gridY", 101) + (cell / InvCols) * pitch, size, size);
     }
 
     // The worn gear takes the first row(s); the bag rows start below it.
@@ -136,12 +135,11 @@ public partial class MushTownGame
     // The official expand button: "+" opens the wide window, "-" goes back.
     private GameObject InvExpandButton()
     {
-        var r = InvRect();
         int dx = _invWide ? _invLay.Get("minusX", 729) : _invLay.Get("plusX", 193);
         int dy = _invWide ? _invLay.Get("minusY", 8) : _invLay.Get("plusY", 8);
         int w = _invWide ? _invLay.Get("minusW", 19) : _invLay.Get("plusW", 19);
         int h = _invWide ? _invLay.Get("minusH", 19) : _invLay.Get("plusH", 19);
-        var o = ArtButton(new Rectangle(r.X + dx, r.Y + dy, w, h),
+        var o = ArtButton(new Rectangle(dx, dy, w, h),
             $"ui/{InvArtPrefix()}_{(_invWide ? "minus" : "plus")}", ToggleInvWide);
         o.Get<Button>()!.LegacyId = _invWide ? "invmin" : "invplus"; // the hover tick
         return o;
@@ -150,9 +148,8 @@ public partial class MushTownGame
     // The official X (close) button.
     private GameObject InvCloseButton()
     {
-        var r = InvRect();
         int dx = _invWide ? _invLay.Get("closeWideX", 769) : _invLay.Get("closeX", 211);
-        var o = ArtButton(new Rectangle(r.X + dx, r.Y + _invLay.Get("closeY", 4),
+        var o = ArtButton(new Rectangle(dx, _invLay.Get("closeY", 4),
                 _invLay.Get("closeW", 27), _invLay.Get("closeH", 27)),
             $"ui/{InvArtPrefix()}_close", () => _showInv = false);
         o.Get<Button>()!.LegacyId = "x0"; // the hover tick
@@ -177,17 +174,15 @@ public partial class MushTownGame
     {
         _invWide = !_invWide;
         BuildInvScene();
-        _invBuiltPos = _invPos; // the rebuild above is the new state
         _invBuiltTab = _invTab;
     }
 
     // Official tabs: 35x22 art at pitch 37 (small), 128x22 at pitch 130 (wide).
     private Rectangle TabRect(int t)
     {
-        var r = InvRect();
         int step = _invWide ? _invLay.Get("tabWideStep", 130) : _invLay.Get("tabStep", 37);
         int w = _invWide ? _invLay.Get("tabWideW", 128) : _invLay.Get("tabW", 35);
-        return new Rectangle(r.X + _invLay.Get("tabX", 11) + step * t, r.Y + _invLay.Get("tabY", 31),
+        return new Rectangle(_invLay.Get("tabX", 11) + step * t, _invLay.Get("tabY", 31),
             w, _invLay.Get("tabH", 22));
     }
 

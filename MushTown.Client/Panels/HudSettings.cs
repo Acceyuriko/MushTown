@@ -37,13 +37,14 @@ public partial class MushTownGame
     // The key settings window (the game made it, the window list keeps it).
     private static KeyConfigWindow? KeyWindow => UiWindow.List.OfType<KeyConfigWindow>().FirstOrDefault();
 
-    private Rectangle SettingsRect() => new(_settingsPos.X, _settingsPos.Y, SettingsW, _settingsLay.Get("titleH", 16) + SettingsBodyH);
-    private Rectangle SettingsTitleRect() => new(_settingsPos.X, _settingsPos.Y, SettingsW, _settingsLay.Get("titleH", 16));
-    private Rectangle SettingsXRect()
-    {
-        var r = SettingsRect();
-        return new Rectangle(r.X + _settingsLay.Get("closeX", 443), r.Y + _settingsLay.Get("closeY", 3), 11, 11);
-    }
+    private Rectangle SettingsRect() => new(0, 0, SettingsW, _settingsLay.Get("titleH", 16) + SettingsBodyH);
+
+    // The window box on the screen: the parts drawn by hand take their origin
+    // from here, the children read Screen instead.
+    private Rectangle SettingsScreen() => _settingsHost.Get<Rect>()!.Screen;
+
+    private Rectangle SettingsTitleRect() => new(0, 0, SettingsW, _settingsLay.Get("titleH", 16));
+    private Rectangle SettingsXRect() => new(_settingsLay.Get("closeX", 443), _settingsLay.Get("closeY", 3), 11, 11);
 
     // The spot the layout file gives the options window.
     // Static so the field initialiser can use it too.
@@ -73,8 +74,7 @@ public partial class MushTownGame
 
         // The key settings button opens the key window.
         var keyBtn = new GameObject();
-        var wr = SettingsRect();
-        keyBtn.Add(new Rect(new Rectangle(wr.X + _settingsLay.Get("keyX", 21), wr.Y + _settingsLay.Get("keyY", 580), 54, 34)));
+        keyBtn.Add(new Rect(new Rectangle(_settingsLay.Get("keyX", 21), _settingsLay.Get("keyY", 580), 54, 34)));
         keyBtn.Add(new Button { Kind = ButtonKind.Click, OnClick = () => KeyWindow?.Open() });
         keyBtn.Add(new Picture("ui/opt_shortcut.png"));
         body.AddChild(keyBtn);
@@ -106,13 +106,12 @@ public partial class MushTownGame
         int tx = bgm ? _settingsLay.Get("bgmX", 225) : _settingsLay.Get("sfxX", 225);
         int ty = bgm ? _settingsLay.Get("bgmY", 208) : _settingsLay.Get("sfxY", 273);
         int tw = bgm ? _settingsLay.Get("bgmW", 193) : _settingsLay.Get("sfxW", 193);
-        var r = SettingsRect();
         var track = new GameObject();
-        track.Add(new Rect(new Rectangle(r.X + tx, r.Y + ty + _settingsLay.Get("knobDy", -9), tw, 22)));
+        track.Add(new Rect(new Rectangle(tx, ty + _settingsLay.Get("knobDy", -9), tw, 22)));
         track.Add(new Button
         {
             Kind = ButtonKind.Click,
-            OnClick = () => SetVolume(bgm, VolumeAt(tx, tw, _uiScene.LastClick.X - r.X)),
+            OnClick = () => SetVolume(bgm, VolumeAt(tx, tw, _uiScene.LastClick.X - SettingsScreen().X)),
         });
         body.AddChild(track);
         var knob = new GameObject();
@@ -140,7 +139,7 @@ public partial class MushTownGame
     private void DrawVolumeKnob(UiGfx gfx, bool bgm, int trackX, int trackY, int trackW)
     {
         int volume = bgm ? _bgm.Volume : _sfxVol;
-        var r = SettingsRect();
+        var r = SettingsScreen();
         int x = r.X + trackX + (volume * (trackW - SliderKnobW)) / 100;
         int y = r.Y + trackY + _settingsLay.Get("knobDy", -9);
         gfx.Sb.Draw(gfx.Tex("ui/opt_knob.png"), new Vector2(x, y), Color.White);
@@ -149,9 +148,8 @@ public partial class MushTownGame
     // One art button (the art has normal, hover and pressed states).
     private GameObject SettingsArtButton(string stem, int dx, int dy, int w, int h, Action onClick)
     {
-        var r = SettingsRect();
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(r.X + dx, r.Y + dy, w, h)));
+        o.Add(new Rect(new Rectangle(dx, dy, w, h)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
         o.Add(new Image(stem));
         return o;

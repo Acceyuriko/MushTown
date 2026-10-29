@@ -21,8 +21,8 @@ public sealed class MenuWindow : UiWindow
     private const int ItemW = 136, ItemH = 40;
     private const int CloseW = 20, CloseH = 20;
 
-    public override Rectangle Rect() => new(Pos.X, Pos.Y, _lay.Get("w", 1022), _lay.Get("h", 597));
-    public override Rectangle TitleRect() => new(Pos.X, Pos.Y, Rect().Width, _lay.Get("titleH", 46));
+    public override Rectangle Rect() => new(0, 0, _lay.Get("w", 1022), _lay.Get("h", 597));
+    public override Rectangle TitleRect() => new(0, 0, Rect().Width, _lay.Get("titleH", 46));
     public override Point LayoutPos() => new(_lay.Get("x", 172), _lay.Get("y", 18));
 
     // The rows the game has: column, row, what it opens.
@@ -88,7 +88,7 @@ public sealed class MenuWindow : UiWindow
     // The hover art itself would light the grey rows up like live ones.
     private Invoke FocusFrame(GameObject cell, int col, int row) => new(gfx =>
     {
-        if (_curCol == col && _curRow == row) Border.Draw(gfx, cell.Get<Rect>()!.Box, new Color(123, 204, 224));
+        if (_curCol == col && _curRow == row) Border.Draw(gfx, cell.Get<Rect>()!.Screen, new Color(123, 204, 224));
     });
 
     public override void Build()
@@ -103,7 +103,7 @@ public sealed class MenuWindow : UiWindow
 
         Host.Clear();
         var root = new GameObject();
-        root.Add(new Rect(Rect()));
+        root.Add(new Rect(Rect())); // the window box: the children ride it
         root.Add(new BlurBackdrop()); // the frosted glass: the screen at 1/4 size
         root.Add(new MenuArt()); // the 40% white panel, the tabs and the title
 
@@ -118,14 +118,14 @@ public sealed class MenuWindow : UiWindow
                 string stem = $"ui/menu_item_c{c}r{r}";
                 var action = ActionOf(c, r);
                 var item = new GameObject();
-                item.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + y, ItemW, ItemH)));
+                item.Add(new Rect(new Rectangle(x, y, ItemW, ItemH)));
                 if (action == Feature.None)
                     item.Add(new Picture(stem + "_d.png")); // the official disabled art
                 else
                 {
                     item.Add(new Button { LegacyId = $"menu{c}r{r}", Kind = ButtonKind.Click, OnClick = () => _game.OpenFeature(action) });
                     item.Add(new Image(stem));
-                    AddBadge(item, x, y, action);
+                    AddBadge(item, action);
                 }
                 item.Add(FocusFrame(item, c, r)); // the arrows frame the pick here
                 root.AddChild(item);
@@ -139,14 +139,14 @@ public sealed class MenuWindow : UiWindow
             var (stem, action) = BottomButtons[i];
             int x = _lay.Get($"bot{i}X", 23 + i * 140);
             var o = new GameObject();
-            o.Add(new Rect(new Rectangle(Pos.X + x, Pos.Y + botY, ItemW, ItemH)));
+            o.Add(new Rect(new Rectangle(x, botY, ItemW, ItemH)));
             if (action == Feature.None)
                 o.Add(new Picture($"ui/{stem}_d.png")); // the official disabled art
             else
             {
                 o.Add(new Button { LegacyId = $"menub{i}", Kind = ButtonKind.Click, OnClick = () => _game.OpenFeature(action) });
                 o.Add(new Image($"ui/{stem}"));
-                AddBadge(o, x, botY, action);
+                AddBadge(o, action);
             }
             o.Add(FocusFrame(o, i, RowsOf(i))); // the bottom row is the last row of its column
             root.AddChild(o);
@@ -160,7 +160,7 @@ public sealed class MenuWindow : UiWindow
 
         // the X closes the window
         var close = new GameObject();
-        close.Add(new Rect(new Rectangle(Pos.X + _lay.Get("closeX", 982), Pos.Y + _lay.Get("closeY", 12), CloseW, CloseH)));
+        close.Add(new Rect(new Rectangle(_lay.Get("closeX", 982), _lay.Get("closeY", 12), CloseW, CloseH)));
         close.Add(new Button { LegacyId = "menuClose", Kind = ButtonKind.Click, OnClick = Close });
         close.Add(new Image("ui/menu_close")); // the official white X, on the glass
         root.AddChild(close);
@@ -174,12 +174,12 @@ public sealed class MenuWindow : UiWindow
     // The key badge at the right of a row: the official cyan square with
     // the key the player bound to that action. A row without a key gets
     // no badge.
-    private void AddBadge(GameObject row, int x, int y, Feature action)
+    private void AddBadge(GameObject row, Feature action)
     {
         var key = KeyOf(action);
         if (key == null) return;
         var badge = new GameObject { NoHit = true }; // the badge sits on the row: the row keeps the hover light
-        badge.Add(new Rect(new Rectangle(Pos.X + x + _lay.Get("badgeX", 115), Pos.Y + y + _lay.Get("badgeY", 12), 16, 16)));
+        badge.Add(new Rect(new Rectangle(_lay.Get("badgeX", 115), _lay.Get("badgeY", 12), 16, 16)));
         badge.Add(new MenuKeyBadge(() => _game.HotkeyKey(key.Value)));
         row.AddChild(badge);
     }
@@ -224,7 +224,7 @@ public sealed class MenuArt : Component, IDrawable
 
     public void Draw(UiGfx gfx)
     {
-        var r = Owner.Get<Rect>()!.Box;
+        var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Tex("ui/menu_bg.png"), r, new Rectangle(0, 0, r.Width, r.Height), Color.White);
         // the channel name in the pill at the top right (the official
         // vector:info spot: the middle of the pill)

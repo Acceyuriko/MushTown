@@ -20,7 +20,7 @@ public partial class MushTownGame
     // The window width: the drag clamp in the HUD chain uses this.
     private int ShopW => _shopLay.Get("w", 380);
     private int ShopH => _shopLay.Get("h", 681);
-    private Rectangle ShopRect() => new(_shopPos.X, _shopPos.Y, ShopW, ShopH);
+    private Rectangle ShopRect() => new(0, 0, ShopW, ShopH);
 
     // The official ink: the title is pale, the item text is black on the
     // light rows.
@@ -44,8 +44,8 @@ public partial class MushTownGame
 
     // One row of the official list: the item list starts at listX/listY.
     private Rectangle ShopRowRect(int i) => new(
-            _shopPos.X + _shopLay.Get("listX", 20),
-            _shopPos.Y + _shopLay.Get("listY", 141) + i * _shopLay.Get("rowPitch", 50),
+            _shopLay.Get("listX", 20),
+            _shopLay.Get("listY", 141) + i * _shopLay.Get("rowPitch", 50),
             _shopLay.Get("rowW", 336), _shopLay.Get("rowH", 45));
 
     // The keeper: the stock list belongs to one shop entry.
@@ -126,7 +126,7 @@ public partial class MushTownGame
     {
         int x = _shopLay.Get("tabX", 11) + index * _shopLay.Get("tabStep", 72);
         int y = _shopLay.Get("tabY", 103);
-        var o = PanelButton(new Rectangle(_shopPos.X + x, _shopPos.Y + y,
+        var o = PanelButton(new Rectangle(x, y,
                 _shopLay.Get("tabW", 70), _shopLay.Get("tabH", 30)),
             "shoptab" + index, () => _shopTab = index);
         int dx = _shopLay.Get("tabTextX", 35) - _ui.GetSmall(label).Width / 2;
@@ -176,9 +176,9 @@ public partial class MushTownGame
             }
         }
         // the drag strip at the top and the X
-        body.AddChild(PanelButton(new Rectangle(_shopPos.X, _shopPos.Y, ShopW, _shopLay.Get("dragH", 30)),
+        body.AddChild(PanelButton(new Rectangle(0, 0, ShopW, _shopLay.Get("dragH", 30)),
             "", () => _dragShop = _uiScene.LastClick - _shopPos)); // silent, like legacy
-        body.AddChild(ArtButton(new Rectangle(_shopPos.X + _shopLay.Get("closeX", 349), _shopPos.Y + _shopLay.Get("closeY", 2),
+        body.AddChild(ArtButton(new Rectangle(_shopLay.Get("closeX", 349), _shopLay.Get("closeY", 2),
                 _shopLay.Get("closeW", 27), _shopLay.Get("closeH", 27)),
             "ui/shop_x", () => _showShop = false));
         _shopHost.AddChild(body);

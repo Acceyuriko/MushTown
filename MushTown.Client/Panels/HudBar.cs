@@ -44,9 +44,8 @@ public partial class MushTownGame
     private readonly GameObject[] _panelHosts; // panel-id order: 0 inventory .. 5 shop (filled by the constructor)
     private readonly CarryHand _hand = new(); // game-level: a panel rebuilds its content, the held piece survives
     private readonly GameObject _talkHost = new() { Modal = true, Z = TalkZ }; // the NPC dialog: one root carries the modal flag
-    private Point _invBuiltPos = new(-1, -1), _statBuiltPos = new(-1, -1), _skillBuiltPos = new(-1, -1);
-    private Point _questBuiltPos = new(-1, -1), _settingsBuiltPos = new(-1, -1), _shopBuiltPos = new(-1, -1);
-    private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow drags + tab flips (bag counts are static)
+    private bool _invBuilt, _statBuilt, _skillBuilt, _questBuilt, _settingsBuilt, _shopBuilt; // built at least once
+    private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow tab flips (bag counts are static)
     private int _shopBuiltTab = -1; // the shop tab in the drawn scene
     private List<int> _questBuiltRows = new();
     private List<int> _shopBuiltStock = new();
@@ -162,10 +161,10 @@ public partial class MushTownGame
             if (!held) _dragShop = null;
             else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW, ShopH);
         }
-        SyncPanels(); // drags + tab flips move the baked Rects (hover ran first, so it lags one frame, like legacy)
+        SyncPanels(); // tab flips and new rows rebuild (a drag only moves the host; hover ran first, so it lags one frame, like legacy)
         DragWindows(held, gx, gy); // the new windows move by their title
         _worldMapWindow.UpdateWheel(); // the wheel scrolls the map list: before the sync, so the rows land this frame
-        SyncWindows(); // a window rebuilds when it moves or its state changed
+        SyncWindows(); // a window rebuilds when its state changed (a drag only moves the root)
         if (!click) return;
         UpdateHudClick(gx, gy); // click sounds play by Button Kind inside ClickTree (the flag funnel is gone)
     }
@@ -423,28 +422,29 @@ public partial class MushTownGame
         RaiseHost(_panelHosts[id]);
     }
 
-    // Panel trees are pure functions of (pos, tab): rebuild when either
-    // moves. Bag counts are static catalogs, so slots never reshape. Also
-    // the dialog root: its visibility follows the talk state.
+    // Panel trees are pure functions of (tab, contents): a drag only moves the
+    // host, so only a tab flip or new rows rebuilds. Bag counts are static
+    // catalogs, so slots never reshape. Also the dialog root: its visibility
+    // follows the talk state.
     private void SyncPanels()
     {
         _invHost.Enabled = _showInv; _statHost.Enabled = _showStat; _skillHost.Enabled = _showSkill; // a hidden panel stays in the tree, it just stops drawing and hitting
         _questHost.Enabled = _showQuest; _settingsHost.Enabled = _showSettings; _shopHost.Enabled = _showShop;
         _talkHost.Enabled = _talkNpc != 0; // the dialog root is in the tree: showing it is all it takes
-        if (_invPos != _invBuiltPos || _invTab != _invBuiltTab) { BuildInvScene(); _invBuiltPos = _invPos; _invBuiltTab = _invTab; }
-        if (_statPos != _statBuiltPos) { BuildStatScene(); _statBuiltPos = _statPos; }
-        if (_skillPos != _skillBuiltPos || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuiltPos = _skillPos; _skillBuiltTab = _skillTab; }
+        if (!_invBuilt || _invTab != _invBuiltTab) { BuildInvScene(); _invBuilt = true; _invBuiltTab = _invTab; }
+        if (!_statBuilt) { BuildStatScene(); _statBuilt = true; }
+        if (!_skillBuilt || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuilt = true; _skillBuiltTab = _skillTab; }
         if (_showQuest) // the rows cost a list each call, and a hidden panel is not drawn: skip it
         {
             var quests = QuestRows();
-            if (_questPos != _questBuiltPos || !quests.SequenceEqual(_questBuiltRows)) { BuildQuestScene(quests); _questBuiltPos = _questPos; _questBuiltRows = quests; }
+            if (!_questBuilt || !quests.SequenceEqual(_questBuiltRows)) { BuildQuestScene(quests); _questBuilt = true; _questBuiltRows = quests; }
         }
-        if (_settingsPos != _settingsBuiltPos) { BuildSettingsScene(); _settingsBuiltPos = _settingsPos; }
+        if (!_settingsBuilt) { BuildSettingsScene(); _settingsBuilt = true; }
         if (_showShop && _shopStock != null)
         {
             var sells = ShopSellRows();
-            if (_shopPos != _shopBuiltPos || !ReferenceEquals(_shopStock, _shopBuiltStock) || !sells.SequenceEqual(_shopBuiltSells) || _shopTab != _shopBuiltTab)
-            { BuildShopScene(sells); _shopBuiltPos = _shopPos; _shopBuiltStock = _shopStock; _shopBuiltSells = sells; _shopBuiltTab = _shopTab; }
+            if (!_shopBuilt || !ReferenceEquals(_shopStock, _shopBuiltStock) || !sells.SequenceEqual(_shopBuiltSells) || _shopTab != _shopBuiltTab)
+            { BuildShopScene(sells); _shopBuilt = true; _shopBuiltStock = _shopStock; _shopBuiltSells = sells; _shopBuiltTab = _shopTab; }
         }
         if (_talkNpc != 0) // gated: TalkButtons needs an open talk (same exposure as the legacy chain)
         {
@@ -453,6 +453,13 @@ public partial class MushTownGame
             if (_talkNpc != _talkBuiltNpc || _talkQuest != _talkBuiltQuest || _talkPage != _talkBuiltPage || buttons != _talkBuiltButtons || entriesKey != _talkBuiltEntries)
             { BuildTalkScene(); _talkBuiltNpc = _talkNpc; _talkBuiltQuest = _talkQuest; _talkBuiltPage = _talkPage; _talkBuiltButtons = buttons; _talkBuiltEntries = entriesKey; }
         }
+        // The spots go on the hosts last: a build may clamp or place its panel.
+        PlaceHost(_invHost, _invPos, InvW, InvH);
+        PlaceHost(_statHost, _statPos, StatW, StatH);
+        PlaceHost(_skillHost, _skillPos, SkillW, SkillBodyH);
+        PlaceHost(_questHost, _questPos, QuestW, QuestBodyH);
+        PlaceHost(_settingsHost, _settingsPos, SettingsW, _settingsLay.Get("titleH", 16) + SettingsBodyH);
+        PlaceHost(_shopHost, _shopPos, ShopW, ShopH);
     }
 
     private static GameObject PanelButton(Rectangle r, string id, Action onClick, ButtonKind kind = ButtonKind.Silent)
@@ -462,6 +469,10 @@ public partial class MushTownGame
         o.Add(new Button { LegacyId = id, Kind = kind, OnClick = onClick });
         return o;
     }
+
+    // The host rect carries the panel's spot on the screen: a drag repoints it
+    // and the built body rides along, so nothing is rebuilt for a move.
+    private static void PlaceHost(GameObject host, Point pos, int w, int h) => UiWindow.Place(host, pos, new Point(w, h));
 
     // One art button (the art has normal, hover and pressed states).
     internal static GameObject ArtButton(Rectangle r, string stem, Action onClick)
