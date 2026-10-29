@@ -38,7 +38,7 @@ public static class TreeDraw
 
     public static void DrawObject(GameObject o, UiGfx gfx)
     {
-        if (!o.Enabled) return;
+        if (!o.Enabled || o.Dead) return; // a dead node is gone: step, draw, hit and modal all skip it
         DrawSelf(o, gfx);
         foreach (var ch in o.Children) DrawObject(ch, gfx);
     }
@@ -134,7 +134,7 @@ public sealed class Scene
         for (int i = objs.Count - 1; i >= 0; i--)
         {
             var o = objs[i];
-            if (!o.Enabled || o.NoHit) continue;
+            if (!o.Enabled || o.NoHit || o.Dead) continue;
             var child = Hit(o.Children, gx, gy);
             if (child != null) return child;
             var r = o.Get<Rect>();
@@ -165,7 +165,7 @@ public sealed class Scene
     {
         foreach (var o in objs)
         {
-            if (!o.Enabled) continue;
+            if (!o.Enabled || o.Dead) continue;
             if (o.Modal || AnyModal(o.Children)) return true;
         }
         return false;

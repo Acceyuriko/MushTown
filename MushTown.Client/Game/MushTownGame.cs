@@ -54,7 +54,7 @@ public partial class MushTownGame : Game
     private readonly CameraComp _camera = new();
     private double _timeMs; // scrolling backs drift with this (0 in shot mode: still image)
     private int _loadBeat;
-    private List<PortalComp> _portals = new(); // live portal anims, aligned with _map.Portals
+    private List<PortalComp> _portals = new(); // the draw list, aligned with _map.Portals: the anim state lives in the comps
     private List<NpcArt> _npcArts = new(); // live NPC views, one per spawn
 
     // The sim world: one root holding the player, the camera, the map
@@ -184,6 +184,11 @@ public partial class MushTownGame : Game
         _graphics.PreferredBackBufferWidth = mode.Width;
         _graphics.PreferredBackBufferHeight = mode.Height;
 
+        // The tree step order: the player moves first, then the map furniture
+        // (portals) and the mobs, all of them children of the world root.
+        // Camera and audio ride the tree but do not tick. Travel lands after
+        // the step, and the numbers and effects still tick after the tree
+        // (S2/S3 move them).
         var player = new GameObject();
         player.Add(_mover);
         player.Add(_heroPlate);
@@ -594,6 +599,9 @@ public partial class MushTownGame : Game
             Jump = OwnJump(),
         };
         TreeUpdate.UpdateObject(_world, dt);
+        // Before the draw: a corpse sits on Frame == Frames.Count, and the
+        // draw reads that frame. Skipping this line crashes on the first kill.
+        MobArt.CollectDead(_mobs, _world);
         if (_mover.JumpSfx) PlaySfx("jump");
         if (_mover.Travel != null)
         {
@@ -616,26 +624,7 @@ public partial class MushTownGame : Game
         }
         if (_mover.Climb == null || _mover.ClimbMoving) // still on a ladder: hold the pose
             (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, _delays[_shownAction]);
-        foreach (var p in _portals) // portal gates shimmer on their own loop
-            if (p.Portal.Frames.Count > 0)
-                (p.Frame, p.Timer) = SceneMath.AdvanceFrame(p.Frame, p.Timer, dtMs, p.Delays);
 
-        // Mob anims: idles loop, flinch returns to idle, death removes the body.
-        foreach (int uid in _mobs.Keys.ToList())
-        {
-            var m = _mobs[uid];
-            var frames = MobFrames(m.Mob, m.Action);
-            m.Timer += dtMs;
-            if (m.Timer < frames[m.Frame].Delay) continue;
-            m.Timer -= frames[m.Frame].Delay; // keep the overflow (single step: delays run >= 100ms, ticks 16ms)
-            if (++m.Frame < frames.Count) continue;
-            if (m.Action == "die1") { _mobs.Remove(uid); _world.RemoveChild(m.Owner); }
-            else
-            {
-                if (m.Action == "hit1") m.Action = MobIdle(m.Mob);
-                m.Frame = 0;
-            }
-        }
         for (int i = _numbers.Count - 1; i >= 0; i--)
         {
             _numbers[i].Age += dtMs;

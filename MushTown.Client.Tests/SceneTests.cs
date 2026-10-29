@@ -137,6 +137,37 @@ public class SceneTests
         }
     }
 
+    // The hit path skips a dead node: TreeDraw skips it too and TreeUpdate is
+    // covered by WorldTests.
+    [TestMethod]
+    public void TopAt_SkipsADeadNode()
+    {
+        var scene = new Scene();
+        var dead = Box(1);
+        scene.Add(dead);
+        dead.Dead = true;
+        Assert.IsNull(scene.TopAt(5, 5));
+        var live = Box(2);
+        scene.Add(live);
+        Assert.AreSame(live, scene.TopAt(5, 5)); // the dead one is still on the list
+    }
+
+    [TestMethod]
+    public void TopAt_DeadModalDoesNotSwallowTheClick()
+    {
+        var scene = new Scene();
+        var modal = new GameObject { Modal = true };
+        var blocker = new GameObject();
+        blocker.Add(new Rect(new Rectangle(0, 0, 10, 10)));
+        modal.AddChild(blocker);
+        scene.Add(modal);
+        var target = Box(1);
+        scene.Add(target);
+        Assert.IsNull(scene.TopAt(5, 5)); // a live modal swallows everything below it
+        modal.Dead = true;
+        Assert.AreSame(target, scene.TopAt(5, 5));
+    }
+
     // A move repoints the host rect: the tree stays as it was built.
     [TestMethod]
     public void Sync_MoveDoesNotRebuild()

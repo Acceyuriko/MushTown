@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）做完等验收：27 个 `--shot` 逐字节一致，客户端测试 30 → 32。下一步 K3（点击式拖放 + `Cursor/5` 抓手，§3.6）。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；**S1（世界对象自己走）做完等验收**：6 张 `--aiticks` + 27 张 `--shot` 一致，客户端测试 41。下一步 S2（数字变成对象 + 皮肤字典）。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -204,7 +204,7 @@
 
 ### 3.3 世界对象自己走
 
-**新增**：`GameObject.Dead`。`TreeUpdate` 跳过 `Dead` 和它的子树。
+**新增**：`GameObject.Dead`。`TreeUpdate` 跳过 `Dead` 和它的子树（结果段把绘制、命中、模态三条路也补上了，以结果段为准）。
 
 **每类一个组件，自己 `Update`**：
 
@@ -224,6 +224,17 @@
 **相机不搬（S4 砍掉）**：用户 2026-10-26 定。相机是单例，`Follow` 必须在玩家移动之后；现在的调用位置已经是确定顺序。屏幕震动、缩放、过场、边界都是相机内部的状态，不是树对象。S8 当时判"搬进树没收益"，不再翻案。
 
 **验证**：`--shot` 不跑 Update，看不出动画。用 `--aiticks` 截图 + 新增头测（帧推进、播完回收、buff 循环跟人）。
+
+**结果（S1，2026-10-29）**：做完，等验收。
+
+- `GameObject.Dead`；`TreeUpdate`、`TreeDraw`、`Scene.Hit`、`Scene.AnyModal` 都跳过死节点连同子树——死节点等于不存在，四条路语义一致，以后哪个对象改成走树画不用再想这件事。
+- `MobArt` 拿 `Data` + 当前动作的 `Frames`，`SetAction` 一次换四样（动作名、帧表、帧号和计时器），两个字段的 setter 私有。`Update` 推帧，闪烁结束回 idle（保留溢出时间，和旧循环一样），`die1` 播完置 `Owner.Dead`。
+- `MobArt.CollectDead(mobs, world)` 摘树 + 删 dict，游戏在 `TreeUpdate` 之后、`Draw` 之前调一次。**这一步不能漏也不能挪**：尸体停在 `Frame == Frames.Count`，漏了或挪到绘制之后，第一次击杀的那一帧绘制就越界。掉 `_mobs.Keys.ToList()` 的分配。
+- `PortalComp.Update` 自己循环；主循环里那两段（传送门、怪）删掉。`_portals` 列表只剩绘制用。
+- 相位自检：怪的 tick 从「travel 之后」提前到 `TreeUpdate` 里（travel 之前），数字/特效仍在后面；相对次序 怪 → 数字 → 特效 不变。地图切换那一帧，新图的怪和传送门第一次 tick 晚一帧（旧代码是先切图再 tick），看不出来。
+- 时间源：`Component.Update` 收秒，怪按 `dt * 1000f` 算毫秒；旧循环用的是 `TotalMilliseconds`，两者差 2e-6 ms/帧，累计到 100ms 边界会早一帧翻页。截图不跑 Update，看不出来。
+- 头测 9 条：推帧、闪烁回 idle（含帧表跟着换）、无 stand 回 move、播完标 Dead、死节点跳过子树、收尸（树和 dict 都少一个）、传送门循环（`WorldTests` 7 条）+ 命中跳过死节点、死模态不再吞点击（`SceneTests` 2 条）。客户端 32 → 41。
+- 截图证明不了动画推进和回收（截图不跑 `Update`），那两条靠头测 + 一次手动击杀验收。
 
 ### 3.4 扩展点
 
@@ -311,7 +322,7 @@
 
 | 片 | 内容 | 工期 |
 |---|---|---|
-| S1 (P0) | `Dead` + 回收 + 怪动画进 `MobArt.Update` + 传送门 | 1 周 |
+| S1 (P0) | `Dead` + 回收 + 怪动画进 `MobArt.Update` + 传送门。**已做（2026-10-29）**：`GameObject.Dead`，`TreeUpdate`/`TreeDraw`/`Scene.Hit`/`Scene.AnyModal` 都跳过死节点（用户要求「满足 object-component 架构以便之后扩展」，所以让死节点在步进、绘制、命中、模态四条路上语义一致，不只 step）；`MobArt.Update` 推帧（闪烁回 idle、die1 播完标 `Dead`），动作改由 `SetAction` 同时换帧表；`PortalComp.Update` 自己循环；游戏在 `TreeUpdate` 之后 `MobArt.CollectDead` 收尸（摘树 + 删 dict）。数字/特效仍是主循环，归 S2/S3 | 1 周（已完成，等验收） |
 | S2 (P0) | 数字变成对象 + 皮肤字典（默认 1 种） | 1 周 |
 | S3 (P0) | 特效变成对象 + buff 循环挂玩家 | 1 周 |
 
@@ -341,7 +352,7 @@
 1. `dotnet format` 干净；`dotnet build` 0 警告 0 错误。
 2. 测试全过（K1 新增 16 条；当前 319）。
 3. 受影响的 `--shot` 截图与改动前逐字节一致；**例外**：输入片换了默认键（Stat C→S、Quest V→Q 等），**所有带 HUD 的游戏截图**（第 4 个提示格、MENU 角标）、键窗和**技能窗**（固定键文字已删）按新默认重拍，人工对照官方布局验收。
-4. 世界片：`--aiticks 40` 截图一致；新增头测覆盖"推帧 / 播完 / 回收"。
+4. 世界片：`--aiticks 40` 截图一致；新增头测覆盖"推帧 / 播完 / 回收"。S1 已做：6 张 `--aiticks` 图（0/10/40/100 步、1000000 地图 0/40 步）逐字节一致，27 张 `--shot` 也一致；`WorldTests` 7 条 + `SceneTests` 2 条覆盖推帧、闪烁、播完、死节点（step 和命中都跳）、收尸、传送门。**注意**：截图不跑 `Update`，`--aiticks` 只推怪的走位和刷新，所以这些图只证明"绘制查表没变"，证明不了动画推进和回收。回收这一步要靠**手动验收**：进游戏打一只怪，尸体播完消失，不崩。
 5. 输入片第 1 周：手测 10 个菜单键、攻击、跳跃、Talk；换角色后按键跟着换；旧键窗的 Save/Apply/Copy/Default 在 3 套 preset 上生效（1/2/3 切换选中的 preset 并重读 draft，键格跟着换；新 UI 的预览是 K2）；`settings.json` 没有按键字段。
 6. 输入片第 2 周：3 套 preset 预览 / Apply / Copy / Save 后重开仍生效；HUD 16 槽按表重画（Ctrl/Alt/I 有内容，C 空，12 个物品格按表）。技能头测（已加，`Fresh_ASkillTargetFiresFromItsKey`：塞一条合成绑定，验证按下那个键时技能目标 Fresh）覆盖输入那一半；`CastSkill` 本身要 GraphicsDevice，只能靠 `--skill` 截图手测。实际游玩要等拖放片，这是已知代价。
 7. 代码检查：`grep "new Invoke"` 该文件为 0；**这 16 个**游戏输入字段为 0（`_altWasDown`、`_upWasDown`、`_ctrlWasDown` + 12 个技能键 + `_zWasDown` 拾取）；菜单的 `_escWasDown`、`_menuUpWasDown` 等系统键字段保留（不是绑定键）；`_qsWasDown` 已随快捷栏删掉；`settings.json` 里没有按键。
@@ -435,3 +446,7 @@
 35. W1 的 Scene.Layout() 由 TopAt 和 Draw 各自兜底调用（2026-10-29 审查 P1-1 驳回）：普通帧 2 次、点击帧 3 次。驳回收成一处的理由：命中要读到本帧刚 Build 出来的树（按一次按钮就重建面板，那一帧的点击必须落在新树上），而 Draw 在 Update 之后跑，只留 Draw 里那一次会让命中永远落后一帧。遍历是几百个节点的整数加法，比这个风险便宜。
 36. 面板/窗口的「根在屏幕、子节点局部」是 W1 的唯一写法（2026-10-29）：手画的部件拿不到遍历给的原点，统一用 UiWindow.OnScreen(local)（Pos 始终是最新的，不需要遍历）。
 37. 任务助手的条和 chevron 不在 Draw 里改 Rect（2026-10-29 审查 P1-2）：Draw 跑在 Layout 之后，改了本帧读到的 Screen 还是旧值，条子会闪一帧。位置改在 Build 和 chevron 点击时写。
+38. 怪的帧表跟着动作走（S1，2026-10-29）：`MobArt` 存 `MobData` + 当前动作的 `Frames`，`SetAction` 一次换动作名、帧表、帧号和计时器，两个字段的 setter 是私有的。外部换动作只有三处（spawn、挨打、走起来），第四处是 `Update` 里闪烁结束回 idle——那一处要保留溢出时间，所以手写两行而不走 `SetAction`。理由：`Update` 和 `Draw` 都要按当前动作取帧，每次查一遍 `Data.Actions` 是白查；私有 setter 让"动作名换了、帧表没换"编译不过。
+39. 时间源不统一（S1，2026-10-29）：`Component.Update` 收秒（玩家 mover 的契约），怪和传送门要毫秒，用 `dt * 1000f`。旧循环用的是 `TotalMilliseconds`，两者差 2e-6 ms/帧；按 16.666667 累积，100ms 的帧会早一个 tick 翻页。**接受**：只有真人看得出的一帧动画差别，截图（不跑 Update）看不出来；换成传毫秒要改 mover 的契约和测试，不划算。
+40. 地图切换那一帧的相位（S1，2026-10-29）：`SwitchMap`（踩传送门/换频道）在 `TreeUpdate` 之后，所以那条路径上新图的怪和传送门第一次 tick 晚一帧（旧代码是先切图再 tick）。**接受**：新旧图都从第 0 帧起，晚一帧看不出来；相对次序 怪 → 数字 → 特效 没变。大地图传送（`TravelTo`）走的是 `UpdateHud`，在 `TreeUpdate` **之前**，那条路径新图的怪同帧就 tick，和旧代码一样。
+41. 收尸放在 `MobArt` 上并公开（S1，2026-10-29）：`MobArt.CollectDead(mobs, world)` 摘树 + 删 dict。放在游戏里的私有方法测不到（要 GraphicsDevice），而「播完 → 摘树 → 删 dict」正是这片要验的东西。方法本身只依赖 `Dead` 和 `GameObject`，头测直接调。

@@ -10,8 +10,8 @@ public partial class MushTownGame
     private const int BarWidth = 40; // mob HP bar width, px
     private const int BossBarW = 400; // boss HP bar width, px
 
-    // Art clears: the Owner leaves the tree with the dict entry (single
-    // removals pair the same two calls inline, like the S4 pools).
+    // Batch clear (a map switch): the Owner leaves the tree with the dict
+    // entry. A single death goes through MobArt.CollectDead instead.
     private void ClearMobs()
     {
         foreach (var m in _mobs.Values) _world.RemoveChild(m.Owner);
@@ -20,7 +20,7 @@ public partial class MushTownGame
 
     private void DrawMob(MobArt m)
     {
-        var frame = MobFrames(m.Mob, m.Action)[m.Frame];
+        var frame = m.Frames[m.Frame];
         var tex = _textures[frame.Image];
         // WZ mob art has no origin: center-bottom anchor at the feet
         int x = (int)Math.Floor(m.X) - tex.Width / 2;
@@ -32,9 +32,8 @@ public partial class MushTownGame
         _spriteBatch.Draw(_pixel, new Rectangle(px + 1, py + 1, Math.Max(1, (int)((BarWidth - 2) * (float)m.Hp / m.MaxHp)), 3), new Color(80, 220, 80));
     }
 
-    // One mob's art: json plus textures, loaded once. The idle is stand, or
-    // move when the mob has no stand (the blue snail crawls everywhere).
-    private string LoadMob(int mob)
+    // One mob's art: json plus textures, loaded once.
+    private MobData LoadMob(int mob)
     {
         if (!_mobData.TryGetValue(mob, out var data))
         {
@@ -56,23 +55,17 @@ public partial class MushTownGame
                     LoadTexture(f.Image);
             _mobData[mob] = data;
         }
-        return MobIdle(mob);
+        return data;
     }
-
-    private string MobIdle(int mob) =>
-        _mobData[mob].Actions.Any(a => a.Name == "stand") ? "stand" : "move";
-
-    private List<MobFrame> MobFrames(int mob, string state) =>
-        _mobData[mob].Actions.FirstOrDefault(a => a.Name == state)?.Frames
-            ?? throw new InvalidDataException($"mob {mob} has no {state} action");
 
     // A spawn the server pushed (or the local world listed): the view starts
     // at the live HP, so late joiners see wounded mobs as wounded.
     private void ApplySpawn(int uid, int mob, float x, float y, int maxHp, int hp)
     {
-        string idle = LoadMob(mob);
         var o = new GameObject();
-        _mobs[uid] = o.Add(new MobArt { Mob = mob, X = x, Y = y, Hp = hp, MaxHp = maxHp, Action = idle });
+        var art = o.Add(new MobArt { Mob = mob, Data = LoadMob(mob), X = x, Y = y, Hp = hp, MaxHp = maxHp });
+        art.SetAction(art.Idle);
+        _mobs[uid] = art;
         _world.AddChild(o);
     }
 
@@ -87,11 +80,9 @@ public partial class MushTownGame
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
         m.Hp = hpLeft;
-        m.Action = hpLeft == 0 ? "die1" : "hit1";
-        m.Frame = 0;
-        m.Timer = 0;
-        PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, _mobData[m.Mob].Boss) : "hit");
-        float bodyH = _textures[MobFrames(m.Mob, m.Action)[0].Image].Height;
+        m.SetAction(hpLeft == 0 ? "die1" : "hit1");
+        PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, m.Data.Boss) : "hit");
+        float bodyH = _textures[m.Frames[0].Image].Height;
         float headY = m.Y - bodyH;
         var num = TakeNumber();
         num.Text = damage.ToString(); num.X = m.X; num.Y = headY;
@@ -124,12 +115,7 @@ public partial class MushTownGame
         m.Y = y;
         if (m.Action == "hit1" || m.Action == "die1") return; // flinch/death own the pose
         m.FacingRight = facingRight;
-        if (m.Action != "move")
-        {
-            m.Action = "move";
-            m.Frame = 0;
-            m.Timer = 0;
-        }
+        if (m.Action != "move") m.SetAction("move");
     }
 
     // Respawn arrivals for this view (other maps' graves tick too, but their

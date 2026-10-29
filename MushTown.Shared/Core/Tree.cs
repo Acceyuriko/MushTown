@@ -14,7 +14,7 @@ public static class TreeUpdate
 {
     public static void UpdateObject(GameObject o, float dt)
     {
-        if (!o.Enabled) return;
+        if (!o.Enabled || o.Dead) return; // a dead node and its subtree are done: the owner collects it after the step
         foreach (var c in o.Components) c.Update(dt);
         foreach (var ch in o.Children) UpdateObject(ch, dt);
     }
@@ -23,6 +23,9 @@ public static class TreeUpdate
 public sealed class GameObject
 {
     public bool Enabled = true;
+    public bool Dead; // the node finished its life (a death anim ended): step, draw and hit skip it
+                      // A component that marks its owner dead still lets the rest of this node and its
+                      // children run for the frame: the skip starts at the next step.
     public bool Modal; // swallows clicks below, even outside its rect (first user: delete modal, W2)
     public bool NoHit; // art-only: hit-testing skips it (first users: HUD art, U2)
     // Scene-root order: a bigger Z draws later and hits first. The scene
