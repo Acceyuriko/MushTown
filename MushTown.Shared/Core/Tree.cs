@@ -6,7 +6,7 @@ namespace MushTown.Shared;
 public abstract class Component
 {
     public GameObject Owner { get; internal set; } = null!;
-    public virtual void Update(float dt) { } // sim tick (first user: the player mover, S2)
+    public virtual void Update(float dt) { } // sim tick (the mover, mobs, portals, damage numbers)
 }
 
 // The headless twin of the Client's TreeDraw: steps one subtree.
@@ -15,7 +15,7 @@ public static class TreeUpdate
     public static void UpdateObject(GameObject o, float dt)
     {
         if (!o.Enabled || o.Dead) return; // a dead node and its subtree are done: the owner collects it after the step
-        foreach (var c in o.Components) c.Update(dt);
+        foreach (var c in o.Components) c.Update(dt); // no AddChild/RemoveChild in here: this walk is a live foreach
         foreach (var ch in o.Children) UpdateObject(ch, dt);
     }
 }

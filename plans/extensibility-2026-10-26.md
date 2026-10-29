@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；**S1（世界对象自己走）做完等验收**：6 张 `--aiticks` + 27 张 `--shot` 一致，客户端测试 41。下一步 S2（数字变成对象 + 皮肤字典）。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；**S2（数字变成对象 + 皮肤字典）做完等验收**：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张，全部逐字节一致，客户端测试 45。下一步 S3（特效变成对象 + buff 循环挂玩家）。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -212,7 +212,7 @@
 |---|---|---|
 | 怪 | MushTownGame 679-693 | `MobArt.Update`：推帧；`die1` 播完标 `Dead` |
 | 传送门 | MushTownGame 674-676 | `PortalComp.Update` |
-| 数字 | 694-700 | `FloatingNumber.Update`：计龄，到时标 `Dead` |
+| 数字 | 694-700 | `FloatingNumber.Update`：计龄，到时标 `Dead`（已做） |
 | 特效 | 701-722 | `SkillFx.Update`：推帧，播完标 `Dead`；buff 循环挂在玩家身上，由 buff 结束移除 |
 
 **回收**：`TreeUpdate` 之后，游戏扫自己的容器（`_mobs` / `_drops` / `_numbers` / `_fx`），把 `Dead` 的摘掉、进池。O(n)，n < 几百。数字和特效继续用两个 `Stack`；怪和掉落不池（Q11 已定：只池高频小东西）。
@@ -225,7 +225,7 @@
 
 **验证**：`--shot` 不跑 Update，看不出动画。用 `--aiticks` 截图 + 新增头测（帧推进、播完回收、buff 循环跟人）。
 
-**结果（S1，2026-10-29）**：做完，等验收。
+**结果（S1，2026-10-29）**：已验收并提交（60fda5e）。
 
 - `GameObject.Dead`；`TreeUpdate`、`TreeDraw`、`Scene.Hit`、`Scene.AnyModal` 都跳过死节点连同子树——死节点等于不存在，四条路语义一致，以后哪个对象改成走树画不用再想这件事。
 - `MobArt` 拿 `Data` + 当前动作的 `Frames`，`SetAction` 一次换四样（动作名、帧表、帧号和计时器），两个字段的 setter 私有。`Update` 推帧，闪烁结束回 idle（保留溢出时间，和旧循环一样），`die1` 播完置 `Owner.Dead`。
@@ -236,10 +236,22 @@
 - 头测 9 条：推帧、闪烁回 idle（含帧表跟着换）、无 stand 回 move、播完标 Dead、死节点跳过子树、收尸（树和 dict 都少一个）、传送门循环（`WorldTests` 7 条）+ 命中跳过死节点、死模态不再吞点击（`SceneTests` 2 条）。客户端 32 → 41。
 - 截图证明不了动画推进和回收（截图不跑 `Update`），那两条靠头测 + 一次手动击杀验收。
 
+**结果（S2，2026-10-29）**：做完，等验收。
+
+- `FloatingNumber : Component`（`World/FloatingNumber.cs`）带 `Text` / `Skin` / `X` / `Y` / `Age`，`Update` 只做一件事：加龄，到 `LifeMs`（800ms）标 `Owner.Dead`。上升高度 `RisePx`（60）也归它，绘制读这两个常量，主循环里那两个常量删掉。
+- 数字真正变成树上的节点：`TakeNumber` 从池里取组件（空池就 `new GameObject().Add(new FloatingNumber())`），`Reset()` 清 `Age`/`Skin` 并把 `Dead` 归 false，再 `_world.AddChild` **并 `_numbers.Add`**——进树和进列表是同一步，新的生成点不会只做一半。池子复用节点，不新建节点。
+- `FloatingNumber.CollectDead(numbers, world, pool)` 在 `TreeUpdate` 之后和 `MobArt.CollectDead` 并排调：摘树、进池、出列表。`FloatingNumber.DropAll(numbers, world, pool)` 管换图清场，同样三样都做。两个都做成 public static 是为了能头测（理由同 §8 #41）。
+- **换图清场必须摘树**：以前池里只有裸对象，现在节点还在树上，漏了 `RemoveChild` 就会留在 `_world` 里继续 tick，下次复用同一节点还会被加第二次。这是这次唯一的真实陷阱，`NumberDropAll_ClearsTheTreeAndTheList` 就是钉这一条。
+- `_dmg` 从一份变 `Dictionary<int, DmgData>`，`LoadDmg(skin)` 按 key 缓存。**文件名不动**：皮肤 0 还是 `effect/dmg.json`，新皮肤是 `effect/dmg{key}.json`。这样不用重导 assets。
+- 纹理仍按需载入，没做释放（§3.4 已记触发条件）。
+- 相位自检：数字的 tick 从「主循环最后一段」挪进 `TreeUpdate`（travel 之前），比怪还晚一点；数字之间互相独立，先后无所谓。绘制仍读 `_numbers` 列表，不进 y-sort，所以画出来的顺序没变。
+- 头测 4 条（`WorldTests`）：到点死（800ms 边界）、`Reset` 复活（含 `Skin` 归 0）后还能走、收尸（树少一个、列表少一个、池多一个）、换图清场（树清空、列表清空、池多两个）。客户端 41 → 45。
+- 截图：27 张 `--shot` + 6 张 `--aiticks` 逐字节一致；另外补拍 `--hit` 和 `--skill`（这两张不进 27 张基线，因为要挑有怪的地图 20000），对着 S1 的 commit 也逐字节一致。
+
 ### 3.4 扩展点
 
 - **怪**：数据驱动，几种怪就几个 json。不做池。纹理缓存现在是永不清（[GameRender.cs:178-188](../MushTown.Client/Game/GameRender.cs#L178-L188)），几百张图会吃内存 → 这次不做，记触发条件：单图怪贴图占用明显变大时，单开"按图卸载"计划。
-- **伤害皮肤**：`_dmg`（一份）改成按 key 的字典；数字对象存皮肤 key，默认 0。几百种皮肤只加数据 + 导出。选择皮肤的设置 UI 这次不做。
+- **伤害皮肤**：`_dmg`（一份）改成按 key 的字典；数字对象存皮肤 key，默认 0。几百种皮肤只加数据 + 导出。选择皮肤的设置 UI 这次不做。**加第 1 个真皮肤时导出器要一起改**：皮肤 0 是 `effect/dmg.json` + `effect/dmg/{d}.png`；皮肤 N 要写 `effect/dmg{N}.json`，10 张图**必须放独立目录**（例如 `effect/dmg{N}/{d}.png`），照抄现在的路径会把皮肤 0 的图覆盖掉，两份 json 指向同一批 png，皮肤 0 的样子被静默换掉。客户端是第一次画到那个皮肤时才读 json，缺文件在那时抛 `FileNotFoundException`，不是启动时。
 - **技能**：`CastSkill(id)` + 覆盖表；特效按 `SkillData.Effect/Hit/Affected` 的 key 读；几百个技能不改循环。
 - **技能的改键 UI**：K2 已做（技能窗开在键窗上面，从技能行拖到键格）。剩下的点击式拖放归 K3。技能、消耗品、椅子、面板按钮的统一点击式设计在 K3。
 - **技能组合技**：不做，留给技能大改。战神的"上/下 + 攻击"、"右 + 右"、"先趴下再攻击出巨熊"都归那一层。它拿控制器给的原始方向键和动作边，记几百毫秒的输入历史：攻击按下时看当前按住的方向和刚按过的方向，匹配到组合技就放组合技，否则普攻；一次攻击只出一个技能。单键（趴下）是移动键，按下立即生效，不等攻击。K1 只保证原始键可读、动作有 `Fresh`/`Down`、一帧能触发多个动作。
@@ -322,8 +334,8 @@
 
 | 片 | 内容 | 工期 |
 |---|---|---|
-| S1 (P0) | `Dead` + 回收 + 怪动画进 `MobArt.Update` + 传送门。**已做（2026-10-29）**：`GameObject.Dead`，`TreeUpdate`/`TreeDraw`/`Scene.Hit`/`Scene.AnyModal` 都跳过死节点（用户要求「满足 object-component 架构以便之后扩展」，所以让死节点在步进、绘制、命中、模态四条路上语义一致，不只 step）；`MobArt.Update` 推帧（闪烁回 idle、die1 播完标 `Dead`），动作改由 `SetAction` 同时换帧表；`PortalComp.Update` 自己循环；游戏在 `TreeUpdate` 之后 `MobArt.CollectDead` 收尸（摘树 + 删 dict）。数字/特效仍是主循环，归 S2/S3 | 1 周（已完成，等验收） |
-| S2 (P0) | 数字变成对象 + 皮肤字典（默认 1 种） | 1 周 |
+| S1 (P0) | `Dead` + 回收 + 怪动画进 `MobArt.Update` + 传送门。**已做（2026-10-29，提交 60fda5e）**：`GameObject.Dead`，`TreeUpdate`/`TreeDraw`/`Scene.Hit`/`Scene.AnyModal` 都跳过死节点（用户要求「满足 object-component 架构以便之后扩展」，所以让死节点在步进、绘制、命中、模态四条路上语义一致，不只 step）；`MobArt.Update` 推帧（闪烁回 idle、die1 播完标 `Dead`），动作改由 `SetAction` 同时换帧表；`PortalComp.Update` 自己循环；游戏在 `TreeUpdate` 之后 `MobArt.CollectDead` 收尸（摘树 + 删 dict）。数字/特效仍是主循环，归 S2/S3 | 1 周 |
+| S2 (P0) | 数字变成对象 + 皮肤字典（默认 1 种）。**已做（2026-10-29，等验收）**：`FloatingNumber` 组件自己加龄、到点标 `Dead`；数字节点进 `_world`，池子复用节点（`Reset` 清 `Age`/`Skin`/`Dead`）；`FloatingNumber.CollectDead` 收尸，`FloatingNumber.DropAll` 换图清场；`_dmg` 改成按 key 的字典，皮肤 0 沿用 `effect/dmg.json`，新皮肤 `effect/dmg{key}.json`。测试 41 → 45，27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 全部一致 | 1 周 |
 | S3 (P0) | 特效变成对象 + buff 循环挂玩家 | 1 周 |
 
 ### 窗口线
@@ -350,9 +362,9 @@
 ## 5. 每片的验收
 
 1. `dotnet format` 干净；`dotnet build` 0 警告 0 错误。
-2. 测试全过（K1 新增 16 条；当前 319）。
+2. 测试全过（K1 新增 16 条；当前 341）。
 3. 受影响的 `--shot` 截图与改动前逐字节一致；**例外**：输入片换了默认键（Stat C→S、Quest V→Q 等），**所有带 HUD 的游戏截图**（第 4 个提示格、MENU 角标）、键窗和**技能窗**（固定键文字已删）按新默认重拍，人工对照官方布局验收。
-4. 世界片：`--aiticks 40` 截图一致；新增头测覆盖"推帧 / 播完 / 回收"。S1 已做：6 张 `--aiticks` 图（0/10/40/100 步、1000000 地图 0/40 步）逐字节一致，27 张 `--shot` 也一致；`WorldTests` 7 条 + `SceneTests` 2 条覆盖推帧、闪烁、播完、死节点（step 和命中都跳）、收尸、传送门。**注意**：截图不跑 `Update`，`--aiticks` 只推怪的走位和刷新，所以这些图只证明"绘制查表没变"，证明不了动画推进和回收。回收这一步要靠**手动验收**：进游戏打一只怪，尸体播完消失，不崩。
+4. 世界片：`--aiticks 40` 截图一致；新增头测覆盖"推帧 / 播完 / 回收"。S1 已做：6 张 `--aiticks` 图（0/10/40/100 步、1000000 地图 0/40 步）逐字节一致，27 张 `--shot` 也一致；`WorldTests` 7 条 + `SceneTests` 2 条覆盖推帧、闪烁、播完、死节点（step 和命中都跳）、收尸、传送门。**注意**：截图不跑 `Update`，`--aiticks` 只推怪的走位和刷新，所以这些图只证明"绘制查表没变"，证明不了动画推进和回收。回收这一步要靠**手动验收**：进游戏打一只怪，尸体播完消失，不崩。S2 已做：`WorldTests` 4 条（到点死、`Reset` 复活、收尸、换图清场），27 张 `--shot` + 6 张 `--aiticks` 一致，另加 `--hit`/`--skill`（地图 20000）两张在改动前后逐字节一致。手动验收：①打怪时数字上升淡出、自己消失，不崩；②数字还在屏幕上时走进传送门换图，数字立刻消失，换图后新数字的上升速度不变（这条验的是清场时有没有把节点摘出树）。
 5. 输入片第 1 周：手测 10 个菜单键、攻击、跳跃、Talk；换角色后按键跟着换；旧键窗的 Save/Apply/Copy/Default 在 3 套 preset 上生效（1/2/3 切换选中的 preset 并重读 draft，键格跟着换；新 UI 的预览是 K2）；`settings.json` 没有按键字段。
 6. 输入片第 2 周：3 套 preset 预览 / Apply / Copy / Save 后重开仍生效；HUD 16 槽按表重画（Ctrl/Alt/I 有内容，C 空，12 个物品格按表）。技能头测（已加，`Fresh_ASkillTargetFiresFromItsKey`：塞一条合成绑定，验证按下那个键时技能目标 Fresh）覆盖输入那一半；`CastSkill` 本身要 GraphicsDevice，只能靠 `--skill` 截图手测。实际游玩要等拖放片，这是已知代价。
 7. 代码检查：`grep "new Invoke"` 该文件为 0；**这 16 个**游戏输入字段为 0（`_altWasDown`、`_upWasDown`、`_ctrlWasDown` + 12 个技能键 + `_zWasDown` 拾取）；菜单的 `_escWasDown`、`_menuUpWasDown` 等系统键字段保留（不是绑定键）；`_qsWasDown` 已随快捷栏删掉；`settings.json` 里没有按键。
@@ -450,3 +462,9 @@
 39. 时间源不统一（S1，2026-10-29）：`Component.Update` 收秒（玩家 mover 的契约），怪和传送门要毫秒，用 `dt * 1000f`。旧循环用的是 `TotalMilliseconds`，两者差 2e-6 ms/帧；按 16.666667 累积，100ms 的帧会早一个 tick 翻页。**接受**：只有真人看得出的一帧动画差别，截图（不跑 Update）看不出来；换成传毫秒要改 mover 的契约和测试，不划算。
 40. 地图切换那一帧的相位（S1，2026-10-29）：`SwitchMap`（踩传送门/换频道）在 `TreeUpdate` 之后，所以那条路径上新图的怪和传送门第一次 tick 晚一帧（旧代码是先切图再 tick）。**接受**：新旧图都从第 0 帧起，晚一帧看不出来；相对次序 怪 → 数字 → 特效 没变。大地图传送（`TravelTo`）走的是 `UpdateHud`，在 `TreeUpdate` **之前**，那条路径新图的怪同帧就 tick，和旧代码一样。
 41. 收尸放在 `MobArt` 上并公开（S1，2026-10-29）：`MobArt.CollectDead(mobs, world)` 摘树 + 删 dict。放在游戏里的私有方法测不到（要 GraphicsDevice），而「播完 → 摘树 → 删 dict」正是这片要验的东西。方法本身只依赖 `Dead` 和 `GameObject`，头测直接调。
+42. 皮肤文件名不搬家（S2，2026-10-29）：皮肤 0 仍是 `effect/dmg.json`，皮肤 N 是 `effect/dmg{N}.json`，`LoadDmg(skin)` 里就一个三元。另一条路是全部改成 `dmg{key}.json`，但那样现有的 `assets/` 得重导一遍才开得了游戏。字典本来就是这片的目的，文件名不是。
+43. 数字池复用的是**节点**，不是裸组件（S2，2026-10-29）：`TakeNumber` 从池里取组件，`Reset()` 把 `Age`/`Skin`/`Dead` 清干净，再 `_world.AddChild` 挂回树上；收尸时 `RemoveChild` 再进池。少了 `Reset` 里那行 `Dead = false`，复用的数字一出生就是死的：树上不更新，`CollectDead` 当帧把它收回池子，所以永远看不见。少了 `RemoveChild`，换图清场后节点留在 `_world` 里继续 tick，下次复用同一节点时被 `AddChild` 加第二次 → 一帧走两次（上升变快、寿命减半），树里节点越积越多。两条路都有头测（`NumberReset_...`、`NumberDropAll_...`）。
+44. 数字的 tick 挪进 `TreeUpdate`，绘制仍读 `_numbers`（S2，2026-10-29）：数字之间没有依赖，谁先走无所谓，所以不为了保持"怪 → 数字 → 特效"的顺序去另开一个桶。绘制读列表是因为数字不进 y-sort，也不该进——它永远画在最上层。
+45. `FloatingNumber` 自己带 `LifeMs`/`RisePx`（S2，2026-10-29）：寿命和上升高度是这个对象自己的样子，主循环里的两个常量删掉，绘制读 `FloatingNumber.LifeMs` / `RisePx`。以后换皮肤如果连消失时间也不同，字段就在组件上改，不用再找主循环。
+46. 树步进期间不能增删子节点（S2 审查，2026-10-30）：`TreeUpdate` 的 `foreach (o.Children)` 是活遍历，组件 `Update` 里 `AddChild`/`RemoveChild` 会抛 `Collection was modified`。今天的生成点都在步进之外（攻击/技能在步进前，网络/AI 在步进后），所以只写在注释里，没有改成"遍历前拷一份子列表"。以后真要在步进里生成（比如怪死时掉东西），先改遍历方式。
+47. 数字的"进树 + 进列表"合成一步（S2 审查，2026-10-30）：`TakeNumber` 同时做 `_world.AddChild` 和 `_numbers.Add`。分开写时，新生成点漏掉列表那一半，节点会在树里一直 tick 却永远收不到。

@@ -58,7 +58,7 @@ public partial class MushTownGame : Game
     private List<NpcArt> _npcArts = new(); // live NPC views, one per spawn
 
     // The sim world: one root holding the player, the camera, the map
-    // furniture, and the mob/drop/peer views.
+    // furniture, the mob/drop/peer views and the damage numbers.
     private readonly GameObject _world = new();
     private GameObject _mapObj = new(); // rebuilt per map load: portal + NPC children
     private readonly PlayerMover _mover = new();
@@ -87,11 +87,11 @@ public partial class MushTownGame : Game
     private MobWorld? _localWorld;
     private readonly Dictionary<int, MobArt> _mobs = new();
     private readonly Dictionary<int, MobData> _mobData = new();
-    private readonly List<DamageNumber> _numbers = new();
+    private readonly List<FloatingNumber> _numbers = new();
     private readonly List<SkillFx> _fx = new(); // skill cast effects + hit sparks in flight
-    private readonly Stack<DamageNumber> _numberPool = new(); // freelists: spawn pops, removal pushes, live order untouched
+    private readonly Stack<FloatingNumber> _numberPool = new(); // freelists: spawn pops, removal pushes, live order untouched
     private readonly Stack<SkillFx> _fxPool = new();
-    private DmgData? _dmg; // basic damage skin digits, loaded once
+    private readonly Dictionary<int, DmgData> _dmg = new(); // damage skins by key, loaded once each
 
     private readonly Dictionary<int, DropArt> _drops = new();
 
@@ -185,10 +185,10 @@ public partial class MushTownGame : Game
         _graphics.PreferredBackBufferHeight = mode.Height;
 
         // The tree step order: the player moves first, then the map furniture
-        // (portals) and the mobs, all of them children of the world root.
-        // Camera and audio ride the tree but do not tick. Travel lands after
-        // the step, and the numbers and effects still tick after the tree
-        // (S2/S3 move them).
+        // (portals), the mobs and the damage numbers, all of them children of
+        // the world root. Camera and audio ride the tree but do not tick.
+        // Travel lands after the step, and the skill effects still tick after
+        // the tree (S3 moves them).
         var player = new GameObject();
         player.Add(_mover);
         player.Add(_heroPlate);
@@ -602,6 +602,7 @@ public partial class MushTownGame : Game
         // Before the draw: a corpse sits on Frame == Frames.Count, and the
         // draw reads that frame. Skipping this line crashes on the first kill.
         MobArt.CollectDead(_mobs, _world);
+        FloatingNumber.CollectDead(_numbers, _world, _numberPool);
         if (_mover.JumpSfx) PlaySfx("jump");
         if (_mover.Travel != null)
         {
@@ -625,13 +626,6 @@ public partial class MushTownGame : Game
         if (_mover.Climb == null || _mover.ClimbMoving) // still on a ladder: hold the pose
             (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, _delays[_shownAction]);
 
-        for (int i = _numbers.Count - 1; i >= 0; i--)
-        {
-            _numbers[i].Age += dtMs;
-            if (_numbers[i].Age < NumberMs) continue;
-            _numberPool.Push(_numbers[i]);
-            _numbers.RemoveAt(i);
-        }
         for (int i = _fx.Count - 1; i >= 0; i--) // skill effects play once, then leave
         {
             var f = _fx[i];

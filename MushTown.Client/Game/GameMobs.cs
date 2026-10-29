@@ -86,7 +86,6 @@ public partial class MushTownGame
         float headY = m.Y - bodyH;
         var num = TakeNumber();
         num.Text = damage.ToString(); num.X = m.X; num.Y = headY;
-        _numbers.Add(num);
         if (skill != 0 && _skills[skill].Hit.Count > 0)
         {
             var spark = TakeFx();

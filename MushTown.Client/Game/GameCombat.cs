@@ -8,21 +8,11 @@ namespace MushTown.Client;
 // Combat: swings, skills, casts, hurt/death, and the hit feedback pools.
 public partial class MushTownGame
 {
-    private const float NumberMs = 800; // damage numbers rise and fade over this long
-    private const int NumberRise = 60; // px a damage number floats up
     private const int FxDelay = 100; // skill effect frames share one delay (WZ ships no delays for them)
     private const int FxCastDy = 40; // cast effects center on the torso (bare frames: no WZ origins)
     private const int DashPx = 220; // Rush/Flash Blade carry the caster this far along facing
     private const float DiveV = 900f; // Leap Attack slams down this fast (past MaxFall on purpose)
     private const int LeapRange = 400; // Leap Attack needs a platform within this far below
-
-    private sealed class DamageNumber
-    {
-        public string Text = "";
-        public float X; // head position when the hit landed
-        public float Y;
-        public float Age;
-    }
 
     // One skill effect in flight: a cast effect (centered on the caster), a
     // hit spark (centered on the mob's body), or a buff loop (riding the
@@ -39,13 +29,16 @@ public partial class MushTownGame
         public float Timer;
     }
 
-    // Pooled spawn: pop or make, reset the fields the spawn site does not
-    // set (sites always set Text/X/Y and Skill/X/Y/FacingRight; spark and
-    // loop sites add Hit/Loop).
-    private DamageNumber TakeNumber()
+    // Pooled spawn: a number is a node now, so a pop puts it back in the tree
+    // and a fresh one gets its node once. Tree and list move together here,
+    // so a new spawn site cannot leak a node that only the list could reach.
+    // Only call this outside the tree step: adding to a node being walked throws.
+    private FloatingNumber TakeNumber()
     {
-        var n = _numberPool.TryPop(out var p) ? p : new DamageNumber();
-        n.Age = 0;
+        var n = _numberPool.TryPop(out var p) ? p : new GameObject().Add(new FloatingNumber());
+        n.Reset();
+        _world.AddChild(n.Owner);
+        _numbers.Add(n);
         return n;
     }
 
@@ -59,11 +52,7 @@ public partial class MushTownGame
         return f;
     }
 
-    private void DropNumbers()
-    {
-        foreach (var n in _numbers) _numberPool.Push(n);
-        _numbers.Clear();
-    }
+    private void DropNumbers() => FloatingNumber.DropAll(_numbers, _world, _numberPool);
 
     private void DropFx()
     {
@@ -86,20 +75,21 @@ public partial class MushTownGame
         }
     }
 
-    // Damage numbers: basic skin digits, rising and fading over NumberMs.
+    // Damage numbers: the digits of the number's skin, rising and fading
+    // over FloatingNumber.LifeMs.
     private void DrawNumbers()
     {
         if (_numbers.Count == 0) return;
-        var dmg = LoadDmg();
         foreach (var n in _numbers)
         {
-            float k = n.Age / NumberMs;
+            var dmg = LoadDmg(n.Skin);
+            float k = n.Age / FloatingNumber.LifeMs;
             int alpha = k < 0.7f ? 255 : (int)(255 * (1 - (k - 0.7f) / 0.3f));
             var tint = new Color(255, 255, 255, alpha);
             int totalW = 0;
             foreach (char c in n.Text) totalW += _textures[dmg.Digits[c - '0'].Image].Width;
             float x = n.X - totalW / 2f - _camera.X;
-            float baseY = n.Y - NumberRise * k - _camera.Y;
+            float baseY = n.Y - FloatingNumber.RisePx * k - _camera.Y;
             foreach (char c in n.Text)
             {
                 var d = dmg.Digits[c - '0'];
@@ -111,18 +101,19 @@ public partial class MushTownGame
         }
     }
 
-    // Basic damage skin: ten digits plus their baseline offsets, loaded once.
-    private DmgData LoadDmg()
+    // One damage skin: ten digits plus their baseline offsets, loaded once
+    // per key. Skin 0 keeps the original file name; a new skin is the same
+    // file with its key appended.
+    private DmgData LoadDmg(int skin)
     {
-        if (_dmg == null)
-        {
-            var data = LoadJson<DmgData>(Path.Combine(_assetsDir, "effect", "dmg.json"));
-            if (data.Digits.Count != 10)
-                throw new InvalidDataException($"damage skin has {data.Digits.Count} digits, want 10");
-            foreach (var d in data.Digits) LoadTexture(d.Image);
-            _dmg = data;
-        }
-        return _dmg;
+        if (_dmg.TryGetValue(skin, out var data)) return data;
+        string file = skin == 0 ? "dmg.json" : $"dmg{skin}.json";
+        data = LoadJson<DmgData>(Path.Combine(_assetsDir, "effect", file));
+        if (data.Digits.Count != 10)
+            throw new InvalidDataException($"damage skin {skin} has {data.Digits.Count} digits, want 10");
+        foreach (var d in data.Digits) LoadTexture(d.Image);
+        _dmg[skin] = data;
+        return data;
     }
 
     // One touch that landed on us: DEF folds in, the number shows what got
@@ -137,7 +128,6 @@ public partial class MushTownGame
         if (dealt == 0) return false; // harmless touch: no number, no death
         var num = TakeNumber();
         num.Text = dealt.ToString(); num.X = _mover.X; num.Y = _mover.Y - 90;
-        _numbers.Add(num);
         if (chara.Hp != 0) return false;
         Die(chara);
         return true;

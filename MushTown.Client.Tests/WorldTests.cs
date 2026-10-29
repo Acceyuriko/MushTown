@@ -4,7 +4,8 @@ using MushTown.Shared;
 namespace MushTown.Client.Tests;
 
 // The world objects step themselves: a mob plays its anim and ends its own
-// life, a portal loops, and the tree skips whatever is already dead.
+// life, a portal loops, a damage number ages out, and the tree skips
+// whatever is already dead.
 [TestClass]
 public class WorldTests
 {
@@ -109,6 +110,68 @@ public class WorldTests
         TreeUpdate.UpdateObject(dead, 0.1f);
         Assert.AreEqual(0, tick.Ticks);
         Assert.AreEqual(0, childTick.Ticks);
+    }
+
+    [TestMethod]
+    public void NumberTick_DiesAtTheEndOfItsLife()
+    {
+        var n = new GameObject().Add(new FloatingNumber { Text = "12" });
+        n.Update(0.5f); // 500ms: still rising
+        Assert.IsFalse(n.Owner.Dead);
+        n.Update(0.3f); // 800ms: the last frame counts as over
+        Assert.IsTrue(n.Owner.Dead);
+        Assert.AreEqual(800f, n.Age, 0.01f);
+    }
+
+    [TestMethod]
+    public void NumberReset_BringsANumberBack()
+    {
+        var n = new GameObject().Add(new FloatingNumber { Text = "12", Age = 900, Skin = 3 });
+        n.Owner.Dead = true;
+        n.Reset();
+        Assert.AreEqual(0f, n.Age);
+        Assert.AreEqual(0, n.Skin);
+        Assert.IsFalse(n.Owner.Dead);
+        n.Update(0.1f); // it ticks again
+        Assert.AreEqual(100f, n.Age, 0.01f);
+    }
+
+    [TestMethod]
+    public void NumberCollectDead_ReturnsTheNumberToThePool()
+    {
+        var world = new GameObject();
+        var pool = new Stack<FloatingNumber>();
+        var live = new List<FloatingNumber>();
+        var a = new GameObject().Add(new FloatingNumber { Text = "1" });
+        var b = new GameObject().Add(new FloatingNumber { Text = "2" });
+        world.AddChild(a.Owner);
+        world.AddChild(b.Owner);
+        live.Add(a);
+        live.Add(b);
+        a.Owner.Dead = true;
+        FloatingNumber.CollectDead(live, world, pool);
+        Assert.AreEqual(1, world.Children.Count);
+        Assert.AreEqual(1, live.Count);
+        Assert.AreSame(a, pool.Pop());
+        Assert.AreSame(b, live[0]);
+    }
+
+    [TestMethod]
+    public void NumberDropAll_ClearsTheTreeAndTheList()
+    {
+        var world = new GameObject();
+        var pool = new Stack<FloatingNumber>();
+        var live = new List<FloatingNumber>();
+        var a = new GameObject().Add(new FloatingNumber { Text = "1" });
+        var b = new GameObject().Add(new FloatingNumber { Text = "2" });
+        world.AddChild(a.Owner);
+        world.AddChild(b.Owner);
+        live.Add(a);
+        live.Add(b);
+        FloatingNumber.DropAll(live, world, pool);
+        Assert.AreEqual(0, world.Children.Count);
+        Assert.AreEqual(0, live.Count);
+        Assert.AreEqual(2, pool.Count);
     }
 
     [TestMethod]
