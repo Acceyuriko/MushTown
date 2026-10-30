@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；S2（数字变成对象 + 皮肤字典）已验收并提交（1e182d0，两轮审查，测试 45）；S3（特效变成对象 + buff 循环挂玩家）已验收：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张全部逐字节一致，客户端测试 49。同一批还带一条输入修复：键窗不再挡任何东西（角色动作、面板键、喝药全照常，§8 #51）。已提交（`69fc625`）；同批的输入修复也单独提交了。下一步 N1（背包）。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；S2（数字变成对象 + 皮肤字典）已验收并提交（1e182d0，两轮审查，测试 45）；S3（特效变成对象 + buff 循环挂玩家）已验收：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张全部逐字节一致，客户端测试 49。同一批还带一条输入修复：键窗不再挡任何东西（角色动作、面板键、喝药全照常，§8 #51）。已提交（`69fc625`）；同批的输入修复也单独提交了。N1（HUD 条：气泡、手拿、tips、快捷栏格子）已提交。下一步 N2（快捷槽合成一套）。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -194,8 +194,9 @@
    - GUIDE 片（N7）：`ClipPlayer`（序列帧播放，喂 `UiClip`）。
    - 现有 `Picture / Label / LiveLabel / Bar / Image / Round / Fill / InvSlot` 继续用。
 2. **共享画法**（`Ui/AvatarArt.cs`，**已建**）：`MergeParts` / `DrawAvatar` / `DrawAvatarOnScreen`（把相机压到 0,0 再画，UI 上的娃娃都是屏幕像素）+ `AvatarPreview` 组件（owner 矩形的左上角 = 脚）。创建角色预览已用它；Character Info / Equip 里的娃娃等那个窗加 `dollX/dollY` 布局键再接一行（那时 `AvatarPreview` 才需要 `worn` 参数）。选角格一页 12 个娃娃和石柱/传送门交织，留给 N8。
-3. **专用组件**：放窗口自己的文件，不做成通用件。例如 `MinimapCanvas`（HudMap）、`KeyCap`（HudKeyConfig）、`ChatLog`（HudChat）、`Balloon`（HudBalloon）。
-   - 专用组件清单（按窗口）：HUD 条 4 个、快捷栏 1 个、设置旋钮 1 个、聊天 3 个、小地图 1 个、大地图 1 个、键窗 5 个、任务 3 个、组队 2 个、GUIDE 1 个、选角/创建 3 个。
+3. **专用组件**：只给一个窗口用、又要读那个窗口私有状态的，做成窗口文件里的 private 嵌套类，不做成通用件。例如 `KeyCap` / `ActionCell` / `FilterBox`（HudKeyConfig，N5 的 5 个）、`MinimapCanvas`（HudMap）、`ChatLog`（HudChat）。
+   - **只靠构造参数就能活**（不读窗口私有状态）、或者两个以上窗口要用的，放 `Ui/` 做 public 组件：`Picture` / `Bar` / `LiveLabel` / `Slot` / `HoverTip` / `ItemTip` / `InvSlot`，以及 N1 的 `Balloon` / `HeldItem` / `Tips` / `QuickCell`（它们各自只有一处用，但取数全在构造时传进来，所以不绑在窗口文件上）。判断标准：构造时能不能只靠参数。
+   - 专用组件清单（按窗口）：HUD 条 4 个（`Ui/`）、快捷栏 1 个（`Ui/`）、设置旋钮 1 个、聊天 3 个、小地图 1 个、大地图 1 个、键窗 5 个（嵌套）、任务 3 个、组队 2 个、GUIDE 1 个、选角/创建 3 个。
    - 不做"万能组件"：两个窗口画法不同就各留一个。
 
 **顺序**：一片一个窗口，每片截图逐字节对比。
@@ -331,6 +332,19 @@
 
 **验收**：单击动作池的图标 → 图标跟手、原格空出；单击键盘的键 → 动作落在那个键上、池子里少一格（其余格子不动）；再把它从键盘抓回池子 → 键变空、动作回到原来那一格；拿起时按 Esc → 什么都没变；HUD 槽的抓放同 N2 的验收。
 
+### 3.7 HUD 条（N1，2026-10-30）
+
+HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。它们要的数据本来就都在 `MushTownGame` 上，所以拆成四个组件，构造时把「怎么取数」传进去，绘制全在组件里：
+
+- **`Balloon`**（`Ui/Balloon.cs`）：消息（`Func<string>`）、脚在屏幕上的位置（`Func<Point>`）、`panel-balloon.json`。换行缓存跟着组件走，只在消息或宽度变化时重算。
+- **`HeldItem`**（`Ui/HeldItem.cs`）：手拿的东西画在鼠标上，取的是「手上那件的图，空手就空串」。
+- **`Tips`**（`Ui/Tips.cs`）：文字 tip（`HoverTip`）+ 物品 tooltip（`ItemTip`）。tooltip 的正文行用 `ItemLines.Detail`（`Ui/ItemLines.cs`），属性窗的详情框也调同一个函数：以前它在 `HudStat` 里是 private，`HudBar` 靠同一个 partial class 直接调；现在搬到 `Ui/` 公开，两处都能用，也能头测。
+- **`QuickCell`**（`Ui/QuickCell.cs`）：一格快捷栏 = 绑定目标的图标 + 官方键帽。目标每帧现读，改绑不用重建；四个提示格用 `Layout.HintIcon/HintCap`，十二个物品格图标居中、键帽在右下。纹理要按需加载，组件不能往游戏的缓存里加，所以把 `LoadArt(name)` 传进去。
+
+**结果**：`HudBar.cs` / `HudQuickSlots.cs` 的 `new Invoke` 都是 0，全仓 18 → 14。头测 2 条（`ItemLines` 的顺序、没有的项不写），客户端 49 → 51。27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 全部逐字节一致。
+
+**截图怎么验这三条绘制路径**：`--shot` 不跑 `Update`，所以悬停要自己补。加了两条按文件名摆拍的规则（和已有的 `*balloon*` 一样）：名字含 `hptip` → 鼠标停在 HP 条上（文字 tip），含 `itemtip` → 停在背包里那枚戒指上（物品 tooltip），画之前补一次 `Layout()` 和 `Hover()`（`MushTownGame.ShotMouse`）。三张对照图在 `logs/n1_before` / `logs/n1_after`：旧代码和新代码逐字节一致。手拿那 4 行没有摆拍（要真的拿起一件东西），只能手测（§5 第 14 条）。背包窗（`HudInventory.cs`）本来就没有 `Invoke`，K3 的「背包」只差拿起和放下的接线。
+
 ## 4. 分片
 
 工期按每周约 10 小时估。每周一个 commit（用户规矩）；2 周的片第 1 周提交能 build + test 的中间态，第 2 周完成；每片结束停下验收，先 review 后提交。
@@ -358,7 +372,7 @@
 | N0 (P0) | `Box` + `Ui/AvatarArt.cs` + `AvatarPreview`：**已做**（`Box` 用在小地图框和物品 tip 框；`AvatarPreview` 用在创建角色预览；`MergeParts`/`DrawAvatar` 搬进新文件并加了 `DrawAvatarOnScreen`） | 0.5 周 |
 | N5 (P0) | 键窗 7 处 `Invoke` 已删（和 K2 合并）：`KeyCap` / `ActionCell` / `FilterBox` / `FilterItem` / `HeldIcon` 五个窗口内私有组件，预设钮和 Combo Key 钮改用 `Image(stem, on)`；拖放松手改由 `UpdateHud` 的鼠标边沿驱动（`KeyConfigWindow.UpdateDrag`），Draw 不再轮询鼠标 | 已做 |
 | W1 (P0) | **`Rect` 改成父相对（Unity RectTransform 的形状）**：`Rect` 只存局部 offset + size；每帧开头 `Scene.Layout()` 走一次树把屏幕矩形写进 `Rect.Screen`；命中、绘制、HUD 悬停都读 `Screen`；`UiWindow.Sync()` 不再因为 `Pos` 变化重建；48 处 `Pos.X +`、51 处 `Pos.Y +` 变回纯偏移（10 个窗口文件）。不做 anchors / pivot / layout group。详见 §3.5 | 1 周（已验收，8b86b4a） |
-| N1 (P1) | HUD 条：气泡、快捷栏角标、手拿、tips | 1 周 |
+| N1 (P1) | HUD 条：气泡、快捷栏角标、手拿、tips。**已做（2026-10-30，已提交）**：四个组件（`Balloon` / `HeldItem` / `Tips` / `QuickCell`），`ItemLines` 由 tooltip 和属性窗共用；HudBar/HudQuickSlots 的 `Invoke` 归零，全仓 18 → 14；测试 49 → 51；35 张截图逐字节一致。详见 §3.7 | 1 周 |
 | N2 (P1) | 快捷槽：4 个键提示 + 12 个物品格合成一套 16 个等价槽（内容先固定）+ 设置旋钮 | 1 周 |
 | N3 (P1) | 聊天窗（整块，最大） | 2 周 |
 | N4 (P1) | 小地图 + 大地图 | 2 周 |
@@ -375,7 +389,7 @@
 ## 5. 每片的验收
 
 1. `dotnet format` 干净；`dotnet build` 0 警告 0 错误。
-2. 测试全过（K1 新增 16 条；当前 345）。
+2. 测试全过（K1 新增 16 条；当前 347）。
 3. 受影响的 `--shot` 截图与改动前逐字节一致；**例外**：输入片换了默认键（Stat C→S、Quest V→Q 等），**所有带 HUD 的游戏截图**（第 4 个提示格、MENU 角标）、键窗和**技能窗**（固定键文字已删）按新默认重拍，人工对照官方布局验收。
 4. 世界片：`--aiticks 40` 截图一致；新增头测覆盖"推帧 / 播完 / 回收"。S1 已做：6 张 `--aiticks` 图（0/10/40/100 步、1000000 地图 0/40 步）逐字节一致，27 张 `--shot` 也一致；`WorldTests` 7 条 + `SceneTests` 2 条覆盖推帧、闪烁、播完、死节点（step 和命中都跳）、收尸、传送门。**注意**：截图不跑 `Update`，`--aiticks` 只推怪的走位和刷新，所以这些图只证明"绘制查表没变"，证明不了动画推进和回收。回收这一步要靠**手动验收**：进游戏打一只怪，尸体播完消失，不崩。S2 已做：`WorldTests` 4 条（到点死、`Reset` 复活、收尸、换图清场），27 张 `--shot` + 6 张 `--aiticks` 一致，另加 `--hit`/`--skill`（地图 20000）两张在改动前后逐字节一致。手动验收：①打怪时数字上升淡出、自己消失，不崩；②数字还在屏幕上时走进传送门换图，数字立刻消失，换图后新数字的上升速度不变（这条验的是清场时有没有把节点摘出树）。S3 已做：`WorldTests` 4 条（一次性特效推帧播完 + `Reset` 复活、buff 循环绕回不死、buff 循环跟着玩家走、`StripLoops` 只摘那一个 buff 并摘树），27 张 `--shot` + 6 张 `--aiticks` 一致，`--hit`/`--skill` 两张也逐字节一致。手动验收：①放一个带图的 buff（例如 Spirit Blade 那类有 `Affected` 图的），循环图案贴着人走，buff 结束时图案消失；②连续放同一个 buff，图案不会叠成两层；③放一个伤害技能，特效播一次就消失，不崩；④放 buff 后走进传送门换图，图案重新挂在人身上。
 5. 输入片第 1 周：手测 10 个菜单键、攻击、跳跃、Talk；换角色后按键跟着换；旧键窗的 Save/Apply/Copy/Default 在 3 套 preset 上生效（1/2/3 切换选中的 preset 并重读 draft，键格跟着换；新 UI 的预览是 K2）；`settings.json` 没有按键字段。
@@ -387,6 +401,7 @@
 11. K2 动作池（已做）：键窗打开时默认是 Not Added 组，列出 63 个没绑键的动作（官方 icon 全部 77 张图，一张一格；默认表占 14 个）；9 个过滤项（Not Added + 8 个分类）逐组点开都能看到对应图标；键盘上 E 画 EQUIP、U 画 MAPLE GUIDE、`\` 画 KEY BINDINGS、Z 画 PICK UP、Ctrl/Alt 画 ATTACK/JUMP；Chat 键点开聊天输入、Minimap 键只是重建小地图；把 Attack 从键上抓起来、拖到黑色动作池上松手、Save 后攻击真的没键了（K1 的 `Reserved` 保护已删，键格本身可以抓；松手在标题栏、按钮或键缝上什么都不改）；把 `Legion`（没实现）拖到键上 Save，按键什么都不发生；Combo Key 模式下按住第一个已绑的键、拖到第二个键上松手，做成 `I+K`（点一下拿不起来，那是 K3）。`--shot keys` 的像素变化是预期的（池子变大），不用和旧基线比。
 12. K3 点击式拖放：见 §3.6 的验收段。拿起时按 Esc 丢掉手上的东西、不改任何东西；池子只列没绑的动作，绑一个少一格、取消一个多一格。
 13. 键窗不挡（S3 同批，已做）：键窗开着时走路、攻击、跳跃、拾取、对话、喝药、7 个面板键全部生效，用的是**已保存**的 preset；在键窗里改键但**不 Save**，关窗后按旧键还是老效果；Save 后**下一帧**新键生效，不用重开；MENU 窗口仍然挡角色。这几处是 `Update` / `UpdateHud` 里的条件，要 `GraphicsDevice`，没有头测，只能手测。
+14. N1 HUD 条（已做）：`grep "new Invoke"` 在 `HudBar.cs` 和 `HudQuickSlots.cs` 里都是 0；27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 逐字节一致；`ItemLines` 2 条头测；气泡和两条 tip 用 `*balloon*` / `*hptip*` / `*itemtip*` 摆拍，`logs/n1_before` 和 `logs/n1_after` 三对图逐字节一致。手测（截图拍不到手拿）：①鼠标停在 HP/MP/EXP 条上出深色文字 tip；②停在背包或快捷栏的物品上出物品 tooltip（图标、名字、加成、描述），手里拿着东西时不出；③在聊天里发一句话，头顶出气泡，几秒后消失，走开时跟着走；④从背包拿起一件东西，图标跟着鼠标走，放下后回到格子。
 
 ## 6. 风险
 

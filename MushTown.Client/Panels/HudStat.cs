@@ -146,7 +146,7 @@ public partial class MushTownGame
         box.Add(new Box("tip"));
         box.Add(new LiveLabel(() => data.Name, _statLay.Get("detailNameX", 48), _statLay.Get("detailNameY", 6), new Color(255, 220, 0)));
         int ly = _statLay.Get("detailLineY", 28);
-        foreach (string line in ItemDetailLines(data))
+        foreach (string line in ItemLines.Detail(data))
         {
             box.Add(new LiveLabel(() => line, _statLay.Get("detailLineX", 48), ly, Color.White));
             ly += _statLay.Get("detailLineGap", 16);
@@ -156,20 +156,6 @@ public partial class MushTownGame
         icon.Add(new Rect(new Rectangle(x + _statLay.Get("detailIconX", 8), y + _statLay.Get("detailIconY", 8), iconSize, iconSize)));
         icon.Add(new EquipIcon(data.Image));
         body.AddChild(icon);
-    }
-
-    // The detail lines of one item: the level it asks for, then the bonuses.
-    // No HP/MP line: v1 takes no incHP/incMP from gear, and a potion's own
-    // String.wz description already says what it restores.
-    private static List<string> ItemDetailLines(ItemData data)
-    {
-        var lines = new List<string>();
-        if (data.ReqLevel > 0) lines.Add($"Required Level Lv. {data.ReqLevel}");
-        if (data.Atk != 0) lines.Add($"Attack +{data.Atk}");
-        if (data.Def != 0) lines.Add($"Defense +{data.Def}");
-        if (data.Str != 0) lines.Add($"STR +{data.Str}");
-        if (data.Dex != 0) lines.Add($"DEX +{data.Dex}");
-        return lines;
     }
 
     // The equip slots the game has data for: the WZ slot kind gives the slot

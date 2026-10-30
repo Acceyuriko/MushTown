@@ -14,7 +14,7 @@ public partial class MushTownGame
 {
     // Must match the exporter: the HUD names come from ExportHud. Every
     // name here must be exported, or LoadTexture throws. The quick slot caps
-    // and the action icons load when a cell draws (DrawSlot).
+    // and the action icons load when a cell draws (QuickCell).
     private static readonly string[] HudFiles = new[]
     {
         "hud_plate.png", "hud_lvtag.png",
@@ -295,7 +295,7 @@ public partial class MushTownGame
         InstallInput();
         _uiScene = new Scene(); // a reload starts over: no stale hover, click or root list
         var balloon = new GameObject { NoHit = true, Z = BalloonZ }; // the speech bubble over the character: under every HUD piece
-        balloon.Add(new Invoke(DrawBalloon));
+        balloon.Add(MakeBalloon());
         _uiScene.Add(balloon);
         var furniture = new GameObject(); // HUD furniture: hit-rects with no Buttons (clicks stop here, silent)
         furniture.AddChild(HitBox(PlateRect()));
@@ -343,10 +343,10 @@ public partial class MushTownGame
         foreach (var w in UiWindow.List) { w.Scene = _uiScene; _uiScene.Add(w.Host); } // the windows too: one tree, one Z order
         _uiScene.Add(_talkHost); // the modal: clicks outside it blank in Scene.Hit
         var held = new GameObject { NoHit = true, Z = HeldZ }; // the piece on the cursor: above the modal, under the tips
-        held.Add(new Invoke(DrawHeld));
+        held.Add(new HeldItem(HeldArt));
         _uiScene.Add(held);
         var tips = new GameObject { NoHit = true, Z = TipZ }; // the last thing drawn: no layer can cover a tip
-        tips.Add(new Invoke(DrawTips));
+        tips.Add(new Tips(() => _hand.Empty, _items, _invLay, _statLay));
         _uiScene.Add(tips);
         SyncLayers(); // shots skip Update: without this the panels and windows draw empty there (first Update no-ops)
     }
@@ -505,71 +505,8 @@ public partial class MushTownGame
         _uiScene.Draw(_gfx); // one tree, one Z order: balloon, HUD, panels, windows, dialog, hand, tips
     }
 
-    // The piece on the cursor (take-1: no count to show).
-    private void DrawHeld(UiGfx gfx)
-    {
-        if (_hand.Empty) return;
-        var icon = _textures[_items[_hand.Id].Image];
-        gfx.Sb.Draw(icon, new Vector2(gfx.Mouse.X - icon.Width / 2, gfx.Mouse.Y - icon.Height / 2), Color.White);
-    }
-
-    // The tips of the object under the mouse: the text tip of the HUD widgets
-    // and the item tooltip of a slot or a quickslot cell.
-    private void DrawTips(UiGfx gfx)
-    {
-        if (gfx.Hovered?.Get<HoverTip>() is HoverTip text) text.DrawAt(gfx, gfx.Mouse); // Scene.Draw fills gfx.Hovered first
-        if (_hand.Empty && gfx.Hovered?.Get<ItemTip>() is ItemTip item) DrawTip(item.Id(), gfx.Mouse); // a held piece covers the cursor
-    }
-
-    // The item tooltip: the icon, the name, the bonuses and the description of
-    // the cell whose ItemTip is hovered. It reuses the official box and the
-    // detail lines of the stat window, sized to the text.
-    private void DrawTip(int itemId, Point mouse)
-    {
-        if (itemId == 0) return; // an empty cell has nothing to show
-        int gx = mouse.X, gy = mouse.Y;
-        var item = _items[itemId];
-        var name = _gfx.Ui.GetSmall(item.Name);
-        var lines = new List<Texture2D>();
-        foreach (string text in ItemDetailLines(item)) lines.Add(_gfx.Ui.GetSmall(text));
-        // The description String.wz carries (potions have one, gear has none).
-        var desc = new List<Texture2D>();
-        if (item.Desc.Length != 0)
-            foreach (string text in _gfx.Ui.Wrap(item.Desc, _invLay.Get("tipTextW", 180))) desc.Add(_gfx.Ui.GetSmall(text));
-
-        int iconX = _statLay.Get("detailIconX", 8), iconY = _statLay.Get("detailIconY", 8);
-        int iconSize = _statLay.Get("detailIconSize", 32);
-        int nameX = _statLay.Get("detailNameX", 48), nameY = _statLay.Get("detailNameY", 6);
-        int lineX = _statLay.Get("detailLineX", 48), lineY = _statLay.Get("detailLineY", 28);
-        int lineGap = _statLay.Get("detailLineGap", 16);
-        int textW = name.Width;
-        foreach (var line in lines) textW = Math.Max(textW, line.Width);
-        foreach (var line in desc) textW = Math.Max(textW, line.Width);
-        int w = nameX + textW + iconX;
-        int rows = lines.Count + desc.Count; // the blank row between the two blocks
-        if (lines.Count > 0 && desc.Count > 0) rows++;
-        int h = Math.Max(lineY + rows * lineGap, iconY + iconSize) + iconX;
-        int edge = _invLay.Get("tipEdge", 4); // keeps the box off the screen edge
-        var box = new Rectangle(Math.Min(gx + _invLay.Get("tipDX", 18), GameWidth - w - edge),
-            Math.Min(gy + _invLay.Get("tipDY", 12), GameHeight - h - edge), w, h);
-
-        NineSlice.Draw(_gfx, "tip", box);
-        var icon = _gfx.Tex(item.Image); // native size, like every other item icon
-        _gfx.Sb.Draw(icon, new Vector2(box.X + iconX + (iconSize - icon.Width) / 2, box.Y + iconY + (iconSize - icon.Height) / 2), Color.White);
-        _gfx.Sb.Draw(name, new Vector2(box.X + nameX, box.Y + nameY), new Color(255, 220, 0));
-        int y = box.Y + lineY;
-        foreach (var line in lines)
-        {
-            _gfx.Sb.Draw(line, new Vector2(box.X + lineX, y), Color.White);
-            y += lineGap;
-        }
-        if (lines.Count > 0) y += lineGap; // the gap before the description
-        foreach (var line in desc)
-        {
-            _gfx.Sb.Draw(line, new Vector2(box.X + lineX, y), new Color(214, 216, 222));
-            y += lineGap;
-        }
-    }
+    // The art of the piece in the hand, "" when the hand is empty.
+    private string HeldArt() => _hand.Empty ? "" : _items[_hand.Id].Image;
 
     // The EXP tip has the numbers: the official writes them as
     // "EXP : 116 / 19,112 [0.61%]".

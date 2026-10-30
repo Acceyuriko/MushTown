@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
 
@@ -25,10 +25,6 @@ public partial class MushTownGame
     private static string[] SlotCaps =>
         _slotCaps ??= SlotKeys.Select(k => KeyConfigWindow.CapArt(k.ToString())).ToArray();
 
-    private const int HintCells = 4; // the four key hints take the first four cells
-    private const int CapPad = 1;    // the item cap keeps off the cell border
-    private const int CapShadow = 1; // the dark offset that keeps the cap readable on an icon
-
     private GameObject BuildQuickSlots()
     {
         var root = new GameObject();
@@ -40,48 +36,22 @@ public partial class MushTownGame
             var cell = new GameObject();
             cell.Add(new Rect(s));
             cell.Add(new ItemTip(() => ItemOn(key))); // the tooltip of the bound item
-            cell.Add(new Invoke(gfx => DrawSlot(gfx, i, s)));
+            cell.Add(new QuickCell(i, SlotCaps[i], () => IconOn(key), LoadArt));
             root.AddChild(cell);
         }
         return root;
     }
 
-    // One cell: the icon of the target the table binds to the key, then the
-    // cap.
-    private void DrawSlot(UiGfx gfx, int index, Rectangle s)
-    {
-        if (_input.TargetOf(SlotKeys[index]) is { } target)
-        {
-            string art = TargetArt(target);
-            if (art != "") // an action with no official icon (Settings, the sub-windows) draws nothing
-            {
-                LoadTexture(art);
-                var icon = gfx.Tex(art);
-                // The hint cells take the layout offset; the item cells stay centered.
-                var nudge = index < HintCells ? Layout.HintIcon : default;
-                gfx.Sb.Draw(icon, new Vector2(
-                    s.X + (s.Width - icon.Width) / 2 + nudge.X,
-                    s.Y + (s.Height - icon.Height) / 2 + nudge.Y), Color.White);
-            }
-        }
-        DrawCap(gfx, index, s);
-    }
+    // The art of the target the table binds to that key, "" when the cell is
+    // empty or the action has no official icon (Settings, the sub-windows).
+    private string IconOn(Keys key) => _input.TargetOf(key) is { } target ? TargetArt(target) : "";
 
-    // The four hints keep their cap in the top left (the layout offset); the
-    // twelve item cells put it in the bottom right, like the official strip.
-    private void DrawCap(UiGfx gfx, int index, Rectangle s)
+    // Art on demand: the strip binds live, so the icon of a new target may not
+    // be in the cache yet. The component cannot add to it, the game can.
+    private Texture2D LoadArt(string name)
     {
-        string art = SlotCaps[index];
-        LoadTexture(art);
-        var tex = gfx.Tex(art);
-        if (index < HintCells)
-        {
-            gfx.Sb.Draw(tex, new Vector2(s.X + Layout.HintCap.X, s.Y + Layout.HintCap.Y), Color.White);
-            return;
-        }
-        var at = new Vector2(s.Right - tex.Width - CapPad, s.Bottom - tex.Height);
-        gfx.Sb.Draw(tex, at + new Vector2(CapShadow, CapShadow), Color.Black);
-        gfx.Sb.Draw(tex, at, new Color(200, 200, 200));
+        LoadTexture(name);
+        return TexByKey(name);
     }
 
     // The art of a bound target: the item picture, the skill icon, or the

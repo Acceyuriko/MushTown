@@ -814,7 +814,12 @@ public partial class MushTownGame : Game
                 var (gx, gy) = MouseGamePos(ms);
                 DrawHud(gx, gy, ms.LeftButton == ButtonState.Pressed);
             }
-            else DrawHud(-10, -10, false); // shots: clean art, no hover
+            else
+            {
+                var (mx, my) = ShotMouse();
+                if (mx >= 0) { _uiScene.Layout(); _uiScene.Hover(mx, my); } // shots never run Update: the tips read the hover here
+                DrawHud(mx, my, false); // no hand: clean art
+            }
             _spriteBatch.End();
         }
         GraphicsDevice.SetRenderTarget(null);
@@ -836,6 +841,17 @@ public partial class MushTownGame : Game
         GraphicsDevice.SetRenderTarget(null);
         SaveShot(target, _shotPath);
         Exit();
+    }
+
+    // The mouse of a shot: *hptip* hovers the HP bar (the text tip), *itemtip*
+    // the ring in the demo bag (the item tooltip); every other shot has none.
+    // Shots never run Update, so the hover has to be refreshed at the draw.
+    private (int X, int Y) ShotMouse()
+    {
+        string name = Path.GetFileNameWithoutExtension(_shotPath!)!;
+        if (name.Contains("hptip")) return (600, 720);
+        if (name.Contains("itemtip")) return (1283, 376);
+        return (-10, -10);
     }
 
     // A copy of the screen at 1/4 size: the MENU window draws it back up
