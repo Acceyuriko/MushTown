@@ -110,19 +110,19 @@ public partial class MushTownGame
         var hoverSlot = UpdateHudHover(gx, gy); // every frame (clicks return early below)
         _hoverItem = hoverSlot != null;
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
-        // The key window is modal for the HUD and for the game: only its own
-        // key works while it is open. The game update zeroes the keyboard for
-        // the character, so talk, the pickup, the swing and the skills wait.
+        // The key window does not block anything: the character keeps moving
+        // and fighting on the saved preset, the item keys keep drinking, and
+        // every panel key stays alive, so a skill can be dragged onto a key.
+        // The draft only reaches the live keys on Save.
         var keyWin = WindowFor(HotkeyAction.KeyConfig) as KeyConfigWindow;
         bool keyWindowOpen = KeyWindowOpen;
         if (keyWindowOpen) keyWin!.UpdateDrag(held, gx, gy); // the drop reads the same mouse edge the HUD uses
-        ItemEdges(_talkNpc == 0 && !keyWindowOpen && !_menuWindow.Show); // the item keys drink their potion
-        if (_talkNpc == 0 && (!keyWindowOpen || _input.Fresh(HotkeyAction.KeyConfig)))
+        ItemEdges(_talkNpc == 0 && !_menuWindow.Show); // the item keys drink their potion
+        if (_talkNpc == 0)
         {
             bool any = false;
             foreach (var action in UiHotkeyOrder)
             {
-                if (keyWindowOpen && action != HotkeyAction.KeyConfig) continue;
                 if (!_input.Fresh(action)) continue;
                 HandleHotkey(action, kb);
                 any = true;

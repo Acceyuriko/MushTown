@@ -492,9 +492,12 @@ public partial class MushTownGame : Game
         InstallPendingKeys(); // a key window Save/Apply waits for this frame's poll
         _input.Poll(kb, new Point(mx, my), click, ms.LeftButton == ButtonState.Pressed, ms.ScrollWheelValue);
         UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
-        // The key window is modal for the whole game, like the MENU: while it
-        // is open the character ignores the keys (it is for assigning them).
-        bool blocked = _menuWindow.Show || KeyWindowOpen;
+        // The MENU window is modal for the character: while it is open the
+        // character ignores the keys. The key window is not: editing keys
+        // still leaves the saved preset live, so the character keeps acting
+        // (MapleStory does the same), and Save swaps the table at the next
+        // Update. The draft never reaches the live table before Save.
+        bool blocked = _menuWindow.Show;
         // Talk runs after the HUD: a same-frame panel key and Talk both fire
         // (the HUD's guards see _talkNpc still 0; a modal window blocks Talk).
         if (_talkNpc == 0 && !blocked && _input.Fresh(HotkeyAction.Talk)) TalkNearest();
