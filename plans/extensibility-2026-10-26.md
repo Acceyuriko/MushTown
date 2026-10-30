@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；S2（数字变成对象 + 皮肤字典）已验收并提交（1e182d0，两轮审查，测试 45）；S3（特效变成对象 + buff 循环挂玩家）已验收：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张全部逐字节一致，客户端测试 49。同一批还带一条输入修复：键窗不再挡任何东西（角色动作、面板键、喝药全照常，§8 #51）。已提交（`69fc625`）；同批的输入修复也单独提交了。N1（HUD 条：气泡、手拿、tips、快捷栏格子）已提交。下一步 N2（快捷槽合成一套）。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；S2（数字变成对象 + 皮肤字典）已验收并提交（1e182d0，两轮审查，测试 45）；S3（特效变成对象 + buff 循环挂玩家）已验收：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张全部逐字节一致，客户端测试 49。同一批还带一条输入修复：键窗不再挡任何东西（角色动作、面板键、喝药全照常，§8 #51）。已提交（`69fc625`）；同批的输入修复也单独提交了。N1（HUD 条：气泡、手拿、tips、快捷栏格子）已提交。N2（快捷槽一套 + 设置旋钮）已做，结果在 §3.8，等验收。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -82,7 +82,7 @@
 - `BoundAction { BindTarget Target; Keys[] Keys; bool Fresh; bool Down; }`：一个目标一个；`Keys` 是它的键或组合键拆开后的段。两段的组合键按**任一段**触发（别名），不是两段同时按。
 - `Fresh`：任一键这一帧刚按下（上一帧没按）；`Down`：任一键正按着（跳跃高度要用）。
 - `Fresh(Keys)`：原始键查询。菜单、捕获模式用。
-- 鼠标：`Mouse`（1366×768 游戏坐标）、`Click`、`Held`、`Wheel`。**K1 只把字段建好**；HUD/聊天/键窗的鼠标读取迁移和 N2 的拖放一起做，K1 的游戏、聊天、键窗仍各自读一次鼠标。
+- 鼠标：`Mouse`（1366×768 游戏坐标）、`Click`、`Held`、`Wheel`。**K1 只把字段建好**；HUD/聊天/键窗的鼠标读取迁移和 K3 的拖放一起做，K1 的游戏、聊天、键窗仍各自读一次鼠标。
 - "激活的绑定表" = 当前角色的 live 表（`KeyPresets[ActivePreset]`）。菜单没有角色，只用原始键，不进绑定。
 - 装表：遍历 `键 → 目标`，建 action 组；**不建**"目标 → 键"的反查字典。表最多约 100 条，通常 20-40 条。
 - 捕获模式：聊天、创建角色打字、键窗组合键采集时设 `Capture`。捕获时所有 action 的 `Fresh` / `Down` 为 false，原始键照常返回。谁设的谁清。**K1 的旧键窗不用 Capture（旧行为照旧，K2 的新键窗和聊天再用）**。
@@ -153,7 +153,7 @@
 - 不能绑的键：Esc、Enter、Tab、方向键（系统键）；Space 可以绑（默认 Talk），Z 也可以绑（默认 Pickup）。
 - 键名用游戏里的枚举名（`D1`、`OemPipe`），不用裸数字 `"1"`；裸数字会被 `Enum.TryParse<Keys>` 当成枚举值，绑到错的键。
 
-**HUD 右下 16 个快捷槽（16 个固定键）**：键是 Ctrl、Alt、I、C、1-9、0、-、=。每个槽显示表里这个键绑的目标（官方图标 + 键帽）；没有绑定就空着。默认只有 Ctrl→Attack、Alt→Jump、I→Inventory 有内容；C 槽空着（Stat 默认在 S，S 不在这 16 个键里）；1..= 空着。不另存 `QuickSlots`：药水就是 `Item` 目标，绑定在 1..= 上。16 个格子都按固定键查表：有目标就画它的图标（动作图标用 `StatusBar3.img/KeyConfig/icon`：Attack 52、Jump 53；物品画物品图；技能画技能图），键帽永远画。4 个提示格的键帽在左上（`hintcap`/`hinticon` 两个偏移），12 个物品格的键帽在右下角，和原版一样。格子只显示，点格子不绑定（编辑等 N2 的拖放）。
+**HUD 右下 16 个快捷槽（16 个固定键）**：键是 Ctrl、Alt、I、C、1-9、0、-、=。每个槽显示表里这个键绑的目标（官方图标 + 键帽）；没有绑定就空着。默认只有 Ctrl→Attack、Alt→Jump、I→Inventory 有内容；C 槽空着（Stat 默认在 S，S 不在这 16 个键里）；1..= 空着。不另存 `QuickSlots`：药水就是 `Item` 目标，绑定在 1..= 上。16 个格子都按固定键查表：有目标就画它的图标（动作图标用 `StatusBar3.img/KeyConfig/icon`：Attack 52、Jump 53；物品画物品图；技能画技能图），键帽永远画。16 个格子画法一样：键帽在左上（`hud-layout.json` 的 `qslotcap` 偏移），图标居中（N2 定，见 §8 #54）。格子只显示，点格子不绑定（编辑等 K3 的拖放）。
 
 **键窗（K1 适配，K2 重做）**：
 
@@ -301,7 +301,7 @@
 - 新加 2 个测试（`SceneTests`）：`Layout_NestsTheOffsets`、`Sync_MoveDoesNotRebuild`（后者就是"拖窗口不重建"的常驻验证，替掉临时计数）。客户端测试 30 → 32。
 - 热重载（`ReloadLayout`）要把六个"建过一次"的开关一起复位，否则面板被钉在左上角（`PlaceFirst` 不跑）。
 - 一帧的遍历次数不是 1：`TopAt` 和 `Draw` 各自兜底调一次（普通帧 2 次、点击帧 3 次）。取舍见 §8。
-- 手画的地方要自己拿屏幕原点：`Draw`/`DrawMembers`/`DrawRow` 收一个屏幕矩形或原点参数；窗口加 `ScreenBox()`（直接用 `Pos`，不依赖遍历），设置面板加 `SettingsScreen()`。
+- 手画的地方要自己拿屏幕原点：`Draw`/`DrawMembers`/`DrawRow` 收一个屏幕矩形或原点参数；窗口加 `ScreenBox()`（直接用 `Pos`，不依赖遍历），设置面板加 `SettingsScreen()`（N2 删了，旋钮改成组件后没人手画）。
 - 谈话框（`HudQuest.TalkBox/TalkRect`）跟着改成"根在屏幕、body 局部"；根上的 `Rect` 是复用的，不重复堆。
 - 审查（5 轮，自主模式）修掉的真问题：`ReloadLayout` 没复位六个"建过一次"开关（面板钉在左上角）；`QuestHelperState` 在 Draw 里写 `Rect`（条子闪一帧）；复制对话框的全屏拦截块没抵消窗口偏移（左上两条带子的点击漏到 HUD，还会走 `NpcClick`）；任务助手条一行文本被写坏（整条不画）。删除弹窗改成"根不挂 `Rect`、`panel` 拿盒"，去掉了 `InDelete` 那层屏幕→局部的换算。
 - 截图比对必须先删旧文件再逐张查退出码：`--shot` 崩了不写 png，旧文件留着，哈希照样一致（上面那个"整条不画"就是这么被放过的）。
@@ -330,7 +330,7 @@
 
 **依赖**：快捷槽要等 N2（槽先合成一套）；技能窗和背包的抓起要它们自己的窗口片。所以 K3 排在 N2 之后，白色区域和黑色区域的点击式拖放可以先做。
 
-**验收**：单击动作池的图标 → 图标跟手、原格空出；单击键盘的键 → 动作落在那个键上、池子里少一格（其余格子不动）；再把它从键盘抓回池子 → 键变空、动作回到原来那一格；拿起时按 Esc → 什么都没变；HUD 槽的抓放同 N2 的验收。
+**验收**：单击动作池的图标 → 图标跟手、原格空出；单击键盘的键 → 动作落在那个键上、池子里少一格（其余格子不动）；再把它从键盘抓回池子 → 键变空、动作回到原来那一格；拿起时按 Esc → 什么都没变。
 
 ### 3.7 HUD 条（N1，2026-10-30）
 
@@ -339,11 +339,35 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 - **`Balloon`**（`Ui/Balloon.cs`）：消息（`Func<string>`）、脚在屏幕上的位置（`Func<Point>`）、`panel-balloon.json`。换行缓存跟着组件走，只在消息或宽度变化时重算。
 - **`HeldItem`**（`Ui/HeldItem.cs`）：手拿的东西画在鼠标上，取的是「手上那件的图，空手就空串」。
 - **`Tips`**（`Ui/Tips.cs`）：文字 tip（`HoverTip`）+ 物品 tooltip（`ItemTip`）。tooltip 的正文行用 `ItemLines.Detail`（`Ui/ItemLines.cs`），属性窗的详情框也调同一个函数：以前它在 `HudStat` 里是 private，`HudBar` 靠同一个 partial class 直接调；现在搬到 `Ui/` 公开，两处都能用，也能头测。
-- **`QuickCell`**（`Ui/QuickCell.cs`）：一格快捷栏 = 绑定目标的图标 + 官方键帽。目标每帧现读，改绑不用重建；四个提示格用 `Layout.HintIcon/HintCap`，十二个物品格图标居中、键帽在右下。纹理要按需加载，组件不能往游戏的缓存里加，所以把 `LoadArt(name)` 传进去。
+- **`QuickCell`**（`Ui/QuickCell.cs`）：一格快捷栏 = 绑定目标的图标 + 官方键帽。目标每帧现读，改绑不用重建；N2 之前四个提示格用 `Layout.HintIcon/HintCap`、十二个物品格图标居中键帽在右下，N2 已改成 16 格一个画法（那两个字段也删了，见 §3.8）。纹理要按需加载，组件不能往游戏的缓存里加，所以把 `LoadArt(name)` 传进去。
 
 **结果**：`HudBar.cs` / `HudQuickSlots.cs` 的 `new Invoke` 都是 0，全仓 18 → 14。头测 2 条（`ItemLines` 的顺序、没有的项不写），客户端 49 → 51。27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 全部逐字节一致。
 
 **截图怎么验这三条绘制路径**：`--shot` 不跑 `Update`，所以悬停要自己补。加了两条按文件名摆拍的规则（和已有的 `*balloon*` 一样）：名字含 `hptip` → 鼠标停在 HP 条上（文字 tip），含 `itemtip` → 停在背包里那枚戒指上（物品 tooltip），画之前补一次 `Layout()` 和 `Hover()`（`MushTownGame.ShotMouse`）。三张对照图在 `logs/n1_before` / `logs/n1_after`：旧代码和新代码逐字节一致。手拿那 4 行没有摆拍（要真的拿起一件东西），只能手测（§5 第 14 条）。背包窗（`HudInventory.cs`）本来就没有 `Invoke`，K3 的「背包」只差拿起和放下的接线。
+
+### 3.8 快捷槽一套 + 设置旋钮（N2，2026-10-30 定）
+
+**现状**：16 个槽已经是同一个 `SlotKeys` 数组（Ctrl、Alt、I、C、1-9、0、-、=），但「一套」只到键为止，其余是两份：
+
+- 格子几何写死在代码里：`QslotCell(i)` 的 35px 步长和 32px 格子（`HudBar.cs`），只有条带的左上角来自 `hud-layout.json` 的 `qslot`。同一条带的位置在 json、尺寸在代码，改一个要改两处。
+- 「4 个键提示 + 12 个物品格」是代码里的分支：`QuickCell` 里 `index < HintCells` 决定键帽画左上还是右下、图标要不要偏移，偏移读 `Layout.HintIcon/HintCap`，`CapPad/CapShadow` 又是组件里的常量。第 5 个槽想换一种画法只能改代码。
+- 设置窗的音量旋钮还是 `new Invoke(gfx => DrawVolumeKnob(...))`（`HudSettings.cs:118`），是那个文件最后一处。
+
+**目标**：16 个槽的**画法只有一份**（没有「提示格」这种区分）；旋钮变成组件。内容不动（键不变、槽里绑什么不变），不加编辑、不加拖放——拖放归 K3（§3.6），那时三个可放区都按同一套格子命中。
+
+**设计**（用户定：16 格画法完全一样，没有「提示格」这个概念）：
+
+1. **16 个键留在 `HudQuickSlots` 的私有 `SlotKeys`**。中间试过搬成 `Ui/QuickSlotKeys.cs` 以便头测，但那条测试只是把常量抄一遍、抓不到错，删测试后新文件就只剩一个调用点，属于为抽象而抽象，撤回。
+2. **`QuickCell`** 一个画法：键帽画在格子左上角（`Layout.QslotCap`），图标居中。构造参数从 `int index` 缩到 `(cap, iconArt, load)`，`HintCells` 常量和「第几格」的判断整个删掉。`hud-layout.json` 的 `hintcap` / `hinticon` 合成一个 `qslotcap`（图标居中，不再有偏移）。
+3. **`Ui/Slider.cs`**（新）：一个对象 = 轨道矩形 + `Button` + `Slider` 组件。`Slider(Func<int> volume, Action<int> set, Action released)`（轨道宽度只从自己的 `Rect` 读）自己画旋钮（`ui/opt_knob.png`，`Screen.X + volume * travel / 100`），自己管拖动（`Grab(gx)` 抓住、`Drag(held, gx)` 跟手、`Release()` 放掉——松手和关窗都走它，关窗那次不跟手），状态 `_dragging` 在组件里，游戏里没有全局的「正在拖哪一条」。`VolumeAt(clickX, trackW)`（clickX 相对轨道左边缘）是 static 纯函数，能头测；`released` 在松手时回调一次，让游戏只存一次盘。`HudSettings` 删掉 `DrawVolumeKnob`、`VolumeAt`、`SliderKnobW` 和那处 `Invoke`，只留一个 `List<Slider>`；`UpdateHud` 里一行 `foreach (var slider in _sliders) slider.Drag(held, gx);` 把指针递给每个 slider，各自判断是不是自己；`CloseSettings` 里对每个调 `Release()`，窗口关掉时拖动不会残留。
+
+**不做**：不加编辑（16 个键固定，见 §8 #4）、不做快捷槽页（#12）、不接拖放（K3）、不动槽里现在绑的东西。
+
+**原计划的 `layouts/panel-qslot.json` 没做**：格子的 32/35 和条带的 557/67 已经在 `QslotCell` / `QslotRect` 一处，`hud-layout.json` 的说明写着「尺寸留在代码，必须跟美术对齐」。为 4 个常量开一个新文件是配置膨胀，不是这一片要解决的问题。真要挪，等改条带美术时一起挪。
+
+**结果**：`HudSettings.cs` 的 `new Invoke` = 0，全仓 14 → 13。客户端 51 → 54（`SliderTests` 3 条；没有为 16 个键加测试：它只是把常量抄一遍，抓不到错）。`MushTown.Tests/LayoutTests` 的 `Full`/保存/恢复也跟着加了 `qslotcap`（条数不变）。画面变了：12 个数字从右下角移到左上角，4 个动作格的键帽也跟着从 (2,2) 挪到 (2,3)（用户后来把 json 调成 (2,3)）；12 个物品格的键帽从 200 灰改成白色。键帽没有阴影（参考图也没有，用户 2026-10-30 定）。对比图 `logs/n2_strip_before.png` / `logs/n2_strip_after.png`。截图核对：8 张（选角/存档/服务器等不带 HUD 的）逐字节一致；22 张带 HUD 的只有条带那一块变（条带以上 y<1940 逐字节一致）；`settings` 另有一处不同，是用户点过音量条（存档 41/86 → 90/37），同一个音量下新旧代码 A/B 逐字节一致。顺带修了旋钮点击偏移：原来按方块左边缘算，点中心每点一次右移 10px；现在按中心算，点方块中心数值不变（101 个值全验过）。
+
+**验收**：31 张截图（`--aiticks` 3 张：10/40/100），条带以外的像素逐字节一致；`grep "new Invoke" MushTown.Client/Panels/HudSettings.cs` = 0，全仓 14 → 13；头测覆盖 `Slider.VolumeAt`（点方块中心不动、两端夹住）和 `Slider.Drag`/`Release`（只动被按的那个、松手存一次、值没变不存）；手测：对着音量方块中心连点，方块不动；点轨道别处，方块跳过去；按住方块左右拖，音量跟着走，松手就停。
 
 ## 4. 分片
 
@@ -354,7 +378,7 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 | 片 | 内容 | 工期 |
 |---|---|---|
 | K1 (P0) | **第 1 周**：`InputController` + `BoundAction`；绑定进角色（3 套 `KeyPresets` + `ActivePreset`）；KMS 默认键（10 个菜单动作 + 攻击/跳跃/Talk）；技能进表但**无默认键**；`CastSkill`；旧键窗适配到当前 preset（8 个可见动作）；技能窗去掉固定键文字（旧 Q/R/W… 已失效）。**第 2 周**（已做）：HUD 16 槽改成键槽（C 空）；Item 目标；删 `QuickSlots`/`QuickSlotKey`/demo QuickSlots 种子；旧键窗的快捷槽页整个删掉，Quick Slots 按钮只画图、点了不动 | 2 周 |
-| K2 (P0) | 键窗：每角色 preset、动作池、组件化（与 N5 合并）、键格固定、动作拖动、Copy 弹窗、技能从技能窗拖；拖到 HUD 槽随 N2；不做快捷槽页。**已做（2026-10-28）**：组件化（N5）；动作池 = 官方 77 张图标全放进去（没做的按了没反应），默认过滤组 = Not Added；Chat/Minimap 接进 `UpdateHud`；删掉 K1 的"隐藏动作的键不许抢"保护；Copy 换成官方 `presetCopy` 弹窗（3 个来源 preset + checked 高亮）；PRESETS 1/2/3 用 checked 图（选中绿）；Skill 钮不再关键窗，技能窗开在上面，从技能行拖到键格写成 `Skill:<id>`（draft 带技能，键格画技能图标）。**审查后补（2026-10-29）**：键格可抓（解绑和 Combo Key 才有入口）、技能落键加拖动门槛和顶层判断、Copy 默认来源改成当前 preset、Default 真的清掉技能、Chat 键不再把自己的字符打进输入框、键帽反查表。**剩下**：无（点击式拖放归 K3） | 2 周 |
+| K2 (P0) | 键窗：每角色 preset、动作池、组件化（与 N5 合并）、键格固定、动作拖动、Copy 弹窗、技能从技能窗拖；拖到 HUD 槽随 K3；不做快捷槽页。**已做（2026-10-28）**：组件化（N5）；动作池 = 官方 77 张图标全放进去（没做的按了没反应），默认过滤组 = Not Added；Chat/Minimap 接进 `UpdateHud`；删掉 K1 的"隐藏动作的键不许抢"保护；Copy 换成官方 `presetCopy` 弹窗（3 个来源 preset + checked 高亮）；PRESETS 1/2/3 用 checked 图（选中绿）；Skill 钮不再关键窗，技能窗开在上面，从技能行拖到键格写成 `Skill:<id>`（draft 带技能，键格画技能图标）。**审查后补（2026-10-29）**：键格可抓（解绑和 Combo Key 才有入口）、技能落键加拖动门槛和顶层判断、Copy 默认来源改成当前 preset、Default 真的清掉技能、Chat 键不再把自己的字符打进输入框、键帽反查表。**剩下**：无（点击式拖放归 K3） | 2 周 |
 | K3 (P1) | 点击式拖放（§3.6）：hover 抓手（`Cursor/5`）、单击拿、单击放；白色键盘/黑色池子/HUD 槽三区互通；放到黑色区 = 取消绑定；池子固定格位、只列没绑的动作。白+黑两区先做，HUD 槽等 N2，技能/道具等各自窗口片 | 1 周 |
 
 ### 世界线
@@ -373,7 +397,7 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 | N5 (P0) | 键窗 7 处 `Invoke` 已删（和 K2 合并）：`KeyCap` / `ActionCell` / `FilterBox` / `FilterItem` / `HeldIcon` 五个窗口内私有组件，预设钮和 Combo Key 钮改用 `Image(stem, on)`；拖放松手改由 `UpdateHud` 的鼠标边沿驱动（`KeyConfigWindow.UpdateDrag`），Draw 不再轮询鼠标 | 已做 |
 | W1 (P0) | **`Rect` 改成父相对（Unity RectTransform 的形状）**：`Rect` 只存局部 offset + size；每帧开头 `Scene.Layout()` 走一次树把屏幕矩形写进 `Rect.Screen`；命中、绘制、HUD 悬停都读 `Screen`；`UiWindow.Sync()` 不再因为 `Pos` 变化重建；48 处 `Pos.X +`、51 处 `Pos.Y +` 变回纯偏移（10 个窗口文件）。不做 anchors / pivot / layout group。详见 §3.5 | 1 周（已验收，8b86b4a） |
 | N1 (P1) | HUD 条：气泡、快捷栏角标、手拿、tips。**已做（2026-10-30，已提交）**：四个组件（`Balloon` / `HeldItem` / `Tips` / `QuickCell`），`ItemLines` 由 tooltip 和属性窗共用；HudBar/HudQuickSlots 的 `Invoke` 归零，全仓 18 → 14；测试 49 → 51；35 张截图逐字节一致。详见 §3.7 | 1 周 |
-| N2 (P1) | 快捷槽：4 个键提示 + 12 个物品格合成一套 16 个等价槽（内容先固定）+ 设置旋钮 | 1 周 |
+| N2 (P1) | 快捷槽：4 个键提示 + 12 个物品格合成一套 16 个等价槽（内容先固定）+ 设置旋钮。设计见 §3.8：16 个键留在 `HudQuickSlots.SlotKeys`，`QuickCell` 不再认「第几格」，旋钮成组件 | 1 周 |
 | N3 (P1) | 聊天窗（整块，最大） | 2 周 |
 | N4 (P1) | 小地图 + 大地图 | 2 周 |
 | N6 (P2) | 任务窗 | 1 周 |
@@ -402,6 +426,7 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 12. K3 点击式拖放：见 §3.6 的验收段。拿起时按 Esc 丢掉手上的东西、不改任何东西；池子只列没绑的动作，绑一个少一格、取消一个多一格。
 13. 键窗不挡（S3 同批，已做）：键窗开着时走路、攻击、跳跃、拾取、对话、喝药、7 个面板键全部生效，用的是**已保存**的 preset；在键窗里改键但**不 Save**，关窗后按旧键还是老效果；Save 后**下一帧**新键生效，不用重开；MENU 窗口仍然挡角色。这几处是 `Update` / `UpdateHud` 里的条件，要 `GraphicsDevice`，没有头测，只能手测。
 14. N1 HUD 条（已做）：`grep "new Invoke"` 在 `HudBar.cs` 和 `HudQuickSlots.cs` 里都是 0；27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 逐字节一致；`ItemLines` 2 条头测；气泡和两条 tip 用 `*balloon*` / `*hptip*` / `*itemtip*` 摆拍，`logs/n1_before` 和 `logs/n1_after` 三对图逐字节一致。手测（截图拍不到手拿）：①鼠标停在 HP/MP/EXP 条上出深色文字 tip；②停在背包或快捷栏的物品上出物品 tooltip（图标、名字、加成、描述），手里拿着东西时不出；③在聊天里发一句话，头顶出气泡，几秒后消失，走开时跟着走；④从背包拿起一件东西，图标跟着鼠标走，放下后回到格子。
+15. N2 快捷槽一套 + 设置旋钮（已做）：31 张截图（`--aiticks` 3 张），条带以外的像素逐字节一致（8 张不带 HUD 的整张一致，22 张只有条带变）；`settings` 另因音量状态变化，同音量下新旧 A/B 一致；`grep "new Invoke" MushTown.Client/Panels/HudSettings.cs` = 0，全仓 14 → 13；头测 3 条（`Slider.VolumeAt` 点中心不动和两端夹住、`Drag` 只动被按的那个且松手存一次）；手测：对着音量方块中心连点，方块不动；点轨道别处，方块跳过去；按住方块左右拖，音量跟着走，松手就停。
 
 ## 6. 风险
 
@@ -411,7 +436,7 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 | 老存档没有绑定字段 | 缺字段 = 默认表；用户已说明旧档删掉重建，不做迁移 |
 | 技能在拖放重做前不可用 | 用户在计划里接受；K1 只保证 `CastSkill` 的 id 校验和旧分支不变，实际触发等 K2 绑定 |
 | 默认键改了，截图基线变 | 输入片的**所有带 HUD 的游戏截图**、键窗和技能窗明确重拍；其余截图仍逐字节比 |
-| 键窗拖到 HUD 槽要跨两套槽 | 排到 N2：先把 4+12 合成 16 个等价槽，再接拖放 |
+| 键窗拖到 HUD 槽要跨两套槽 | 排到 K3：N2 已先把 4+12 合成 16 个等价槽，K3 再接拖放 |
 | 截图模式没有真实角色 | 截图用 demo 角色，也要灌默认表；`--shot keys` 走 `Open()`，能开能画就是自检 |
 | 键窗拖放逻辑复杂（组合键、拿走） | K2 保留现有路径，只换目标类型；手测覆盖 |
 | 组件化改变像素 | 每片一张截图逐字节比；不顺手改数字 |
@@ -462,7 +487,7 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 10. 绑定表方向是**键 → 目标**（`"1" → "Item:2000000"`）；一个键最多一个目标，一个目标最多一个键。药水不单独存，改成 `Item` 目标进表。
 11. 键窗的键格固定，玩家把动作拖到键上；动作池提供**所有系统动作**（含攻击/跳跃）。不是"点格再按键"。
 12. 快捷槽页的 32 个固定键格：第一行 qwer1234567890up，第二行 asdf ctrl alt zxcvijklmn。以后做可编辑快捷槽时才实现。
-13. 键窗拖动作到 HUD 16 槽，放到 N2（先把槽合成一套）。
+13. 键窗拖动作到 HUD 16 槽，放到 K3（N2 已先把槽合成一套）。
 14. 表的大小 = 键数（最多约 100 条）；只为已绑定的目标建 `BoundAction`，技能数据几百个不进表。
 15. Space 可以绑（默认 Talk）；Esc、Enter、Tab、方向键不能绑。
 16. K1 就把 HUD 16 槽改成键槽：4 个提示格 + 12 个物品格都按固定键查表；C 空着。
@@ -502,3 +527,7 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 50. 传送/掉出地图那一帧的相位（S3，2026-10-30）：旧代码在 `TreeUpdate` 之后（`SwitchMap`/`Spawn()` 之后）才给 buff 循环贴位置，现在循环在 `TreeUpdate` 里、玩家节点之后跑。三处差异，都是一帧：①掉出地图，`Spawn()` 在 `TreeUpdate` 之后传送玩家，循环这一帧还在旧位置；②跨图，`EnterMap` 里 `DropFx` + `RespawnBuffLoops` 先跑，那时 `_mover.X/Y` 还是旧图坐标，新循环生成在旧位置，`_loadBeat` 的 10 帧黑屏盖住；③同图传送门，不调 `EnterMap`、没有黑屏，循环在旧位置画一帧。**接受**：跨图和掉出地图都有黑屏或瞬移盖住；同图传送门可能看见一帧旧图案（传送门离得近、旧位置还在屏幕内时），接受这一帧。真要修就在 `SwitchMap` 设完 `_mover.X/Y` 后把带 `Rider` 的循环贴一次位置（和 `SkillFx.Update` 同样两行）。
 51. 键窗完全不挡（2026-10-30 用户定，参考 MapleStory）：先是面板键照常（不然按 K 打不开技能窗、没法把技能拖到键上），然后用户要求角色也不挡——「MapleStory 里面应该是没限制的」。现在 `blocked` 只看 MENU 窗口；键窗开着时走路、攻击、跳跃、拾取、对话、喝药、7 个面板键全部照常，用的是**已保存**的 preset。草稿只在键窗里，Save/Apply 才写存档，下一帧 `InstallPendingKeys` 在 `Poll` 前重建输入表，所以没保存就一直是旧键、保存后下一帧生效。MENU 仍然挡角色（全屏菜单）。
 52. K3 挪到 N2 之后（2026-10-30 用户定）：点击式拖放的三块可放区里，HUD 16 槽要等 N2 合成一套、背包要等 N1。原顺序里漏了 K3，现在补在 N2 后面。
+53. N2 的 json 没做（2026-10-30）：原计划给条带开 layouts/panel-qslot.json 装格子尺寸和键帽偏移。做的时候发现格子的 32/35 和条带的 557/67 已经在 QslotCell/QslotRect 一处，hud-layout.json 的说明也写着「尺寸留在代码，必须跟美术对齐」。为 4 个常量开新文件是配置膨胀，砍掉。这一片只做「组件不再认第几格」+ 旋钮成组件。
+54. 16 格画法完全一样（2026-10-30 用户定）：N2 做的时候先按「前 4 格是提示格」留了一个 hint 分支，用户看到后说「quickslots 所有格子都一样，不存在区分」，选了「键帽全部放左上角」。于是删掉 hint、HintCells、hinticon，hintcap 改名 qslotcap，16 格统一：键帽左上 + 图标居中。代价是 12 个数字从右下角挪到左上角，压在物品图上（不加阴影，参考图也没有）。
+55. 热重载打断拖动（2026-10-30，review 定的取舍）：DEBUG 下改 json 会重建设置窗，正在拖的音量条被 _sliders.Clear() 丢掉，这次拖动不存盘（音量本身已经生效，下一次新拖动松手或 Cancel 会存；退出游戏时正拖着的那次同理）。BuildSettingsScene 可能从 Draw 里的 SyncLayers 跑，为这个 DEBUG 窄分支在 build 里写盘不值得；和既有的「reload 丢抓取」一致。
+56. 坏布局直接崩，不兜底（2026-10-30，review 定的取舍）：`Slider.VolumeAt` 试过 `if (travel <= 0) return 0;`，又删了。理由是仓库对坏布局的既有做法是抛（`Layout.Load` 的 `Load_BadValue_ThrowsAndKeepsOld`），静默夹到 0 反而查不出来。`bgmW/sfxW` 的要求写在 `panel-settings.json` 的 `_help` 里：要宽于 120（旋钮 20 + travel > 100）。宽 ≤ 20 时除零；21..120 不崩，只是点方块中心会偏。

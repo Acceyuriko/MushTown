@@ -156,6 +156,9 @@ public partial class MushTownGame
             if (!held) _dragSettings = null;
             else _settingsPos = ClampPanel(new Point(gx - _dragSettings.Value.X, gy - _dragSettings.Value.Y), SettingsW);
         }
+        // The sliders follow the mouse while it is held. Closing the window lets go
+        // through CloseSettings, without moving the knob to where the mouse is.
+        foreach (var slider in _sliders) slider.Drag(held, gx);
         if (_dragShop.HasValue)
         {
             if (!held) _dragShop = null;

@@ -1,5 +1,5 @@
 {
-  "_help": "Options window (UI/StatusBar3.img/OptionMenu art). x/y = the window spot in 1366x768 game pixels. titleH = the title strip height. soundX/soundY and tabX/tabY = the official sound tab art inside the window. bgmX/bgmY/bgmW and sfxX/sfxY/sfxW = the volume tracks inside the art. knobDy = the slider knob offset from the track. key* = the shortcut button that opens the key settings. ok*/cancel* = the official buttons. close* = the X button. The window size is in the code: it must match the art.",
+  "_help": "Options window (UI/StatusBar3.img/OptionMenu art). x/y = the window spot in 1366x768 game pixels. titleH = the title strip height. soundX/soundY and tabX/tabY = the official sound tab art inside the window. bgmX/bgmY/bgmW and sfxX/sfxY/sfxW = the volume tracks inside the art. knobDy = the slider knob offset from the track. bgmW/sfxW must be wider than 120: the knob is 20 wide and the travel has to beat 100, or a click on the knob centre drifts. key* = the shortcut button that opens the key settings. ok*/cancel* = the official buttons. close* = the X button. The window size is in the code: it must match the art.",
   "x": 453,
   "y": 67,
   "titleH": 16,

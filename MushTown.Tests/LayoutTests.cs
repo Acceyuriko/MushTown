@@ -6,16 +6,16 @@ namespace MushTown.Tests;
 [TestClass]
 public class LayoutTests
 {
-    private const string Full = """{"plate":[5,6],"hpmp":[7,8],"qslot":[13,14]}""";
+    private const string Full = """{"plate":[5,6],"hpmp":[7,8],"qslot":[13,14],"qslotcap":[3,4]}""";
 
     // Layout fields are shared statics: leave them as found.
-    private ((int X, int Y) plate, (int X, int Y) hpmp, (int X, int Y) qslot) _saved;
+    private ((int X, int Y) plate, (int X, int Y) hpmp, (int X, int Y) qslot, (int X, int Y) qslotcap) _saved;
 
     [TestInitialize]
-    public void Save() => _saved = (Layout.Plate, Layout.HpMp, Layout.Qslot);
+    public void Save() => _saved = (Layout.Plate, Layout.HpMp, Layout.Qslot, Layout.QslotCap);
 
     [TestCleanup]
-    public void Restore() => (Layout.Plate, Layout.HpMp, Layout.Qslot) = _saved;
+    public void Restore() => (Layout.Plate, Layout.HpMp, Layout.Qslot, Layout.QslotCap) = _saved;
 
     [TestMethod]
     public void Load_FullFile_OverridesAll()
@@ -27,6 +27,7 @@ public class LayoutTests
             Assert.AreEqual((5, 6), Layout.Plate);
             Assert.AreEqual((7, 8), Layout.HpMp);
             Assert.AreEqual((13, 14), Layout.Qslot);
+            Assert.AreEqual((3, 4), Layout.QslotCap);
         }
         finally { File.Delete(path); }
     }
@@ -43,6 +44,7 @@ public class LayoutTests
             Assert.AreEqual((100, 200), Layout.Qslot);
             Assert.AreEqual((5, 6), Layout.Plate);
             Assert.AreEqual((7, 8), Layout.HpMp);
+            Assert.AreEqual((3, 4), Layout.QslotCap);
         }
         finally { File.Delete(path); }
     }

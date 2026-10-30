@@ -4,11 +4,10 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The sixteen fixed cells of the official bottom strip. A cell is a key: the
-// four hints (Ctrl, Alt, I, C) then 1-9, 0, - and =. It draws the official cap
-// and the target the table binds to that key; nothing bound, only the cap.
-// A key with an Item target drinks its potion. The cells are display only:
-// the drag that binds them comes with the slot merge.
+// The sixteen fixed cells of the official bottom strip. A cell draws the official
+// cap of its key and the target the table binds to that key; nothing bound, only
+// the cap. A key with an Item target drinks its potion. The cells are display
+// only: the drag that binds them comes with the click-style drag and drop.
 public partial class MushTownGame
 {
     // The key of each cell, in strip order.
@@ -28,15 +27,13 @@ public partial class MushTownGame
     private GameObject BuildQuickSlots()
     {
         var root = new GameObject();
-        for (int k = 0; k < SlotKeys.Length; k++)
+        for (int i = 0; i < SlotKeys.Length; i++)
         {
-            int i = k; // the loop variable is shared: copy it for the lambdas
-            var s = QslotCell(i);
             var key = SlotKeys[i];
             var cell = new GameObject();
-            cell.Add(new Rect(s));
+            cell.Add(new Rect(QslotCell(i)));
             cell.Add(new ItemTip(() => ItemOn(key))); // the tooltip of the bound item
-            cell.Add(new QuickCell(i, SlotCaps[i], () => IconOn(key), LoadArt));
+            cell.Add(new QuickCell(SlotCaps[i], () => IconOn(key), LoadArt));
             root.AddChild(cell);
         }
         return root;

@@ -1,5 +1,5 @@
 {
-  "_help": "HUD widget top-left positions in 1366x768 space. Sizes stay in code (they must match the art). hinticon = the target icon offset inside the four hint cells; hintcap = the key cap offset inside the same cells (the twelve item cells center their icon and keep the cap in the bottom-right corner). The game windows (inventory, stat, skill, quest, settings) have their own file: layouts/panel-<name>.json. Keys may be omitted (keeps current value). DEBUG builds reload this file live on save; the file wins over dragged panels.",
+  "_help": "HUD widget top-left positions in 1366x768 space. Sizes stay in code (they must match the art). qslotcap = the key cap offset inside a 32x32 quick slot cell (all sixteen cells draw the same: cap top-left, icon centered). The game windows (inventory, stat, skill, quest, settings) have their own file: layouts/panel-<name>.json. Keys may be omitted (keeps current value). DEBUG builds reload this file live on save; the file wins over dragged panels.",
   "hpmp": [
     584,
     715
@@ -12,12 +12,8 @@
     810,
     691
   ],
-  "hintcap": [
+  "qslotcap": [
     2,
-    2
-  ],
-  "hinticon": [
-    0,
-    0
+    3
   ]
 }

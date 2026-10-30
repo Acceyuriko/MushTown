@@ -63,14 +63,6 @@ public partial class MushTownGame
         _sfx[key].Play(_sfxVol / 100f, 0f, 0f);
     }
 
-    // The options window slider sets the volume; the change saves right away.
-    private void BumpVolume(bool bgm, int d)
-    {
-        if (bgm) _bgm.Volume = _bgm.Volume + d;
-        else _sfxVol = Math.Clamp(_sfxVol + d, 0, 100);
-        SaveSettings();
-    }
-
     // The mop whooshes like a polearm; bare beginner hands swing a sword.
     private string SwingKey() =>
         _save?.Slots[_slot]?.Equips?.Contains(ItemData.Mop) == true ? "swing_pole" : "swing_sword";

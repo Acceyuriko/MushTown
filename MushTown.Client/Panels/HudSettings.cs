@@ -9,12 +9,12 @@ public partial class MushTownGame
 {
     private const int SettingsW = 460; // the option window art is 460 wide
     private const int SettingsBodyH = 633 - 16; // the art under the title strip
-    private const int SliderKnobW = 20; // the slider knob art
 
     // Every position of this window lives in layouts/panel-settings.json.
     private static readonly PanelLayout _settingsLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-settings.json"));
 
     private int _bgmAtOpen, _sfxAtOpen; // the volumes when the window opened
+    private readonly List<Slider> _sliders = new(); // the volume sliders: each owns its own drag
 
     // Open the options window. The volumes are snapshotted here, so Cancel
     // can put them back even after the window moved.
@@ -30,6 +30,7 @@ public partial class MushTownGame
     // Close the options window.
     internal void CloseSettings()
     {
+        foreach (var slider in _sliders) slider.Release(); // a drag dies with the window
         _showSettings = false;
         _dragSettings = null;
     }
@@ -38,10 +39,6 @@ public partial class MushTownGame
     private static KeyConfigWindow? KeyWindow => UiWindow.List.OfType<KeyConfigWindow>().FirstOrDefault();
 
     private Rectangle SettingsRect() => new(0, 0, SettingsW, _settingsLay.Get("titleH", 16) + SettingsBodyH);
-
-    // The window box on the screen: the parts drawn by hand take their origin
-    // from here, the children read Screen instead.
-    private Rectangle SettingsScreen() => _settingsHost.Get<Rect>()!.Screen;
 
     private Rectangle SettingsTitleRect() => new(0, 0, SettingsW, _settingsLay.Get("titleH", 16));
     private Rectangle SettingsXRect() => new(_settingsLay.Get("closeX", 443), _settingsLay.Get("closeY", 3), 11, 11);
@@ -55,7 +52,7 @@ public partial class MushTownGame
         LoadTexture("ui/opt_bg.png");
         LoadTexture("ui/opt_sound.png");
         LoadTexture("ui/opt_tab.png");
-        LoadTexture("ui/opt_knob.png");
+        LoadTexture(Slider.KnobArt);
         LoadTexture("ui/opt_shortcut.png");
         LoadTexture("ui/hud_statx.png");
         foreach (string stem in new[] { "ui/opt_ok", "ui/opt_cancel" })
@@ -63,6 +60,7 @@ public partial class MushTownGame
                 LoadTexture(stem + state);
 
         _settingsHost.Clear();
+        _sliders.Clear(); // the rebuild makes new ones
         var body = new GameObject();
         body.Add(new Rect(SettingsRect()));
         body.Add(new Picture("ui/opt_bg.png")); // the official option window
@@ -83,12 +81,14 @@ public partial class MushTownGame
             Tint = new Color(60, 60, 70),
         });
 
-        // Confirm keeps the volumes, Cancel puts them back.
+        // Confirm keeps the volumes, Cancel puts them back and saves the old ones.
         body.AddChild(SettingsArtButton("ui/opt_ok", _settingsLay.Get("okX", 144), _settingsLay.Get("okY", 584), 83, 26, CloseSettings));
         body.AddChild(SettingsArtButton("ui/opt_cancel", _settingsLay.Get("cancelX", 233), _settingsLay.Get("cancelY", 584), 83, 26, () =>
         {
+            bool changed = _bgm.Volume != _bgmAtOpen || _sfxVol != _sfxAtOpen;
             SetVolume(true, _bgmAtOpen);
             SetVolume(false, _sfxAtOpen);
+            if (changed) SaveSettings(); // the sliders save on let go; Cancel undoes and saves that undo
             CloseSettings();
         }));
 
@@ -100,49 +100,29 @@ public partial class MushTownGame
         _settingsHost.AddChild(body);
     }
 
-    // One volume slider: the track takes the click, the knob shows the value.
+    // One volume slider: the object's Rect is the knob's box (as wide as the track,
+    // starting at knobDy), so it is the hit box; the component draws and drags.
     private void AddVolumeSlider(GameObject body, bool bgm)
     {
         int tx = bgm ? _settingsLay.Get("bgmX", 225) : _settingsLay.Get("sfxX", 225);
-        int ty = bgm ? _settingsLay.Get("bgmY", 208) : _settingsLay.Get("sfxY", 273);
+        int ty = (bgm ? _settingsLay.Get("bgmY", 208) : _settingsLay.Get("sfxY", 273)) + _settingsLay.Get("knobDy", -9);
         int tw = bgm ? _settingsLay.Get("bgmW", 193) : _settingsLay.Get("sfxW", 193);
+        var slider = new Slider(() => bgm ? _bgm.Volume : _sfxVol, value => SetVolume(bgm, value), SaveSettings);
+        _sliders.Add(slider);
         var track = new GameObject();
-        track.Add(new Rect(new Rectangle(tx, ty + _settingsLay.Get("knobDy", -9), tw, 22)));
-        track.Add(new Button
-        {
-            Kind = ButtonKind.Click,
-            OnClick = () => SetVolume(bgm, VolumeAt(tx, tw, _uiScene.LastClick.X - SettingsScreen().X)),
-        });
+        track.Add(new Rect(new Rectangle(tx, ty, tw, 22)));
+        track.Add(new Button { Kind = ButtonKind.Click, OnClick = () => slider.Grab(_uiScene.LastClick.X) });
+        track.Add(slider);
         body.AddChild(track);
-        var knob = new GameObject();
-        knob.Add(new Invoke(gfx => DrawVolumeKnob(gfx, bgm, tx, ty, tw)));
-        body.AddChild(knob);
     }
 
-    // The volume a click on the track asks for.
-    private int VolumeAt(int trackX, int trackW, int clickX)
-    {
-        int travel = trackW - SliderKnobW;
-        if (travel <= 0) return 0;
-        return Math.Clamp((clickX - trackX) * 100 / travel, 0, 100);
-    }
-
-    // Set a volume (the slider click or Cancel).
+    // The options window slider sets the volume (0-100: the caller passes a clamped
+    // value). The save waits for the slider to be let go, or a drag would write the
+    // file once per step.
     private void SetVolume(bool bgm, int value)
     {
-        int current = bgm ? _bgm.Volume : _sfxVol;
-        int delta = Math.Clamp(value, 0, 100) - current;
-        if (delta != 0) BumpVolume(bgm, delta);
-    }
-
-    // The slider knob at the current volume.
-    private void DrawVolumeKnob(UiGfx gfx, bool bgm, int trackX, int trackY, int trackW)
-    {
-        int volume = bgm ? _bgm.Volume : _sfxVol;
-        var r = SettingsScreen();
-        int x = r.X + trackX + (volume * (trackW - SliderKnobW)) / 100;
-        int y = r.Y + trackY + _settingsLay.Get("knobDy", -9);
-        gfx.Sb.Draw(gfx.Tex("ui/opt_knob.png"), new Vector2(x, y), Color.White);
+        if (bgm) _bgm.Volume = value;
+        else _sfxVol = value;
     }
 
     // One art button (the art has normal, hover and pressed states).
