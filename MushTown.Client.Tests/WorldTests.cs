@@ -4,8 +4,9 @@ using MushTown.Shared;
 namespace MushTown.Client.Tests;
 
 // The world objects step themselves: a mob plays its anim and ends its own
-// life, a portal loops, a damage number ages out, and the tree skips
-// whatever is already dead.
+// life, a portal loops, a damage number ages out, a skill effect plays once
+// (or wraps while a buff holds it), and the tree skips whatever is already
+// dead.
 [TestClass]
 public class WorldTests
 {
@@ -137,7 +138,7 @@ public class WorldTests
     }
 
     [TestMethod]
-    public void NumberCollectDead_ReturnsTheNumberToThePool()
+    public void PoolSweepCollectDead_ReturnsTheNumberToThePool()
     {
         var world = new GameObject();
         var pool = new Stack<FloatingNumber>();
@@ -149,7 +150,7 @@ public class WorldTests
         live.Add(a);
         live.Add(b);
         a.Owner.Dead = true;
-        FloatingNumber.CollectDead(live, world, pool);
+        PoolSweep.CollectDead(live, world, pool);
         Assert.AreEqual(1, world.Children.Count);
         Assert.AreEqual(1, live.Count);
         Assert.AreSame(a, pool.Pop());
@@ -157,7 +158,7 @@ public class WorldTests
     }
 
     [TestMethod]
-    public void NumberDropAll_ClearsTheTreeAndTheList()
+    public void PoolSweepDropAll_ClearsTheTreeAndTheList()
     {
         var world = new GameObject();
         var pool = new Stack<FloatingNumber>();
@@ -168,10 +169,77 @@ public class WorldTests
         world.AddChild(b.Owner);
         live.Add(a);
         live.Add(b);
-        FloatingNumber.DropAll(live, world, pool);
+        PoolSweep.DropAll(live, world, pool);
         Assert.AreEqual(0, world.Children.Count);
         Assert.AreEqual(0, live.Count);
         Assert.AreEqual(2, pool.Count);
+    }
+
+    [TestMethod]
+    public void FxTick_PlaysOnceAndDies()
+    {
+        var f = new GameObject().Add(new SkillFx { Frames = new List<string> { "a", "b" } });
+        f.Update(0.05f); // 50ms: the first frame still shows
+        Assert.AreEqual(0, f.Frame);
+        f.Update(0.05f); // 100ms: next frame
+        Assert.AreEqual(1, f.Frame);
+        Assert.IsFalse(f.Owner.Dead);
+        f.Update(0.1f); // past the last frame: done
+        Assert.IsTrue(f.Owner.Dead);
+        Assert.AreEqual(2, f.Frame); // one past the end: the collect must run before the draw
+        f.Reset(); // a pooled effect comes back clean
+        Assert.IsFalse(f.Owner.Dead);
+        Assert.AreEqual(0, f.Frame);
+    }
+
+    [TestMethod]
+    public void FxTick_LoopWrapsForever()
+    {
+        var f = new GameObject().Add(new SkillFx { Loop = true, Frames = new List<string> { "a", "b" } });
+        f.Update(0.1f);
+        Assert.AreEqual(1, f.Frame);
+        f.Update(0.1f); // the second frame wraps back to the first
+        Assert.AreEqual(0, f.Frame);
+        Assert.IsFalse(f.Owner.Dead);
+    }
+
+    [TestMethod]
+    public void FxTick_LoopRidesThePlayer()
+    {
+        var rider = new PlayerMover { X = 100f, Y = 200f };
+        var f = new GameObject().Add(new SkillFx { Loop = true, Frames = new List<string> { "a" }, Rider = rider });
+        f.Update(0.1f);
+        Assert.AreEqual(100f, f.X);
+        Assert.AreEqual(200f - SkillFx.CastDy, f.Y);
+        rider.X = 150f; // it follows every frame, not just the first
+        f.Update(0.1f);
+        Assert.AreEqual(150f, f.X);
+        f.Reset(); // the pool hands a stripped loop back as a one-shot: no rider, no wrap
+        Assert.IsFalse(f.Loop);
+        Assert.IsNull(f.Rider);
+        Assert.AreEqual(0f, f.Timer, 0.001f);
+    }
+
+    [TestMethod]
+    public void FxStripLoops_TakesOnlyThatBuffOutOfTheTree()
+    {
+        var world = new GameObject();
+        var pool = new Stack<SkillFx>();
+        var live = new List<SkillFx>();
+        var a = new GameObject().Add(new SkillFx { Skill = 1, Loop = true, Frames = new List<string> { "a" } });
+        var b = new GameObject().Add(new SkillFx { Skill = 2, Loop = true, Frames = new List<string> { "a" } });
+        var cast = new GameObject().Add(new SkillFx { Skill = 1, Frames = new List<string> { "a" } });
+        foreach (var f in new[] { a, b, cast })
+        {
+            world.AddChild(f.Owner);
+            live.Add(f);
+        }
+        SkillFx.StripLoops(live, world, pool, 1);
+        Assert.AreEqual(2, world.Children.Count); // the node leaves the tree, or the next spawn adds it twice
+        Assert.AreEqual(2, live.Count); // the cast of the same skill keeps playing
+        Assert.AreSame(a, pool.Pop());
+        Assert.AreSame(b, live[0]);
+        Assert.AreSame(cast, live[1]);
     }
 
     [TestMethod]

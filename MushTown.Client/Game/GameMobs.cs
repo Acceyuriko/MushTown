@@ -89,8 +89,8 @@ public partial class MushTownGame
         if (skill != 0 && _skills[skill].Hit.Count > 0)
         {
             var spark = TakeFx();
-            spark.Skill = skill; spark.Hit = true; spark.X = m.X; spark.Y = m.Y - bodyH / 2; spark.FacingRight = true;
-            _fx.Add(spark);
+            spark.Frames = _skills[skill].Hit;
+            spark.X = m.X; spark.Y = m.Y - bodyH / 2; spark.FacingRight = true;
         }
         if (mine && skill != SkillData.FinalAttack && _fighter.Buffs.ContainsKey(SkillData.ComboAttack))
         {

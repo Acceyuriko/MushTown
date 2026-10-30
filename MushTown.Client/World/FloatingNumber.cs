@@ -30,29 +30,4 @@ public sealed class FloatingNumber : Component
         Age += dt * 1000f;
         if (Age >= LifeMs) Owner.Dead = true;
     }
-
-    // The numbers whose life ended: out of the tree and back to the pool.
-    public static void CollectDead(List<FloatingNumber> live, GameObject world, Stack<FloatingNumber> pool)
-    {
-        for (int i = live.Count - 1; i >= 0; i--)
-        {
-            if (!live[i].Owner.Dead) continue;
-            world.RemoveChild(live[i].Owner);
-            pool.Push(live[i]);
-            live.RemoveAt(i);
-        }
-    }
-
-    // Leaving the map: every live number goes back to the pool. The node has
-    // to leave the tree too: left in place it keeps ticking, and the next
-    // spawn adds the same node a second time.
-    public static void DropAll(List<FloatingNumber> live, GameObject world, Stack<FloatingNumber> pool)
-    {
-        foreach (var n in live)
-        {
-            world.RemoveChild(n.Owner);
-            pool.Push(n);
-        }
-        live.Clear();
-    }
 }

@@ -8,26 +8,9 @@ namespace MushTown.Client;
 // Combat: swings, skills, casts, hurt/death, and the hit feedback pools.
 public partial class MushTownGame
 {
-    private const int FxDelay = 100; // skill effect frames share one delay (WZ ships no delays for them)
-    private const int FxCastDy = 40; // cast effects center on the torso (bare frames: no WZ origins)
     private const int DashPx = 220; // Rush/Flash Blade carry the caster this far along facing
     private const float DiveV = 900f; // Leap Attack slams down this fast (past MaxFall on purpose)
     private const int LeapRange = 400; // Leap Attack needs a platform within this far below
-
-    // One skill effect in flight: a cast effect (centered on the caster), a
-    // hit spark (centered on the mob's body), or a buff loop (riding the
-    // player until the buff ends). One-shots play once, then are removed.
-    private sealed class SkillFx
-    {
-        public int Skill;
-        public bool Hit;
-        public bool Loop;
-        public float X;
-        public float Y;
-        public bool FacingRight;
-        public int Frame;
-        public float Timer;
-    }
 
     // Pooled spawn: a number is a node now, so a pop puts it back in the tree
     // and a fresh one gets its node once. Tree and list move together here,
@@ -42,33 +25,28 @@ public partial class MushTownGame
         return n;
     }
 
+    // Same contract as TakeNumber: the node enters the tree and the list here.
     private SkillFx TakeFx()
     {
-        var f = _fxPool.TryPop(out var p) ? p : new SkillFx();
-        f.Hit = false;
-        f.Loop = false;
-        f.Frame = 0;
-        f.Timer = 0;
+        var f = _fxPool.TryPop(out var p) ? p : new GameObject().Add(new SkillFx());
+        f.Reset();
+        _world.AddChild(f.Owner);
+        _fx.Add(f);
         return f;
     }
 
-    private void DropNumbers() => FloatingNumber.DropAll(_numbers, _world, _numberPool);
+    private void DropNumbers() => PoolSweep.DropAll(_numbers, _world, _numberPool);
 
-    private void DropFx()
-    {
-        foreach (var f in _fx) _fxPool.Push(f);
-        _fx.Clear();
-    }
+    private void DropFx() => PoolSweep.DropAll(_fx, _world, _fxPool);
 
     // Skill effects: bare frames centered on their anchor, flipped like
-    // avatars (raw art faces left). Cast effects ride the caster, hit sparks
-    // the mob's body, buff loops the player; all were centered when spawned.
+    // avatars (raw art faces left). Cast effects and hit sparks sit where they
+    // spawned; only a buff loop keeps following the player.
     private void DrawFx()
     {
         foreach (var f in _fx)
         {
-            var frames = f.Loop ? _skills[f.Skill].Affected : f.Hit ? _skills[f.Skill].Hit : _skills[f.Skill].Effect;
-            var tex = _textures[frames[f.Frame]];
+            var tex = _textures[f.Frames[f.Frame]];
             var o = new Vector2(tex.Width / 2f, tex.Height / 2f);
             _spriteBatch.Draw(tex, new Vector2(f.X - _camera.X, f.Y - _camera.Y), null, Color.White,
                 0f, o, 1f, f.FacingRight ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
@@ -279,15 +257,7 @@ public partial class MushTownGame
     }
 
     // Buff loops are singletons per buff (cast and end both strip first).
-    private void StripLoopFx(int id)
-    {
-        for (int i = _fx.Count - 1; i >= 0; i--)
-            if (_fx[i].Loop && _fx[i].Skill == id)
-            {
-                _fxPool.Push(_fx[i]);
-                _fx.RemoveAt(i);
-            }
-    }
+    private void StripLoopFx(int id) => SkillFx.StripLoops(_fx, _world, _fxPool, id);
 
     // A buff ends (expiry, toggle, session): timer, loop, and orbs all go,
     // and the build drops back (pools clamp next frame, never heal).
@@ -310,8 +280,8 @@ public partial class MushTownGame
     {
         if (_skills[id].Affected.Count == 0) return;
         var loop = TakeFx();
-        loop.Skill = id; loop.Loop = true; loop.X = _mover.X; loop.Y = _mover.Y - FxCastDy; loop.FacingRight = _mover.FacingRight;
-        _fx.Add(loop);
+        loop.Skill = id; loop.Loop = true; loop.Frames = _skills[id].Affected; loop.Rider = _mover;
+        loop.X = _mover.X; loop.Y = _mover.Y - SkillFx.CastDy; loop.FacingRight = _mover.FacingRight;
     }
 
     // Rush/Flash Blade carry: shift along facing (staying inside the map),
@@ -350,8 +320,8 @@ public partial class MushTownGame
     {
         if (_skills[skill].Effect.Count == 0) return;
         var fx = TakeFx();
-        fx.Skill = skill; fx.X = x; fx.Y = y - FxCastDy; fx.FacingRight = facingRight;
-        _fx.Add(fx);
+        fx.Frames = _skills[skill].Effect;
+        fx.X = x; fx.Y = y - SkillFx.CastDy; fx.FacingRight = facingRight;
     }
 
     // Our combat stats for the server (Build) and the local judge. CLI

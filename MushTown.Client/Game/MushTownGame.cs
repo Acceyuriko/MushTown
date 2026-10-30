@@ -88,7 +88,7 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, MobArt> _mobs = new();
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<FloatingNumber> _numbers = new();
-    private readonly List<SkillFx> _fx = new(); // skill cast effects + hit sparks in flight
+    private readonly List<SkillFx> _fx = new(); // skill effects in flight: casts, hit sparks, buff loops
     private readonly Stack<FloatingNumber> _numberPool = new(); // freelists: spawn pops, removal pushes, live order untouched
     private readonly Stack<SkillFx> _fxPool = new();
     private readonly Dictionary<int, DmgData> _dmg = new(); // damage skins by key, loaded once each
@@ -185,10 +185,11 @@ public partial class MushTownGame : Game
         _graphics.PreferredBackBufferHeight = mode.Height;
 
         // The tree step order: the player moves first, then the map furniture
-        // (portals), the mobs and the damage numbers, all of them children of
-        // the world root. Camera and audio ride the tree but do not tick.
-        // Travel lands after the step, and the skill effects still tick after
-        // the tree (S3 moves them).
+        // (portals), the mobs and the pooled numbers and skill effects, all of
+        // them children of the world root. Only "the player first" matters (a
+        // buff loop reads its position); the rest never depend on each other,
+        // so the pooled ones tick in spawn order. Camera and audio ride the
+        // tree but do not tick.
         var player = new GameObject();
         player.Add(_mover);
         player.Add(_heroPlate);
@@ -599,10 +600,12 @@ public partial class MushTownGame : Game
             Jump = OwnJump(),
         };
         TreeUpdate.UpdateObject(_world, dt);
-        // Before the draw: a corpse sits on Frame == Frames.Count, and the
-        // draw reads that frame. Skipping this line crashes on the first kill.
+        // Before the draw: a corpse and a finished effect both sit on
+        // Frame == Frames.Count, and the draw reads that frame. A number does
+        // not crash, it just keeps drawing and ageing. All three belong here.
         MobArt.CollectDead(_mobs, _world);
-        FloatingNumber.CollectDead(_numbers, _world, _numberPool);
+        PoolSweep.CollectDead(_numbers, _world, _numberPool);
+        PoolSweep.CollectDead(_fx, _world, _fxPool);
         if (_mover.JumpSfx) PlaySfx("jump");
         if (_mover.Travel != null)
         {
@@ -625,29 +628,6 @@ public partial class MushTownGame : Game
         }
         if (_mover.Climb == null || _mover.ClimbMoving) // still on a ladder: hold the pose
             (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, _delays[_shownAction]);
-
-        for (int i = _fx.Count - 1; i >= 0; i--) // skill effects play once, then leave
-        {
-            var f = _fx[i];
-            if (f.Loop) // buff loops ride the player and wrap until the buff ends
-            {
-                f.X = _mover.X;
-                f.Y = _mover.Y - FxCastDy;
-                f.Timer += dtMs;
-                if (f.Timer < FxDelay) continue;
-                f.Timer -= FxDelay;
-                var loop = _skills[f.Skill].Affected;
-                f.Frame = (f.Frame + 1) % loop.Count;
-                continue;
-            }
-            var frames = f.Hit ? _skills[f.Skill].Hit : _skills[f.Skill].Effect;
-            f.Timer += dtMs;
-            if (f.Timer < FxDelay) continue;
-            f.Timer -= FxDelay; // keep the overflow (single step: 100ms delays, 16ms ticks)
-            if (++f.Frame < frames.Count) continue;
-            _fxPool.Push(f);
-            _fx.RemoveAt(i);
-        }
 
         var (targetX, targetY) = CameraTarget();
         _camera.Follow(dt, targetX, targetY);

@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；**S2（数字变成对象 + 皮肤字典）做完等验收**：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张，全部逐字节一致，客户端测试 45。下一步 S3（特效变成对象 + buff 循环挂玩家）。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；S2（数字变成对象 + 皮肤字典）已验收并提交（1e182d0，两轮审查，测试 45）；S3（特效变成对象 + buff 循环挂玩家）已验收：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张全部逐字节一致，客户端测试 49。同一批还带一条输入修复：键窗不再挡任何东西（角色动作、面板键、喝药全照常，§8 #51）。**待提交。** 下一步 N1（背包）。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -213,7 +213,7 @@
 | 怪 | MushTownGame 679-693 | `MobArt.Update`：推帧；`die1` 播完标 `Dead` |
 | 传送门 | MushTownGame 674-676 | `PortalComp.Update` |
 | 数字 | 694-700 | `FloatingNumber.Update`：计龄，到时标 `Dead`（已做） |
-| 特效 | 701-722 | `SkillFx.Update`：推帧，播完标 `Dead`；buff 循环挂在玩家身上，由 buff 结束移除 |
+| 特效 | 701-722 | `SkillFx.Update`：推帧，播完标 `Dead`；buff 循环挂在玩家身上，由 buff 结束移除（已做） |
 
 **回收**：`TreeUpdate` 之后，游戏扫自己的容器（`_mobs` / `_drops` / `_numbers` / `_fx`），把 `Dead` 的摘掉、进池。O(n)，n < 几百。数字和特效继续用两个 `Stack`；怪和掉落不池（Q11 已定：只池高频小东西）。
 
@@ -236,7 +236,7 @@
 - 头测 9 条：推帧、闪烁回 idle（含帧表跟着换）、无 stand 回 move、播完标 Dead、死节点跳过子树、收尸（树和 dict 都少一个）、传送门循环（`WorldTests` 7 条）+ 命中跳过死节点、死模态不再吞点击（`SceneTests` 2 条）。客户端 32 → 41。
 - 截图证明不了动画推进和回收（截图不跑 `Update`），那两条靠头测 + 一次手动击杀验收。
 
-**结果（S2，2026-10-29）**：做完，等验收。
+**结果（S2，2026-10-29）**：已验收并提交（1e182d0）。
 
 - `FloatingNumber : Component`（`World/FloatingNumber.cs`）带 `Text` / `Skin` / `X` / `Y` / `Age`，`Update` 只做一件事：加龄，到 `LifeMs`（800ms）标 `Owner.Dead`。上升高度 `RisePx`（60）也归它，绘制读这两个常量，主循环里那两个常量删掉。
 - 数字真正变成树上的节点：`TakeNumber` 从池里取组件（空池就 `new GameObject().Add(new FloatingNumber())`），`Reset()` 清 `Age`/`Skin` 并把 `Dead` 归 false，再 `_world.AddChild` **并 `_numbers.Add`**——进树和进列表是同一步，新的生成点不会只做一半。池子复用节点，不新建节点。
@@ -247,6 +247,18 @@
 - 相位自检：数字的 tick 从「主循环最后一段」挪进 `TreeUpdate`（travel 之前），比怪还晚一点；数字之间互相独立，先后无所谓。绘制仍读 `_numbers` 列表，不进 y-sort，所以画出来的顺序没变。
 - 头测 4 条（`WorldTests`）：到点死（800ms 边界）、`Reset` 复活（含 `Skin` 归 0）后还能走、收尸（树少一个、列表少一个、池多一个）、换图清场（树清空、列表清空、池多两个）。客户端 41 → 45。
 - 截图：27 张 `--shot` + 6 张 `--aiticks` 逐字节一致；另外补拍 `--hit` 和 `--skill`（这两张不进 27 张基线，因为要挑有怪的地图 20000），对着 S1 的 commit 也逐字节一致。
+
+**结果（S3，2026-10-30）**：已验收。
+
+- `SkillFx : Component`（`World/SkillFx.cs`）带 `Skill` / `Loop` / `FacingRight` / `Frames` / `Frame` / `Timer` / `X` / `Y` / `Rider`。`Update` 三件事：有 `Rider` 就贴到玩家身上；按 `Delay`（100ms）推一帧，保留溢出；buff 循环取模绕回，一次性特效播完标 `Owner.Dead`。
+- 帧表在生成时定好（施法 `Effect`、命中 `Hit`、buff 循环 `Affected`），绘制不再每帧按 `Loop/Hit` 三选一。
+- `TakeFx` 和 `TakeNumber` 一样：从池取节点 → `Reset()` → `_world.AddChild` + `_fx.Add`，一步到位。
+- 主循环里那段特效循环删掉，`TreeUpdate` 之后加一行 `PoolSweep.CollectDead(_fx, ...)`。
+- buff 循环挂玩家：`Rider` 直接指向 `_mover`，组件每帧自己读位置。buff 结束/重挂走 `SkillFx.StripLoops`（static，可头测），它把节点同时从树、列表、池三边对好（以前只回池，留在树上的会被 tick 两次）。
+- **`PoolSweep`（新）**：数字和特效的两把扫帚（`CollectDead` / `DropAll`）合成一个泛型工具，`FloatingNumber` 的那两个方法删掉。不持有池，只是无状态清扫。
+- 头测 4 条：一次性特效推帧播完 + `Reset` 复活、buff 循环绕回不死、buff 循环跟着玩家走（换位置后下一帧跟上）、`StripLoops` 只摘那一个 buff 且摘树。客户端 45 → 49。
+- 截图：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 全部逐字节一致（`--skill` 那张画的就是新组件的帧）。
+- 相位差三处（掉出地图、跨图、同图传送门），都是一帧，见 §8 #50。
 
 ### 3.4 扩展点
 
@@ -279,7 +291,7 @@
 
 **验收**：全部 `--shot` 屏幕（27 个）逐字节一致；拖标题栏、拖任务窗时树不重建（临时在 `Build()` 里加计数验证后删掉）；`grep "Pos.X\|Pos.Y"` 只剩三处：窗口基类的 `OnScreen`、`StartDrag`，和复制对话框的全屏拦截块（它必须抵消窗口偏移才能盖满屏幕）。
 
-**结果（2026-10-29）**：做完了，等验收。
+**结果（2026-10-29）**：已验收并提交（8b86b4a）。
 
 - `Rect` 只存 `Offset` + `Size`，`Scene.Layout()` 每帧填 `Screen`，`Hit`/`Draw`/各组件都读 `Screen`。
 - `UiWindow.Sync()` 只在没建过或 `Dirty` 时重建，`Pos` 变化只改根节点 `Offset`；HUD 面板同理（`PlaceHost` + 六个"建过一次"的开关）。
@@ -310,7 +322,8 @@
    - 快捷槽：抓住槽里的目标。
 4. **池子只列没绑的动作，格子位置不动**（用户 2026-10-28 定）：绑定的动作从黑色区域消失，**后面的格子不往前补**——每个 action 的格子位置是固定的（`Actions` 的下标），空出来的格子就是空的。从白色或快捷槽抓回黑色区域 = 取消绑定，动作回到它原来那一格。所以池子是"固定格位 + 按 draft 隐藏已绑的"，不是动态重排。
 5. **技能和道具同理**：从技能窗/背包抓起，放到白色区域或快捷槽 = 绑定；放回黑色区域 = 取消。
-6. 拿起后按 Esc 或右键 → 丢掉手上的东西，不改任何东西。
+6. **技能窗拿起不看键窗**（用户 2026-10-30 定，归 K3）：现在点技能行只在键窗开着时才算拿起（`HudSkill.KeyWindowOpen` 那道门槛）。有快捷槽之后，快捷槽也是可放区，所以拿起条件改成"有可放区"，不再依赖键窗。
+7. 拿起后按 Esc 或右键 → 丢掉手上的东西，不改任何东西。
 
 **和旧设计的关系**：这替代 §3.1 里的"按住拖、松手放"，也替代 K1 的"松手落在键上"。`UpdateDrag` 的状态机要从"按住/松开"改成"有没有拿着东西"。K3 做之前，K2 先补了最小版本（键格可抓、拖到黑色池子取消、技能落键有门槛），所以现在就能解绑和做 Combo Key。
 
@@ -335,8 +348,8 @@
 | 片 | 内容 | 工期 |
 |---|---|---|
 | S1 (P0) | `Dead` + 回收 + 怪动画进 `MobArt.Update` + 传送门。**已做（2026-10-29，提交 60fda5e）**：`GameObject.Dead`，`TreeUpdate`/`TreeDraw`/`Scene.Hit`/`Scene.AnyModal` 都跳过死节点（用户要求「满足 object-component 架构以便之后扩展」，所以让死节点在步进、绘制、命中、模态四条路上语义一致，不只 step）；`MobArt.Update` 推帧（闪烁回 idle、die1 播完标 `Dead`），动作改由 `SetAction` 同时换帧表；`PortalComp.Update` 自己循环；游戏在 `TreeUpdate` 之后 `MobArt.CollectDead` 收尸（摘树 + 删 dict）。数字/特效仍是主循环，归 S2/S3 | 1 周 |
-| S2 (P0) | 数字变成对象 + 皮肤字典（默认 1 种）。**已做（2026-10-29，等验收）**：`FloatingNumber` 组件自己加龄、到点标 `Dead`；数字节点进 `_world`，池子复用节点（`Reset` 清 `Age`/`Skin`/`Dead`）；`FloatingNumber.CollectDead` 收尸，`FloatingNumber.DropAll` 换图清场；`_dmg` 改成按 key 的字典，皮肤 0 沿用 `effect/dmg.json`，新皮肤 `effect/dmg{key}.json`。测试 41 → 45，27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 全部一致 | 1 周 |
-| S3 (P0) | 特效变成对象 + buff 循环挂玩家 | 1 周 |
+| S2 (P0) | 数字变成对象 + 皮肤字典（默认 1 种）。**已验收并提交（1e182d0）**：`FloatingNumber` 组件自己加龄、到点标 `Dead`；数字节点进 `_world`，池子复用节点（`Reset` 清 `Age`/`Skin`/`Dead`）；`FloatingNumber.CollectDead` 收尸，`FloatingNumber.DropAll` 换图清场；`_dmg` 改成按 key 的字典，皮肤 0 沿用 `effect/dmg.json`，新皮肤 `effect/dmg{key}.json`。测试 41 → 45，27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 全部一致 | 1 周 |
+| S3 (P0) | 特效变成对象 + buff 循环挂玩家。**已验收（2026-10-30）**：`SkillFx` 组件自己推帧、播完标 `Dead`、buff 循环跟着 `Rider`（玩家）走；`TakeFx` 进树 + 进列表一步；主循环那段删掉；`PoolSweep` 统一数字和特效的收尸/清场；`SkillFx.StripLoops` 补上摘树。测试 45 → 49，27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 全部一致 | 1 周 |
 
 ### 窗口线
 
@@ -344,7 +357,7 @@
 |---|---|---|
 | N0 (P0) | `Box` + `Ui/AvatarArt.cs` + `AvatarPreview`：**已做**（`Box` 用在小地图框和物品 tip 框；`AvatarPreview` 用在创建角色预览；`MergeParts`/`DrawAvatar` 搬进新文件并加了 `DrawAvatarOnScreen`） | 0.5 周 |
 | N5 (P0) | 键窗 7 处 `Invoke` 已删（和 K2 合并）：`KeyCap` / `ActionCell` / `FilterBox` / `FilterItem` / `HeldIcon` 五个窗口内私有组件，预设钮和 Combo Key 钮改用 `Image(stem, on)`；拖放松手改由 `UpdateHud` 的鼠标边沿驱动（`KeyConfigWindow.UpdateDrag`），Draw 不再轮询鼠标 | 已做 |
-| W1 (P0) | **`Rect` 改成父相对（Unity RectTransform 的形状）**：`Rect` 只存局部 offset + size；每帧开头 `Scene.Layout()` 走一次树把屏幕矩形写进 `Rect.Screen`；命中、绘制、HUD 悬停都读 `Screen`；`UiWindow.Sync()` 不再因为 `Pos` 变化重建；48 处 `Pos.X +`、51 处 `Pos.Y +` 变回纯偏移（10 个窗口文件）。不做 anchors / pivot / layout group。详见 §3.5 | 1 周（已完成，等验收） |
+| W1 (P0) | **`Rect` 改成父相对（Unity RectTransform 的形状）**：`Rect` 只存局部 offset + size；每帧开头 `Scene.Layout()` 走一次树把屏幕矩形写进 `Rect.Screen`；命中、绘制、HUD 悬停都读 `Screen`；`UiWindow.Sync()` 不再因为 `Pos` 变化重建；48 处 `Pos.X +`、51 处 `Pos.Y +` 变回纯偏移（10 个窗口文件）。不做 anchors / pivot / layout group。详见 §3.5 | 1 周（已验收，8b86b4a） |
 | N1 (P1) | HUD 条：气泡、快捷栏角标、手拿、tips | 1 周 |
 | N2 (P1) | 快捷槽：4 个键提示 + 12 个物品格合成一套 16 个等价槽（内容先固定）+ 设置旋钮 | 1 周 |
 | N3 (P1) | 聊天窗（整块，最大） | 2 周 |
@@ -355,16 +368,16 @@
 
 合计约 19 周（N0 缩到 0.5 周，S4 砍掉，W1 加 1 周）。三块互不依赖，顺序可以换。
 
-**顺序（我定的）**：K1 → N0 → K2+N5 → W1 → S1 → S2 → S3 → N1 → N2 → N3 → N4 → N6 → N7 → N8。
+**顺序（我定的）**：K1 → N0 → K2+N5 → W1 → S1 → S2 → S3 → N1 → N2 → **K3** → N3 → N4 → N6 → N7 → N8。
 
-理由：先把输入这条线走完（技能解耦 + 每角色绑定是一件事）；再做组件基础，紧接着把键窗改组件；然后**先把 `Rect` 改成父相对**，再动世界和窗口——W1 要改每个窗口的坐标写法，放在 N1/N2/N3/N6/N7/N8 之前，那些窗口就只写一次新写法。
+理由：先把输入这条线走完（技能解耦 + 每角色绑定是一件事）；再做组件基础，紧接着把键窗改组件；然后**先把 `Rect` 改成父相对**，再动世界和窗口——W1 要改每个窗口的坐标写法，放在 N1/N2/N3/N6/N7/N8 之前，那些窗口就只写一次新写法。**K3 从原来的位置挪到 N2 之后**（2026-10-30 用户定）：点击式拖放的三个可放区里，HUD 16 槽要等 N2 先合成一套，背包要等 N1。
 
 ## 5. 每片的验收
 
 1. `dotnet format` 干净；`dotnet build` 0 警告 0 错误。
-2. 测试全过（K1 新增 16 条；当前 341）。
+2. 测试全过（K1 新增 16 条；当前 345）。
 3. 受影响的 `--shot` 截图与改动前逐字节一致；**例外**：输入片换了默认键（Stat C→S、Quest V→Q 等），**所有带 HUD 的游戏截图**（第 4 个提示格、MENU 角标）、键窗和**技能窗**（固定键文字已删）按新默认重拍，人工对照官方布局验收。
-4. 世界片：`--aiticks 40` 截图一致；新增头测覆盖"推帧 / 播完 / 回收"。S1 已做：6 张 `--aiticks` 图（0/10/40/100 步、1000000 地图 0/40 步）逐字节一致，27 张 `--shot` 也一致；`WorldTests` 7 条 + `SceneTests` 2 条覆盖推帧、闪烁、播完、死节点（step 和命中都跳）、收尸、传送门。**注意**：截图不跑 `Update`，`--aiticks` 只推怪的走位和刷新，所以这些图只证明"绘制查表没变"，证明不了动画推进和回收。回收这一步要靠**手动验收**：进游戏打一只怪，尸体播完消失，不崩。S2 已做：`WorldTests` 4 条（到点死、`Reset` 复活、收尸、换图清场），27 张 `--shot` + 6 张 `--aiticks` 一致，另加 `--hit`/`--skill`（地图 20000）两张在改动前后逐字节一致。手动验收：①打怪时数字上升淡出、自己消失，不崩；②数字还在屏幕上时走进传送门换图，数字立刻消失，换图后新数字的上升速度不变（这条验的是清场时有没有把节点摘出树）。
+4. 世界片：`--aiticks 40` 截图一致；新增头测覆盖"推帧 / 播完 / 回收"。S1 已做：6 张 `--aiticks` 图（0/10/40/100 步、1000000 地图 0/40 步）逐字节一致，27 张 `--shot` 也一致；`WorldTests` 7 条 + `SceneTests` 2 条覆盖推帧、闪烁、播完、死节点（step 和命中都跳）、收尸、传送门。**注意**：截图不跑 `Update`，`--aiticks` 只推怪的走位和刷新，所以这些图只证明"绘制查表没变"，证明不了动画推进和回收。回收这一步要靠**手动验收**：进游戏打一只怪，尸体播完消失，不崩。S2 已做：`WorldTests` 4 条（到点死、`Reset` 复活、收尸、换图清场），27 张 `--shot` + 6 张 `--aiticks` 一致，另加 `--hit`/`--skill`（地图 20000）两张在改动前后逐字节一致。手动验收：①打怪时数字上升淡出、自己消失，不崩；②数字还在屏幕上时走进传送门换图，数字立刻消失，换图后新数字的上升速度不变（这条验的是清场时有没有把节点摘出树）。S3 已做：`WorldTests` 4 条（一次性特效推帧播完 + `Reset` 复活、buff 循环绕回不死、buff 循环跟着玩家走、`StripLoops` 只摘那一个 buff 并摘树），27 张 `--shot` + 6 张 `--aiticks` 一致，`--hit`/`--skill` 两张也逐字节一致。手动验收：①放一个带图的 buff（例如 Spirit Blade 那类有 `Affected` 图的），循环图案贴着人走，buff 结束时图案消失；②连续放同一个 buff，图案不会叠成两层；③放一个伤害技能，特效播一次就消失，不崩；④放 buff 后走进传送门换图，图案重新挂在人身上。
 5. 输入片第 1 周：手测 10 个菜单键、攻击、跳跃、Talk；换角色后按键跟着换；旧键窗的 Save/Apply/Copy/Default 在 3 套 preset 上生效（1/2/3 切换选中的 preset 并重读 draft，键格跟着换；新 UI 的预览是 K2）；`settings.json` 没有按键字段。
 6. 输入片第 2 周：3 套 preset 预览 / Apply / Copy / Save 后重开仍生效；HUD 16 槽按表重画（Ctrl/Alt/I 有内容，C 空，12 个物品格按表）。技能头测（已加，`Fresh_ASkillTargetFiresFromItsKey`：塞一条合成绑定，验证按下那个键时技能目标 Fresh）覆盖输入那一半；`CastSkill` 本身要 GraphicsDevice，只能靠 `--skill` 截图手测。实际游玩要等拖放片，这是已知代价。
 7. 代码检查：`grep "new Invoke"` 该文件为 0；**这 16 个**游戏输入字段为 0（`_altWasDown`、`_upWasDown`、`_ctrlWasDown` + 12 个技能键 + `_zWasDown` 拾取）；菜单的 `_escWasDown`、`_menuUpWasDown` 等系统键字段保留（不是绑定键）；`_qsWasDown` 已随快捷栏删掉；`settings.json` 里没有按键。
@@ -373,6 +386,7 @@
 10. W1（`Rect` 父相对）：全部 `--shot` 屏幕（27 个）逐字节一致；拖标题栏、拖任务窗不触发 `Build()`（临时计数验证后删）；`grep "Pos.X\|Pos.Y"` 只剩 `OnScreen`、`StartDrag` 和复制对话框的全屏拦截块；一帧里的节点遍历最多 3 次，理由见 §8 第 35 条。
 11. K2 动作池（已做）：键窗打开时默认是 Not Added 组，列出 63 个没绑键的动作（官方 icon 全部 77 张图，一张一格；默认表占 14 个）；9 个过滤项（Not Added + 8 个分类）逐组点开都能看到对应图标；键盘上 E 画 EQUIP、U 画 MAPLE GUIDE、`\` 画 KEY BINDINGS、Z 画 PICK UP、Ctrl/Alt 画 ATTACK/JUMP；Chat 键点开聊天输入、Minimap 键只是重建小地图；把 Attack 从键上抓起来、拖到黑色动作池上松手、Save 后攻击真的没键了（K1 的 `Reserved` 保护已删，键格本身可以抓；松手在标题栏、按钮或键缝上什么都不改）；把 `Legion`（没实现）拖到键上 Save，按键什么都不发生；Combo Key 模式下按住第一个已绑的键、拖到第二个键上松手，做成 `I+K`（点一下拿不起来，那是 K3）。`--shot keys` 的像素变化是预期的（池子变大），不用和旧基线比。
 12. K3 点击式拖放：见 §3.6 的验收段。拿起时按 Esc 丢掉手上的东西、不改任何东西；池子只列没绑的动作，绑一个少一格、取消一个多一格。
+13. 键窗不挡（S3 同批，已做）：键窗开着时走路、攻击、跳跃、拾取、对话、喝药、7 个面板键全部生效，用的是**已保存**的 preset；在键窗里改键但**不 Save**，关窗后按旧键还是老效果；Save 后**下一帧**新键生效，不用重开；MENU 窗口仍然挡角色。这几处是 `Update` / `UpdateHud` 里的条件，要 `GraphicsDevice`，没有头测，只能手测。
 
 ## 6. 风险
 
@@ -459,7 +473,7 @@
 36. 面板/窗口的「根在屏幕、子节点局部」是 W1 的唯一写法（2026-10-29）：手画的部件拿不到遍历给的原点，统一用 UiWindow.OnScreen(local)（Pos 始终是最新的，不需要遍历）。
 37. 任务助手的条和 chevron 不在 Draw 里改 Rect（2026-10-29 审查 P1-2）：Draw 跑在 Layout 之后，改了本帧读到的 Screen 还是旧值，条子会闪一帧。位置改在 Build 和 chevron 点击时写。
 38. 怪的帧表跟着动作走（S1，2026-10-29）：`MobArt` 存 `MobData` + 当前动作的 `Frames`，`SetAction` 一次换动作名、帧表、帧号和计时器，两个字段的 setter 是私有的。外部换动作只有三处（spawn、挨打、走起来），第四处是 `Update` 里闪烁结束回 idle——那一处要保留溢出时间，所以手写两行而不走 `SetAction`。理由：`Update` 和 `Draw` 都要按当前动作取帧，每次查一遍 `Data.Actions` 是白查；私有 setter 让"动作名换了、帧表没换"编译不过。
-39. 时间源不统一（S1，2026-10-29）：`Component.Update` 收秒（玩家 mover 的契约），怪和传送门要毫秒，用 `dt * 1000f`。旧循环用的是 `TotalMilliseconds`，两者差 2e-6 ms/帧；按 16.666667 累积，100ms 的帧会早一个 tick 翻页。**接受**：只有真人看得出的一帧动画差别，截图（不跑 Update）看不出来；换成传毫秒要改 mover 的契约和测试，不划算。
+39. 时间源不统一（S1，2026-10-29）：`Component.Update` 收秒（玩家 mover 的契约），怪和传送门要毫秒，用 `dt * 1000f`。旧循环用的是 `TotalMilliseconds`，两者差 2e-6 ms/帧；按 16.666667 累积，100ms 的帧会早一个 tick 翻页。**接受**：只有真人看得出的一帧动画差别，截图（不跑 Update）看不出来；换成传毫秒要改 mover 的契约和测试，不划算。S3 起特效（`SkillFx`）也从 `dtMs` 换成了 `dt * 1000f`，同样的量级，同样接受。
 40. 地图切换那一帧的相位（S1，2026-10-29）：`SwitchMap`（踩传送门/换频道）在 `TreeUpdate` 之后，所以那条路径上新图的怪和传送门第一次 tick 晚一帧（旧代码是先切图再 tick）。**接受**：新旧图都从第 0 帧起，晚一帧看不出来；相对次序 怪 → 数字 → 特效 没变。大地图传送（`TravelTo`）走的是 `UpdateHud`，在 `TreeUpdate` **之前**，那条路径新图的怪同帧就 tick，和旧代码一样。
 41. 收尸放在 `MobArt` 上并公开（S1，2026-10-29）：`MobArt.CollectDead(mobs, world)` 摘树 + 删 dict。放在游戏里的私有方法测不到（要 GraphicsDevice），而「播完 → 摘树 → 删 dict」正是这片要验的东西。方法本身只依赖 `Dead` 和 `GameObject`，头测直接调。
 42. 皮肤文件名不搬家（S2，2026-10-29）：皮肤 0 仍是 `effect/dmg.json`，皮肤 N 是 `effect/dmg{N}.json`，`LoadDmg(skin)` 里就一个三元。另一条路是全部改成 `dmg{key}.json`，但那样现有的 `assets/` 得重导一遍才开得了游戏。字典本来就是这片的目的，文件名不是。
@@ -467,4 +481,9 @@
 44. 数字的 tick 挪进 `TreeUpdate`，绘制仍读 `_numbers`（S2，2026-10-29）：数字之间没有依赖，谁先走无所谓，所以不为了保持"怪 → 数字 → 特效"的顺序去另开一个桶。绘制读列表是因为数字不进 y-sort，也不该进——它永远画在最上层。
 45. `FloatingNumber` 自己带 `LifeMs`/`RisePx`（S2，2026-10-29）：寿命和上升高度是这个对象自己的样子，主循环里的两个常量删掉，绘制读 `FloatingNumber.LifeMs` / `RisePx`。以后换皮肤如果连消失时间也不同，字段就在组件上改，不用再找主循环。
 46. 树步进期间不能增删子节点（S2 审查，2026-10-30）：`TreeUpdate` 的 `foreach (o.Children)` 是活遍历，组件 `Update` 里 `AddChild`/`RemoveChild` 会抛 `Collection was modified`。今天的生成点都在步进之外（攻击/技能在步进前，网络/AI 在步进后），所以只写在注释里，没有改成"遍历前拷一份子列表"。以后真要在步进里生成（比如怪死时掉东西），先改遍历方式。
-47. 数字的"进树 + 进列表"合成一步（S2 审查，2026-10-30）：`TakeNumber` 同时做 `_world.AddChild` 和 `_numbers.Add`。分开写时，新生成点漏掉列表那一半，节点会在树里一直 tick 却永远收不到。
+47. 数字的"进树 + 进列表"合成一步（S2 审查，2026-10-30）：`TakeNumber` 同时做 `_world.AddChild` 和 `_numbers.Add`。分开写时，新生成点漏掉列表那一半，节点会在树里一直 tick 却永远收不到。`TakeFx` 照同一个写法（S3）。
+48. buff 循环自己跟着玩家（S3，2026-10-30）：`SkillFx.Rider` 直接指向 `PlayerMover`，组件每帧读它的 `X/Y` 并减去 `CastDy`。另一条路是让节点成为玩家的子节点，但世界树没有坐标（`Screen` 只给 UI 用），那样得先做一套世界坐标，超出这一片。组件持一个玩家引用是最小的做法。
+49. `PoolSweep` 统一两把扫帚（S3，2026-10-30）：数字那一份（`FloatingNumber` 上的 `CollectDead`/`DropAll`）和特效那一份（`GameCombat` 里的倒序循环 + `DropFx` 的 foreach）做的是同一件事，合成泛型工具，`FloatingNumber` 上那两个方法删掉。名字不叫 Pool：它不持有池，只是无状态清扫，池在游戏里。`MobArt.CollectDead` 不并进来：它还要删 dict，签名不同。
+50. 传送/掉出地图那一帧的相位（S3，2026-10-30）：旧代码在 `TreeUpdate` 之后（`SwitchMap`/`Spawn()` 之后）才给 buff 循环贴位置，现在循环在 `TreeUpdate` 里、玩家节点之后跑。三处差异，都是一帧：①掉出地图，`Spawn()` 在 `TreeUpdate` 之后传送玩家，循环这一帧还在旧位置；②跨图，`EnterMap` 里 `DropFx` + `RespawnBuffLoops` 先跑，那时 `_mover.X/Y` 还是旧图坐标，新循环生成在旧位置，`_loadBeat` 的 10 帧黑屏盖住；③同图传送门，不调 `EnterMap`、没有黑屏，循环在旧位置画一帧。**接受**：跨图和掉出地图都有黑屏或瞬移盖住；同图传送门可能看见一帧旧图案（传送门离得近、旧位置还在屏幕内时），接受这一帧。真要修就在 `SwitchMap` 设完 `_mover.X/Y` 后把带 `Rider` 的循环贴一次位置（和 `SkillFx.Update` 同样两行）。
+51. 键窗完全不挡（2026-10-30 用户定，参考 MapleStory）：先是面板键照常（不然按 K 打不开技能窗、没法把技能拖到键上），然后用户要求角色也不挡——「MapleStory 里面应该是没限制的」。现在 `blocked` 只看 MENU 窗口；键窗开着时走路、攻击、跳跃、拾取、对话、喝药、7 个面板键全部照常，用的是**已保存**的 preset。草稿只在键窗里，Save/Apply 才写存档，下一帧 `InstallPendingKeys` 在 `Poll` 前重建输入表，所以没保存就一直是旧键、保存后下一帧生效。MENU 仍然挡角色（全屏菜单）。
+52. K3 挪到 N2 之后（2026-10-30 用户定）：点击式拖放的三块可放区里，HUD 16 槽要等 N2 合成一套、背包要等 N1。原顺序里漏了 K3，现在补在 N2 后面。
