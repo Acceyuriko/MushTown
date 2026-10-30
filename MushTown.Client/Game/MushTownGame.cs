@@ -474,6 +474,7 @@ public partial class MushTownGame : Game
         }
         if (esc)
         {
+            if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
@@ -488,6 +489,7 @@ public partial class MushTownGame : Game
         }
         var ms = Mouse.GetState(); // one click edge for the HUD
         bool click = ClickEdge(ms);
+        if (RightEdge(ms) && Holding) { ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
         var (mx, my) = MouseGamePos(ms);
         InstallPendingKeys(); // a key window Save/Apply waits for this frame's poll
         _input.Poll(kb, new Point(mx, my), click, ms.LeftButton == ButtonState.Pressed, ms.ScrollWheelValue);
@@ -500,7 +502,7 @@ public partial class MushTownGame : Game
         bool blocked = _menuWindow.Show;
         // Talk runs after the HUD: a same-frame panel key and Talk both fire
         // (the HUD's guards see _talkNpc still 0; a modal window blocks Talk).
-        if (_talkNpc == 0 && !blocked && _input.Fresh(HotkeyAction.Talk)) TalkNearest();
+        if (_talkNpc == 0 && !blocked && !Holding && _input.Fresh(HotkeyAction.Talk)) TalkNearest(); // a piece in hand would float over the dialog
         if (blocked) kb = new KeyboardState();
         SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;

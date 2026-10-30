@@ -29,7 +29,7 @@ public partial class MushTownGame
     private string _focus = "";
     private string _name = "";
     private string _error = "";
-    private bool _mouseWasDown, _enterWasDown, _escWasDown, _backWasDown;
+    private bool _mouseWasDown, _rightWasDown, _enterWasDown, _escWasDown, _backWasDown;
     private float _backTimer;
     private UiText _ui = null!;
     private Texture2D _pixel = null!;
@@ -53,7 +53,7 @@ public partial class MushTownGame
     private Texture2D? _cursorTex; // scaled cursor pixels (the _textures source stays 24x28)
     private int _cursorH; // backbuffer height the OS cursor was last built for (0 = not built)
     private readonly CursorAnim _cursor = new(); // the brain: state + frame (the OS hands stay below)
-    private bool _hoverItem; // the mouse sits on an inventory slot (no sfx: the cursor alone answers)
+    private bool _hoverGrab; // the mouse sits on something a click can pick up (no sfx: the cursor alone answers)
     private string _hoverId = ""; // last hovered button id (hover sfx plays on change)
 
     // One looping overlay clip: frames plus their player state.
@@ -491,11 +491,13 @@ public partial class MushTownGame
 
     // Cursor states: pressed shows the click hand (state 12, static); a press
     // on an item freezes the grab on frame 0. Hover shows the blink (state 1)
-    // over buttons, the grab (state 5) over inventory slots.
+    // over buttons, the grab (state 5) over inventory slots and over the things
+    // a click can pick up. Something in hand (an item, or a target a click
+    // picked up) keeps the grab anywhere.
     private void SyncCursorState(float dtMs)
     {
         bool pressed = Mouse.GetState().LeftButton == ButtonState.Pressed;
-        int want = CursorAnim.Select(_hoverId, _hoverItem, _hand.Empty, pressed); // full hands keep the grab anywhere
+        int want = CursorAnim.Select(_hoverId, _hoverGrab, _hand.Empty && !Holding, pressed);
         CursorAnimData? data = want == 1 ? _hoverSet.Data : want == 2 ? _clickSet.Data : want == 3 ? _itemSet.Data : null;
         if (_cursor.Tick(want, data, dtMs)) ApplyCursor();
     }
@@ -573,18 +575,24 @@ public partial class MushTownGame
         return ((int)Math.Floor((ms.X - bx) * (float)GameWidth / w), (int)Math.Floor((ms.Y - by) * (float)GameHeight / h));
     }
 
-    // One left-click edge for menu and game updates (both share _mouseWasDown).
-    private bool ClickEdge(MouseState ms)
+    // One click edge: remembers the button state and reports the press that
+    // starts a click.
+    private static bool Edge(bool down, ref bool was)
     {
-        bool down = ms.LeftButton == ButtonState.Pressed;
-        bool edge = down && !_mouseWasDown;
-        _mouseWasDown = down;
+        bool edge = down && !was;
+        was = down;
         return edge;
     }
 
+    // One left-click edge for menu and game updates (both share _mouseWasDown).
+    private bool ClickEdge(MouseState ms) => Edge(ms.LeftButton == ButtonState.Pressed, ref _mouseWasDown);
+
+    // One right-click edge (the click puts a piece back with it).
+    private bool RightEdge(MouseState ms) => Edge(ms.RightButton == ButtonState.Pressed, ref _rightWasDown);
+
     private void UpdateMenu(float dtMs)
     {
-        _hoverItem = false; // menus have no inventory slots
+        _hoverGrab = false; // menus have nothing to pick up
         var ms = Mouse.GetState();
         var (gx, gy) = MouseGamePos(ms);
         bool click = ClickEdge(ms);
@@ -731,6 +739,7 @@ public partial class MushTownGame
         // In-game windows never survive the exit: a map list left open would
         // keep its wheel baseline across the character screen.
         CloseAllWindows();
+        ClearHeld(); // a target a click picked up does not follow the character out
         _talkKey = ""; _questKey = ""; _trackKey = ""; // cached #h names die with the char
         DropFx();
         _fighter.Cooldowns.Clear();

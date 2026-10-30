@@ -167,6 +167,18 @@ public class InputTests
         Assert.IsFalse(table.ContainsKey("LeftControl+RightControl"));
     }
 
+    // A drop back on the key it came from changes nothing: rewriting that key
+    // would collapse "LeftControl+RightControl" into "LeftControl".
+    [TestMethod]
+    public void HasPart_ABindingThatAlreadyCarriesTheKey()
+    {
+        Assert.IsTrue(KeyBindings.HasPart("LeftControl+RightControl", "LeftControl"));
+        Assert.IsTrue(KeyBindings.HasPart("LeftControl+RightControl", "RightControl"));
+        Assert.IsTrue(KeyBindings.HasPart("I", "I"));
+        Assert.IsFalse(KeyBindings.HasPart("LeftControl+RightControl", "I"));
+        Assert.IsFalse(KeyBindings.HasPart("", "I"));
+    }
+
     [TestMethod]
     public void Apply_AComboTakesItsParts()
     {

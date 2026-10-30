@@ -4,9 +4,9 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // The key settings window: the official KeyConfig art. The official grid
-// under the keyboard holds the game actions: the player presses an action
-// in its cell, drags it onto a key and saves. The official keyboard shows
-// the key letters, or the icon of the action a key has.
+// under the keyboard holds the game actions: the player clicks an action to
+// pick it up and clicks a key to drop it, then saves. The official keyboard
+// shows the key letters, or the icon of the action or skill a key has.
 public sealed class KeyConfigWindow : UiWindow
 {
     private readonly MushTownGame _game;
@@ -131,12 +131,10 @@ public sealed class KeyConfigWindow : UiWindow
         (HotkeyAction.MapleRelay, 300),
     };
 
-    // The pending bindings, the action the player holds and the picked
-    // preset slot.
+    // The pending bindings and the picked preset slot. What the player holds
+    // lives in the game: the quick slot cells drop onto it too.
     private readonly Dictionary<HotkeyAction, string> _draft = new();
     private readonly Dictionary<int, string> _draftSkills = new(); // the skills the draft bound (from the skill window)
-    private HotkeyAction? _held;
-    private Point _pickAt; // where the action was picked up
     private int _slot;
 
     // Key -> what sits on it, built once per Build: the 73 key caps read it
@@ -144,8 +142,6 @@ public sealed class KeyConfigWindow : UiWindow
     // times a frame for every action.
     private readonly Dictionary<string, HotkeyAction> _keyAction = new();
     private readonly Dictionary<string, int> _keySkill = new();
-
-    private const int DragSlop = 8; // a press that moves less than this is a click, not a drag
 
     // Default was pressed: the official table has no item keys either, so Save
     // drops them (the draft only carries actions and skills).
@@ -190,7 +186,6 @@ public sealed class KeyConfigWindow : UiWindow
     {
         _slot = _game.ActivePreset;
         ReloadDraft();
-        _held = null;
         _filter = 0; // Not Added: the window always opens on the actions that are still free
         Pos = LayoutPos();
         _game.ShowWindow(HotkeyAction.KeyConfig);
@@ -207,20 +202,19 @@ public sealed class KeyConfigWindow : UiWindow
         _dropItems = false; // the draft is the preset again: nothing left over from a Default
     }
 
-    // Close the window: the unsaved changes and the held action go away.
+    // Close the window: the unsaved changes go away, a piece in hand stays.
     public void Close()
     {
         OnClosed();
         Show = false;
     }
 
-    // The game closed the window (Esc): the draft and the held action go away.
+    // The game closed the window (Esc): the draft goes away, a piece in hand stays.
     public override void OnClosed()
     {
         _draft.Clear();
         _draftSkills.Clear();
-        _held = null;
-        _game.ClearHeldSkill(); // a skill picked in the skill window would follow the mouse with no window to drop it on
+        // The piece a click picked up stays in hand: the quick slot strip is a drop area too.
         _filterOpen = false;
         _comboMode = false;
         _copyOpen = false;
@@ -263,11 +257,12 @@ public sealed class KeyConfigWindow : UiWindow
             o.Add(new KeyCap(this, spot));
             int code = spot.Code;
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickKey(code) });
+            o.Add(new Grab(() => DraftOn(KeyName(code)) != null));
             root.AddChild(o);
         }
 
-        // The actions in the official grid: press one, drag it onto a key.
-        // The filter picks the actions that show.
+        // The actions in the official grid: a click picks one up, a click on a
+        // key drops it. The filter picks the actions that show.
         for (int i = 0; i < Actions.Length; i++)
         {
             var a = Actions[i];
@@ -276,6 +271,7 @@ public sealed class KeyConfigWindow : UiWindow
             var o = new GameObject();
             o.Add(new Rect(CellRect(index)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(a.Action) });
+            o.Add(new Grab(() => true));
             o.Add(new ActionCell(this, a.Action));
             root.AddChild(o);
         }
@@ -319,8 +315,7 @@ public sealed class KeyConfigWindow : UiWindow
             root.AddChild(ArtButton("ui/keys_save", _lay.Get("saveX", 562), _lay.Get("saveY", 568), 78, 27, Save));
 
         BuildTitleAndClose(root, "ui/hud_statx.png", _lay.Get("closeX", 636), _lay.Get("closeY", 4), 11);
-        BuildDrag(root);
-        if (_copyOpen) BuildCopyDialog(root); // the dialog sits above everything, the drop icon included
+        if (_copyOpen) BuildCopyDialog(root); // the dialog sits above everything
         Host.AddChild(root);
     }
 
@@ -337,15 +332,6 @@ public sealed class KeyConfigWindow : UiWindow
         close.Add(new Button { Kind = ButtonKind.Click, OnClick = Close });
         close.Add(new Picture(closeArt));
         root.AddChild(close);
-    }
-
-    // The held action rides the mouse. Letting go of the mouse drops it on the
-    // key under the cursor: the HUD passes the same click edge it uses itself.
-    private void BuildDrag(GameObject root)
-    {
-        var drag = new GameObject();
-        drag.Add(new HeldIcon(this));
-        root.AddChild(drag);
     }
 
     // One art button (the art has normal, hover and pressed states).
@@ -505,15 +491,9 @@ public sealed class KeyConfigWindow : UiWindow
         public void Draw(UiGfx gfx)
         {
             var r = Owner.Get<Rect>()!.Screen;
-            string key = KeyName(_spot.Code);
-            if (_w._keyAction.TryGetValue(key, out var action))
+            if (_w.DraftOn(KeyName(_spot.Code)) is { } target)
             {
-                DrawCentered(gfx, r, IconTex(action));
-                return;
-            }
-            if (_w._keySkill.TryGetValue(key, out int skill))
-            {
-                DrawCentered(gfx, r, _w._game.SkillIconTex(skill));
+                if (_w._game.Held != target) DrawCentered(gfx, r, _w._game.TargetArt(target)); // in hand: the key is blank
                 return;
             }
             if (_spot.Cap == "") return;
@@ -536,6 +516,7 @@ public sealed class KeyConfigWindow : UiWindow
         public ActionCell(KeyConfigWindow w, HotkeyAction action) { _w = w; _action = action; }
         public void Draw(UiGfx gfx)
         {
+            if (_w._game.Held == BindTarget.Ui(_action)) return; // in hand: the cell is blank until the drop lands
             var r = Owner.Get<Rect>()!.Screen;
             var icon = gfx.Tex(IconTex(_action));
             gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
@@ -585,73 +566,60 @@ public sealed class KeyConfigWindow : UiWindow
         }
     }
 
-    // The action the player picked up rides the cursor (a skill picked up in
-    // the skill window rides it too, and the skill window draws that one).
-    private sealed class HeldIcon : Component, IDrawable
-    {
-        private readonly KeyConfigWindow _w;
-        public HeldIcon(KeyConfigWindow w) => _w = w;
-        public void Draw(UiGfx gfx)
-        {
-            if (_w._held is not { } action) return;
-            var icon = gfx.Tex(IconTex(action));
-            gfx.Sb.Draw(icon, new Vector2(gfx.Mouse.X - icon.Width / 2, gfx.Mouse.Y - icon.Height / 2), Color.White);
-        }
-    }
+    // The HUD passes the click: a click while something is in hand is a drop.
+    // A click on a pool cell or a bound key picks that up instead.
+    private void Pick(HotkeyAction action) => _game.Hold(BindTarget.Ui(action));
 
-    // The HUD passes its own mouse edge: letting go drops the held action or
-    // the held skill on the key under the cursor.
-    public void UpdateDrag(bool held, int gx, int gy)
-    {
-        if (held) return;
-        if (_game.HeldSkill != 0)
-        {
-            int skill = _game.HeldSkill;
-            _game.ClearHeldSkill();
-            DropSkill(skill, gx, gy);
-            return;
-        }
-        if (_held is not { } action) return;
-        Drop(action, gx, gy);
-    }
-
-    // The player presses an action cell: it sticks to the mouse.
-    private void Pick(HotkeyAction action)
-    {
-        _held = action;
-        _pickAt = Scene.LastClick;
-    }
-
-    // The player presses a key that has an action on it: the action comes off
-    // the keyboard and follows the mouse, so a bound action is not stuck.
+    // A click on a key: the action on it comes up, or the skill (a key never
+    // holds both). The draft keeps the binding until the drop lands, so Esc
+    // changes nothing.
     private void PickKey(int code)
     {
-        if (ActionFor(KeyName(code)) is not { } action) return;
-        Pick(action);
+        if (DraftOn(KeyName(code)) is { } target) _game.Hold(target);
     }
 
-    // The player lets go: the action takes the key under the mouse, or loses
-    // its key when it is let go on the action pool. Anywhere else (the title
-    // bar, a button, the gap between two keys) changes nothing.
-    private void Drop(HotkeyAction action, int gx, int gy)
+    // The click landed here: the point is one of this window's drop areas (a
+    // key of the keyboard, or the pool = unbind). False when it is not, so the
+    // caller can put the piece back.
+    internal bool TryDropAt(int gx, int gy)
     {
-        _held = null;
-        if (Math.Abs(gx - _pickAt.X) + Math.Abs(gy - _pickAt.Y) < DragSlop) return; // a click, not a drag
+        if (_copyOpen) return false; // the dialog covers the window: nothing behind it takes a drop
         foreach (var s in Spots.Keys)
         {
             if (!OnScreen(KeyRect(s)).Contains(gx, gy)) continue;
-            if (!OnKeyWindow(gx, gy)) return; // another window covers that key
             string key = KeyName(s.Code);
-            if (_comboMode) AddKey(action, key);
-            else Bind(action, key);
-            Build(); // the pool hides the bound action: its cells are built from the draft
+            if (!InputController.TryParseKeys(key, out _)) return false; // no letter, or Esc/Enter/Tab/arrows: the cell takes nothing
+            if (!OnKeyWindow(gx, gy)) return false; // another window covers that key
+            ApplyDrop(key);
+            return true;
+        }
+        if (!OnScreen(PoolRect()).Contains(gx, gy) || _filterOpen) return false; // the open filter list covers the pool
+        if (!OnKeyWindow(gx, gy)) return false; // another window covers the pool: it takes the click
+        ApplyDrop(""); // on the pool: the action loses its key, combo mode or not
+        return true;
+    }
+
+    // The drop landed on a key of this window ("" = the pool). Callers pass a
+    // key the game binds, or "".
+    internal void ApplyDrop(string key)
+    {
+        var target = _game.TakeHeld();
+        if (target.Kind == BindKind.Skill)
+        {
+            // Back where it came from: nothing to write (a combo keeps both parts).
+            string had = _draftSkills.GetValueOrDefault(target.Id, "");
+            if (key == "" ? had == "" : KeyBindings.HasPart(had, key)) return;
+            if (key != "") TakeAway(key, null);
+            _draftSkills[target.Id] = key; // "" on the pool: the skill loses its key
+            Build();
             return;
         }
-        if (_comboMode) return;
-        // Not the pool, or the open filter list covering it: the binding stays.
-        if (!OnScreen(PoolRect()).Contains(gx, gy) || _filterOpen) return;
-        _draft[action] = ""; // let go on the pool: the action loses its key
-        Build();
+        var action = (HotkeyAction)target.Id;
+        if (key == _draft.GetValueOrDefault(action, "")) return; // back where it came from
+        if (key == "") _draft[action] = ""; // on the pool: the action loses its key
+        else if (_comboMode) { if (!AddKey(action, key)) return; }
+        else if (!Bind(action, key)) return; // back where it came from: nothing to rebuild
+        Build(); // the pool hides the bound action: its cells are built from the draft
     }
 
     // The black action pool under the keyboard: the cells the draft binds.
@@ -666,56 +634,33 @@ public sealed class KeyConfigWindow : UiWindow
 
     // True when the topmost object under the point belongs to the key window:
     // a key hidden behind another window must not take a drop.
-    private bool OnKeyWindow(int gx, int gy)
-    {
-        for (var o = Scene.TopAt(gx, gy); o != null; o = o.Parent)
-            if (o == Host) return true;
-        return false;
-    }
-
-    // A skill from the skill window lands on one key of the keyboard. It does
-    // not take a combo (the action combo mode is for actions only) and a drop
-    // off the keyboard leaves the draft alone: the skill pool is not here. A
-    // plain click on the skill row is not a drop, and a key another window
-    // covers does not take it either.
-    private void DropSkill(int skill, int gx, int gy)
-    {
-        var at = _game.HeldSkillAt;
-        if (Math.Abs(gx - at.X) + Math.Abs(gy - at.Y) < DragSlop) return; // a click on the skill row, not a drag
-        foreach (var s in Spots.Keys)
-        {
-            if (!OnScreen(KeyRect(s)).Contains(gx, gy)) continue;
-            if (!OnKeyWindow(gx, gy)) return; // the skill window covers that key
-            string key = KeyName(s.Code);
-            if (!InputController.TryParseKeys(key, out _)) return;
-            TakeAway(key, null);
-            _draftSkills[skill] = key;
-            Build();
-            return;
-        }
-    }
+    private bool OnKeyWindow(int gx, int gy) => MushTownGame.RootOf(Scene.TopAt(gx, gy)) == Host;
 
     // The combo key mode: the action keeps its key and gets a second one
     // ("I+K"). The action then fires on either key.
-    private void AddKey(HotkeyAction action, string key)
+    // Combo mode: the key joins the action's combo. False when nothing changed.
+    private bool AddKey(HotkeyAction action, string key)
     {
-        if (!InputController.TryParseKeys(key, out _)) return;
         var parts = Keys(action);
-        if (parts.Length == 0) { Bind(action, key); return; }
-        if (parts.Contains(key)) return;
+        if (parts.Length == 0) return Bind(action, key);
+        if (parts.Contains(key)) return false; // already one of the two parts
         TakeAway(key, action);
         if (parts.Length == 1) parts = new[] { parts[0], key };
         else parts[1] = key;
         _draft[action] = string.Join("+", parts);
+        return true;
     }
 
     // The action takes the key. The key is taken away from the other actions;
     // a key that a skill or an item holds leaves it when the draft is saved.
-    private void Bind(HotkeyAction action, string key)
+    // False when nothing changed, so the window is not rebuilt for nothing.
+    private bool Bind(HotkeyAction action, string key)
     {
-        if (!InputController.TryParseKeys(key, out _)) return; // Esc/Enter/Tab/arrows are not bindable
+        if (KeyBindings.HasPart(_draft.GetValueOrDefault(action, ""), key))
+            return false; // already on that key: a combo keeps both parts
         TakeAway(key, action);
         _draft[action] = key;
+        return true;
     }
 
     // The key goes away from the other actions and the bound skills (part by
@@ -731,15 +676,16 @@ public sealed class KeyConfigWindow : UiWindow
         }
         foreach (var id in _draftSkills.Keys.ToList())
         {
-            var parts = _draftSkills[id].Split('+', StringSplitOptions.RemoveEmptyEntries);
+            var parts = Parts(_draftSkills[id]);
             if (!parts.Contains(key)) continue;
             _draftSkills[id] = string.Join("+", parts.Where(p => p != key));
         }
     }
 
-    // The keys of an action: one key, or the two of a combo.
-    private string[] Keys(HotkeyAction action) =>
-        _draft.GetValueOrDefault(action, "").Split('+', StringSplitOptions.RemoveEmptyEntries);
+    // The keys of a binding: one key, or the two of a combo.
+    private static string[] Parts(string keys) => keys.Split('+', StringSplitOptions.RemoveEmptyEntries);
+
+    private string[] Keys(HotkeyAction action) => Parts(_draft.GetValueOrDefault(action, ""));
 
     // Save: the draft goes into the picked preset.
     private void Save()
@@ -768,7 +714,6 @@ public sealed class KeyConfigWindow : UiWindow
     private void Cancel()
     {
         ReloadDraft();
-        _held = null;
         Build();
     }
 
@@ -829,12 +774,16 @@ public sealed class KeyConfigWindow : UiWindow
     }
 
     // The skill button: the skill window opens above this one, so the player
-    // drags a skill row onto a key. The key window stays open.
+    // clicks a skill row and drops it on a key. The key window stays open.
     private void OpenSkill() => _game.OpenSkillWindow();
 
-    // The action that has this key (the pool only: the sub-windows have no
-    // cell to pick from).
-    private HotkeyAction? ActionFor(string key) => _keyAction.TryGetValue(key, out var action) ? action : null;
+    // What the draft puts on a key, null when it has nothing there. The quick
+    // slot strip draws and picks this while the window is open, so a drop on a
+    // cell shows right away.
+    internal BindTarget? DraftOn(string key) =>
+        _keyAction.TryGetValue(key, out var action) ? BindTarget.Ui(action)
+        : _keySkill.TryGetValue(key, out int skill) ? new BindTarget(BindKind.Skill, skill)
+        : null;
 
     // Key -> action and key -> skill, rebuilt whenever the tree is: the key
     // caps read it every frame.

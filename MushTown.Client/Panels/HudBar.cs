@@ -96,7 +96,7 @@ public partial class MushTownGame
             case HotkeyAction.Chat: _chatWindow.FocusInput(kb); break; // the input line takes the keys from here
             case HotkeyAction.Minimap: ShowWindow(HotkeyAction.Minimap); break; // always on the screen: a key only brings it back
             case HotkeyAction.KeyConfig:
-                if (KeyWindowOpen) ToggleWindow(HotkeyAction.KeyConfig);
+                if (DraftWindow != null) ToggleWindow(HotkeyAction.KeyConfig);
                 else OpenKeyWindow();
                 break;
             default: ToggleWindow(action); break;
@@ -107,16 +107,12 @@ public partial class MushTownGame
 
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
     {
-        var hoverSlot = UpdateHudHover(gx, gy); // every frame (clicks return early below)
-        _hoverItem = hoverSlot != null;
+        UpdateHudHover(gx, gy); // every frame (clicks return early below)
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
         // The key window does not block anything: the character keeps moving
         // and fighting on the saved preset, the item keys keep drinking, and
-        // every panel key stays alive, so a skill can be dragged onto a key.
+        // every panel key stays alive, so a skill can be dropped onto a key.
         // The draft only reaches the live keys on Save.
-        var keyWin = WindowFor(HotkeyAction.KeyConfig) as KeyConfigWindow;
-        bool keyWindowOpen = KeyWindowOpen;
-        if (keyWindowOpen) keyWin!.UpdateDrag(held, gx, gy); // the drop reads the same mouse edge the HUD uses
         ItemEdges(_talkNpc == 0 && !_menuWindow.Show); // the item keys drink their potion
         if (_talkNpc == 0)
         {
@@ -233,15 +229,30 @@ public partial class MushTownGame
 
     // One "over" per frame (clicks live in UpdateHudClick below): the tree
     // answers with its topmost object, so a covered panel stays dark.
-    // Returns the hovered inventory slot (it decides the grab cursor).
-    private Slot? UpdateHudHover(int gx, int gy)
+    // Sets the grab cursor: the bag slots and the things a click can pick up.
+    private void UpdateHudHover(int gx, int gy)
     {
         SfxOnHover(_uiScene.Hover(gx, gy)); // one tree: the topmost object by Z takes the hover (the modal blanks the rest)
-        return _uiScene.HoverButton as Slot; // the bag is the only panel with slots: that is the grab cursor
+        _hoverGrab = _uiScene.HoverButton is Slot || Grabbable(_uiScene.Hovered);
+    }
+
+    // The object under the mouse can be picked up by a click, and the inventory
+    // hand is empty (a full hand refuses the pick).
+    private bool Grabbable(GameObject? o)
+    {
+        if (!_hand.Empty) return false;
+        for (; o != null; o = o.Parent)
+            if (o.Get<Grab>() is { Can: true }) return true;
+        return false;
     }
 
     private void UpdateHudClick(int gx, int gy)
     {
+        // A click while something is in hand is a drop: a key of the key
+        // window, a quick slot cell or the action pool. Anywhere else puts the
+        // piece back and the click runs as usual.
+        if (Holding && DropHeld(gx, gy)) { PlaySfx("click"); return; } // a drop is a click too
+        ClearHeld(); // nothing there: the piece goes back where it came from
         // What the click is about to hit, read before any button runs: a
         // button may rebuild its own layer and detach the hit object.
         var top = _uiScene.TopAt(gx, gy);
@@ -276,7 +287,7 @@ public partial class MushTownGame
     }
 
     // The scene root a hit object belongs to (null = no hit).
-    private static GameObject? RootOf(GameObject? o)
+    internal static GameObject? RootOf(GameObject? o)
     {
         while (o?.Parent != null) o = o.Parent;
         return o;
@@ -346,10 +357,10 @@ public partial class MushTownGame
         foreach (var w in UiWindow.List) { w.Scene = _uiScene; _uiScene.Add(w.Host); } // the windows too: one tree, one Z order
         _uiScene.Add(_talkHost); // the modal: clicks outside it blank in Scene.Hit
         var held = new GameObject { NoHit = true, Z = HeldZ }; // the piece on the cursor: above the modal, under the tips
-        held.Add(new HeldItem(HeldArt));
+        held.Add(new HeldItem(HeldArt)); // the piece in the inventory hand, or the action or skill a click picked up
         _uiScene.Add(held);
         var tips = new GameObject { NoHit = true, Z = TipZ }; // the last thing drawn: no layer can cover a tip
-        tips.Add(new Tips(() => _hand.Empty, _items, _invLay, _statLay));
+        tips.Add(new Tips(() => _hand.Empty && !Holding, _items, _invLay, _statLay));
         _uiScene.Add(tips);
         SyncLayers(); // shots skip Update: without this the panels and windows draw empty there (first Update no-ops)
     }
@@ -508,8 +519,10 @@ public partial class MushTownGame
         _uiScene.Draw(_gfx); // one tree, one Z order: balloon, HUD, panels, windows, dialog, hand, tips
     }
 
-    // The art of the piece in the hand, "" when the hand is empty.
-    private string HeldArt() => _hand.Empty ? "" : _items[_hand.Id].Image;
+    // The art on the cursor: the piece in the inventory hand, or the action or
+    // skill a click picked up (one thing at a time, so only one is set).
+    private string HeldArt() => !_hand.Empty ? _items[_hand.Id].Image
+        : Held is { } target ? TargetArt(target) : "";
 
     // The EXP tip has the numbers: the official writes them as
     // "EXP : 116 / 19,112 [0.61%]".

@@ -36,7 +36,6 @@ public partial class MushTownGame
     }
 
     // The key settings window (the game made it, the window list keeps it).
-    private static KeyConfigWindow? KeyWindow => UiWindow.List.OfType<KeyConfigWindow>().FirstOrDefault();
 
     private Rectangle SettingsRect() => new(0, 0, SettingsW, _settingsLay.Get("titleH", 16) + SettingsBodyH);
 

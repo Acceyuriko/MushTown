@@ -6,17 +6,17 @@ namespace MushTown.Client;
 
 // The last layer of the HUD: the text tip of the hovered widget and the item
 // tooltip of the hovered cell. Both read the hover the scene resolved this
-// frame. A held piece covers the cursor, so its tooltip waits.
+// frame. A piece on the cursor covers it, so the item tooltip waits.
 public sealed class Tips : Component, IDrawable
 {
-    private readonly Func<bool> _handEmpty;
+    private readonly Func<bool> _cursorFree;
     private readonly Dictionary<int, ItemData> _items;
     private readonly PanelLayout _invLay;  // the tooltip box: its offset, edge and wrap width
     private readonly PanelLayout _statLay; // panel-stat.json: the only source of the detail offsets (the stat window's box reads the same keys)
 
-    public Tips(Func<bool> handEmpty, Dictionary<int, ItemData> items, PanelLayout invLay, PanelLayout statLay)
+    public Tips(Func<bool> cursorFree, Dictionary<int, ItemData> items, PanelLayout invLay, PanelLayout statLay)
     {
-        _handEmpty = handEmpty;
+        _cursorFree = cursorFree;
         _items = items;
         _invLay = invLay;
         _statLay = statLay;
@@ -25,7 +25,7 @@ public sealed class Tips : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         if (gfx.Hovered?.Get<HoverTip>() is HoverTip text) text.DrawAt(gfx, gfx.Mouse); // Scene.Draw fills gfx.Hovered first
-        if (_handEmpty() && gfx.Hovered?.Get<ItemTip>() is ItemTip item) DrawItem(gfx, item.Id());
+        if (_cursorFree() && gfx.Hovered?.Get<ItemTip>() is ItemTip item) DrawItem(gfx, item.Id());
     }
 
     // The item tooltip: the icon, the name, the bonuses and the description of

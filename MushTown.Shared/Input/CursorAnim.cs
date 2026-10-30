@@ -9,8 +9,8 @@ public sealed class CursorAnim
     public int Frame;
     private float _t;
 
-    public static int Select(string hoverId, bool hoverItem, bool handEmpty, bool pressed) =>
-        hoverItem || !handEmpty ? pressed ? 4 : 3 : pressed ? 2 : hoverId != "" ? 1 : 0;
+    public static int Select(string hoverId, bool hoverGrab, bool cursorFree, bool pressed) =>
+        hoverGrab || !cursorFree ? pressed ? 4 : 3 : pressed ? 2 : hoverId != "" ? 1 : 0;
 
     // True means re-apply the OS cursor. States 0/4 never advance;
     // single-frame sets (click) never advance either. Data must be

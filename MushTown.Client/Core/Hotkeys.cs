@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -178,6 +178,11 @@ public static class KeyBindings
             if (BindTarget.TryParse(text, out var target) && target.Kind == kind) table.Remove(key);
     }
 
+    // Does a binding already carry this key? Writing it again would drop the
+    // other half of a combo, so a drop on the key it came from changes nothing.
+    public static bool HasPart(string keys, string key) =>
+        keys.Split('+', StringSplitOptions.RemoveEmptyEntries).Contains(key);
+
     private static void Write(Dictionary<string, string> table, IEnumerable<KeyValuePair<string, string>> targets)
     {
         foreach (var (target, key) in targets)
@@ -248,17 +253,32 @@ public partial class MushTownGame
 
     public string HotkeyKey(HotkeyAction action) => KeyBindings.FindKey(LiveKeys, action);
 
-    // The skill the player picked up in the skill window: the key window
-    // drops it on a key. 0 = nothing held. HeldAt is where the press landed,
-    // so a plain click on the skill row is not a drag onto the keys under it.
-    public int HeldSkill { get; private set; }
-    public Point HeldSkillAt { get; private set; }
-    public void HoldSkill(int id, Point at)
+    // What a click picked up: one target, an action or a skill. It rides the
+    // mouse until a click drops it on a key, a quick slot cell or the action
+    // pool; Esc or a right click throws it away and changes nothing. Nothing
+    // comes up while the inventory hand holds a piece: one thing at a time.
+    // Not the mouse button (InputController.Held is that): this is the piece a
+    // click picked up.
+    public BindTarget? Held { get; private set; }
+    public bool Holding => Held != null;
+
+    // Only a Ui or a Skill target: nothing else can be picked up yet.
+    public void Hold(BindTarget target)
     {
-        HeldSkill = id;
-        HeldSkillAt = at;
+        if (!_hand.Empty) return;
+        Held = target;
     }
-    public void ClearHeldSkill() => HeldSkill = 0;
+
+    public void ClearHeld() => Held = null;
+
+    // What a drop takes out of the hand, in one step: the value and the clear
+    // belong together, and both callers drop what they took.
+    public BindTarget TakeHeld()
+    {
+        var taken = Held!.Value; // a drop only runs while something is in hand
+        Held = null;
+        return taken;
+    }
 
     // The icon art of a skill id, or "" when it is not a skill of this
     // character (the key window draws the skill the draft put on a key).
@@ -302,6 +322,19 @@ public partial class MushTownGame
         KeyBindings.ApplySkills(table, skills);
         if (slot == chara.ActivePreset) _keysDirty = true;
         SaveChara();
+    }
+
+    // A drop on a quick slot cell while the key window is closed: the key binds
+    // now. The caller checked that there is a character to write. The strip
+    // reads the live table, so the new binding shows on the next frame, when
+    // InstallPendingKeys runs before Poll (never mid-click).
+    public void BindLive(Keys key, BindTarget target)
+    {
+        var chara = Hero!;
+        if (_input.TargetOf(key) == target) return; // already on that key: a combo keeps both parts
+        string name = key.ToString();
+        if (target.Kind == BindKind.Skill) SaveHotkeyPreset(chara.ActivePreset, new(), new() { [target.Id] = name }, false);
+        else SaveHotkeyPreset(chara.ActivePreset, new() { [(HotkeyAction)target.Id] = name }, new(), false);
     }
 
     // Copy: the source preset covers the picked one whole (skills and items

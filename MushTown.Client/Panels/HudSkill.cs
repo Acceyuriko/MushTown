@@ -86,8 +86,9 @@ public partial class MushTownGame
             int id = tab[i];
             var line = new GameObject();
             line.Add(new Rect(SkillRowRect(i)));
-            line.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _skillSel = i; if (KeyWindowOpen) HoldSkill(id, _uiScene.LastClick); } }); // no LegacyId: the rows stay silent
-            line.Add(new SkillListRow(_skills[id], PassiveBlurb.TryGetValue(id, out string? b) ? b : "", () => _skillSel == i, () => SkillLiveOf(id)));
+            line.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _skillSel = i; Hold(new BindTarget(BindKind.Skill, id)); } }); // a click picks the skill up: the strip and the keys take the drop
+            line.Add(new Grab(() => true));
+            line.Add(new SkillListRow(_skills[id], PassiveBlurb.TryGetValue(id, out string? b) ? b : "", () => _skillSel == i, () => SkillLiveOf(id), () => Held == new BindTarget(BindKind.Skill, id)));
             body.AddChild(line);
         }
         var detail = new GameObject();
@@ -106,20 +107,14 @@ public partial class MushTownGame
         x.Add(new Picture("ui/hud_statx.png")); // the skill window has no X of its own in the WZ
         body.AddChild(x);
         _skillHost.AddChild(body);
-        var held = new GameObject();
-        held.Add(new SkillHeldIcon(this)); // a skill picked for the key window rides the mouse above everything
-        _skillHost.AddChild(held);
     }
 
-    // The key window is open: pressing a skill row picks the skill up for the drop.
-    private bool KeyWindowOpen => WindowFor(HotkeyAction.KeyConfig) is { Show: true };
-
-    // The skill window closes: a skill picked for the key window goes with it.
+    // The skill window closes. A skill a click picked up stays in hand: the
+    // quick slot strip and the keys are drop areas with or without this window.
     private void CloseSkillWindow()
     {
         _showSkill = false;
         _dragSkill = null;
-        ClearHeldSkill();
     }
 
     // Skill window job tabs (three Roman numerals under the title).
@@ -222,9 +217,10 @@ public sealed class SkillListRow : Component, IDrawable
     private readonly string _blurb;
     private readonly Func<bool> _selected;
     private readonly Func<SkillLive> _live;
-    public SkillListRow(SkillData skill, string blurb, Func<bool> selected, Func<SkillLive> live)
+    private readonly Func<bool> _held;
+    public SkillListRow(SkillData skill, string blurb, Func<bool> selected, Func<SkillLive> live, Func<bool> held)
     {
-        _skill = skill; _blurb = blurb; _selected = selected; _live = live;
+        _skill = skill; _blurb = blurb; _selected = selected; _live = live; _held = held;
     }
     public void Draw(UiGfx gfx)
     {
@@ -236,7 +232,8 @@ public sealed class SkillListRow : Component, IDrawable
         bool live = s.BuffMs > 0;
         var art = gfx.Tex(_selected() ? "ui/skill_row_sel.png" : "ui/skill_row.png");
         gfx.Sb.Draw(art, r, new Rectangle(0, 0, art.Width, r.Height), Color.White);
-        gfx.Sb.Draw(gfx.Tex(locked || cooling ? _skill.Disabled : _skill.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
+        if (!_held()) // in hand: the icon rides the mouse, the row keeps the name and the numbers
+            gfx.Sb.Draw(gfx.Tex(locked || cooling ? _skill.Disabled : _skill.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
         var ink = locked ? new Color(140, 140, 150) : new Color(30, 30, 40);
         gfx.Sb.Draw(gfx.Ui.GetSmall(_skill.Name), new Vector2(r.X + lay.Get("rowNameX", 38), r.Y + lay.Get("rowNameY", 3)), ink);
         // The sub line: the level (a passive shows its blurb).
@@ -355,20 +352,5 @@ public sealed class SkillPlusArt : Component, IDrawable
             : gfx.Hovered == Owner ? gfx.Pressed ? "ui/skill_spup_p.png" : "ui/skill_spup_h.png"
             : "ui/skill_spup_n.png";
         gfx.Sb.Draw(gfx.Tex(key), new Vector2(r.X, r.Y), Color.White);
-    }
-}
-
-// The skill icon that rides the mouse while the key window waits for the drop.
-// It lives in the skill window, so it is hidden while another window covers it.
-public sealed class SkillHeldIcon : Component, IDrawable
-{
-    private readonly MushTownGame _game;
-    public SkillHeldIcon(MushTownGame game) => _game = game;
-    public void Draw(UiGfx gfx)
-    {
-        string tex = _game.SkillIconTex(_game.HeldSkill);
-        if (tex == "") return;
-        var t = gfx.Tex(tex);
-        gfx.Sb.Draw(t, new Vector2(gfx.Mouse.X - t.Width / 2, gfx.Mouse.Y - t.Height / 2), Color.White);
     }
 }

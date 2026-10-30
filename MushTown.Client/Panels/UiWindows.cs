@@ -9,8 +9,17 @@ namespace MushTown.Client;
 // all read that one order.
 public partial class MushTownGame
 {
+    // The key window, whenever one is open.
+    private KeyConfigWindow? KeyWindow => WindowFor(HotkeyAction.KeyConfig) as KeyConfigWindow;
+
     // The window a key opens, or null.
-    private UiWindow? WindowFor(HotkeyAction action) => UiWindow.List.FirstOrDefault(w => w.Action == action);
+    // A loop, not LINQ: the strip asks for the key window up to twice per cell per frame.
+    private UiWindow? WindowFor(HotkeyAction action)
+    {
+        foreach (var w in UiWindow.List)
+            if (w.Action == action) return w;
+        return null;
+    }
 
     // A key or a menu icon opens a window, raises it when it is behind, closes it when it is in front.
     private void ToggleWindow(HotkeyAction action)

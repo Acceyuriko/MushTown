@@ -78,6 +78,16 @@ public class Button : Component
     public void Press() => OnClick?.Invoke();
 }
 
+// A marker: the thing under the mouse can be picked up by a click. The cursor
+// shows the grab hand over it. The answer is live, because a quick slot cell
+// goes grabbable when the table binds it, without a rebuild.
+public sealed class Grab : Component
+{
+    private readonly Func<bool> _can;
+    public Grab(Func<bool> can) => _can = can;
+    public bool Can => _can();
+}
+
 // Wooden-button answer: hover 0.9, pressed 0.6 (one spelling for all menu art).
 internal static class MenuAlpha
 {
