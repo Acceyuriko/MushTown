@@ -418,6 +418,7 @@ public partial class MushTownGame
         LoadCursorSet(_itemSet, "item");
         SyncCursor(); // _cursorH starts 0, so this first call always builds
         _gfx = new UiGfx { Sb = _spriteBatch, Ui = _ui, Tex = TexByKey, Pixel = _pixel };
+        PoseShotChat(); // the chat shots pose the window before the tree is built
         BuildScreenScene();
         if (_shotScreen == "delete") _csDeleteModal.Enabled = true;
         _contentLoaded = true;

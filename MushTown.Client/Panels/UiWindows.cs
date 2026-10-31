@@ -50,7 +50,8 @@ public partial class MushTownGame
             if (!w.Show) { w.Drag = null; continue; }
             if (!w.Drag.HasValue) continue;
             if (!held) { w.Drag = null; continue; }
-            w.Pos = ClampPanel(new Point(gx - w.Drag.Value.X, gy - w.Drag.Value.Y), w.Rect().Width, w.Rect().Height);
+            // the box bottom, not the height: a window whose rect starts under its own top (the folded chat) stays on the screen
+            w.Pos = ClampPanel(new Point(gx - w.Drag.Value.X, gy - w.Drag.Value.Y), w.Rect().Width, w.Rect().Bottom);
         }
     }
 

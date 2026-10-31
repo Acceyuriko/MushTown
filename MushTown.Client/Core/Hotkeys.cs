@@ -22,7 +22,7 @@ public enum HotkeyAction
     Settings,    // no default key: the options window is opened from the MENU
     KeyConfig,   // OemPipe (\)
     Menu,        // L
-    Chat,        // no key: the input line is clicked, and the key focuses it
+    Chat,        // no key: Enter focuses the chat input (and unfolds the chat)
     Guide,       // U: the big guide (the small guide's green plus also opens it)
     GuideCard,   // no key: the MENU window opens the small guide
     Equip,       // E: the equipment page of the stat window

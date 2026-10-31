@@ -736,14 +736,15 @@ public sealed class ChatScrollBar : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Screen;
-        string stem = _enabled() ? "ui/chat_scroll" : "ui/chat_scroll_off";
+        bool on = _enabled();
+        string stem = on ? "ui/chat_scroll" : "ui/chat_scroll_off";
         var top = gfx.Tex(stem + "_base_t.png");
         var mid = gfx.Tex(stem + "_base_c.png");
         var bot = gfx.Tex(stem + "_base_b.png");
         gfx.Sb.Draw(top, new Vector2(r.X, r.Y), Color.White);
         gfx.Sb.Draw(mid, new Rectangle(r.X, r.Y + top.Height, r.Width, r.Height - top.Height - bot.Height), Color.White);
         gfx.Sb.Draw(bot, new Vector2(r.X, r.Bottom - bot.Height), Color.White);
-        if (!_enabled()) return;
+        if (!on) return;
         string thumb = gfx.Hovered == Owner ? gfx.Pressed ? "ui/chat_scroll_thumb2.png" : "ui/chat_scroll_thumb1.png" : "ui/chat_scroll_thumb0.png";
         var t = gfx.Tex(thumb);
         int y = r.Y + (int)((r.Height - t.Height) * _position());

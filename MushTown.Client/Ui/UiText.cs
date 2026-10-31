@@ -141,6 +141,7 @@ public sealed class UiText : IDisposable
         var key = (text, maxWidth);
         if (!_wrapCache.TryGetValue(key, out var lines))
         {
+            if (_wrapCache.Count >= CacheCap) _wrapCache.Clear(); // the chat adds lines all night: keep it bounded
             lines = WrapWith(text, maxWidth, _small);
             _wrapCache[key] = lines;
         }

@@ -30,6 +30,11 @@ public abstract class UiWindow
     // The window box, relative to its own top-left corner.
     public abstract Rectangle Rect();
 
+    // The box the window swallows clicks with. A window that draws less than
+    // its box (the chat without a typing row) says so, or the empty part eats
+    // the clicks that belong to the world.
+    public virtual Point HitSize() => Rect().Size;
+
     // The title strip the player drags the window by, in the same local coords.
     public abstract Rectangle TitleRect();
 
@@ -73,6 +78,7 @@ public abstract class UiWindow
             Build();
             _built = true;
         }
-        Place(Host, Pos, Rect().Size);
+        var box = Rect(); // the folded chat sits at the bottom of its open box: the host follows the rect
+        Place(Host, Pos + box.Location, HitSize());
     }
 }

@@ -5,67 +5,51 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // The chat window: the official MapleStory chat (UI/StatusBar3.img/chat).
-// The log frame, the filter tabs, the scroll bar, the window buttons and
-// the input line are official art; the log text uses the game font. The
-// window is on the screen all the time.
+// The log frame, the filter tabs, the scroll bar, the chevron and the input
+// line are official art; the log text uses the game font. The window is on
+// the screen all the time. The lines live in ChatLog and the typed text in
+// CaretText: the window keeps the frame, the chevron and the keyboard.
 public sealed class ChatWindow : UiWindow
 {
-    // The filter tabs, in the order they sit in the window. The official
-    // chat has four tabs, but Friend needs a whisper: the protocol has
-    // none, so that tab is not drawn. The party lines show in the All tab
-    // and the party chat button in the input row sends to the party.
-    private enum Tab { All, Etc }
-
-    // One log line. The tab says where the line shows up: a normal chat
-    // line (and a party line) is All, a system line is Etc.
-    private sealed record Line(string Name, string Text, Tab Tab);
-
     // The art the exporter writes (assets/ui/chat_*.png).
     private static readonly string[] FramePieces = { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se" };
     private static readonly string[] TabStems = { "chat_taball", "chat_tabetc" };
-    // Only the settings button has a function in this game: the other
-    // official buttons (whisper, link, command, emoticon) are not drawn.
-    private static readonly string[] BtnStems = { "chat_btn_set" };
-    // The official window buttons of the chat. Only the minimise works in
-    // this game, so the other three are art without a click. The width and
-    // the height are the art sizes.
-    private static readonly (string Stem, int W, int H)[] WinArtBtns =
-    {
-        ("chat_btaddtab", 25, 20),
-        ("chat_btmax", 15, 15),
-        ("chat_btoutchat", 26, 20),
-    };
-    private const string MinBtnStem = "chat_btmin";
-    private const int MinBtnW = 26, MinBtnH = 20; // the art size
-    private const int ScrollW = 5; // the width of the scroll bar art
+    // The one window button that is left: the chevron of the tab row. It
+    // folds the chat into one line; the folded line shows a "+" instead.
+    private const string ChevStem = "chat_btmin";
 
     // Every number of this window lives in layouts/panel-chat.json.
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-chat.json"));
 
-    private const int MaxInput = 100; // the typed text stops here
-    private const int MaxLines = 50; // the log keeps the last lines
+    // The box sizes of the art (the art is stretched to its box): chevW/chevH,
+    // tabW/tabH, targetW/targetH and scrollW are in the layout file.
+    private int ChevW => _lay.Get("chevW", 26);
+    private int ChevH => _lay.Get("chevH", 20);
+    private int TabW => _lay.Get("tabW", 54);
+    private int TabH => _lay.Get("tabH", 20);
+    private int ScrollW => _lay.Get("scrollW", 5);
 
     private readonly MushTownGame _game;
     private readonly Action<string> _send;
-    private readonly List<Line> _lines = new();
-    private readonly List<Line> _visible = new(); // the lines of the tab in use
+    private readonly ChatLog _log;
+    private readonly CaretText _caret;
     private readonly HashSet<Keys> _down = new(); // the keys that were down last frame
-    private readonly GameObject[] _tabObjs = new GameObject[TabStems.Length];
-    private Tab _tab = Tab.All;
-    private string _input = "";
-    private bool _focused;
-    private bool _mouseDown; // the mouse button was down last frame
-    private bool _minimised; // the chat is folded into a small box
+    private bool _minimised; // the chat is folded into one line
     private bool _partyTarget; // the line goes to the party instead of the world
-    private int _scroll; // the lines the log is scrolled up from the newest
     private int _wheel; // the wheel value of the last frame
-    private GameObject? _minBox; // the minimised box (the hover changes its art)
+    private Keys _repeatKey = Keys.None; // the key the repeat is counting
+    private float _repeatMs;             // how long it has been held
+    private bool _foldWhenDone;          // Enter opened the folded chat: it folds again when the input leaves
+    private bool _foldPending;           // the fold waits for the next update: the click that caused it must reach the log or a tab first
+    private readonly List<ChatLog.Run> _runs = new(); // the newest line, in the log colors (the log clears it each draw)
 
-    // The chat opens from the input line or from the Chat key.
+    // The chat opens from Enter or from the Chat key.
     public ChatWindow(MushTownGame game, Action<string> send) : base(HotkeyAction.Chat)
     {
         _game = game;
         _send = send;
+        _log = new ChatLog(_lay);
+        _caret = new CaretText(_lay);
         Show = true;
         Pos = LayoutPos(); // the layout file gives the spot (the game sets it again on a reload)
         AddSystem("Welcome to MushTown."); // dummy lines: the log shows its two kinds
@@ -75,15 +59,38 @@ public sealed class ChatWindow : UiWindow
     // The chat is never closed by the game: Esc leaves the input instead.
     public override void OnClosed() => Show = true;
 
-    // The minimised chat is a small box at the same spot.
+    // The window box. The folded chat is one row at the bottom of the open
+    // box (the newest line and a "+"), so folding pulls the chat down and
+    // opening it grows upwards from that row.
     public override Rectangle Rect() => _minimised
-        ? new Rectangle(0, 0, _lay.Get("minW", 60), _lay.Get("minH", 20))
+        ? new Rectangle(0, _lay.Get("h", 150) - _lay.Get("minH", 20), _lay.Get("w", 315), _lay.Get("minH", 20))
         : new Rectangle(0, 0, _lay.Get("w", 315), _lay.Get("h", 150));
-    public override Rectangle TitleRect() => new(0, 0, Rect().Width, 0); // the chat has no title bar
+    // The empty part of the tab row drags the window. The folded chat has no
+    // tab row: the rect is read in the open state only (its whole bar drags,
+    // built there).
+    public override Rectangle TitleRect()
+    {
+        if (_minimised) return Rect(); // the whole folded bar drags (built there)
+        int x = TabRect(TabStems.Length - 1).Right;
+        return new Rectangle(x, _lay.Get("tabY", 0), ChevRect().X - x, TabH);
+    }
     public override Point LayoutPos() => new(_lay.Get("x", 6), _lay.Get("y", 566));
+
+    // The chat swallows the clicks it draws. The typing row is not drawn while
+    // no line is typed, so the bar under the log has to go to the world; the
+    // folded chat is one line.
+    public override Point HitSize() => new(_lay.Get("w", 315), _minimised
+        ? _lay.Get("minH", 20)
+        : _caret.Focused ? _lay.Get("inputY", 125) + _lay.Get("inputH", 25)
+        : _lay.Get("logY", 22) + _lay.Get("logH", 100));
 
     // The log frame: the official nine piece slice under the tabs.
     private Rectangle LogRect() => new(0, _lay.Get("logY", 22), _lay.Get("w", 315), _lay.Get("logH", 100));
+
+    // The width a log line wraps at: the frame, less the padding, the frame
+    // border and the scroll bar column.
+    private int LogTextW() =>
+        _lay.Get("w", 315) - _lay.Get("logPadX", 10) - _lay.Get("border", 8) - ScrollW - _lay.Get("logGap", 2);
 
     // The scroll bar of the log: on the right of the log, inside the frame.
     private Rectangle ScrollRect()
@@ -93,59 +100,89 @@ public sealed class ChatWindow : UiWindow
         return new Rectangle(log.Right - b - ScrollW, log.Y + b, ScrollW, log.Height - 2 * b);
     }
 
-    // The input line: the official bar, the buttons to the right of it.
-    private int ButtonsW()
+    // The input line: the official bar, the whole width of the window.
+    private Rectangle InputRect() => new(0, _lay.Get("inputY", 125), _lay.Get("w", 315), _lay.Get("inputH", 25));
+
+    // The chevron at the top right of the tab row: it folds the chat. It rides
+    // the tab row, so moving the tabs keeps it level with them; chevY moves it
+    // on its own.
+    private Rectangle ChevRect() => new(_lay.Get("w", 315) - ChevW - _lay.Get("chevGap", 4),
+        _lay.Get("chevY", _lay.Get("tabY", 0)), ChevW, ChevH);
+
+    // The "+" on the folded line (its own top-left is the bar's): the only
+    // spot that opens the chat again.
+    private Rectangle PlusRect()
     {
-        int w = _lay.Get("btnW", 24); // the settings button
-        foreach (var (_, bw, _) in WinArtBtns) w += bw + _lay.Get("btnGap", 1);
-        return w + MinBtnW + _lay.Get("btnGap", 1);
+        int w = _lay.Get("plusW", 18);
+        return new Rectangle(_lay.Get("w", 315) - w, 0, w, _lay.Get("minH", 20));
     }
-    private int BarW() => _lay.Get("w", 315) - ButtonsW();
-    // The input field starts after the chat target button (the official
-    // spot: the target button is 60 wide at x=6, the field at x=71).
-    private int FieldX() => _lay.Get("fieldX", 71);
-    private Rectangle InputRect() => new(0, _lay.Get("inputY", 125), BarW(), _lay.Get("inputH", 25));
-    private Rectangle SettingsRect() => new(BarW(), _lay.Get("inputY", 125), _lay.Get("btnW", 24), _lay.Get("inputH", 25));
 
     // The chat target button: it says where the line goes when it is
     // clicked (the world or the party).
-    private Rectangle TargetRect() => new(_lay.Get("targetX", 6), _lay.Get("inputY", 125) + _lay.Get("targetY", 1), 60, 24);
+    private Rectangle TargetRect() => new(_lay.Get("targetX", 6), _lay.Get("inputY", 125) + _lay.Get("targetY", 1),
+        _lay.Get("targetW", 60), _lay.Get("targetH", 24));
 
-    // The window buttons follow the settings button, the minimise last.
-    private Rectangle WinArtRect(int i)
+    // One filter tab: the row starts at tabX and each tab keeps its art size
+    // with tabGap between them.
+    private Rectangle TabRect(int i) => new(_lay.Get("tabX", 0) + i * (TabW + _lay.Get("tabGap", 3)),
+        _lay.Get("tabY", 0), TabW, TabH);
+
+    // Once a frame, before the input poll: the wheel scrolls the log and the
+    // fold a click asked for happens. The click that asked for it had to reach
+    // the log or a tab of the open window first.
+    public void UpdateFrame()
     {
-        int x = SettingsRect().Right + _lay.Get("btnGap", 1);
-        for (int k = 0; k < i; k++) x += WinArtBtns[k].W + _lay.Get("btnGap", 1);
-        return new(x, _lay.Get("inputY", 125) + (_lay.Get("inputH", 25) - WinArtBtns[i].H) / 2, WinArtBtns[i].W, WinArtBtns[i].H);
+        ReadWheel(); // the wheel is read here, so Draw only draws
+        if (!_foldPending) return;
+        _foldPending = false;
+        _minimised = true;
+        Dirty = true;
     }
-    private Rectangle MinBtnRect() => new(WinArtRect(WinArtBtns.Length - 1).Right + _lay.Get("btnGap", 1),
-        _lay.Get("inputY", 125) + (_lay.Get("inputH", 25) - MinBtnH) / 2, MinBtnW, MinBtnH);
-
-    // One filter tab.
-    private Rectangle TabRect(int i) => new(i * (_lay.Get("tabW", 54) + _lay.Get("tabGap", 3)), _lay.Get("tabY", 0),
-        _lay.Get("tabW", 54), _lay.Get("tabH", 20));
-
-    // The empty tab slot: the official plain tab, the same size as the
-    // text tabs. It stands for the tabs this game does not have.
-    private Rectangle EmptyTabRect() => new(TabStems.Length * (_lay.Get("tabW", 54) + _lay.Get("tabGap", 3)),
-        _lay.Get("tabY", 0), _lay.Get("tabW", 54), _lay.Get("tabH", 20));
 
     // True while the input has the focus: the game gives the keys to the chat.
-    public bool Focused => _focused;
+    public bool Focused => _caret.Focused;
 
-    // The chat key: unfold the window if it is minimised (the input row is
-    // not drawn there), and seed the held keys so the key that opened the
-    // input is not typed into it on the next frame.
+    // Enter on the chat (or the Chat key): unfold the window if it is
+    // minimised (the input row is not drawn there), and seed the held keys so
+    // the key that opened the input is not typed into it on the next frame.
     public void FocusInput(KeyboardState kb)
     {
-        if (_minimised) Restore();
-        _focused = true;
+        if (_minimised) { Restore(); _foldWhenDone = true; } // Enter on the folded chat: it folds again when the line is done
+        _caret.Focused = true;
+        Dirty = true; // the typing row shows up
+        _repeatKey = Keys.None;
+        _repeatMs = 0;
         _down.Clear();
         foreach (var key in kb.GetPressedKeys()) _down.Add(key);
     }
 
     // The chat target: the line goes to the party instead of the world.
     public bool PartyTarget => _partyTarget;
+
+    // The input leaves: the typing row hides again (and the chat folds if Enter opened it).
+    private void Unfocus()
+    {
+        if (!_caret.Focused) return;
+        _caret.Focused = false;
+        _repeatKey = Keys.None; // a held key must not type into the input that just left
+        _repeatMs = 0;
+        if (_foldWhenDone) { _foldWhenDone = false; _foldPending = true; } // sending or a click outside folds it again, on the next update
+        Dirty = true;
+    }
+
+    // A shot never runs Update: these pose the window by the file name (the
+    // folded bar and a line longer than the field).
+    internal void FoldForShot() => _minimised = true;
+
+    // A name and one long word: the log wraps it over two rows (no space to
+    // break at), so the folded bar has to cut it at the end.
+    internal void LongForShot() => AddLine("asdfadsf", "sdfads" + new string('f', 45));
+
+    internal void TypeForShot(string text)
+    {
+        _caret.Focused = true;
+        foreach (char c in text) _caret.Type(c);
+    }
 
     // The target button swaps the target. Without a party there is no party
     // to write to: the button says so instead of doing nothing.
@@ -170,45 +207,57 @@ public sealed class ChatWindow : UiWindow
 
     // A chat line from a player. A line without a name is a system line
     // from the server: it belongs to the Etc. tab.
-    public void AddLine(string name, string text)
-    {
-        _lines.Add(new Line(name, text, name == "" ? Tab.Etc : Tab.All));
-        if (_lines.Count > MaxLines) _lines.RemoveAt(0);
-    }
+    public void AddLine(string name, string text) => _log.AddLine(name, text);
 
     // A system line (the Etc. tab).
-    public void AddSystem(string text)
-    {
-        _lines.Add(new Line("", text, Tab.Etc));
-        if (_lines.Count > MaxLines) _lines.RemoveAt(0);
-    }
+    public void AddSystem(string text) => _log.AddSystem(text);
+
+    // How long a key is held before it repeats, and how fast it repeats after
+    // that (the OS defaults: about half a second, then 25 a second).
+    private const float RepeatDelayMs = 400f;
+    private const float RepeatRateMs = 40f;
 
     // The keys go into the input while it has the focus: Enter sends the
-    // line, Backspace deletes, Esc leaves the input. A click outside the
-    // input line leaves the input too.
-    public void UpdateKeys(KeyboardState kb)
+    // line, Backspace deletes, Esc leaves the input, a held key repeats like
+    // it does in the rest of the system. A click outside the input line
+    // leaves the input too.
+    public void UpdateKeys(KeyboardState kb, float dtMs)
     {
-        var ms = Mouse.GetState();
-        bool click = ms.LeftButton == ButtonState.Pressed;
-        if (click && !_mouseDown)
-        {
-            var (gx, gy) = _game.MouseGamePos(ms);
-            if (!OnScreen(InputRect()).Contains(gx, gy)) _focused = false;
-        }
-        _mouseDown = click;
+        var input = _game.Input;
+        if (input.Click && !OnScreen(InputRect()).Contains(input.Mouse.X, input.Mouse.Y)) Unfocus();
 
         var now = kb.GetPressedKeys();
         foreach (var key in now)
         {
-            if (_down.Contains(key)) continue; // held down: not a new press
+            if (!_caret.Focused) break; // Enter sent the line: those keys go back to the game
+            if (_down.Contains(key)) continue; // held down: the repeat below handles it
             if (key == Keys.Enter) { Send(); continue; }
-            if (key == Keys.Escape) { _focused = false; continue; }
-            if (key == Keys.Back) { if (_input.Length > 0) _input = _input[..^1]; continue; }
-            char c = CharOf(key);
-            if (c != '\0' && _input.Length < MaxInput) _input += c;
+            if (key == Keys.Escape) { Unfocus(); continue; }
+            Press(key);
+            if (CharOf(key) == '\0' && key != Keys.Back) continue; // a key that types nothing does not stop the repeat
+            _repeatKey = key; // keep typing while it stays down
+            _repeatMs = 0;
+        }
+        if (_repeatKey != Keys.None && !kb.IsKeyDown(_repeatKey)) _repeatKey = Keys.None;
+        else if (_repeatKey != Keys.None)
+        {
+            _repeatMs += dtMs;
+            if (_repeatMs >= RepeatDelayMs)
+            {
+                Press(_repeatKey);
+                _repeatMs = Math.Min(_repeatMs - RepeatRateMs, RepeatDelayMs - RepeatRateMs); // a long stall must not dump a burst of characters
+            }
         }
         _down.Clear();
         foreach (var key in now) _down.Add(key);
+    }
+
+    // One press: a character goes into the text, Backspace deletes.
+    private void Press(Keys key)
+    {
+        if (key == Keys.Back) { _caret.Backspace(); return; }
+        char c = CharOf(key);
+        if (c != '\0') _caret.Type(c);
     }
 
     // Enter: the line goes out, the input is cleared and the focus leaves
@@ -216,9 +265,9 @@ public sealed class ChatWindow : UiWindow
     // character shows the same line for a few seconds.
     private void Send()
     {
-        string text = _input.Trim();
-        _input = "";
-        _focused = false;
+        string text = _caret.Text.Trim();
+        _caret.Clear();
+        Unfocus(); // clears the repeat state too
         if (text == "") return;
         _send(text);
         _game.ShowBalloon(text);
@@ -256,242 +305,161 @@ public sealed class ChatWindow : UiWindow
     public override void Build()
     {
         foreach (string piece in FramePieces) _game.LoadTexture($"ui/chat_frame_{piece}.png");
-        foreach (string stem in new[] { "chat_frame_min", "chat_frame_min1" })
-            foreach (string piece in FramePieces) _game.LoadTexture($"ui/{stem}_{piece}.png");
+        foreach (string piece in FramePieces) _game.LoadTexture($"ui/chat_frame_min_{piece}.png");
         foreach (string stem in TabStems)
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
-        _game.LoadTexture("ui/chat_tab_n.png");
         foreach (string piece in new[] { "w", "c", "e" }) _game.LoadTexture($"ui/chat_input_{piece}.png");
-        foreach (string stem in BtnStems)
-            foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
-        foreach (string stem in new[] { "chat_btaddtab", "chat_btmax", "chat_btoutchat", MinBtnStem })
-            foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
+        foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{ChevStem}{state}");
         foreach (string stem in new[] { "chat_target_all", "chat_target_party" })
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" }) _game.LoadTexture($"ui/{stem}{state}");
         foreach (string stem in new[] { "chat_scroll", "chat_scroll_off" })
             foreach (string piece in new[] { "base_t", "base_c", "base_b" }) _game.LoadTexture($"ui/{stem}_{piece}.png");
         foreach (string piece in new[] { "thumb0", "thumb1", "thumb2" }) _game.LoadTexture($"ui/chat_scroll_{piece}.png");
 
+        _log.WrapW = LogTextW(); // the layout can change the log width between builds
         Host.Clear();
         var root = new GameObject();
-        root.Add(new Rect(Rect())); // the window swallows the clicks inside it
+        // the host carries the window offset; the root starts at its own box.
+        // Without a line typed the typing row is not drawn, so the window does
+        // not eat clicks there either: it ends with the log frame.
+        root.Add(new Rect(new Rectangle(0, 0, Rect().Width, HitSize().Y))); // the same box the host swallows clicks with
         root.Add(new Invoke(Draw));
 
         if (_minimised)
         {
-            // the minimised chat: a click brings the chat back
+            // the folded chat: the line drags the window, only the "+" opens it.
+            // The children of the root hang at the bar, so their rects start at 0.
+            var bar = new Rectangle(0, 0, Rect().Width, Rect().Height);
             var box = new GameObject();
-            box.Add(new Rect(Rect()));
-            box.Add(new Button { Kind = ButtonKind.Click, OnClick = Restore });
-            _minBox = box;
+            box.Add(new Rect(bar));
+            box.Add(new Button { OnClick = StartDrag });
             root.AddChild(box);
+
+            var plus = new GameObject();
+            plus.Add(new Rect(PlusRect()));
+            plus.Add(new Button { Kind = ButtonKind.Click, OnClick = Restore });
+            root.AddChild(plus);
             Host.AddChild(root);
             return;
         }
 
-        // the filter tabs: the click picks the tab
+        // the filter tabs: the click picks the tab (the art carries the text)
         for (int i = 0; i < TabStems.Length; i++)
         {
             int n = i;
             var tab = new GameObject();
             tab.Add(new Rect(TabRect(i)));
-            tab.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _tab = (Tab)n });
-            _tabObjs[i] = tab;
+            tab.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _log.Current = (ChatLog.Tab)n });
+            tab.Add(new Image($"ui/{TabStems[i]}"));
             root.AddChild(tab);
         }
 
-        // the empty tab slot: the official plain tab
-        var empty = new GameObject();
-        empty.Add(new Rect(EmptyTabRect()));
-        empty.Add(new Picture("ui/chat_tab_n.png"));
-        root.AddChild(empty);
-
-        // the log: a click leaves the input
+        // the log and its scroll bar: a click leaves the input
         var log = new GameObject();
         log.Add(new Rect(LogRect()));
-        log.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _focused = false });
+        log.Add(new Button { Kind = ButtonKind.Click, OnClick = Unfocus });
+        log.Add(new Box("chat_frame")); // the official nine piece frame: the corners stay, the edges stretch
+        log.Add(_log);
         root.AddChild(log);
 
-        // the scroll bar of the log
         var scroll = new GameObject();
         scroll.Add(new Rect(ScrollRect()));
-        scroll.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => _focused = false });
-        scroll.Add(new ChatScrollBar(() => ScrollPos(), () => MaxScroll() > 0));
+        scroll.Add(new Button { Kind = ButtonKind.Silent, OnClick = Unfocus });
+        scroll.Add(new ChatScrollBar(() => _log.ScrollPos(), () => _log.Scrollable));
         root.AddChild(scroll);
 
-        // the input line: a click focuses it
-        var input = new GameObject();
-        input.Add(new Rect(InputRect()));
-        input.Add(new Button { Kind = ButtonKind.Click, OnClick = () => FocusInput(Keyboard.GetState()) });
-        root.AddChild(input);
-
-        // the chat target button: it shows where the line goes now (the
-        // official art: "To All" or "To Party")
-        var target = new GameObject();
-        target.Add(new Rect(TargetRect()));
-        target.Add(new Button { Kind = ButtonKind.Click, OnClick = ToggleTarget });
-        target.Add(new Image(_partyTarget ? "ui/chat_target_party" : "ui/chat_target_all"));
-        root.AddChild(target);
-
-        // the settings button: the official art, it opens the options window.
-        // The other official buttons (whisper, link, command, emoticon) have
-        // no function in this game yet, so they are not drawn.
-        var set = new GameObject();
-        set.Add(new Rect(SettingsRect()));
-        set.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _game.OpenSettings() });
-        set.Add(new Image($"ui/{BtnStems[0]}"));
-        root.AddChild(set);
-
-        // the three official window buttons without a function: art only
-        for (int i = 0; i < WinArtBtns.Length; i++)
+        // the input line and the chat target show only while a line is typed
+        // (Enter starts one): the log is on the screen all the time, the
+        // typing row is not.
+        if (_caret.Focused)
         {
-            var b = new GameObject();
-            b.Add(new Rect(WinArtRect(i)));
-            b.Add(new Picture($"ui/{WinArtBtns[i].Stem}_n.png"));
-            root.AddChild(b);
+            var input = new GameObject();
+            input.Add(new Rect(InputRect()));
+            input.Add(_caret);
+            root.AddChild(input);
+
+            // the chat target button: it shows where the line goes now (the
+            // official art: "To All" or "To Party")
+            var target = new GameObject();
+            target.Add(new Rect(TargetRect()));
+            target.Add(new Button { Kind = ButtonKind.Click, OnClick = ToggleTarget });
+            target.Add(new Image(_partyTarget ? "ui/chat_target_party" : "ui/chat_target_all"));
+            root.AddChild(target);
         }
 
-        // the minimise button: the chat folds into a small box
-        var min = new GameObject();
-        min.Add(new Rect(MinBtnRect()));
-        min.Add(new Button { Kind = ButtonKind.Click, OnClick = Minimise });
-        min.Add(new Image($"ui/{MinBtnStem}"));
-        root.AddChild(min);
+        // the free part of the tab row drags the window
+        root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
+
+        // the chevron: the top right of the tab row, it folds the chat
+        var chev = new GameObject();
+        chev.Add(new Rect(ChevRect()));
+        chev.Add(new Button { Kind = ButtonKind.Click, OnClick = Minimise });
+        chev.Add(new Image($"ui/{ChevStem}"));
+        root.AddChild(chev);
 
         Host.AddChild(root);
     }
 
-    // The whole chat: the frame, the tabs, the log and the input line.
+    // The one part the window still draws: the folded chat. The row shows the
+    // newest line and the "+" says that a click there opens it. Everything
+    // else is a component.
     private void Draw(UiGfx gfx)
     {
-        FillVisible(); // the line list comes first: the wheel needs the new scroll range
-        ReadWheel();
-        if (_minimised)
+        if (!_minimised) return;
+        var r = OnScreen(Rect());
+        NineSlice.Draw(gfx, "chat_frame_min", r);
+        int pad = _lay.Get("minPad", 6);
+        int plusW = _lay.Get("plusW", 18);
+        var plus = gfx.Ui.GetSmall("+");
+        gfx.Sb.Draw(plus, new Vector2(r.Right - plusW + (plusW - plus.Width) / 2,
+            r.Y + (r.Height - plus.Height) / 2), Color.White);
+
+        // The newest line in the colors of the log: the name, the gap of a log
+        // row, the text. It is drawn from the start and cut at the end when it
+        // is wider than the bar.
+        _log.NewestRuns(_runs, _lay.Get("nameGap", 6));
+        int x = r.X + pad;
+        int end = r.Right - plusW;
+        foreach (var run in _runs)
         {
-            DrawMinimised(gfx);
-            return;
+            x += run.Gap;
+            var t = gfx.Ui.GetSmall(run.Text);
+            int w = Math.Min(t.Width, end - x);
+            if (w <= 0) break;
+            gfx.Sb.Draw(t, new Rectangle(x, r.Y + (r.Height - t.Height) / 2, w, t.Height),
+                new Rectangle(0, 0, w, t.Height), run.Color);
+            x += w;
         }
-        DrawFrame(gfx, OnScreen(LogRect()));
-        DrawTabs(gfx);
-        DrawLog(gfx);
-        DrawInput(gfx);
-    }
-
-    // The official nine piece frame: the corners stay, the edges stretch.
-    private void DrawFrame(UiGfx gfx, Rectangle r) => NineSlice.Draw(gfx, "chat_frame", r);
-
-    // The minimised chat: the official small frame. The mouse over it
-    // shows the plainer variant of the same frame.
-    private void DrawMinimised(UiGfx gfx)
-    {
-        bool over = gfx.Hovered == _minBox;
-        NineSlice.Draw(gfx, over ? "chat_frame_min1" : "chat_frame_min", OnScreen(Rect()));
-    }
-
-    // The filter tabs: All and Etc. carry their text in the official art.
-    // The official art has no "selected" look (the checked state of this WZ
-    // is the same file as the normal one), so the art is never recolored.
-    private void DrawTabs(UiGfx gfx)
-    {
-        for (int i = 0; i < TabStems.Length; i++)
-        {
-            var r = OnScreen(TabRect(i));
-            bool over = gfx.Hovered == _tabObjs[i];
-            string state = over ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
-            gfx.Sb.Draw(gfx.Tex($"ui/{TabStems[i]}{state}"), new Vector2(r.X, r.Y), Color.White);
-        }
-    }
-
-    // The log lines of the tab in use. The scroll says how far the log is
-    // scrolled up from the newest line.
-    private void DrawLog(UiGfx gfx)
-    {
-        var box = OnScreen(LogRect());
-        int x = box.X + _lay.Get("logPadX", 10);
-        int y = box.Y + _lay.Get("logPadY", 9);
-        int lineH = _lay.Get("lineH", 14);
-        int rows = LogRows();
-        _scroll = Math.Clamp(_scroll, 0, Math.Max(0, _visible.Count - rows));
-        int first = Math.Max(0, _visible.Count - rows - _scroll);
-        for (int i = first; i < Math.Min(_visible.Count, first + rows); i++)
-        {
-            var line = _visible[i];
-            int ty = y + (i - first) * lineH;
-            if (line.Name == "")
-                gfx.Sb.Draw(gfx.Ui.GetSmall(line.Text), new Vector2(x, ty), new Color(255, 220, 120));
-            else
-            {
-                var name = gfx.Ui.GetSmall(line.Name);
-                gfx.Sb.Draw(name, new Vector2(x, ty), new Color(120, 190, 255));
-                gfx.Sb.Draw(gfx.Ui.GetSmall(line.Text), new Vector2(x + name.Width + _lay.Get("nameGap", 6), ty), Color.White);
-            }
-        }
-    }
-
-    // The input line: the official bar (left cap, middle, right cap), the
-    // typed text and the caret.
-    private void DrawInput(UiGfx gfx)
-    {
-        var bar = OnScreen(InputRect());
-        int cap = _lay.Get("capW", 7); // the width of the left and right cap
-        gfx.Sb.Draw(gfx.Tex("ui/chat_input_w.png"), new Vector2(bar.X, bar.Y), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_input_c.png"), new Rectangle(bar.X + cap, bar.Y, bar.Width - 2 * cap, bar.Height), Color.White);
-        gfx.Sb.Draw(gfx.Tex("ui/chat_input_e.png"), new Vector2(bar.Right - cap, bar.Y), Color.White);
-        var t = gfx.Ui.GetSmall(_input);
-        int tx = bar.X + FieldX(); // the text starts after the target button
-        gfx.Sb.Draw(t, new Vector2(tx, bar.Y + (bar.Height - t.Height) / 2), Color.White);
-        if (_focused) gfx.Sb.Draw(gfx.Pixel, new Rectangle(tx + t.Width + _lay.Get("caretDx", 1), bar.Y + _lay.Get("caretDy", 6),
-            _lay.Get("caretW", 1), _lay.Get("caretH", 12)), Color.White);
-    }
-
-    // The lines the tab in use shows: All shows everything, the other tabs
-    // show the lines of their own kind.
-    private void FillVisible()
-    {
-        _visible.Clear();
-        foreach (var line in _lines)
-            if (_tab == Tab.All || line.Tab == _tab) _visible.Add(line);
-    }
-
-    // The lines that fit in the log.
-    private int LogRows() => (LogRect().Height - 2 * _lay.Get("border", 8)) / _lay.Get("lineH", 14);
-
-    // How far the log can be scrolled up: the lines that do not fit.
-    private int MaxScroll() => Math.Max(0, _visible.Count - LogRows());
-
-    // The thumb of the scroll bar: 0 at the top of the track, 1 at the
-    // bottom. The newest line sits at the bottom, so it starts at 1.
-    private float ScrollPos()
-    {
-        int max = MaxScroll();
-        return max == 0 ? 1f : 1f - _scroll / (float)max;
     }
 
     // The mouse wheel scrolls the log. The chat is on the screen all the
     // time, so the wheel is read where the chat draws.
     private void ReadWheel()
     {
-        var ms = Mouse.GetState();
-        int delta = ms.ScrollWheelValue - _wheel;
-        _wheel = ms.ScrollWheelValue;
+        int wheel = _game.Input.Wheel;
+        int delta = wheel - _wheel;
+        _wheel = wheel;
         if (delta == 0 || _minimised) return;
-        var (gx, gy) = _game.MouseGamePos(ms);
-        if (!OnScreen(LogRect()).Contains(gx, gy)) return;
-        _scroll = Math.Clamp(_scroll + delta / 120, 0, MaxScroll());
+        if (!OnScreen(LogRect()).Contains(_game.Input.Mouse.X, _game.Input.Mouse.Y)) return;
+        _log.Scroll(delta / 120);
     }
 
-    // The minimise button folds the chat into a small box; a click on the
-    // box brings the chat back.
+    // The chevron folds the chat into one line; the "+" on that line brings
+    // it back (a drag on the line only moves it).
     private void Minimise()
     {
+        _foldWhenDone = false; // the chevron or the "+" decide from here, not the Enter that opened the input
+        Unfocus(); // drops the caret and the repeat state
         _minimised = true;
-        _focused = false;
-        Dirty = true; // the game rebuilds the scene on the next frame
+        _foldPending = false;
+        Dirty = true; // the folded bar replaces the log and the typing row
     }
 
     private void Restore()
     {
         _minimised = false;
+        _foldPending = false;
+        _foldWhenDone = false; // opened by the "+": sending a line must not fold it back
         Dirty = true;
     }
 }

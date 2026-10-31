@@ -17,36 +17,43 @@ public sealed class PanelLayout
     private static readonly Dictionary<string, PanelLayout> Files = new();
 
     // Load (or return) the layout file. The same path gives the same
-    // object, so a panel can keep it in a field.
+    // object, so a panel can keep it in a field. A file that does not parse
+    // keeps the built-in defaults here: the game has to start. The reload
+    // below collects the errors instead, so a typo is one line in the log and
+    // the other files still reload.
     public static PanelLayout Load(string path)
     {
         if (Files.TryGetValue(path, out var hit)) return hit;
         var lay = new PanelLayout();
-        Read(path, lay);
+        try { Read(path, lay); }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException) { } // the game has to start: a typo or a locked file keeps the defaults
         Files[path] = lay;
         return lay;
     }
 
-    // Re-read every loaded file (the layout hot-reload).
-    public static void ReloadAll()
+    // Re-read every loaded file (the layout hot-reload). A file that does not
+    // parse keeps the numbers it had and does not stop the others: its error
+    // goes back to the caller, which logs it. One typo must not freeze every
+    // panel at its old size.
+    public static List<string> ReloadAll()
     {
-        foreach (var path in Files.Keys.ToList())
-            Read(path, Files[path]);
+        var errors = new List<string>();
+        foreach (var path in Files.Keys)
+            try { Read(path, Files[path]); }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException) { errors.Add($"{path}: {ex.Message}"); }
+        return errors;
     }
 
+    // A missing file means the defaults; a file that does not parse throws.
     private static void Read(string path, PanelLayout lay)
     {
         var values = new Dictionary<string, int>();
         if (File.Exists(path))
         {
-            try
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
-                foreach (var p in doc.RootElement.EnumerateObject())
-                    if (p.Value.ValueKind == JsonValueKind.Number && p.Value.TryGetInt32(out int v))
-                        values[p.Name] = v;
-            }
-            catch (JsonException) { return; } // a bad file keeps the values it had
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            foreach (var p in doc.RootElement.EnumerateObject())
+                if (p.Value.ValueKind == JsonValueKind.Number && p.Value.TryGetInt32(out int v))
+                    values[p.Name] = v;
         }
         lay._values = values;
     }

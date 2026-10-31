@@ -16,6 +16,7 @@ public sealed class UiGfx
     public required Texture2D Pixel { get; init; }
     public Texture2D Blur = null!; // the screen at 1/4 size: the frosted glass source
     public bool Pressed;
+    public float Time; // the frame time in ms: the animated parts (the chat caret) blink on it
     public Point Mouse; // the pointer in frame coords, set by DrawHud only: the held piece and the tips follow it
     public GameObject? Hovered;
     public Button? HoverButton;

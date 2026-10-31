@@ -512,9 +512,21 @@ public partial class MushTownGame
     private Point _settingsPos = SettingsLayoutPos(); // settings window opens centered-ish, drags after
     private Point _shopPos = new(0, 0); // the shop window opens at the spot in panel-shop.json, drags after
 
+    // The chat shots: "chatmin" folds the chat, "chattype" types a line longer
+    // than the input field. A shot never runs Update, so it is posed here.
+    private void PoseShotChat()
+    {
+        if (_shotPath == null) return;
+        string name = Path.GetFileNameWithoutExtension(_shotPath);
+        if (name.Contains("chatmin")) _chatWindow.FoldForShot();
+        if (name.Contains("chattype")) _chatWindow.TypeForShot("asdfasdfasdfasdfasdfasdfasdfasdfasdfasdf");
+        if (name.Contains("chatlong")) _chatWindow.LongForShot();
+    }
+
     private void DrawHud(int gx, int gy, bool pressed)
     {
         _gfx.Pressed = pressed;
+        _gfx.Time = (float)_timeMs;
         _gfx.Mouse = new Point(gx, gy); // the held piece and the tips ride this
         _uiScene.Draw(_gfx); // one tree, one Z order: balloon, HUD, panels, windows, dialog, hand, tips
     }

@@ -103,6 +103,8 @@ public partial class MushTownGame : Game
 #if DEBUG
     private FileSystemWatcher? _layoutWatcher;
     private volatile bool _layoutDirty; // set by the watcher thread, consumed on the game thread
+    private int _layoutRetry;           // ms to wait before a failed reload is tried again
+    private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
     public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0)
@@ -164,13 +166,14 @@ public partial class MushTownGame : Game
         _raiseRow.AddRange(_panelHosts);
         foreach (var w in UiWindow.List) if (!Pinned(w)) _raiseRow.Add(w.Host);
         RenumberRow();
+        if (_shotPath == null) _rollLog ??= new RollLog(NetLogPath()); // the first reload below must be able to log a bad file
         TryReloadLayout();
 #if DEBUG
         // One watcher for the folder: every layout file reloads on save.
         _layoutWatcher = new FileSystemWatcher(dir, "*.json");
-        _layoutWatcher.Changed += (_, _) => _layoutDirty = true;
-        _layoutWatcher.Renamed += (_, _) => _layoutDirty = true; // some editors save by rename
-        _layoutWatcher.Created += (_, _) => _layoutDirty = true; // ...or delete-then-create
+        _layoutWatcher.Changed += (_, _) => { _layoutDirty = true; _layoutTries = 0; }; // a new save gets a fresh retry budget
+        _layoutWatcher.Renamed += (_, _) => { _layoutDirty = true; _layoutTries = 0; }; // some editors save by rename
+        _layoutWatcher.Created += (_, _) => { _layoutDirty = true; _layoutTries = 0; }; // ...or delete-then-create
         _layoutWatcher.EnableRaisingEvents = true;
 #endif
         _graphics = new GraphicsDeviceManager(this);
@@ -448,10 +451,11 @@ public partial class MushTownGame : Game
         SyncCursor(); // a window resize rebuilds the OS cursor at the new scene zoom
         _ui.Trim(); // the text cache gives the old textures back before the draw
 #if DEBUG
-        if (_layoutDirty)
+        if (_layoutDirty && (_layoutRetry -= (int)gameTime.ElapsedGameTime.TotalMilliseconds) <= 0)
         {
-            _layoutDirty = false;
-            TryReloadLayout();
+            if (TryReloadLayout()) { _layoutDirty = false; _layoutRetry = 0; _layoutTries = 0; }
+            else if (++_layoutTries >= 5) { _layoutDirty = false; _layoutRetry = 0; _layoutTries = 0; } // the file stays bad: the log has the line, no loop
+            else _layoutRetry = 300; // the editor still holds the file: try again, the reader only needs a free moment
         }
 #endif
         if (_screen != Screen.Game)
@@ -463,16 +467,14 @@ public partial class MushTownGame : Game
         }
 
         var kb = Keyboard.GetState();
-        // One layer per press: the edge is taken here, before the chat empties
-        // the keyboard, so a held Esc closes once and the chat press is spent.
+        // One layer per press: the edge is taken here, before the chat sees the
+        // keys. The chat keeps its own Esc (it leaves the input), so the layer
+        // below runs only while the chat does not have the input.
         bool esc = FreshKey(kb, Keys.Escape, ref _escWasDown);
-        if (_chatWindow.Focused)
-        {
-            _chatWindow.UpdateKeys(kb);
-            kb = new KeyboardState(); // the chat input eats the keys
-            esc = false; // that Esc leaves the input, it closes nothing
-        }
-        if (esc)
+        // Esc closes one layer. The chat keeps its own Esc (it leaves the input),
+        // so the layer runs here, before the poll: a frame that closes a window
+        // must not eat the click or the key the player pressed with it.
+        if (esc && !_chatWindow.Focused)
         {
             if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
             var escChara = _save?.Slots[_slot];
@@ -481,19 +483,32 @@ public partial class MushTownGame : Game
             if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the top of the raise row
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
+        var ms = Mouse.GetState(); // the click edge and the game coordinates of this frame
+        bool click = ClickEdge(ms);
+        var (mx, my) = MouseGamePos(ms);
+        bool held = ms.LeftButton == ButtonState.Pressed;
+        InstallPendingKeys(); // a key window Save/Apply waits for this frame's poll
+        _chatWindow.UpdateFrame(); // the wheel and a fold a click asked for last frame: that click already reached the open window
+        _input.Capture = _chatWindow.Focused; // typing must not fire the actions the same keys bind
+        _input.Poll(kb, new Point(mx, my), click, held, ms.ScrollWheelValue);
+        // Enter starts a chat line: the input row only shows while one is typed.
+        // The check sits before the chat block, so the Enter that sends a line
+        // cannot open the next one.
+        if (!_chatWindow.Focused && !_menuWindow.Show && _talkNpc == 0 && _input.Fresh(Keys.Enter))
+            _chatWindow.FocusInput(kb);
+        if (_chatWindow.Focused)
+        {
+            _chatWindow.UpdateKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
+            kb = new KeyboardState(); // the arrows and Up/Down must not move the character while typing
+        }
         // Talk needs presence: walking out of reach closes the modal.
         if (_talkNpc != 0 && !_npcArts.Any(a => a.Spawn.NpcId == _talkNpc && InTalkReach(a)))
         {
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
             _talkHost.Enabled = false; // the one early layer write: this frame's hover and click run later and would still see the modal
         }
-        var ms = Mouse.GetState(); // one click edge for the HUD
-        bool click = ClickEdge(ms);
         if (RightEdge(ms) && Holding) { ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
-        var (mx, my) = MouseGamePos(ms);
-        InstallPendingKeys(); // a key window Save/Apply waits for this frame's poll
-        _input.Poll(kb, new Point(mx, my), click, ms.LeftButton == ButtonState.Pressed, ms.ScrollWheelValue);
-        UpdateHud(kb, click, ms.LeftButton == ButtonState.Pressed, mx, my);
+        UpdateHud(kb, click, held, mx, my);
         // The MENU window is modal for the character: while it is open the
         // character ignores the keys. The key window is not: editing keys
         // still leaves the saved preset live, so the character keeps acting
@@ -895,27 +910,35 @@ public partial class MushTownGame : Game
             ?? throw new InvalidDataException($"cannot parse json: {path}");
     }
 
-    // A missing/bad file keeps the current layout and logs one line
-    // (startup: built-in defaults; hot-reload: old values). A mid-write
-    // read fails once; saving again fixes it.
-    private void TryReloadLayout()
+    // True when the files were read: a save that lands while the editor still
+    // holds the file fails here (IOException) and the caller tries again in a
+    // moment. A file with a typo never reaches this: Guard and
+    // PanelLayout.ReloadAll catch it per file and it comes back in the list.
+    private bool TryReloadLayout()
     {
-        try { ReloadLayout(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        try
+        {
+            foreach (string error in ReloadLayout()) GameLog($"layout: {error}");
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             GameLog($"layout: {ex.Message}");
+            return false; // the editor still holds the file, or it is half written: try again in 300 ms
         }
+
     }
 
     // File wins: reload positions and snap dragged panels back to them.
-    private void ReloadLayout()
+    private List<string> ReloadLayout()
     {
-        Layout.Load(_layoutPath);
-        MenuLayout.Load(_menuLayoutPath);
-        CharLayout.Load(_charLayoutPath);
-        JobLayout.Load(_jobLayoutPath);
-        SetupLayout.Load(_setupLayoutPath);
-        PanelLayout.ReloadAll(); // the panel files (layouts/panel-*.json)
+        var errors = new List<string>();
+        Guard(errors, _layoutPath, () => Layout.Load(_layoutPath));
+        Guard(errors, _menuLayoutPath, () => MenuLayout.Load(_menuLayoutPath));
+        Guard(errors, _charLayoutPath, () => CharLayout.Load(_charLayoutPath));
+        Guard(errors, _jobLayoutPath, () => JobLayout.Load(_jobLayoutPath));
+        Guard(errors, _setupLayoutPath, () => SetupLayout.Load(_setupLayoutPath));
+        errors.AddRange(PanelLayout.ReloadAll()); // the panel files (layouts/panel-*.json)
         if (_ui != null) _ui.RefreshFonts(); // null only on the ctor reload, before content loads
         _invPos = new Point(0, 0); _invPlaced = false; _invBuilt = false; // the inventory takes its spot from its own file again
         _statPos = new Point(0, 0); _statPlaced = false; _statBuilt = false; // the stat window takes its spot from its own file again
@@ -926,6 +949,15 @@ public partial class MushTownGame : Game
         _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
         foreach (var w in UiWindow.List) { w.Pos = w.LayoutPos(); w.Dirty = true; w.Drag = null; } // the new windows go back to the file spot
         if (_contentLoaded) BuildScreenScene(); // ctor reload skips: no textures yet
+        return errors;
+    }
+
+    // One file with a typo must not stop the rest of the reload: the error goes
+    // back to the caller (one line in the log) and the other files still load.
+    private static void Guard(List<string> errors, string path, Action load)
+    {
+        try { load(); }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException) { errors.Add($"{path}: {ex.Message}"); }
     }
 
     // The layouts folder (next to assets/). Every panel reads its own file

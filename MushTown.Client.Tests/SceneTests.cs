@@ -137,6 +137,69 @@ public class SceneTests
         }
     }
 
+    // A window whose rect does not start at 0 (the folded chat) puts its
+    // content at Pos + the rect offset, once: the host carries the offset and
+    // the root of the window starts at its own box. Twice and the hit boxes sit
+    // off the visible bar; not at all and the host swallows a phantom strip.
+    [TestMethod]
+    public void Sync_OffsetRect_PutsTheContentAtTheOffset()
+    {
+        var scene = new Scene();
+        var w = new OffsetWindow { Pos = new Point(10, 100) };
+        try
+        {
+            scene.Add(w.Host);
+            w.Sync();
+            scene.Layout();
+            Assert.AreEqual(new Rectangle(10, 140, 40, 20), w.Host.Get<Rect>()!.Screen);
+            Assert.AreEqual(new Rectangle(10, 140, 40, 20), w.Host.Children[0].Get<Rect>()!.Screen);
+            Assert.IsNotNull(scene.TopAt(20, 145)); // the bar is where it is drawn
+        }
+        finally { UiWindow.List.Remove(w); } // the constructor registers: the game walks this list
+    }
+
+    private sealed class OffsetWindow : UiWindow
+    {
+        public OffsetWindow() : base(HotkeyAction.Chat) { }
+        public override Rectangle Rect() => new(0, 40, 40, 20);
+        public override Rectangle TitleRect() => new(0, 0, 40, 10);
+        public override Point LayoutPos() => new(0, 0);
+        public override void Build()
+        {
+            var root = new GameObject();
+            root.Add(new Rect(new Rectangle(0, 0, Rect().Width, Rect().Height))); // like the folded chat
+            Host.AddChild(root);
+        }
+    }
+
+    // A window that draws less than its box leaves the rest to the world: the
+    // chat without a typing row has an empty bar under the log.
+    [TestMethod]
+    public void Sync_HitSize_LeavesTheEmptyPartToTheWorld()
+    {
+        var scene = new Scene();
+        var w = new ShortWindow { Pos = new Point(10, 100) }; // box 40x60, draws 40x20
+        try
+        {
+            scene.Add(w.Host);
+            w.Sync();
+            scene.Layout();
+            Assert.IsNotNull(scene.TopAt(20, 145)); // the part it draws
+            Assert.IsNull(scene.TopAt(20, 175));    // the empty part is not the window's
+        }
+        finally { UiWindow.List.Remove(w); }
+    }
+
+    private sealed class ShortWindow : UiWindow
+    {
+        public ShortWindow() : base(HotkeyAction.Chat) { }
+        public override Rectangle Rect() => new(0, 40, 40, 60);
+        public override Point HitSize() => new(40, 20);
+        public override Rectangle TitleRect() => new(0, 0, 40, 10);
+        public override Point LayoutPos() => new(0, 0);
+        public override void Build() { }
+    }
+
     // The hit path skips a dead node: TreeDraw skips it too and TreeUpdate is
     // covered by WorldTests.
     [TestMethod]

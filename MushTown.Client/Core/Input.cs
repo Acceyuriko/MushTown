@@ -64,8 +64,9 @@ public sealed class InputController
     private readonly HashSet<Keys> _last = new();
 
     public IReadOnlyList<BoundAction> Actions => _actions;
-    // The K1 game, chat and key windows still read the mouse themselves;
-    // the K2 drag and the window migration consume these.
+    // While a text input has the keys, no action fires: the raw keyboard still
+    // reaches the typing window, the bound keys read as nothing.
+    public bool Capture { get; set; }
     public Point Mouse { get; private set; } // 1366x768 game coordinates
     public bool Click { get; private set; }
     public bool Held { get; private set; }
@@ -98,6 +99,7 @@ public sealed class InputController
         foreach (var action in _actions)
         {
             bool fresh = false, down = false;
+            if (Capture) { action.Fresh = false; action.Down = false; continue; }
             foreach (var key in action.Keys)
             {
                 if (!_down.Contains(key)) continue;
@@ -174,4 +176,8 @@ public sealed class InputController
 public partial class MushTownGame
 {
     private readonly InputController _input = new();
+
+    // The one poll of the keyboard and the mouse: the panels read this copy
+    // instead of asking the devices again.
+    internal InputController Input => _input;
 }

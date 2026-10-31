@@ -3,7 +3,8 @@ using WzComparerR2.WzLib;
 namespace MushTown.Exporter;
 
 // The chat window art (UI/StatusBar3.img/chat): the log frame (a nine
-// piece slice), the filter tabs and the input line with its buttons.
+// piece slice), the two filter tabs, the input line, the chevron that folds
+// the chat and the small frame of the folded chat.
 // The art is saved as it is: no recolouring, no baking.
 public static partial class Export
 {
@@ -31,11 +32,6 @@ public static partial class Export
         foreach (string piece in new[] { "w", "c", "e" })
             if (!UiPng.Save(ui, $"{chat}/input/backgrnd/{piece}", Path.Combine(dir, $"chat_input_{piece}.png"))) return false;
 
-        // the input button: settings. The other official buttons (whisper,
-        // link, chat command, emoticon) have no function in this game, so
-        // the client does not draw them.
-        foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
-            if (!UiPng.Save(ui, $"{chat}/input/button:setting/{state}/0", Path.Combine(dir, $"chat_btn_set_{suffix}.png"))) return false;
 
         // the speech balloon (UI/ChatBalloon.img/0): nine pieces for the bubble
         // and the tail under it
@@ -43,36 +39,20 @@ public static partial class Export
             if (!UiPng.Save(ui, $"ChatBalloon.img/0/{piece}", Path.Combine(dir, $"balloon_{piece}.png"))) return false;
         if (!UiPng.Save(ui, "ChatBalloon.img/0/arrow", Path.Combine(dir, "balloon_arrow.png"))) return false;
 
-        // the other official chat frames: the plain one (no border) and the
-        // two small ones for the minimised chat
-        foreach (var (node, name) in new[]
-        {
-            ("view/backgrnd1", "chat_frame2"),
-            ("view/backgrnd_min", "chat_frame_min"),
-            ("view/backgrnd_min1", "chat_frame_min1"),
-        })
-            foreach (string piece in new[] { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se" })
-                if (!UiPng.Save(ui, $"{chat}/{node}/{piece}", Path.Combine(dir, $"{name}_{piece}.png"))) return false;
+        // the small frame of the folded chat
+        foreach (string piece in new[] { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se" })
+            if (!UiPng.Save(ui, $"{chat}/view/backgrnd_min/{piece}", Path.Combine(dir, $"chat_frame_min_{piece}.png"))) return false;
 
-        // the plain tab that sits next to the All and Etc. tabs
+        // the one window button that is left: the chevron that folds the chat.
+        // The other official buttons (add tab, maximise, pop out chat) have no
+        // function in this game, so the client does not draw them.
         foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
-            if (!UiPng.Save(ui, $"{chat}/view/tab/{state}/0", Path.Combine(dir, $"chat_tab_{suffix}.png"))) return false;
-
-        // the window buttons: add tab, minimise, maximise, pop out chat
-        foreach (var (node, name) in new[]
-        {
-            ("view/btAddTab", "chat_btaddtab"),
-            ("view/btMin", "chat_btmin"),
-            ("view/btMax", "chat_btmax"),
-            ("view/btOutChat", "chat_btoutchat"),
-        })
-            foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
-                if (!UiPng.Save(ui, $"{chat}/{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;
+            if (!UiPng.Save(ui, $"{chat}/view/btMin/{state}/0", Path.Combine(dir, $"chat_btmin_{suffix}.png"))) return false;
 
         // the scroll bar of the chat log
-        foreach (string piece in new[] { "base_t", "base_c", "base_b", "thumb0", "thumb1", "thumb2", "prev0", "prev1", "prev2", "next0", "next1", "next2" })
+        foreach (string piece in new[] { "base_t", "base_c", "base_b", "thumb0", "thumb1", "thumb2" })
             if (!UiPng.Save(ui, $"{chat}/view/scroll/enabled/{piece}", Path.Combine(dir, $"chat_scroll_{piece}.png"))) return false;
-        foreach (string piece in new[] { "base_t", "base_c", "base_b", "prev", "next" })
+        foreach (string piece in new[] { "base_t", "base_c", "base_b" })
             if (!UiPng.Save(ui, $"{chat}/view/scroll/disabled/{piece}", Path.Combine(dir, $"chat_scroll_off_{piece}.png"))) return false;
 
         // the chat target button of the input row: the official switch
@@ -85,7 +65,7 @@ public static partial class Export
         // the NPC talk art ships with the chat art
         if (!ExportTalkUi(ui, outDir)) return false;
 
-        Console.WriteLine("chat ui: frame, 2 tabs, input bar, 1 button, speech balloon");
+        Console.WriteLine("chat ui: frame, folded frame, 2 tabs, input bar, chevron, speech balloon");
         return true;
     }
 

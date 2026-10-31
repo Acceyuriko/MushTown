@@ -1,6 +1,6 @@
 # 扩展性重构 — 2026-10-26
 
-状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；S2（数字变成对象 + 皮肤字典）已验收并提交（1e182d0，两轮审查，测试 45）；S3（特效变成对象 + buff 循环挂玩家）已验收：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张全部逐字节一致，客户端测试 49。同一批还带一条输入修复：键窗不再挡任何东西（角色动作、面板键、喝药全照常，§8 #51）。已提交（`69fc625`）；同批的输入修复也单独提交了。N1（HUD 条：气泡、手拿、tips、快捷栏格子）已提交。N2（快捷槽一套 + 设置旋钮）已验收并提交（41b50f4，11 轮审查）。K3（点击式拖放）已验收，8 轮审查后收敛，待提交。下一步 N3。按片做，每片 1-2 周，一次验收。
+状态：K1 第 1、2 周已验收并提交；N5 键窗组件化已验收并提交；N0（`Box` + `Ui/AvatarArt.cs` + `AvatarPreview`）已验收并提交（6c521cc）；K2 已验收并提交（5348adb，两轮审查修了 5 个 P0 和一批 P1/P2）；W1（`Rect` 父相对，§3.5）已验收并提交（8b86b4a，5 轮审查，27 张 `--shot` 一致，客户端测试 32）；S1（世界对象自己走）已验收并提交（60fda5e）；S2（数字变成对象 + 皮肤字典）已验收并提交（1e182d0，两轮审查，测试 45）；S3（特效变成对象 + buff 循环挂玩家）已验收：27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 各 1 张全部逐字节一致，客户端测试 49。同一批还带一条输入修复：键窗不再挡任何东西（角色动作、面板键、喝药全照常，§8 #51）。已提交（`69fc625`）；同批的输入修复也单独提交了。N1（HUD 条：气泡、手拿、tips、快捷栏格子）已提交。N2（快捷槽一套 + 设置旋钮）已验收并提交（41b50f4，11 轮审查）。K3（点击式拖放）已验收并提交（986c438，9 轮审查）。N3 已做（§3.9，`ChatLog` + `CaretText` + `Box` 框，按用户验收意见改了 10 轮，之后跑了 7 轮自主 review：修了 6 个 P0、12 个 P1），等验收。下一步：N3 收尾（等验收），然后 N9 聊天气泡样式（用户 2026-10-31 定）。按片做，每片 1-2 周，一次验收。
 
 ## 0. 一句话
 
@@ -189,7 +189,7 @@
 1. **通用组件**（`Ui/Widgets.cs` 追加，**用到才加**）：
    - `Box`（九宫格框，包 `NineSlice.Draw`，**已加**）：小地图框（`mini_frame`）和装备页的物品详情框（`tip`）已经用它；HUD 跟随鼠标的 tip、气泡、buff 框、聊天框还在自己的画法里直接调 `NineSlice.Draw`，等它们组件化时再换。
    - `Image(stem, on, onSuffix)`（已加，N5 用）：`on` 为真时换成 `stem + onSuffix`，默认后缀 `_p`；预设钮和 Combo Key 钮用它，PRESETS 1/2/3 传 `_c` 画绿勾。
-   - 聊天片（N3）：`CaretText`（输入文字 + 光标闪烁）、`WrapText`（按宽度折行，复用 `UiText.Wrap`）。
+   - 聊天片（N3）：`CaretText`（输入文字 + 光标闪烁）、`ChatLog`（折行复用 `UiText.Wrap`，日志 + 标签 + 滚动）。见 §3.9。
    - 任务片（N6）：`TextLines`（多行文字，每行可不同颜色）。
    - GUIDE 片（N7）：`ClipPlayer`（序列帧播放，喂 `UiClip`）。
    - 现有 `Picture / Label / LiveLabel / Bar / Image / Round / Fill / InvSlot` 继续用。
@@ -330,7 +330,7 @@
 
 **依赖**：快捷槽要等 N2（槽先合成一套）；技能窗和背包的抓起要它们自己的窗口片。所以 K3 排在 N2 之后，白色区域和黑色区域的点击式拖放可以先做。
 
-**结果**（2026-10-30 已做，review 8 轮后收敛，已验收，待提交）：
+**结果**（2026-10-30 已做，review 9 轮后收敛，已验收并提交）：
 
 - 手上的东西从窗口搬到游戏：`Core/Hotkeys.cs` 的 `Held`（`BindTarget?`，只装 Ui/Skill）/ `Holding` / `Hold` / `TakeHeld` / `ClearHeld`（替掉 `HeldSkillAt` 和 `ClearHeldSkill`）。一个字段而不是"动作 + 技能"两个，所以"两个都设"这种状态在类型上不存在。**拿起不改 draft**，只有放下才改，所以 Esc 和右键什么都不改。`BindLive(Keys, BindTarget)` 是"键窗没开时直接绑当前 preset 并存盘"；条带读实时表，所以新绑定下一帧才画出来（`InstallPendingKeys` 仍然只在 `Poll` 前跑，不在点击中途重装输入表）。
 - `KeyConfigWindow` 的按住拖拽整个删掉：`_held`、`_pickAt`、`DragSlop`、`UpdateDrag`、`Drop`、`DropSkill`、`HeldIcon`、`BuildDrag`、`ActionFor`。新的入口四个：`Pick`（拿起动作）、`PickKey`（拿起键上的东西）、`TryDropAt`（这个点是可放区就放下）、`ApplyDrop`（真正改 draft），加一个 `DraftOn`（draft 在这个键上放了什么，给键帽和条带画）。
@@ -384,6 +384,115 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 
 **验收**：31 张截图（`--aiticks` 3 张：10/40/100），条带以外的像素逐字节一致；`grep "new Invoke" MushTown.Client/Panels/HudSettings.cs` = 0，全仓 14 → 13；头测覆盖 `Slider.VolumeAt`（点方块中心不动、两端夹住）和 `Slider.Drag`/`Release`（只动被按的那个、松手存一次、值没变不存）；手测：对着音量方块中心连点，方块不动；点轨道别处，方块跳过去；按住方块左右拖，音量跟着走，松手就停。
 
+### 3.9 聊天窗（N3 第 1 周，2026-10-31）
+
+**现状**：`HudChat.cs`（497 行）只有外壳是对象树：`Build()` 给框、标签、滚动条、输入行、按钮各建了 `Rect` + `Button`，但文字和状态都在窗口自己身上，`Invoke(Draw)` 一口气画框、标签、日志、输入行，`UpdateKeys` 自己读键盘和鼠标。
+
+- 日志：`_lines` / `_visible` / `_scroll` / `_tab` 四个字段在窗口里，`FillVisible` / `LogRows` / `MaxScroll` / `ScrollPos` 四个纯计算也是；滚动条反过来用两个 `Func` 问窗口。
+- 日志一行只画一遍，**不折行**：长句直接冲出框架。`Balloon` 早就在用 `gfx.Ui.Wrap`，聊天没用。
+- 输入行：`_input` 字符串和 `_focused` 在窗口里；光标**常亮**，不闪。
+- 框：`DrawFrame` 直接调 `NineSlice.Draw("chat_frame", ...)`，是 §3.2 说"组件化时再换 `Box`"的最后一处之一。
+
+**目标**：日志和输入行各自变成一个组件，窗口只留框、标签、按钮和键盘。像素不变（聊天在主界面上，31 张截图都得逐字节一致）。
+
+**设计**：
+1. **`Ui/ChatLog.cs`**（新）：一个对象 = `Rect(LogRect())` + `Button` + `Box("chat_frame")` + `ChatLog`。它持有 `_lines` / `_visible` / `_rows` / `_scroll` / `Current`（标签），对外 `AddLine` / `AddSystem` / `Scroll(rows)` / `ScrollPos()` / `Scrollable`。`Draw` 先按 `gfx.Ui.Wrap` 把每行折成若干 `Row`（具名行折在名字后面，后续行缩进对齐名字），再按 `Fits(高度)` 从最新的往上画。滚动条的两个 `Func` 改成读 `ChatLog`。
+2. **`Ui/CaretText.cs`**（新）：持有 `_text` / `Focused`，`Type(char)` / `Backspace()` / `Clear()`；`Draw` 画官方三段式输入条、文字和**闪烁**的光标（`gfx.Time` 每 500ms 亮灭一次）。100 字上限跟着组件走。
+3. **`UiGfx.Time`**（新字段）：`DrawHud` 每帧从 `_timeMs` 填。`--shot` 下 `_timeMs` 是 0（静态画面），所以摆拍不会出现随机相位的光标。
+4. **框换成 `Box("chat_frame")`**：日志对象加一个 `Box` 子组件。`Draw` 只剩滚轮读取和标签（标签要按 hover 换三张图，`Box` 是固定 stem，留给下一步）。
+5. 窗口删掉 `_lines` / `_visible` / `_input` / `_scroll` / `_tab` / `_focused` / `MaxLines` / `MaxInput` / `DrawLog` / `DrawInput` / `DrawFrame` / `FillVisible` / `LogRows` / `MaxScroll` / `ScrollPos`；`AddLine` / `AddSystem` 转给 `ChatLog`，`Focused` 转给 `CaretText`。
+
+6. **鼠标读取只剩一份**：`_input.Poll` 从「聊天之后」挪到「聊天之前」，`Update` 里一开头就读一次鼠标（`ClickEdge` / `MouseGamePos` / 按键状态），聊天读 `_game.Input.Mouse/Click/Wheel`。聊天删掉 `_mouseDown`。
+7. **`Capture` 落地**（§3.1 的设计）：`InputController.Capture` 为真时，`Poll` 把每个动作的 `Fresh`/`Down` 直接置假，原始键盘照常返回。游戏每帧写 `_input.Capture = _chatWindow.Focused`，不再依赖「先把 `kb` 清空再 Poll」——清空 `kb` 仍然保留，因为方向键和 Up/Down 是直接读 `kb.IsKeyDown` 的（那条路不走 action）。
+
+8. **标签也是组件**：两个标签各是 `Rect` + `Button` + `Image("ui/chat_taball")`，`Image` 自己按 hover/pressed 换 `_n`/`_h`/`_p` 三张图，`DrawTabs` 和 `_tabObjs` 删掉。
+
+**结果**：`HudChat.cs` 497 → 376 行，`Ui/ChatLog.cs` 129 行、`Ui/CaretText.cs` 49 行；`Input.cs` +9 行。窗口自己画的东西只剩折叠状态下那个会随 hover 换图的小框。31 张截图（`--aiticks` 3 张）和改前逐字节一致：短句折行后还是自己那一行，日志、输入条、框和标签的位置与画法没动。客户端 55 条、共享/服务端 296 条不变。
+
+**用户验收提的三条（2026-10-31，当场改）**：
+1. **输入框内容会溢出**：`CaretText.Draw` 先算可用宽度（`BarW - fieldX - capW`），超长就按源矩形裁成尾巴（`src = (t.Width - w, 0, w, h)`），光标跟着可见的尾端走，不再盖住右边的按钮。
+2. **按住字母只打一个**：`UpdateKeys` 收 `dtMs`，加键盘重复——按下先打一个，按住 400ms 后每 40ms 再打一个（Backspace 同样会重复）；`FocusInput` 和 `Send` 都把重复状态清掉，所以开关输入不会误触发。
+3. **折叠态不对**：按参考图改成一行——`chat_frame_min` 九宫格 + 最近一行（超长同样裁尾巴）+ 右端一个白色 `+`；单击整条折叠框展开（`minW` 60 → 315，新增 `minPad`）。同时删掉窗口上不需要的第三个标签格（官方那张空标签图，`chat_tab_n.png` 不再加载，`EmptyTabRect` 删掉），标签只剩 All / Etc。
+
+4. **输入框平时隐藏**：照参考图改成"日志常在、输入行临时"——没在打字时只画标签 + 日志框 + 右边那一排小按钮，`To All` 和输入条都不画（`Build` 里按 `_caret.Focused` 才挂这两个对象）。回车（或聊天键）开始一行，回车发送、Esc 取消、点日志/点别处都会收起输入行（`Unfocus` 里置 `Dirty` 重建）。判断回车的位置放在聊天处理之前（`MushTownGame.Update`，Poll 之后），否则"回车发送"和"回车开始新行"会在同一帧撞车。
+
+5. **按钮全删、只留一个 chevron、窗口可拖**（用户 2026-10-31 第二轮）：`chat_btn_set` / `chat_btaddtab` / `chat_btmax` / `chat_btoutchat` 四个按钮和它们的贴图加载一起删掉。只留 `chat_btmin` 那个 chevron，摆到标签行右上角（`chevGap`），点它折起。折起那条仍是最近一句 + 右端 `+`，但**只有 `+` 那 18px（`plusW`）能展开**，其余部分改成拖动条。聊天窗可拖：展开时拖标签行中间那段空白（`TitleRect()` = 第二个标签右边到 chevron 左边），折起时拖整条（`+` 除外），走 `UiWindow.StartDrag` + `DragWindows` 那套，拖动只改 `Pos` 不重建。没在打字时窗口高度只到日志框底边（`Rect()` 取 `LogRect().Bottom`），输入行出现时才长到 150，所以展开态平时就是"标签 + 日志"。
+
+6. **折叠往下收、展开往上长 + 标签行可整排平移**（用户 2026-10-31 第三轮）：折起来的那一条改成占**开窗盒子的最下面一行**（`Rect()` 折叠态 = `(0, h - minH, minW, minH)`），所以收起是"往下收"，展开是"往上长"，底边不动。为此开窗高度固定为 `h`，不再按有没有输入行变高（空闲时日志框下面那 28px 不画东西，但窗口照样吃点击）。根节点的 rect 仍在盒子左上角，折叠时子节点的 rect 从 0 起算。`DragWindows` 的夹取改用 `Rect().Bottom`，这样 rect 有纵向偏移的窗口（折叠的聊天）不会被拖出屏幕。标签行新增 `tabX`：整排标签一起左右平移，不用逐个改。
+
+7. **收起条的 hover、回车自动收回、字体颜色、layout 位置键**（用户 2026-10-31 第四轮）：
+   - hover：`chat_frame_min` / `chat_frame_min1` 是官方两张（`view/backgrnd_min`、`min1`），"hover 换第二张"是我加的，已删——收起条不再随鼠标变样（它现在是拖动条，冒 hover 反而误导）。
+   - 回车自动收回：`FocusInput` 在"从收起状态展开"时置 `_foldWhenDone`，`Unfocus` 里据此折回去；`Minimise`/`Restore` 清掉这个标记，所以用 `+` 打开不会自己收。
+   - 字体颜色：`ChatLog` 把名字色/系统句色提成 `NameColor`/`SystemColor`，新增 `NewestRuns`（`Run(Text, Color, Gap)`），收起条按日志的排法画整条最新消息——蓝名字 + `nameGap` + 白正文，系统句是一整段金色，从左往右画、放不下在结尾截断；顺带去掉了原来拼在中间的冒号。超长仍从左裁。
+   - layout：`tabW`/`tabH` 进过代码常量又回到 json（第 3 轮审查指出 `Image` 会把贴图拉伸到框，尺寸改了看得出来）；现在 `tabW/tabH/chevW/chevH/targetW/targetH/scrollW` 都在 json。实测把 `tabX` 改成 40，两个标签整体右移 40 ✓。
+
+8. **layout 改了不生效的真相**（用户 2026-10-31 第五轮）：我上一轮动 `_help` 时把 `the "+" box` 里的引号直接写进了 JSON 字符串，整个 `panel-chat.json` 变成非法 → `PanelLayout.Read` 的 `catch (JsonException)` 把错误吞掉，游戏一直用内置默认值，**所以用户改的任何键都不会生效**（我的 `tabX: 40` 自测也没动，当时看错了截图）。修法三条：
+   - 重写 `panel-chat.json`，`_help` 里不再出现裸引号，`ConvertFrom-Json` 验过；`tabY` 设 4（标签贴到日志框上沿）、`targetX` 保留用户改的 0（`To All` 贴最左）。
+   - `PanelLayout.Load` 仍吞解析错误（启动必须能起来），但 `Read` 不再吞：热重载时抛给 `ReloadLayout`，由 `TryReloadLayout` 写一行 `layout: ...` 到 `logs/net-*.log`。配 `Load_BrokenJson_KeepsTheDefaults` / `ReloadAll_BrokenFile_KeepsItsNumbersAndReadsTheRest` 两个测试。
+   - 热重载撞上"编辑器还占着文件"（`IOException`）时不再放弃：`TryReloadLayout` 返回 bool，失败 300ms 重试，最多 5 次（永久坏掉的文件只留一行日志，不死循环）。
+
+9. **chevron 跟着标签行走**（用户 2026-10-31 第六轮）：用户把 `tabY` 改成 2，chevron 停在第 0 行，两者错开。`ChevRect()` 的 Y 改成 `_lay.Get("chevY", _lay.Get("tabY", 0))`——没写 `chevY` 时自动跟标签行对齐，要单独挪就加一个 `chevY`。拖动条（`TitleRect()`）的 Y 也跟着改成 `tabY`、高改成固定的 `TabH`（原来还在读已经删掉的 `tabH`）。
+
+10. **收起条显示"最后一整行"**（用户 2026-10-31 第七轮）：之前收起条画的是"最新一条消息整段塞进一行"，一条消息在日志里占两行时，收起后两行被并成一行。现在改成画日志**最后一行（wrap 后的最后一行）**：`ChatLog.NewestRowRuns` 复用 `FillVisible` + `WrapRows` 拿 `_rows[^1]`，颜色和间距跟日志一致，仍从左裁。摆拍 `*chatmin*` 顺手加了一条会折行的长句，好核对。
+
+11. **收起条把同一行叠着画**（用户 2026-10-31 第八轮）：`ChatLog.NewestRowRuns` 往调用方传进来的 `List<Run>` 里**只加不清**，而那个 list 是窗口的字段、每帧复用——跑几秒后同一行被重复追加，`skip` 只留尾部 `maxW` 像素，于是尾部窗口里出现"上一份的尾 + 间隙 + 下一份"，看起来像中间被截断。修法：`NewestRowRuns` 开头 `runs.Clear()`。**这类每帧累积的 bug 用 `--shot` 抓不到**（摆拍只渲染一帧），以后碰到"跑一会儿才出现"的显示问题，要按帧累积的思路查。
+
+12. **收起条左端留了一大段空白**（用户 2026-10-31 第九轮）：`skip = total - maxW` 在文字比收起条短时是**负数**，而绘制循环里 `else { x += run.Gap - skip; }` 把这个负数当成"要跳过的量"反向加到了 x 上，于是短文本被整段推到右边（看着像居中/右对齐）。修法：`skip` 用 `Math.Max(..., 0)` 夹住，放得下就从左端 `pad` 开始画。验证：短的一行折起后紧贴左端（截图 `logs/f_chatmin.png`）。
+
+13. **收起条改成"最后一条消息从头显示、尾巴截断"**（用户 2026-10-31 第十轮，定稿）：上一版画"日志最后一行（wrap 之后）"，看着很怪（只剩半句 `dddd…`）。现在 `ChatLog.NewestRuns` 给整条最新消息——蓝名字 + `nameGap` + 正文（系统句一整段金色），收起条从 `pad` 开始从左往右画，宽度用完就把最后一个字**从中间截断**，不再从左边裁。上一版的 `NewestRowRuns` 删掉。
+
+**新增摆拍**：`--shot *chatmin*` 折起聊天，`--shot *chattype*` 在输入行打一串超长文字（`PoseShotChat`，和 `*hptip*` / `*itemtip*` 同一套按文件名摆拍）。
+
+14. **审查修的一批**（2026-10-31，自主 review-loop 第 1 轮）：
+    - **P0 坏一个 json 就冻住整次热重载**：我上一轮把 `PanelLayout.Read` 改成抛异常，但 `ReloadAll` 没逐文件兜住，而且 `layouts/panel-party.json` 的 `_help` 里本来就有裸引号（`the "not in a party" layer`），从 10-22 起就没解析过。结果：改 `panel-chat.json` 时重载在 party 那里抛出，后面的 `BuildScreenScene()` 不跑 → 界面完全不动。修法：`ReloadAll` 逐文件 `try/catch`（`JsonException` / `InvalidOperationException`），坏文件保旧值继续读别的，错误以 `List<string>` 返回；`TryReloadLayout` 把每条写进日志但返回 true（解析错误重试没用），只有 `IOException` / `UnauthorizedAccessException` 才重试。party 文件的裸引号清掉。测试 `ReloadAll_BrokenFile_KeepsItsNumbersAndReadsTheRest` 改成断言"坏文件保旧值 + 别的文件照读 + 返回 1 条错误"。
+    - **P0 `_foldWhenDone` 没清**：`Minimise` / `Restore` 都补上清标记，否则"回车展开 → chevron 折起 → `+` 展开 → 发送"会把窗口自己折回去。
+    - **P1 看不见的点击吞区**：`UiWindow.Sync` 原来 `Place(Host, Pos, Rect().Size)`，折叠时 `Rect()` 的 y 偏移 130 没算进去，宿主命中框落在展开盒左上角。改成 `Pos + box.Location`。
+    - **P1 折行宽度不跟热重载**：`ChatLog._wrapW` 是构造参数，改 `w`/`logPadX` 不生效。改成 `WrapW` 属性，`Build()` 里按 `LogTextW()` 重设。
+    - **P1 `_repeatKey` 失焦不清**：点输入框外面 / Esc 之后重复块还会再打一个字。`Unfocus()` 里清 `_repeatKey`/`_repeatMs`。
+    - **P1 `_wrapCache` 无上限**：聊天每发一句就多一条永久缓存，给到和贴图缓存一样的 `CacheCap` 上限、满了整体清空。
+    - 清理：`TitleRect()` 的折叠分支（死代码）、输入行的死按钮、四处过期注释。
+
+15. **第 2 轮审查修的一批**（2026-10-31）：
+    - **P0 收起后加号点不开、整条拖不动**：上一轮给 `UiWindow.Sync` 加 `Pos + Rect().Location` 之后，折叠窗的根节点还带着 `Rect()` 的 y=130，`Scene.Layout` 又加一次父偏移，命中框落到 `Pos.Y + 260`（屏幕外）；画的时候用 `OnScreen(Rect())`，所以截图完全正常。修法：根节点的 `Rect` 改成从 `(0,0)` 起，偏移只由宿主带一次。补了测试 `Sync_OffsetRect_PutsTheContentAtTheOffset`（带偏移 `Rect()` 的窗口 + `TopAt` 命中）。
+    - **P1 点聊天框自己的地方会漏到世界**：`UpdateKeys` 在 HUD 分发点击之前就把窗口折起，点击点落空 → `NpcClick` 跑世界点击。改成"延后一帧"：`Unfocus` 只置 `_foldPending`，真正的折叠在 `Draw` 里做（那时点击已经分发完）。
+    - **P1 收起条跟随页签**：`NewestRuns` 改用 `_lines[^1]`（全局最新），不管当前停在哪个页签。
+    - **P1 语法错被当成可重试**：`TryReloadLayout` 拆成两个 catch——IO/权限错返回 false 重试，JSON/根不是对象返回 true 只记一行。
+    - 小项：`logGap` 进 json（替掉 `LogTextW()` 里写死的 `-2`）；`WrapW` 去掉重复的 40 下限；按住连发只对能打出字符的键生效（按一下方向键不再打断字母连发）；`ReloadAll` 去掉多余 `ToList()`；7 处过期注释；补 3 条测试（`Sync` 偏移、`NewestRuns` 三次调用、**所有 `layouts/*.json` 必须能解析**——party 那个坏文件挂了 9 天没人发现）。
+
+16. **第 3 轮审查修的一批**（2026-10-31）：
+    - **P0 IO 错会让游戏退出**：上一轮把 catch 收窄到 JSON 两类，结果保存时文件被占（`IOException`/`FileNotFoundException`，仓库在 Documents 下，OneDrive 也会锁）会从 `Update` 抛出去 → `Program` 写 crash 文件退出；同时计划里写的"300ms 重试 5 次"变成死代码。现在分两个 catch：IO/权限 → 记一行、返回 false 走重试；JSON/根不是对象 → 记一行、返回 true 不重试。
+    - **P0 盒子尺寸又写死在代码里**：上一轮把 `tabW/tabH` 从 json 删掉换成常量，理由是"图按原尺寸画"，这个理由是错的（`Image` 会把贴图拉伸到 Rect）。现在 `tabW/tabH/chevW/chevH/targetW/targetH/scrollW` 都回到 json，代码全走 `_lay.Get`。
+    - **P1 在 `Draw` 里改状态**：折叠挪到下一帧 `Update` 开头的 `ChatWindow.Tick()`，`Draw` 变纯；顺带消掉"发送那一帧折叠条闪一下"。
+    - **P1 `Capture` 没测试**：补 `Poll_CaptureBlanksTheActions_AndKeepsTheKeys`（捕获时空动作表、按键边沿仍在、放开后不算新按下）。
+    - 小项：`Math.Max(..., 40)` 改 1（只为不让宽度为 0）、`WrapW` 改自动属性、`Send` 去掉重复清重复态、`NewestRuns`/折叠相关注释、双空行。
+
+17. **第 4 轮审查修的一批**（2026-10-31）：
+    - **P1 Esc 那一帧会吃掉输入**：上一轮为了读取点击把 `Poll` 挪到了 Esc 早退之前，结果按 Esc 关窗的那一帧，同帧按下的键/点击被消费掉（`Poll` 更新了按下表，下一帧不再算新按下）。现在 Esc 那层回到 `Poll` 之前，条件是 `!_chatWindow.Focused`（聊天有自己的 Esc）。
+    - **P1 全局 layout 坏文件仍会冻住整次重载**：`Layout/MenuLayout/CharLayout/JobLayout/SetupLayout` 五个 `Load` 之前没有逐文件兜底。现在统一走 `Guard(errors, path, () => Load(...))`，坏文件记一行、继续读别的，最后照常 `BuildScreenScene()`。
+    - **启动期 IO 错不再崩**：`PanelLayout.Load` 也吞 `IOException`/`UnauthorizedAccessException`（文件被 OneDrive 或编辑器锁住时保默认值，游戏必须能起来）。
+    - 小项：`Minimise` 改走 `Unfocus()`（重复态只在一处清）、连发遇到长帧不再一口气补按一长串（把 `_repeatMs` 夹在 `RepeatDelayMs - RepeatRateMs`）、`WrapW` 去掉推测的默认 40、`Scroll`/`WrapRows` 的注释按真实行为重写、"一次鼠标读取"那句改成实际情况、`TheShippedLayouts_Parse` 只扫 `panel-*.json` 和 `*-layout.json`（别人的备份文件不该让它红）。
+
+18. **第 5 轮审查修的一批**（2026-10-31，无 P0）：
+    - **死 catch 删掉**：所有布局解析都在 `Guard` / `PanelLayout.ReloadAll` 里逐文件兜住了，`TryReloadLayout` 第二个 catch 永远命中不了；留着还会把别处真正的 `InvalidOperationException` 当成"布局写错"吞掉。
+    - **导出器对齐**：删掉已不加载的 `chat_btn_set` / `chat_frame2` / `chat_frame_min1` / `chat_tab` / `chat_btaddtab` / `chat_btmax` / `chat_btoutchat` 七组导出，只留 `chat_btmin`（折叠箭头）；头注释和完成行改成实际内容。
+    - **重试预算按每次保存算**：watcher 的 Changed/Renamed/Created 都清 `_layoutTries`，连续保存不会再提前用完 5 次。
+    - **折叠条宽度只用一个键**：`minW` 删掉，折叠条跟 `w` 同宽（原来两个键默认相同，改一个忘另一个就对不齐）。
+    - **滚轮挪出 Draw**：`ReadWheel()` 进 `Tick()`，`Draw` 只画；滚动条 `_enabled()` 只读一次；`TheShippedLayouts_Parse` 在没有仓库时 `Assert.Inconclusive`。
+    - 挂账（P2，已记）：`ReloadLayout` 可能半提交（后面的文件 IO 失败时，前面的已经写进静态对象，靠重试或下次保存收敛）；别的窗口盖住输入行时 Enter 仍能开聊天；超长名字不裁剪会出框；满格时光标压右端帽 1px；字号仍是全局 12px 没进 json；折叠/发送/连发的状态机没有单测（要 `MushTownGame` 实例，靠手测）。
+
+19. **第 6 轮审查修的一批**（2026-10-31，无 P0）：
+    - **P1 展开态多出 28px 看不见的吞点击带**：根节点命中框用 `Rect()` 全高（150），但没打字时输入行不画（日志框到 122），那片空白会吃掉下沿的点击。改成按状态取高：折叠 `minH`、打字时到 `inputY+inputH`、平时到 `logY+logH`。
+    - **P1 启动时的 layout 错误静默**：`GameLog` 只写 `_rollLog`，而它在构造函数第 169 行那次 `TryReloadLayout()` 之后才建。现在建日志提前到那次 reload 之前（截图路径仍不写日志）。
+    - **P1 手写 `CharOf` + 手写连发**（建议改用 `Window.TextInput`）：**驳回**。理由：`TextInput` 是否会在按住时重复依赖 SDL 与系统设置，这个环境没法验证，删掉连发就是拿需求 2（长按连发）去赌；而且走 `TextInput` 会顺带支持中文/大写输入，用户 2026-10-31 明确说中文输入不做。等哪天真机确认 `TextInput` 会重复，再删 `CharOf` 和整套连发。
+    - 小项：`TitleRect()` 折叠态返回 `Rect()`（折叠条没有标题条）、`FoldForShot` 不再改数据（只摆状态，长句折叠：文件名同时含 `chatlong` 和 `chatmin`（如 `chatlong_chatmin.png`）两条摆拍都会触发）、`Tick` 改名 `UpdateFrame`、导出器去掉没人加载的 `prev*/next*` 滚动箭头、`Math.Max(end - x, 0)` 删掉、`Guard` 的日志改成全路径、`TheShippedLayouts_Parse` 找不到仓库时 `Assert.Inconclusive`。
+
+20. **第 7 轮审查修的一批**（2026-10-31，最后一条 P1）：
+    - **宿主命中框和内容高度对齐**：第 19 条只把根节点改矮了，宿主（`UiWindow.Sync` 里 `Place` 的那个 Rect）还是整个 150 高，日志框下面那 28px 空白仍然吞点击。现在 `UiWindow` 加 `HitSize()`（默认 `Rect().Size`），`Sync` 用它放宿主；`ChatWindow` 覆写成"折叠 = minH / 打字 = 到输入行底 / 平时 = 到日志框底"，根节点也读同一个值，两处不会再走偏。补测试 `Sync_HitSize_LeavesTheEmptyPartToTheWorld`（窗口盒里没画东西那段 `TopAt` 必须是 null）。
+    - `_layoutTries` 改 `volatile`（watcher 线程会清它）。
+
+**结果（含上面十三条验收意见 + 六轮审查修复）：`HudChat.cs` 497 → 465 行（`ChatLog.cs` 129 → 157 行、`CaretText.cs` 49 → 55 行）。收起条、输入行、chevron 这些行为改动都发生在聊天窗自己的区域里，画面其它地方没动；最后两版收起条的样子看 `logs/crop/h_min.png`（名字 + 正文 + `+`）和 `logs/crop/h_open.png`（展开、未打字时没有输入行）。客户端 60 条、共享/服务端 299 条全过。
+
+**没做**：官方那几个没功能的窗口按钮（whisper/link/command/emoticon）的行为；私聊/表情那一排官方 art 的行为。**下一片就是气泡样式**（用户 2026-10-31 定）：角色头顶的说话气泡现在画的是官方 `UI/ChatBalloon.img/0` 九宫 + `balloon_arrow` 尾巴 + 黑字居中，最多 3 行（`Ui/Balloon.cs`、`layouts/panel-balloon.json`）；用户说样式不对，具体要改哪里等开工时确认。
 ## 4. 分片
 
 工期按每周约 10 小时估。每周一个 commit（用户规矩）；2 周的片第 1 周提交能 build + test 的中间态，第 2 周完成；每片结束停下验收，先 review 后提交。
@@ -394,7 +503,7 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 |---|---|---|
 | K1 (P0) | **第 1 周**：`InputController` + `BoundAction`；绑定进角色（3 套 `KeyPresets` + `ActivePreset`）；KMS 默认键（10 个菜单动作 + 攻击/跳跃/Talk）；技能进表但**无默认键**；`CastSkill`；旧键窗适配到当前 preset（8 个可见动作）；技能窗去掉固定键文字（旧 Q/R/W… 已失效）。**第 2 周**（已做）：HUD 16 槽改成键槽（C 空）；Item 目标；删 `QuickSlots`/`QuickSlotKey`/demo QuickSlots 种子；旧键窗的快捷槽页整个删掉，Quick Slots 按钮只画图、点了不动 | 2 周 |
 | K2 (P0) | 键窗：每角色 preset、动作池、组件化（与 N5 合并）、键格固定、动作拖动、Copy 弹窗、技能从技能窗拖；拖到 HUD 槽随 K3；不做快捷槽页。**已做（2026-10-28）**：组件化（N5）；动作池 = 官方 77 张图标全放进去（没做的按了没反应），默认过滤组 = Not Added；Chat/Minimap 接进 `UpdateHud`；删掉 K1 的"隐藏动作的键不许抢"保护；Copy 换成官方 `presetCopy` 弹窗（3 个来源 preset + checked 高亮）；PRESETS 1/2/3 用 checked 图（选中绿）；Skill 钮不再关键窗，技能窗开在上面，从技能行拖到键格写成 `Skill:<id>`（draft 带技能，键格画技能图标）。**审查后补（2026-10-29）**：键格可抓（解绑和 Combo Key 才有入口）、技能落键加拖动门槛和顶层判断、Copy 默认来源改成当前 preset、Default 真的清掉技能、Chat 键不再把自己的字符打进输入框、键帽反查表。**剩下**：无（点击式拖放归 K3） | 2 周 |
-| K3 (P1) | 点击式拖放（§3.6，**已做**）：hover 抓手（`Cursor/5`）、单击拿、单击放；白色键盘/黑色池子/HUD 槽三区互通；放到黑色区 = 取消绑定；池子固定格位、只列没绑的动作。道具推迟到背包窗那片 | 1 周 |
+| K3 (P1) | 点击式拖放（§3.6，**已提交 986c438**）：hover 抓手（`Cursor/5`）、单击拿、单击放；白色键盘/黑色池子/HUD 槽三区互通；放到黑色区 = 取消绑定；池子固定格位、只列没绑的动作。道具推迟到背包窗那片 | 1 周 |
 
 ### 世界线
 
@@ -413,15 +522,16 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 | W1 (P0) | **`Rect` 改成父相对（Unity RectTransform 的形状）**：`Rect` 只存局部 offset + size；每帧开头 `Scene.Layout()` 走一次树把屏幕矩形写进 `Rect.Screen`；命中、绘制、HUD 悬停都读 `Screen`；`UiWindow.Sync()` 不再因为 `Pos` 变化重建；48 处 `Pos.X +`、51 处 `Pos.Y +` 变回纯偏移（10 个窗口文件）。不做 anchors / pivot / layout group。详见 §3.5 | 1 周（已验收，8b86b4a） |
 | N1 (P1) | HUD 条：气泡、快捷栏角标、手拿、tips。**已做（2026-10-30，已提交）**：四个组件（`Balloon` / `HeldItem` / `Tips` / `QuickCell`），`ItemLines` 由 tooltip 和属性窗共用；HudBar/HudQuickSlots 的 `Invoke` 归零，全仓 18 → 14；测试 49 → 51；35 张截图逐字节一致。详见 §3.7 | 1 周 |
 | N2 (P1) | 快捷槽：4 个键提示 + 12 个物品格合成一套 16 个等价槽（内容先固定）+ 设置旋钮。设计见 §3.8：16 个键留在 `HudQuickSlots.SlotKeys`，`QuickCell` 不再认「第几格」，旋钮成组件 | 1 周 |
-| N3 (P1) | 聊天窗（整块，最大） | 2 周 |
+| N3 (P1) | 聊天窗（整块，最大）；第 1 周已做（§3.9）：`ChatLog` + `CaretText` + `Box` 框，31 张截图逐字节一致 | 2 周 |
 | N4 (P1) | 小地图 + 大地图 | 2 周 |
 | N6 (P2) | 任务窗 | 1 周 |
 | N7 (P2) | 组队 + GUIDE | 1.5 周 |
+| N9 (P1) | 聊天气泡样式：官方 `UI/ChatBalloon.img/0` 九宫 + 尾巴 + 黑字，最多 3 行；用户 2026-10-31 说样式不对，**排在 N3 之后**，具体改哪里开工时确认 | 0.5 周 |
 | N8 (P2) | 选角 + 创建角色 | 2 周 |
 
 合计约 19 周（N0 缩到 0.5 周，S4 砍掉，W1 加 1 周）。三块互不依赖，顺序可以换。
 
-**顺序（我定的）**：K1 → N0 → K2+N5 → W1 → S1 → S2 → S3 → N1 → N2 → **K3** → N3 → N4 → N6 → N7 → N8。
+**顺序（我定的）**：K1 → N0 → K2+N5 → W1 → S1 → S2 → S3 → N1 → N2 → **K3** → N3 → **N9（气泡样式，2026-10-31 用户插到 N3 之后）** → N4 → N6 → N7 → N8。
 
 理由：先把输入这条线走完（技能解耦 + 每角色绑定是一件事）；再做组件基础，紧接着把键窗改组件；然后**先把 `Rect` 改成父相对**，再动世界和窗口——W1 要改每个窗口的坐标写法，放在 N1/N2/N3/N6/N7/N8 之前，那些窗口就只写一次新写法。**K3 从原来的位置挪到 N2 之后**（2026-10-30 用户定）：点击式拖放的三个可放区里，HUD 16 槽要等 N2 先合成一套，背包要等 N1。
 
@@ -442,6 +552,8 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 13. 键窗不挡（S3 同批，已做）：键窗开着时走路、攻击、跳跃、拾取、对话、喝药、7 个面板键全部生效，用的是**已保存**的 preset；在键窗里改键但**不 Save**，关窗后按旧键还是老效果；Save 后**下一帧**新键生效，不用重开；MENU 窗口仍然挡角色。这几处是 `Update` / `UpdateHud` 里的条件，要 `GraphicsDevice`，没有头测，只能手测。
 14. N1 HUD 条（已做）：`grep "new Invoke"` 在 `HudBar.cs` 和 `HudQuickSlots.cs` 里都是 0；27 张 `--shot` + 6 张 `--aiticks` + `--hit`/`--skill` 逐字节一致；`ItemLines` 2 条头测；气泡和两条 tip 用 `*balloon*` / `*hptip*` / `*itemtip*` 摆拍，`logs/n1_before` 和 `logs/n1_after` 三对图逐字节一致。手测（截图拍不到手拿）：①鼠标停在 HP/MP/EXP 条上出深色文字 tip；②停在背包或快捷栏的物品上出物品 tooltip（图标、名字、加成、描述），手里拿着东西时不出；③在聊天里发一句话，头顶出气泡，几秒后消失，走开时跟着走；④从背包拿起一件东西，图标跟着鼠标走，放下后回到格子。
 15. N2 快捷槽一套 + 设置旋钮（已做）：31 张截图（`--aiticks` 3 张），条带以外的像素逐字节一致（8 张不带 HUD 的整张一致，22 张只有条带变）；`settings` 另因音量状态变化，同音量下新旧 A/B 一致；`grep "new Invoke" MushTown.Client/Panels/HudSettings.cs` = 0，全仓 14 → 13；头测 3 条（`Slider.VolumeAt` 点中心不动和两端夹住、`Drag` 只动被按的那个且松手存一次）；手测：对着音量方块中心连点，方块不动；点轨道别处，方块跳过去；按住方块左右拖，音量跟着走，松手就停。
+
+16. N3 聊天窗（已做，跑了 7 轮自主 review：修了 6 个 P0、12 个 P1，其余记在 §3.9）：`HudChat.cs` 497 → 465 行，`grep "new Invoke" MushTown.Client/Panels/HudChat.cs` 只剩折叠框那一处；行为改动只在聊天窗自己的区域（收起条 / 输入行 / chevron），31 张整图不再逐字节一致是预期的；客户端 60 条 + 共享/服务端 299 条。手测：①按回车 → 展开并出现输入行和光标（平时输入行不画）；②打一句比一行宽的话回车 → 日志里折成多行，第二行缩进对齐名字；③日志行多到超出框 → 滚轮能上下滚，滑块跟着动；④打字时 WASD/方向键不动角色，Enter 发出去之后角色又能走；⑤打字时按绑定的动作键（比如 Ctrl 攻击）不出招；⑥点日志或别处 → 输入失焦，输入行消失；⑦点 All / Etc 两个标签 → 日志换成对应内容；⑧右上角只有一个 chevron，点它折成一行（那一行贴在窗口最下面，展开时往上长，底边不动）；⑨折起那一行显示最新一条的"名字 + 正文"，放不下就在结尾截断；只有右端 `+` 能展开，拖这一行的其它地方能移动聊天窗；⑩收起时按回车 → 展开并进入输入，发送完成或失焦自己收回；⑪按住一个字母不放 → 隔约 0.4 秒开始连续输入（Backspace 也会连续删）；⑫打一句比输入框宽的话 → 只显示末尾那一截；⑬展开时拖标签行中间的空白也能移动。挂账（已知、未改）：收起状态下拖不到窗口顶部（`ClampPanel` 夹的是展开盒的顶边，折叠条最低只能到 y=130）；Esc / 折起 / 失焦不清输入框里的半句话（下次回车会带出来，等用户决定）；点 `+` 展开后打字发送**不会**自动收回（只有回车从收起态打开的那种才收回，用户第 7 轮定的）。
 
 ## 6. 风险
 

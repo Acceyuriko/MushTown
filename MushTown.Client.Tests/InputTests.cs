@@ -32,6 +32,26 @@ public class InputTests
         Assert.IsFalse(c.Down(target));
     }
 
+    // While the chat has the input, typing must not fire the actions the same
+    // keys bind: the action table goes blank, the raw key edges do not.
+    [TestMethod]
+    public void Poll_CaptureBlanksTheActions_AndKeepsTheKeys()
+    {
+        var c = Installed(("I", "Inventory"));
+        var target = BindTarget.Ui(HotkeyAction.Inventory);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fresh(target)); // a normal frame fires the action
+        c.Poll(new KeyboardState(), default, false, false, 0);
+        c.Capture = true;
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsFalse(c.Fresh(target)); // the chat types the I instead
+        Assert.IsFalse(c.Down(target));
+        Assert.IsTrue(c.Fresh(Keys.I)); // the key edge itself is still there
+        c.Capture = false;
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsFalse(c.Fresh(target)); // I was down while captured: not a new press
+    }
+
     [TestMethod]
     public void Combo_IsAnAlias()
     {
