@@ -85,6 +85,8 @@ public partial class MushTownGame
     {
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         _showShop = false; // the shop is NPC-bound too: a new map closes it
+        _npcBalloonNpc = 0; // the NPCs of the old map: the next map starts over
+        _npcBalloonDone = 0;
         foreach (var s in _map.Npcs)
             if (!_npcs.ContainsKey(s.NpcId))
                 throw new InvalidDataException($"map {_mapId}: npc art {s.NpcId} not exported");

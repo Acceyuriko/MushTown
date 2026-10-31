@@ -18,6 +18,9 @@ public static partial class Export
         (@"Ring\01112134.img", null),
         (@"Ring\01112135.img", null),
         (@"Ring\01112162.img", null),
+        // The chat rings: they change the speech balloon (info/chatBalloon), not the plate.
+        (@"Ring\01112200.img", null),
+        (@"Ring\01112205.img", null),
         // The gear of the two shops (Sid 11000, Pan 21000).
         (@"Weapon\01302007.img", BeginnerSword),
         (@"Weapon\01302005.img", BeginnerSword),
@@ -147,7 +150,7 @@ public static partial class Export
                     Console.WriteLine($"equip {id} has no art (slot {slot} needs one)");
                     return null;
                 }
-                if (!NameTagNodes.Contains(tag)) // the boot loads the plate art by this node
+                if (tag != 0 && !NameTagNodes.Contains(tag)) // 0 = no plate (a chat ring); else the boot loads the plate by this node
                 {
                     Console.WriteLine($"equip {id} is a ring with no exported name tag ({tag})");
                     return null;
@@ -172,11 +175,17 @@ public static partial class Export
                 Price = Int(info, "price"),
                 ReqLevel = Int(info, "reqLevel"),
                 NameTag = tag,
+                ChatBalloon = Int(info, "chatBalloon"),
                 HasArt = beginner != null,
             };
             if (data.Price <= 0 && Int(info, "cash") == 0) // cash gear carries no meso price
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
+                return null;
+            }
+            if (data.ChatBalloon != 0 && !Export.BalloonStyles.Contains(data.ChatBalloon))
+            {
+                Console.WriteLine($"equip {id} wants balloon style {data.ChatBalloon}, which the chat export does not write");
                 return null;
             }
             defs.Add((gear, data));

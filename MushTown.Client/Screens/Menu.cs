@@ -281,12 +281,12 @@ public partial class MushTownGame
             {
                 if (!ItemData.BeginnerImgs.ContainsKey(item.Slot) && item.Slot != "Ri")
                     throw new InvalidDataException($"equip {id} has a bad slot");
-                if (item.Slot == "Ri" && item.NameTag == 0)
+                if (item.Slot == "Ri" && item.NameTag == 0 && item.ChatBalloon == 0) // a chat ring changes the balloon, not the plate
                     throw new InvalidDataException($"equip {id} has no nametag");
                 if (ItemData.BeginnerImgs.ContainsKey(item.Slot) && !item.HasArt)
                     throw new InvalidDataException($"equip {id} has no art");
             }
-            if (item.Price <= 0 && item.NameTag == 0) // stale jsons price 0, except rings (cash gear carries no meso price)
+            if (item.Price <= 0 && item.NameTag == 0 && item.ChatBalloon == 0) // stale jsons price 0, except rings (cash gear carries no meso price)
                 throw new InvalidDataException($"item {id} has a bad price");
             if (item.Name == "") // pre-name jsons would print blank labels
                 throw new InvalidDataException($"item {id} has no name");
@@ -376,7 +376,7 @@ public partial class MushTownGame
             _textures["menu/" + f] = Texture2D.FromStream(GraphicsDevice, stream);
         }
         foreach (string f in HudFiles) LoadTexture("ui/" + f);
-        LoadBalloonArt(); // the speech bubble over the character
+        LoadBalloonStyles(); // the speech bubble over the character
         _jobs = LoadJson<JobListData>(Path.Combine(_assetsDir, "ui", "jobs.json")).Jobs; // class roster
         if (_jobs.Count == 0) throw new InvalidDataException("jobs.json has no classes: re-export");
         if (_shotJob != 0) // --job <id>: the shot poses that class instead of the page default

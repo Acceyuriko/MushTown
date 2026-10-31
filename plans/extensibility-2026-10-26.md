@@ -493,6 +493,34 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 **结果（含上面十三条验收意见 + 六轮审查修复）：`HudChat.cs` 497 → 465 行（`ChatLog.cs` 129 → 157 行、`CaretText.cs` 49 → 55 行）。收起条、输入行、chevron 这些行为改动都发生在聊天窗自己的区域里，画面其它地方没动；最后两版收起条的样子看 `logs/crop/h_min.png`（名字 + 正文 + `+`）和 `logs/crop/h_open.png`（展开、未打字时没有输入行）。客户端 60 条、共享/服务端 299 条全过。
 
 **没做**：官方那几个没功能的窗口按钮（whisper/link/command/emoticon）的行为；私聊/表情那一排官方 art 的行为。**下一片就是气泡样式**（用户 2026-10-31 定）：角色头顶的说话气泡现在画的是官方 `UI/ChatBalloon.img/0` 九宫 + `balloon_arrow` 尾巴 + 黑字居中，最多 3 行（`Ui/Balloon.cs`、`layouts/panel-balloon.json`）；用户说样式不对，具体要改哪里等开工时确认。
+## 3.10 N9 聊天气泡样式（2026-10-31，已做，等验收）
+
+用户要求：气泡跟着聊天戒指变样式；NPC 气泡用不同字体和颜色；默认气泡就是官方那套。
+
+**数据（WZ）**
+- `UI/ChatBalloon.img/<n>`：472 套气泡，每套 4 个角 + 4 条边 + 中心 + 尾巴（`arrow`）+ 文字颜色（`clr`）。角的大小每套不同（0/1 是 6×6，7 是 16）。
+- `Character/Ring/0111xxxx.img/info/chatBalloon`：455 枚戒指带这个字段，值就是样式号。这就是"戒指换气泡"的官方规则。
+- `UI/ChatBalloon.img/popupSayEx/chatBalloon` 是**深灰的 NPC 说话弹窗**（412 宽、中间透明），不是图二那种白气泡，所以没用它；NPC 气泡复用玩家样式 0 的九宫格，尾巴改到正中。
+
+**做法**
+- 导出器：`ItemData.ChatBalloon` 读 `info/chatBalloon`；新增两枚聊天戒指（`01112200` Pink Quote Ring → 样式 1、`01112205` Blue-Flowered Quote Ring → 样式 7）；`BalloonStyles = {0,1,7}` 一处声明，导物品时检查戒指要的样式在表里；每套样式导出 `ui/balloon_<n>_<piece>.png` 和 `ui/balloon_<n>.json`（`Style/Border/ArrowX/ArrowY/Color`，角宽=边框，尾巴锚点见下面「尾巴对齐」那条）。
+- 客户端：`Balloon` 每帧问 `BalloonStyle()`；`ItemData.WornBalloonStyle(worn, defs)` 是唯一规则（第一枚聊天戒指赢，名牌戒指不算），有单测。`UiText.GetSized(text, px)` + `Wrap(text, w, px)` 让字号来自 json。
+- NPC 气泡：`NpcBalloon` 组件，玩家走进对话距离时最近那个 NPC 说 `Greet`，`npcLifeMs` 后消失，开对话时不显示。字体 `npcFontSize`（14，比玩家的 12 大），颜色 `npcClr`。
+- `layouts/panel-balloon.json`：加 `fontSize` 和 8 个 `npc*` 键。
+- 两枚戒指进了 `shops/10000.json` 和 `shops/21000.json` 的货架。演示背包 `DemoChara.EquipBag` 是固定的 3 件，`_equips` 只驱动背包格子，所以 `--wear` 里没有聊天戒指（截图用 `--shot ...balloonring` 摆样式）。
+
+**验证**
+- `--shot ...balloonring` 摆拍：白气泡 → 粉气泡（样式 1）。
+- `--shot ...npcbubble` 摆拍：站到最近 NPC 旁，白气泡居中尾巴 + "He-hello..."（14px）。
+- 门禁：format 干净、0 警告 0 错误、测试 61 + 300。
+
+**挂账**
+- `--wear` 摆拍会依次戴上三枚名牌戒指和两枚聊天戒指，最后戴的是聊天戒指（无名牌），所以那张图里头顶名牌没了。真存档没这个问题（只会戴一枚）。
+- 商店截图要 NPC 21000 在图上，`--screen shop --talk 21000` 在 10000 地图上会报错，换个 NPC 或地图再摆。
+- 只导出了 3 套样式；换别的戒指要往 `BalloonStyles` 里加一行再重导。
+- **背包和装备栏的设计要重做**（用户 2026-10-31 指出，同意放后面）：现在 EQUIP 页上半是"身上"格子、下半是"背包"格子，买来的东西直接进背包格，点一下拿在手上、再点上面格子才穿上。用户觉得这不是他想要的背包/装备栏分法。另外现金道具（戒指是 cash 道具）没有 CASH 页，价格 0 免费。
+- 尾巴对齐（改了三次才对）：`origin` 不是尾巴的中间，别用；现在导出时读这套的 `arrow` 宽度和 `s`（底边）高度，算出 `ArrowX = -arrowWidth/2`（尾巴居中）、`ArrowY = -sHeight`（尾巴顶边压进底边边框里，黑边和框的黑边连成一条）。每套样式各算一份，不写死。
+- 名字纠正（用户 2026-10-31）：**Inventory 是背包**，里面的 EQUIP 只是背包的装备分类；**身上穿的装备在 E 键打开的那个面板**。现在穿装备是把背包里的东西拿在手上，再点 E 面板里对应的格子。这条和上一条"背包/装备栏要重做"一起做。
 ## 4. 分片
 
 工期按每周约 10 小时估。每周一个 commit（用户规矩）；2 周的片第 1 周提交能 build + test 的中间态，第 2 周完成；每片结束停下验收，先 review 后提交。

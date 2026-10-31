@@ -10,6 +10,14 @@ public class ShopTests
     private static ItemData Def(int id, int price, string? slot = null) =>
         new() { ItemId = id, Price = price, Slot = slot };
 
+    // A 0-price item (cash gear) sells for nothing: no free-money loop.
+    [TestMethod]
+    public void SellPrice_ZeroPrice_IsZero()
+    {
+        Assert.AreEqual(0, Shop.SellPrice(0));
+        Assert.AreEqual(1, Shop.SellPrice(1));
+        Assert.AreEqual(1, Shop.SellPrice(2));
+    }
     [TestMethod]
     public void SellPrice_HalvesMinOne()
     {

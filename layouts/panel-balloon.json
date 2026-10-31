@@ -1,5 +1,5 @@
 {
-  "_help": "The speech bubble over the player (official MapleStory art, UI/ChatBalloon.img/0). Game pixels in 1366x768. w = the bubble width. maxLines = how many lines of the message the bubble shows (a longer message is cut short). lineH = the height of one line. padX/padY = the gap between the text and the bubble border. lifeMs = how long the bubble stays on the screen. aboveFeet = how many pixels above the feet the bubble bottom sits. arrowUp = how many pixels the tail tip reaches up into the bubble border.",
+  "_help": "The speech bubble over the player (official MapleStory art, UI/ChatBalloon.img/0). Game pixels in 1366x768. w = the bubble width. maxLines = how many lines of the message the bubble shows (a longer message is cut short). lineH = the height of one line. padX/padY = the gap between the text and the bubble border. lifeMs = how long the bubble stays on the screen. aboveFeet = how many pixels above the feet the bubble bottom sits. fontSize = the text size of the message. npc* = the same for the NPC balloon (npcW is its width, npcClr its text color). The border of the bubble and its text color come from the style art (assets/ui/balloon_<style>.json).",
   "w": 130,
   "maxLines": 3,
   "lineH": 15,
@@ -7,5 +7,13 @@
   "padY": 6,
   "lifeMs": 4000,
   "aboveFeet": 74,
-  "arrowUp": 2
+  "fontSize": 12,
+  "npcW": 150,
+  "npcPadX": 8,
+  "npcPadY": 6,
+  "npcLineH": 16,
+  "npcFontSize": 14,
+  "npcAboveHead": 44,
+  "npcClr": -13354916,
+  "npcLifeMs": 3000
 }

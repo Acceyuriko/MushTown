@@ -38,6 +38,7 @@ public partial class MushTownGame : Game
     private readonly int _shotSkillTab; // --skilltab: which job tab the skill window opens on
     private readonly bool _shotDrop; // --drop: swing until the first kill, show its drops
     private readonly bool _shotWear; // --wear: the demo wears its whole EQUIP bag
+    private readonly bool _shotBalloonRing; // *balloonring*: the balloon is posed with the chat ring's style
     private readonly int _shotAiticks; // --aiticks <n>: n 100ms AI steps at the posed feet
 
     private SpriteBatch _spriteBatch = null!;
@@ -126,6 +127,7 @@ public partial class MushTownGame : Game
         _shotDrop = shotDrop;
         _shotAiticks = shotAiticks;
         _shotWear = shotWear;
+        _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
         _panelHosts = new[] { _invHost, _statHost, _skillHost, _questHost, _settingsHost, _shopHost }; // the panel-id order the Z row and the hit lookups use
         _assetsDir = FindAssetsDir();
         _bgm = new BgmPlayer(Path.Combine(_assetsDir, "sound"), _shotPath != null);
@@ -297,6 +299,15 @@ public partial class MushTownGame : Game
             // a shot never types, so a shot named *balloon* shows a sample line
             if (Path.GetFileNameWithoutExtension(_shotPath)!.Contains("balloon"))
                 ShowBalloon("Hi! I am going to Southperry now, see you soon!");
+            // *npcbubble* stands next to the nearest NPC: the bubble only shows in talk reach
+            if (Path.GetFileNameWithoutExtension(_shotPath)!.Contains("npcbubble") && _npcArts.Count > 0)
+            {
+                var near = _npcArts.OrderBy(a => Math.Abs(a.Spawn.X - _mover.X)).First();
+                _mover.X = near.Spawn.X + 20;
+                _mover.Y = near.Spawn.Cy;
+                UpdateNpcBalloon(); // a shot renders without Update: pick the line now
+            }
+
             // a shot named *guideboss* or *guidespecial* opens that guide tab
             string shotName = Path.GetFileNameWithoutExtension(_shotPath)!;
             if (shotName.Contains("guideboss")) _guideWindow.SetTab(1);
@@ -507,6 +518,7 @@ public partial class MushTownGame : Game
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
             _talkHost.Enabled = false; // the one early layer write: this frame's hover and click run later and would still see the modal
         }
+
         if (RightEdge(ms) && Holding) { ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
         UpdateHud(kb, click, held, mx, my);
         // The MENU window is modal for the character: while it is open the
@@ -523,6 +535,7 @@ public partial class MushTownGame : Game
         if (_loadBeat > 0) _loadBeat--;
 
         _timeMs = gameTime.TotalGameTime.TotalMilliseconds;
+        UpdateNpcBalloon(); // the nearest NPC in reach says its line over its head (after the clock moves)
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float dtMs = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
         _fighter.Tick(dtMs);

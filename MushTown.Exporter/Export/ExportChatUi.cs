@@ -1,3 +1,4 @@
+using MushTown.Shared;
 using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
@@ -8,6 +9,10 @@ namespace MushTown.Exporter;
 // The art is saved as it is: no recolouring, no baking.
 public static partial class Export
 {
+    // The balloon styles written to assets/ui: the plain one and the ones the
+    // chat rings in ExportItem.Gears name. One list, checked at item export.
+    public static readonly int[] BalloonStyles = { 0, 1, 7 };
+
     // The file names must match the client (MushTown.Client/Panels/HudChat.cs).
     public static bool ExportChatUi(WzRoot ui, string outDir)
     {
@@ -33,11 +38,33 @@ public static partial class Export
             if (!UiPng.Save(ui, $"{chat}/input/backgrnd/{piece}", Path.Combine(dir, $"chat_input_{piece}.png"))) return false;
 
 
-        // the speech balloon (UI/ChatBalloon.img/0): nine pieces for the bubble
-        // and the tail under it
-        foreach (string piece in new[] { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se" })
-            if (!UiPng.Save(ui, $"ChatBalloon.img/0/{piece}", Path.Combine(dir, $"balloon_{piece}.png"))) return false;
-        if (!UiPng.Save(ui, "ChatBalloon.img/0/arrow", Path.Combine(dir, "balloon_arrow.png"))) return false;
+        // The speech balloons: the plain one (0) and the styles the chat rings
+        // name (info/chatBalloon). A style is ten pictures (ui/balloon_<n>_<piece>.png)
+        // plus the numbers the client needs (ui/balloon_<n>.json): the corner
+        // size, which is the border of the bubble, where the tail hangs and the
+        // color of the text.
+        foreach (int style in BalloonStyles)
+        {
+            foreach (string piece in new[] { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se", "arrow" })
+                if (!UiPng.Save(ui, $"ChatBalloon.img/{style}/{piece}", Path.Combine(dir, $"balloon_{style}_{piece}.png"))) return false;
+            if (!UiPng.TryRead(ui, "UI", $"ChatBalloon.img/{style}/nw", out var corner, out _)) return false;
+            if (!UiPng.TryRead(ui, "UI", $"ChatBalloon.img/{style}/arrow", out var arrowPng, out _)) return false;
+            if (!UiPng.TryRead(ui, "UI", $"ChatBalloon.img/{style}/s", out var bottom, out _)) return false;
+            // The tail art is centred under the bubble: its own middle lands on
+            // the middle of the bubble. It starts inside the bottom border, so
+            // the frame's dark outline and the tail's dark outline join into one
+            // line (the tail's top row carries no outline: it blends into the
+            // fill). (The WZ origin is not the tail's middle, so it is not used.)
+            WriteJson(Path.Combine(dir, $"balloon_{style}.json"), new BalloonStyleData
+            {
+                Style = style,
+                Border = corner.Width,
+                ArrowX = -(arrowPng.Width / 2),
+                ArrowY = -bottom.Height, // the bottom border is how far the tail goes in
+                Color = ui.Find($@"ChatBalloon.img\{style}\clr")?.GetValueEx<int>(0) ?? 0,
+            });
+        }
+
 
         // the small frame of the folded chat
         foreach (string piece in new[] { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se" })
@@ -65,7 +92,7 @@ public static partial class Export
         // the NPC talk art ships with the chat art
         if (!ExportTalkUi(ui, outDir)) return false;
 
-        Console.WriteLine("chat ui: frame, folded frame, 2 tabs, input bar, chevron, speech balloon");
+        Console.WriteLine($"chat ui: frame, folded frame, 2 tabs, input bar, chevron, {BalloonStyles.Length} speech balloons");
         return true;
     }
 

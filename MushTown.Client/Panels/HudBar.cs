@@ -311,6 +311,9 @@ public partial class MushTownGame
         var balloon = new GameObject { NoHit = true, Z = BalloonZ }; // the speech bubble over the character: under every HUD piece
         balloon.Add(MakeBalloon());
         _uiScene.Add(balloon);
+        var npcBalloon = new GameObject { NoHit = true, Z = BalloonZ }; // the NPCs speak through their own bubble
+        npcBalloon.Add(new NpcBalloon(NpcSpeech, _balloonLay, _balloonStyles[0]));
+        _uiScene.Add(npcBalloon);
         var furniture = new GameObject(); // HUD furniture: hit-rects with no Buttons (clicks stop here, silent)
         furniture.AddChild(HitBox(PlateRect()));
         var hp = HitBox(HpBox()); // the bars split at the line of their own numbers

@@ -5,7 +5,7 @@ namespace MushTown.Shared;
 // (take it off first: the sell list shows bags only).
 public static class Shop
 {
-    public static int SellPrice(int price) => Math.Max(1, price / 2);
+    public static int SellPrice(int price) => price <= 0 ? 0 : Math.Max(1, price / 2); // a 0-price item (cash gear) sells for nothing
 
     public static bool Buy(CharaSlot chara, int id, int price, ItemData def)
     {

@@ -28,11 +28,13 @@ public sealed class UiText : IDisposable
     private readonly Dictionary<string, Texture2D> _cacheSmall = new();
     private readonly Dictionary<string, Texture2D> _cacheMid = new();
     private readonly Dictionary<string, Texture2D> _cacheMeso = new();
+    private readonly Dictionary<int, Font> _sized = new(); // px -> font (the balloons ask for theirs)
+    private readonly Dictionary<(string text, int px), Texture2D> _cacheSized = new();
     private readonly Dictionary<string, Texture2D> _cacheList = new();
     private readonly Dictionary<string, Texture2D> _cacheCancel = new();
     private readonly Dictionary<string, Texture2D> _cacheSetupName = new();
     private readonly Dictionary<string, Texture2D> _cacheSetupError = new();
-    private readonly Dictionary<(string, float), List<string>> _wrapCache = new();
+    private readonly Dictionary<(string, float, int), List<string>> _wrapCache = new();
     private readonly List<Texture2D> _trash = new(); // the textures that left the cache
     private const int CacheCap = 512; // the cache size that makes room for new strings
 
@@ -76,10 +78,14 @@ public sealed class UiText : IDisposable
         foreach (var tex in _cacheCancel.Values) tex.Dispose();
         foreach (var tex in _cacheSetupName.Values) tex.Dispose();
         foreach (var tex in _cacheSetupError.Values) tex.Dispose();
+        foreach (var tex in _cacheSized.Values) tex.Dispose(); // the balloons ask by pixel size: a reload may change it
+        foreach (var font in _sized.Values) font.Dispose();
         _cacheList.Clear();
         _cacheCancel.Clear();
         _cacheSetupName.Clear();
         _cacheSetupError.Clear();
+        _cacheSized.Clear();
+        _sized.Clear();
         _list = Maple(MenuLayout.ListSize);
         _cancel = Maple(MenuLayout.CancelSize);
         _setupName = Maple(SetupLayout.NameFont);
@@ -93,6 +99,21 @@ public sealed class UiText : IDisposable
 
     // Small sibling for HUD labels (names, tabs, rows, slots).
     public Texture2D GetSmall(string text) => GetFrom(_cacheSmall, _small, text);
+
+    // Text at a pixel size the layout names (the player and the NPC balloons).
+    public Texture2D GetSized(string text, int px)
+    {
+        if (!_sized.TryGetValue(px, out var font)) _sized[px] = font = Maple(px);
+        if (_cacheSized.TryGetValue((text, px), out var tex)) return tex;
+        tex = Bake(text, font);
+        if (_cacheSized.Count >= CacheCap)
+        {
+            foreach (var old in _cacheSized.Values) _trash.Add(old);
+            _cacheSized.Clear();
+        }
+        _cacheSized[(text, px)] = tex;
+        return tex;
+    }
 
     // Meso/point numbers in MapleStory Bold 12. Draw tinted #606871.
     public Texture2D GetMeso(string text) => GetFrom(_cacheMeso, _meso, text);
@@ -136,13 +157,17 @@ public sealed class UiText : IDisposable
     // first, then greedy words; a word wider than the box splits by char).
     // The result is cached: the world map wraps every row on each rebuild and
     // GDI+ measuring is slow.
-    public List<string> Wrap(string text, float maxWidth)
+    public List<string> Wrap(string text, float maxWidth) => Wrap(text, maxWidth, 12);
+
+    // Word-wrap at the size the caller draws (the balloons wrap at their own font size).
+    public List<string> Wrap(string text, float maxWidth, int px)
     {
-        var key = (text, maxWidth);
+        var key = (text, maxWidth, px);
         if (!_wrapCache.TryGetValue(key, out var lines))
         {
             if (_wrapCache.Count >= CacheCap) _wrapCache.Clear(); // the chat adds lines all night: keep it bounded
-            lines = WrapWith(text, maxWidth, _small);
+            if (!_sized.TryGetValue(px, out var font)) _sized[px] = font = Maple(px);
+            lines = WrapWith(text, maxWidth, font);
             _wrapCache[key] = lines;
         }
         return lines;
@@ -220,6 +245,8 @@ public sealed class UiText : IDisposable
         _cancel.Dispose();
         _setupName.Dispose();
         _setupError.Dispose();
+        foreach (var tex in _cacheSized.Values) tex.Dispose();
+        foreach (var font in _sized.Values) font.Dispose();
         Trim();
         foreach (var tex in _cache.Values) tex.Dispose();
         foreach (var tex in _cacheSmall.Values) tex.Dispose();

@@ -247,6 +247,7 @@ public sealed class ItemData
     public const int BambooRing = 1112134; // Bamboo Name Tag Ring (Ri, plate 58): cash shop (later)
     public const int InkRing = 1112135; // Ink-and-Wash Painting Name Tag Ring (Ri, plate 59): cash shop (later)
     public const int IslandRing = 1112162; // Island Travel Name Tag Ring (Ri, plate 129): cash shop (later)
+
     public const int LongSword = 1302007; // Long Sword (Wp, PAD 27): the shop of Sid (11000)
     public const int LolicoArmor = 1040015; // Brown Lolico Armor (Ma, PDD 15): the shop of Pan (21000)
 
@@ -260,9 +261,18 @@ public sealed class ItemData
         ["Ma"] = "01050287",
     };
 
-    // Worn bonuses: weapon PAD (0 when none worn: the caller keeps the
-    // beginner 32), summed STR/DEX/DEF. Unknown ids grant nothing (a
-    // hand-made save may list what v1 never shipped).
+    // The balloon style of the worn rings: the first chat ring wins, 0 is the
+    // plain balloon. A name-tag ring names no style.
+    public static int WornBalloonStyle(List<int>? worn, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        if (worn == null) return 0;
+        foreach (int id in worn)
+            if (defs.TryGetValue(id, out var d) && d.ChatBalloon != 0)
+                return d.ChatBalloon;
+        return 0;
+    }
+
+    // Worn bonuses: the weapon's attack, the armour's stats.
     public static (int weapon, int str, int dex, int def) EquipBonus(List<int>? worn, IReadOnlyDictionary<int, ItemData> defs)
     {
         int weapon = 0, str = 0, dex = 0, def = 0;
@@ -292,6 +302,7 @@ public sealed class ItemData
     public int Str { get; set; } // WZ incSTR
     public int Dex { get; set; } // WZ incDEX
     public int NameTag { get; set; } // WZ info/nameTag: UI NameTag.img node (0 = plain black box)
+    public int ChatBalloon { get; set; } // WZ info/chatBalloon: the style of the speech balloon (0 = the plain one)
     public bool HasArt { get; set; } // the exporter wrote doll frames for this equip (rings carry none)
 }
 
@@ -328,6 +339,18 @@ public sealed class UiFrame
     public int Delay { get; set; } // frame time in ms
     public int A0 { get; set; } // start alpha (missing in WZ means 255)
     public int A1 { get; set; } // end alpha (missing means hold A0)
+}
+
+// The numbers of one speech balloon style (assets/ui/balloon_{Style}.json,
+// written by the exporter from UI/ChatBalloon.img/<Style>). The art is ten
+// pictures named balloon_{Style}_{piece}.png.
+public sealed class BalloonStyleData
+{
+    public int Style { get; set; }
+    public int Border { get; set; } // the corner art: the border of the bubble
+    public int ArrowX { get; set; } // the tail: draw it at (bubble middle + ArrowX, bubble bottom + ArrowY)
+    public int ArrowY { get; set; }
+    public int Color { get; set; } // the text color (ARGB)
 }
 
 // Exported name tag plate: assets/ui/tag/ring{node}.json + ring{node}_{w,c,e}.png.
