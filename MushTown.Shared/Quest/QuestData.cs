@@ -4,14 +4,12 @@ namespace MushTown.Shared;
 
 // Exported NPC file: assets/npc/{id}.png + assets/npc/{id}.json. The art is
 // the stand frame (Npc/_Canvas via _outlink; the loose node is a 1x1 stub),
-// Origin anchors it like mob art (feet). Greet is the String d0 line (the
-// talk panel's greeting); Says is every d0, d1, ... line, which the bubble
-// picks from at random.
+// Origin anchors it like mob art (feet). Says is every String d0, d1, ... line:
+// the talk panel opens on the first, the bubble picks one at random.
 public sealed class NpcData
 {
     public int NpcId { get; set; }
     public string Name { get; set; } = "";
-    public string Greet { get; set; } = "";
     public List<string> Says { get; set; } = new();
     public int OriginX { get; set; }
     public int OriginY { get; set; }

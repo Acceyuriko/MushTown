@@ -528,9 +528,14 @@ HUD 条上还剩 4 处 `Invoke`：气泡、手拿、tips、快捷栏的格子。
 - `Scene.Update(dt)` 是新加的：UI 树和世界树一样每帧 tick，气泡的时钟才走。
 - 第一句也要等一个随机间隔（不然进图所有 NPC 同时开口）。
 - 任务气泡用官方美术 `UIWindow2.img/QuestIcon/<n>/0`（用户 2026-11-01 指定）：`0` 可以接任务（灯泡）、`1` 任务进行中（打开的书）、`2` 可以交任务（带勾的书），各取第 0 帧，导出成 `ui/npc_quest_<n>.png`。先试的 `QuestGuide/LowLVQuestMark/forNPC` 那套不对，已删。
-- 时间参数进 `layouts/panel-balloon.json`：`npcSayGapMinMs/MaxMs`（安静 3–5 秒）、`npcSayLifeMinMs/MaxMs`（显示 8–20 秒）、`npcAboveHead` 28（尾巴尖离精灵顶端）。
+- 时间参数进 `layouts/panel-balloon.json`：`npcSayGapMinMs/MaxMs`（安静 3–5 秒）、`npcSayLifeMinMs/MaxMs`（显示 8–20 秒）、`npcAboveHead` 2（尾巴尖离精灵顶端的空隙；框的位置按尾巴图高反推）。
 - NPC 名字牌挪到脚下（`n.Cy + 2`），和官方参考图一致；任务气泡挂在头顶上方。
 - 摆拍：`--shot ...npcbubble` 直接把最近 NPC 的计时器设成"正在说"，因为截图不跑 `Update`。
+### 3.11 N9 的债（2026-11-01 清账）
+- **已清**：NPC 锚点算法原来有三份（`NpcHead`、`NpcClick`、`DrawNpc`），收成一个 `NpcTopLeft(n)`（世界坐标左上角，X 和 Y 一起），三处都读它。
+- **已清**：`NpcData.Greet` 恒等于 `Says[0]`，删掉字段；导出器不再写两份，对话页读 `Says[0]`。
+- **已清（2026-11-01）**：任务气泡改用「尾巴尖」当锚点。官方 `QuestIcon` 的 origin 是图心 `(21,22)`（44×44），不是尾巴，按 origin 摆会把图标压在 NPC 脸上；实测三张图最底一行是 `x=10..13`、`y=43`，取中点 `x=11`。尾巴尖由导出器的 `MeasureTail` 读图标像素量出来，写进 `assets/ui/npc_quest_<n>.json`（`TailX`/`TailY`），客户端只读 json，`head - 尾巴尖` 摆，`npcMarkAbove`（2）只管空隙。尾巴尖由导出器量好写进 `assets/ui/npc_quest_<n>.json`（`TailX`/`TailY`），客户端只读。
+- **不清，记录理由**：`NpcQuestIcon` 每帧每个 NPC 被调 1–3 次，每次遍历 10 条任务（一图最多 5 个 NPC）。要缓存的话在组件里存个字段就够，但这点开销远小于多一份会和存档状态不同步的缓存，所以不缓存。任务表变大时再处理。
 ## 4. 分片
 
 工期按每周约 10 小时估。每周一个 commit（用户规矩）；2 周的片第 1 周提交能 build + test 的中间态，第 2 周完成；每片结束停下验收，先 review 后提交。

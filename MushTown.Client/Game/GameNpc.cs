@@ -26,14 +26,24 @@ public partial class MushTownGame
         OpenTalk(best.Spawn.NpcId);
     }
 
-    // Where an NPC's head is on the screen: the middle of its stand art, its top edge.
-    private Point NpcHead(NpcSpawn n)
+    // The top left of an NPC's stand art, in world coordinates. The raw art
+    // faces left, so the flipped draw mirrors around the origin (avatar parts
+    // do the same). Every NPC anchor reads this, never the arithmetic twice.
+    private Point NpcTopLeft(NpcSpawn n)
     {
         var data = _npcs[n.NpcId];
         var tex = _textures[$"npc/{n.NpcId}.png"];
         int x = n.FacingRight ? SceneMath.FlipDrawX(n.X, -data.OriginX, tex.Width) : n.X - data.OriginX;
-        return new Point(x + tex.Width / 2 - _camera.X, n.Cy - data.OriginY - _camera.Y);
+        return new Point(x, n.Cy - data.OriginY);
     }
+
+    // Where an NPC's head is on the screen: the middle of its stand art, its top edge.
+    private Point NpcHead(NpcSpawn n)
+    {
+        var top = NpcTopLeft(n);
+        return new Point(top.X + _textures[$"npc/{n.NpcId}.png"].Width / 2 - _camera.X, top.Y - _camera.Y);
+    }
+
     // The talk panel opens on this NPC.
     private void OpenTalk(int npcId)
     {
@@ -49,12 +59,9 @@ public partial class MushTownGame
         foreach (var a in _npcArts.OrderByDescending(a => a.Spawn.Cy)) // draw order: high feet on top, clicks match
         {
             var n = a.Spawn;
-            var data = _npcs[n.NpcId];
             var tex = _textures[$"npc/{n.NpcId}.png"];
-            int feet = n.X;
-            int x = n.FacingRight ? SceneMath.FlipDrawX(feet, -data.OriginX, tex.Width) : feet - data.OriginX;
-            var rect = new Rectangle(x - _camera.X, n.Cy - data.OriginY - _camera.Y,
-                tex.Width, tex.Height);
+            var top = NpcTopLeft(n);
+            var rect = new Rectangle(top.X - _camera.X, top.Y - _camera.Y, tex.Width, tex.Height);
             if (!HitRect(rect, gx, gy)) continue;
             if (!InTalkReach(a)) continue; // an overlapped NPC behind may be in reach
             OpenTalk(n.NpcId);

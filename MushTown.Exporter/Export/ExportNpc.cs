@@ -3,7 +3,7 @@ using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
 
-// NPC exports: one placed NPC's stand art + String name and greeting.
+// NPC exports: one placed NPC's stand art + String name and greeting lines.
 public static partial class Export
 {
     // One placed NPC: stand frame (a 1x1 stub with _outlink into _Canvas) plus
@@ -23,7 +23,6 @@ public static partial class Export
             Console.WriteLine($"npc {npcId} has no String name");
             return false;
         }
-        string greet = str.Find($@"Npc.img\{npcId}\d0")?.GetValueEx<string>("") ?? "";
         var says = new List<string>();
         for (int i = 0; ; i++)
         {
@@ -33,7 +32,7 @@ public static partial class Export
         }
         SaveOnce(png, Path.Combine(outDir, "npc", $"{npcId}.png"), saved);
         WriteJson(Path.Combine(outDir, "npc", $"{npcId}.json"),
-            new NpcData { NpcId = npcId, Name = name, Greet = greet, Says = says, OriginX = origin.X, OriginY = origin.Y });
+            new NpcData { NpcId = npcId, Name = name, Says = says, OriginX = origin.X, OriginY = origin.Y });
         Console.WriteLine($"npc {npcId}: {name} {png.Width}x{png.Height}");
         return true;
     }

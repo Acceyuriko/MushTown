@@ -353,11 +353,12 @@ public sealed class BalloonStyleData
     public int Color { get; set; } // the text color (ARGB)
 }
 
-// Where a quest balloon hangs (assets/ui/npc_quest_<n>.json): the WZ origin,
-// which gives the anchor column. The picture itself rides above the head.
+// Where a quest balloon hangs from: the tail tip inside its own picture
+// (assets/ui/npc_quest_<n>.json). The WZ origin is the centre, not the tail.
 public sealed class QuestMarkData
 {
-    public int Ox { get; set; }
+    public int TailX { get; set; }
+    public int TailY { get; set; }
 }
 // Exported name tag plate: assets/ui/tag/ring{node}.json + ring{node}_{w,c,e}.png.
 // A 3-slice bar (UI NameTag.img node): origins anchor each canvas (draw pos =

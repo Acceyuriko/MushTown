@@ -68,14 +68,10 @@ public partial class MushTownGame
     // NpcBalloon), not drawn here.
     private void DrawNpc(NpcSpawn n)
     {
-        var data = _npcs[n.NpcId];
-        var tex = _textures[$"npc/{n.NpcId}.png"];
         int feet = n.X;
-        // Raw art faces left: flipped feet mirror around the origin (avatar parts do the same).
-        int x = n.FacingRight ? SceneMath.FlipDrawX(feet, -data.OriginX, tex.Width) : feet - data.OriginX;
-        int y = n.Cy - data.OriginY;
-        DrawTexture($"npc/{n.NpcId}.png", x, y, n.FacingRight);
-        var tag = _ui.GetSmall(data.Name);
+        var top = NpcTopLeft(n);
+        DrawTexture($"npc/{n.NpcId}.png", top.X, top.Y, n.FacingRight);
+        var tag = _ui.GetSmall(_npcs[n.NpcId].Name);
         int feetX = feet - _camera.X, tagY = n.Cy - _camera.Y + _balloonLay.Get("npcNameDown", 2); // the name sits under the feet
         _spriteBatch.Draw(_pixel,
             new Rectangle(feetX - tag.Width / 2 - _balloonLay.Get("npcNamePadX", 3), tagY, tag.Width + _balloonLay.Get("npcNamePadX", 3) * 2, _balloonLay.Get("npcNameH", 16)),

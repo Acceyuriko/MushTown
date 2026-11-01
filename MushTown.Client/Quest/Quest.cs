@@ -158,7 +158,7 @@ public partial class MushTownGame
         if (q == null || chara == null)
         {
             var npc = _npcs[_talkNpc];
-            return new List<string> { npc.Greet != "" ? npc.Greet : npc.Name };
+            return new List<string> { npc.Says.Count > 0 ? npc.Says[0] : npc.Name };
         }
         bool offer = !chara.Quests.Contains(q.QuestId);
         if (offer) return q.Say0.Count > 0 ? q.Say0 : new List<string> { q.Offer };

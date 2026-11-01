@@ -37,7 +37,6 @@ public static partial class Export
         foreach (string piece in new[] { "w", "c", "e" })
             if (!UiPng.Save(ui, $"{chat}/input/backgrnd/{piece}", Path.Combine(dir, $"chat_input_{piece}.png"))) return false;
 
-
         // The speech balloons: the plain one (0) and the styles the chat rings
         // name (info/chatBalloon). A style is ten pictures (ui/balloon_<n>_<piece>.png)
         // plus the numbers the client needs (ui/balloon_<n>.json): the corner
@@ -64,7 +63,6 @@ public static partial class Export
                 Color = ui.Find($@"ChatBalloon.img\{style}\clr")?.GetValueEx<int>(0) ?? 0,
             });
         }
-
 
         // the small frame of the folded chat
         foreach (string piece in new[] { "nw", "n", "ne", "w", "c", "e", "sw", "s", "se" })
@@ -97,15 +95,28 @@ public static partial class Export
         for (int i = 0; i < 3; i++)
         {
             if (!UiPng.Save(ui, $"UIWindow2.img/QuestIcon/{i}/0", Path.Combine(dir, $"npc_quest_{i}.png"))) return false;
-            // the WZ origin is the anchor column the icon hangs from
-            if (!UiPng.TryRead(ui, "UI", $"UIWindow2.img/QuestIcon/{i}/0", out _, out var origin) || origin == null) return false;
-            WriteJson(Path.Combine(dir, $"npc_quest_{i}.json"), new QuestMarkData { Ox = origin.X });
+            if (!UiPng.TryRead(ui, "UI", $"UIWindow2.img/QuestIcon/{i}/0", out var icon, out _) || icon == null) return false;
+            WriteJson(Path.Combine(dir, $"npc_quest_{i}.json"), MeasureTail(icon));
+
         }
 
         Console.WriteLine($"chat ui: frame, folded frame, 2 tabs, input bar, chevron, {BalloonStyles.Length} speech balloons, 3 NPC quest balloons");
         return true;
     }
 
+    // Where the tail tip of a quest balloon sits in its own picture: the middle
+    // of its lowest drawn row. The WZ origin is the picture centre, not the tail.
+    private static QuestMarkData MeasureTail(Wz_Png png)
+    {
+        using var bmp = png.ExtractPng();
+        int bottom = -1, left = int.MaxValue, right = -1;
+        for (int y = 0; y < bmp.Height; y++)
+            for (int x = 0; x < bmp.Width; x++)
+                if (bmp.GetPixel(x, y).A > 40) bottom = y;
+        for (int x = 0; x < bmp.Width; x++)
+            if (bmp.GetPixel(x, bottom).A > 40) { left = Math.Min(left, x); right = Math.Max(right, x); }
+        return new QuestMarkData { TailX = (left + right) / 2, TailY = bottom };
+    }
     // The NPC talk art: the quest helper list window (UI/Quest.img/Helper),
     // the dialogue frame the client uses for its text boxes
     // (UI/UIWindow2.img/UtilDlgEx), the blue system popup

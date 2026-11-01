@@ -38,12 +38,12 @@ public partial class MushTownGame
                 LoadTexture($"ui/balloon_{style}_{piece}.png");
             LoadTexture($"ui/balloon_{style}_arrow.png");
         }
-        for (int i = 0; i < 3; i++) _questMarks[i] = LoadJson<QuestMarkData>(Path.Combine(_assetsDir, "ui", $"npc_quest_{i}.json"));
-
+        for (int i = 0; i < 3; i++)
+            _questMarks[i] = LoadJson<QuestMarkData>(Path.Combine(_assetsDir, "ui", $"npc_quest_{i}.json"));
     }
 
-    // The anchor column of quest balloon n: its WZ origin.
-    internal int QuestMarkOx(int icon) => _questMarks[icon].Ox;
+    // Where quest balloon n hangs from: the tail tip inside its own picture.
+    internal Point QuestMarkTail(int icon) => new(_questMarks[icon].TailX, _questMarks[icon].TailY);
 
     // The style of the worn chat ring: the first ring wins, 0 is the plain balloon.
     // (*balloonring* shots pose the pink ring, the way *chatmin* poses a fold.)

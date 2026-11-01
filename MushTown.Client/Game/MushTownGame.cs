@@ -407,7 +407,7 @@ public partial class MushTownGame : Game
         foreach (var a in _npcArts)
         {
             var s = a.Spawn;
-            var mark = new NpcQuestMark { Icon = () => NpcQuestIcon(s.NpcId), Head = () => NpcHead(s), Lay = _balloonLay, OriginX = QuestMarkOx };
+            var mark = new NpcQuestMark { Icon = () => NpcQuestIcon(s.NpcId), Head = () => NpcHead(s), Lay = _balloonLay, Tail = QuestMarkTail };
             NpcBalloon? balloon = null;
             if (_npcs[s.NpcId].Says.Count > 0)
                 balloon = new NpcBalloon
