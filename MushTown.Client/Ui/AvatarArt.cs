@@ -48,6 +48,27 @@ public partial class MushTownGame
         }
     }
 
+    // The horizontal center of the drawn body. The parts are not symmetric
+    // around the feet, so a balloon hung on the feet leans when the character
+    // turns; the body part is the widest one in the frame.
+    private int BodyCenterX(int feetX, string action, int frame, bool facingRight, List<int>? worn)
+    {
+        var parts = worn == null || worn.Count == 0
+            ? _charas[action].Frames[frame].Parts
+            : MergeParts(action, frame, worn);
+        CharaPart? body = null;
+        int area = 0;
+        foreach (var p in parts)
+        {
+            var tex = _textures[p.Image];
+            if (tex.Width * tex.Height <= area) continue;
+            area = tex.Width * tex.Height;
+            body = p;
+        }
+        if (body == null) return feetX;
+        int w = _textures[body.Image].Width;
+        return facingRight ? SceneMath.FlipDrawX(feetX, body.X, w) + w / 2 : feetX + body.X + w / 2;
+    }
     // The same drawing on a UI spot: the world draw adds the camera, so park
     // it for the call (the menus draw at screen pixels).
     internal void DrawAvatarOnScreen(int feetX, int feetY, string action, int frame, bool facingRight)
