@@ -63,8 +63,9 @@ public partial class MushTownGame
         _spriteBatch.End();
     }
 
-    // One NPC: stand sprite on its origin-anchored feet, name tag above,
-    // gold "!" when it has quest work (an offer or a ready turn-in).
+    // One NPC: stand sprite on its origin-anchored feet, name tag under the
+    // feet. The quest balloon and the speech bubble are components (NpcQuestMark,
+    // NpcBalloon), not drawn here.
     private void DrawNpc(NpcSpawn n)
     {
         var data = _npcs[n.NpcId];
@@ -75,17 +76,11 @@ public partial class MushTownGame
         int y = n.Cy - data.OriginY;
         DrawTexture($"npc/{n.NpcId}.png", x, y, n.FacingRight);
         var tag = _ui.GetSmall(data.Name);
-        int feetX = feet - _camera.X, tagY = y - 20 - _camera.Y;
+        int feetX = feet - _camera.X, tagY = n.Cy - _camera.Y + _balloonLay.Get("npcNameDown", 2); // the name sits under the feet
         _spriteBatch.Draw(_pixel,
-            new Rectangle(feetX - tag.Width / 2 - 3, tagY, tag.Width + 6, 16),
+            new Rectangle(feetX - tag.Width / 2 - _balloonLay.Get("npcNamePadX", 3), tagY, tag.Width + _balloonLay.Get("npcNamePadX", 3) * 2, _balloonLay.Get("npcNameH", 16)),
             new Color(0, 0, 0, 120));
         _spriteBatch.Draw(tag, new Vector2(feetX - tag.Width / 2, tagY), Color.White);
-        if (NpcHasWork(n.NpcId))
-        {
-            var mark = _ui.GetSmall("!");
-            _spriteBatch.Draw(mark, new Vector2(feetX - mark.Width / 2, tagY - 16),
-                new Color(255, 220, 0));
-        }
     }
 
     // The map without any characters: the chars screen reuses this as its backdrop.

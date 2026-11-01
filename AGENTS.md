@@ -3,10 +3,8 @@
 只写全局约定（~/.dsh/AGENTS.md）之外、本项目特有的规则。
 大头细节在 `.dsh/memory.md`，完整计划在 `plans/`，动手前先读。
 
-## Skill
-
-- `.agents/skills/wz-find/`（SKILL.md + findsize.ps1 + sheet.ps1）：在 WZ 里找官方美术和数据。**说"官方没有这个"之前必须先看这个 skill**：按名字找、按图片尺寸找、把候选图拼成一张大表看、以及用 origin 读出零件的官方坐标。WZ 数据在 `E:\game\maplestory\appdata\Data`。
-- `.agents/skills/crop/`：裁剪截图（游戏像素 vs 文件像素）。
+## 架构设计
+- 仿照 Unity 的 **Object-Component** 实现，编写和审查时需注意，代码**必须符合 Unity 架构要求**，不得有散乱的全局代码。
 
 ## 工作节奏
 
@@ -19,7 +17,6 @@
 
 - `assets/` `data/` `logs/` 永远不进 git（游戏素材是 Nexon 版权，仓库只放工具和文档）。
 - 单 exe 双身份（本机开房 / 加入主机）：Server 是被客户端托管的类库，不写 Console 输出、不碰 UI，日志走回调写滚动文件。
-- 快捷键一个都不分给调试工具，日志面板用鼠标点开。
 - `WzComparerR2/` 是 git 子模块，锁定 commit；要改解析器先 fork，不要就地大改。
 - 客户端**内部固定按 1366×768 渲染**（GameWidth/GameHeight），再整幅按比例放大到无边框全屏；不是扩大相机范围。窗口尺寸变化要跟着当前屏幕重新适配。
 - 界面的定位数字、盒子尺寸、字号都放 `layouts/*.json`（菜单/选角/选职业/创建角色/HUD 各一个），不要写死在代码里；Debug 版存盘即热重载，Release 版只在启动时读一次。
@@ -52,7 +49,3 @@ dotnet run --project MushTown.Client -- --join <ip>           # 加入主机
 dotnet run --project MushTown.Client -- --shot logs/x.png [--map 10000] [--travel 2000000] [--action walk1] [--frame 2] [--facing left] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|equip|hud|skill|quest|talk|settings|shop|minimap|worldmap|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab 0] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]  # 截图后退出（验收用，frame 从 0 数，--hit 摆拍打怪，--skill 摆拍技能，--skilltab 选技能页，--drop 摆拍掉落，--wear 穿满 demo 装备，--aiticks 跑 n 步 AI，quest 摆拍任务窗+追踪，talk+--talk 摆拍 NPC 对话，settings 摆拍音量窗，shop+--talk 摆拍商店，stat 摆拍属性窗，equip 摆拍装备页，minimap/worldmap 摆拍小地图窗和大地图窗，keys 摆拍快捷键窗，menu 摆拍 MENU 大菜单窗，guide 摆拍 GUIDE 内容指南窗（guidecard 摆拍 GUIDE 小窗），party 摆拍组队窗（partysearch 摆拍组队搜索窗，partyask 摆拍组队邀请弹窗），job/job2+--job 摆拍指定职业，--frame 非0时覆盖脊柱冻结帧，创建角色页用 --frame 摆小人待机帧）
 git clone --recurse-submodules <仓库>                       # 克隆要带子模块
 ```
-
-## 截图裁剪
-
-裁剪截图按 `.agents/skills/crop/SKILL.md` 做。

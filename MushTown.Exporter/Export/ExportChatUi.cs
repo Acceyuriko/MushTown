@@ -92,7 +92,17 @@ public static partial class Export
         // the NPC talk art ships with the chat art
         if (!ExportTalkUi(ui, outDir)) return false;
 
-        Console.WriteLine($"chat ui: frame, folded frame, 2 tabs, input bar, chevron, {BalloonStyles.Length} speech balloons");
+        // The balloons an NPC wears instead of talking: 0 = a quest to take,
+        // 1 = a quest under way, 2 = a quest to hand in (UIWindow2.img/QuestIcon).
+        for (int i = 0; i < 3; i++)
+        {
+            if (!UiPng.Save(ui, $"UIWindow2.img/QuestIcon/{i}/0", Path.Combine(dir, $"npc_quest_{i}.png"))) return false;
+            // the WZ origin is the anchor column the icon hangs from
+            if (!UiPng.TryRead(ui, "UI", $"UIWindow2.img/QuestIcon/{i}/0", out _, out var origin) || origin == null) return false;
+            WriteJson(Path.Combine(dir, $"npc_quest_{i}.json"), new QuestMarkData { Ox = origin.X });
+        }
+
+        Console.WriteLine($"chat ui: frame, folded frame, 2 tabs, input bar, chevron, {BalloonStyles.Length} speech balloons, 3 NPC quest balloons");
         return true;
     }
 

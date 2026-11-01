@@ -85,8 +85,6 @@ public partial class MushTownGame
     {
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         _showShop = false; // the shop is NPC-bound too: a new map closes it
-        _npcBalloonNpc = 0; // the NPCs of the old map: the next map starts over
-        _npcBalloonDone = 0;
         foreach (var s in _map.Npcs)
             if (!_npcs.ContainsKey(s.NpcId))
                 throw new InvalidDataException($"map {_mapId}: npc art {s.NpcId} not exported");
@@ -136,16 +134,21 @@ public partial class MushTownGame
         return entries;
     }
 
-    // Gold "!" over quest-relevant NPCs (an offer, or a ready turn-in).
-    private bool NpcHasWork(int npc)
+    // The balloon an NPC wears instead of talking: 0 = a quest to take,
+    // 1 = a quest under way, 2 = a quest to hand in, -1 = none.
+    private int NpcQuestIcon(int npc)
     {
         var chara = _save?.Slots[_slot];
-        if (chara == null) return false;
-        return _quests.Values.Any(q =>
-            (q.Npc0 == npc && _questLog.CanAccept(chara, q.QuestId))
-            || (q.Npc1 == npc && _questLog.IsComplete(chara, q.QuestId)));
+        if (chara == null) return -1;
+        bool take = false, under = false;
+        foreach (var q in _quests.Values)
+        {
+            if (q.Npc1 == npc && _questLog.IsComplete(chara, q.QuestId)) return 2; // hand in wins
+            if (q.Npc0 == npc && _questLog.CanAccept(chara, q.QuestId)) take = true;
+            else if ((q.Npc0 == npc || q.Npc1 == npc) && chara.Quests.Contains(q.QuestId)) under = true;
+        }
+        return take ? 0 : under ? 1 : -1;
     }
-
     // Current talk pages: menu shows the greeting, offer/turn-in show Say
     // (scripted quests export empty Say: summaries fill in).
     private List<string> TalkPages()

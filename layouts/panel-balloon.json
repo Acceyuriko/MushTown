@@ -1,5 +1,5 @@
 {
-  "_help": "The speech bubble over the player (official MapleStory art, UI/ChatBalloon.img/0). Game pixels in 1366x768. w = the bubble width. maxLines = how many lines of the message the bubble shows (a longer message is cut short). lineH = the height of one line. padX/padY = the gap between the text and the bubble border. lifeMs = how long the bubble stays on the screen. aboveFeet = how many pixels above the feet the bubble bottom sits. fontSize = the text size of the message. npc* = the same for the NPC balloon (npcW is its width, npcClr its text color). The border of the bubble and its text color come from the style art (assets/ui/balloon_<style>.json).",
+  "_help": "The speech bubble over the player (official MapleStory art, UI/ChatBalloon.img/0). Game pixels in 1366x768. w = the bubble width. maxLines = how many lines of the message the bubble shows (a longer message is cut short). lineH = the height of one line. padX/padY = the gap between the text and the bubble border. lifeMs = how long the bubble stays on the screen. aboveFeet = how many pixels above the feet the bubble bottom sits. fontSize = the text size of the message. npc* = the same for the NPC balloon (npcW is its width, npcClr its text color, npcAboveHead the gap between the tail tip and the head, npcNameDown how far under the feet the name plate sits, npcNameH its height, npcNamePadX its side padding, npcMarkAbove how far above the head the quest balloon floats). npcSayGapMinMs/MaxMs = the quiet time between two lines, npcSayLifeMinMs/MaxMs = how long a line stays. An NPC with quest work shows its quest balloon and does not talk. The border of the bubble and its text color come from the style art (assets/ui/balloon_<style>.json).",
   "w": 130,
   "maxLines": 3,
   "lineH": 15,
@@ -13,7 +13,14 @@
   "npcPadY": 6,
   "npcLineH": 16,
   "npcFontSize": 14,
-  "npcAboveHead": 44,
+  "npcAboveHead": 2,
+  "npcNameDown": 2,
+  "npcNameH": 16,
+  "npcNamePadX": 3,
+  "npcMarkAbove": 4,
   "npcClr": -13354916,
-  "npcLifeMs": 3000
+  "npcSayGapMinMs": 3000,
+  "npcSayGapMaxMs": 5000,
+  "npcSayLifeMinMs": 8000,
+  "npcSayLifeMaxMs": 20000
 }

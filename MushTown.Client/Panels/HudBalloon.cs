@@ -25,6 +25,7 @@ public partial class MushTownGame
 
     // The style of every balloon the game can draw, by style id.
     private readonly Dictionary<int, BalloonStyleData> _balloonStyles = new();
+    private readonly Dictionary<int, QuestMarkData> _questMarks = new(); // where each quest balloon hangs
 
     // The balloon art (the exporter writes assets/ui/balloon_<style>_*.png and
     // balloon_<style>.json): the plain style and the ones a chat ring names.
@@ -37,8 +38,12 @@ public partial class MushTownGame
                 LoadTexture($"ui/balloon_{style}_{piece}.png");
             LoadTexture($"ui/balloon_{style}_arrow.png");
         }
+        for (int i = 0; i < 3; i++) _questMarks[i] = LoadJson<QuestMarkData>(Path.Combine(_assetsDir, "ui", $"npc_quest_{i}.json"));
 
     }
+
+    // The anchor column of quest balloon n: its WZ origin.
+    internal int QuestMarkOx(int icon) => _questMarks[icon].Ox;
 
     // The style of the worn chat ring: the first ring wins, 0 is the plain balloon.
     // (*balloonring* shots pose the pink ring, the way *chatmin* poses a fold.)

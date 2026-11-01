@@ -39,6 +39,8 @@ public partial class MushTownGame
     private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
     private readonly SceneManager _scenes = new();
     private Scene _uiScene = new(); // one tree, ordered by Z (a reload makes a fresh one); not null from the start: shots raise windows before the HUD is built
+    private readonly NpcSayLayer _npcSay = new(); // the NPC bubbles, by NPC id: the layer owns them
+    private readonly GameObject _npcSayLayer = new() { NoHit = true, Z = BalloonZ }; // one object per NPC, refilled by LoadMap
     private readonly GameObject _invHost = new(), _statHost = new(), _skillHost = new();
     private readonly GameObject _questHost = new(), _settingsHost = new(), _shopHost = new();
     private readonly GameObject[] _panelHosts; // panel-id order: 0 inventory .. 5 shop (filled by the constructor)
@@ -311,9 +313,7 @@ public partial class MushTownGame
         var balloon = new GameObject { NoHit = true, Z = BalloonZ }; // the speech bubble over the character: under every HUD piece
         balloon.Add(MakeBalloon());
         _uiScene.Add(balloon);
-        var npcBalloon = new GameObject { NoHit = true, Z = BalloonZ }; // the NPCs speak through their own bubble
-        npcBalloon.Add(new NpcBalloon(NpcSpeech, _balloonLay, _balloonStyles[0]));
-        _uiScene.Add(npcBalloon);
+        _uiScene.Add(_npcSayLayer); // the NPC bubbles: one child per NPC, refilled by LoadMap
         var furniture = new GameObject(); // HUD furniture: hit-rects with no Buttons (clicks stop here, silent)
         furniture.AddChild(HitBox(PlateRect()));
         var hp = HitBox(HpBox()); // the bars split at the line of their own numbers

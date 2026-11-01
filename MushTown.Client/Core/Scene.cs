@@ -95,6 +95,13 @@ public sealed class Scene
     // is a moved root, not a rebuilt tree.
     public void Layout() => Layout(_roots, 0, 0);
 
+    // The UI tree ticks like the world tree: the components with a clock of
+    // their own (the NPC bubbles) advance here.
+    public void Update(float dt)
+    {
+        foreach (var r in _roots) TreeUpdate.UpdateObject(r, dt);
+    }
+
     private static void Layout(IReadOnlyList<GameObject> objs, int ox, int oy)
     {
         foreach (var o in objs)

@@ -132,6 +132,7 @@ public partial class MushTownGame : Game
         _assetsDir = FindAssetsDir();
         _bgm = new BgmPlayer(Path.Combine(_assetsDir, "sound"), _shotPath != null);
         _audio.Add(_bgm);
+        _npcSayLayer.Add(_npcSay); // the NPC bubbles: owned here, refilled per map
         string dir = Path.Combine(Path.GetDirectoryName(_assetsDir)!, "layouts");
         _layoutPath = Path.Combine(dir, "hud-layout.json");
         _menuLayoutPath = Path.Combine(dir, "menu-layout.json");
@@ -299,13 +300,18 @@ public partial class MushTownGame : Game
             // a shot never types, so a shot named *balloon* shows a sample line
             if (Path.GetFileNameWithoutExtension(_shotPath)!.Contains("balloon"))
                 ShowBalloon("Hi! I am going to Southperry now, see you soon!");
-            // *npcbubble* stands next to the nearest NPC: the bubble only shows in talk reach
+            // *npcbubble* stands next to the nearest NPC and makes it say a line (a shot never runs Update)
             if (Path.GetFileNameWithoutExtension(_shotPath)!.Contains("npcbubble") && _npcArts.Count > 0)
             {
-                var near = _npcArts.OrderBy(a => Math.Abs(a.Spawn.X - _mover.X)).First();
-                _mover.X = near.Spawn.X + 20;
-                _mover.Y = near.Spawn.Cy;
-                UpdateNpcBalloon(); // a shot renders without Update: pick the line now
+                var near = _npcArts.OrderBy(a => Math.Abs(a.Spawn.X - _mover.X)).FirstOrDefault(a => _npcSay.Has(a.Spawn.NpcId));
+                if (near != null)
+                {
+                    _mover.X = near.Spawn.X + 20;
+                    _mover.Y = near.Spawn.Cy;
+                    SnapCamera(); // the bubble is placed by the camera: move it with the player
+                    // a shot renders without Update: make this NPC say its line now
+                    _npcSay.Say(near.Spawn.NpcId, 0); // the first line: the same picture every run
+                }
             }
 
             // a shot named *guideboss* or *guidespecial* opens that guide tab
@@ -396,6 +402,27 @@ public partial class MushTownGame : Game
         }
         _world.AddChild(_mapObj);
         EndTalkAndCheckNpcs(); // NPCs are static per map (talk ends with the map)
+        // one object per NPC: its quest mark, and its own bubble when it has lines
+        var npcs = new List<(int, NpcQuestMark, NpcBalloon?)>();
+        foreach (var a in _npcArts)
+        {
+            var s = a.Spawn;
+            var mark = new NpcQuestMark { Icon = () => NpcQuestIcon(s.NpcId), Head = () => NpcHead(s), Lay = _balloonLay, OriginX = QuestMarkOx };
+            NpcBalloon? balloon = null;
+            if (_npcs[s.NpcId].Says.Count > 0)
+                balloon = new NpcBalloon
+                {
+                    Lines = _npcs[s.NpcId].Says,
+                    Mark = mark,
+                    Text = QText,
+                    Lay = _balloonLay,
+                    Style = () => _balloonStyles[0],
+                    Head = () => NpcHead(s),
+                    Busy = () => _talkNpc != 0 || _showShop,
+                };
+            npcs.Add((s.NpcId, mark, balloon));
+        }
+        _npcSay.Build(npcs);
     }
 
     // Stand on this map's spawn ground.
@@ -450,6 +477,7 @@ public partial class MushTownGame : Game
         foreach (var item in _map.Objs) LoadTexture(item.Image);
         foreach (var item in _map.Portals) foreach (var f in item.Frames) LoadTexture(f.Image);
         LoadTexture(_map.MiniMap.Image);
+        for (int i = 0; i < 3; i++) LoadTexture($"ui/npc_quest_{i}.png"); // the NPC quest balloons
     }
 
     protected override void Update(GameTime gameTime)
@@ -533,9 +561,9 @@ public partial class MushTownGame : Game
         if (blocked) kb = new KeyboardState();
         SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;
+        _npcSayLayer.Enabled = _loadBeat == 0; // the black beat covers the world: the bubbles hide with it
 
         _timeMs = gameTime.TotalGameTime.TotalMilliseconds;
-        UpdateNpcBalloon(); // the nearest NPC in reach says its line over its head (after the clock moves)
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float dtMs = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
         _fighter.Tick(dtMs);
@@ -633,6 +661,7 @@ public partial class MushTownGame : Game
             Jump = OwnJump(),
         };
         TreeUpdate.UpdateObject(_world, dt);
+        _uiScene.Update(dt); // the NPC bubbles keep their own clock
         // Before the draw: a corpse and a finished effect both sit on
         // Frame == Frames.Count, and the draw reads that frame. A number does
         // not crash, it just keeps drawing and ageing. All three belong here.
@@ -815,6 +844,7 @@ public partial class MushTownGame : Game
         else { ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them
         _worldMapWindow.OnMapChanged(); // the list follows the player and marks the map we stand on
         _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
+        _npcSayLayer.Enabled = false; // the beat starts now: hide the bubbles before this frame draws
     }
 
     private void SnapCamera()
