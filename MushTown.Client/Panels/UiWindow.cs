@@ -69,6 +69,9 @@ public abstract class UiWindow
     // Build the content for the current state. Every rect it makes is local.
     public abstract void Build();
 
+    // The game opened the window (the content is built right after this).
+    public virtual void OnShown() { }
+
     // The game closed the window (Esc). A window with a draft throws it away.
     public virtual void OnClosed() { }
 

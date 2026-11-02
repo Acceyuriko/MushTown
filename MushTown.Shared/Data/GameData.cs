@@ -451,7 +451,6 @@ public sealed class CharaPart
 // The map window data the exporter wrote: assets/ui/mapui.json.
 public sealed class MapUiData
 {
-    public WorldUiData World { get; set; } = new();
     public ChannelUiData Channel { get; set; } = new();
     public List<MapNameUi> Maps { get; set; } = new();
 }
@@ -460,23 +459,6 @@ public sealed class MapUiData
 public sealed class ChannelUiData
 {
     public string World { get; set; } = "";
-}
-
-// The world map art and the regions on it (Map/WorldMap/WorldMap.img).
-public sealed class WorldUiData
-{
-    public string Image { get; set; } = "";
-    public List<WorldRegionUi> Regions { get; set; } = new();
-}
-
-// One region: the official title, where its mark sits in the art, and the
-// map ids that belong to it.
-public sealed class WorldRegionUi
-{
-    public string Title { get; set; } = "";
-    public int X { get; set; }
-    public int Y { get; set; }
-    public List<int> Maps { get; set; } = new();
 }
 
 // One map's official names (String.wz Map.img).

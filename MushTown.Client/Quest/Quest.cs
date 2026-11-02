@@ -93,7 +93,7 @@ public partial class MushTownGame
     internal string NpcName(int id) => _npcs.TryGetValue(id, out var n) ? n.Name : $"NPC {id}";
     internal List<string> NpcLines(int id) => _npcs[id].Says; // LoadMapData proved it exists
 
-    private string MobName(int id)
+    internal string MobName(int id)
     {
         // Names cache apart from _mobData: a json-only entry there would make
         // LoadMob skip the textures, and names must never break mob art.

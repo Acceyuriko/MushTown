@@ -752,3 +752,24 @@ public sealed class ChatScrollBar : Component, IDrawable
         gfx.Sb.Draw(t, new Vector2(r.X, y), Color.White);
     }
 }
+
+// The lines of the popup, centred on the blue body. The list is built once when
+// the popup opens, so a redraw does not allocate.
+public sealed class SysPopText : Component, IDrawable
+{
+    public required IReadOnlyList<string> Lines { get; init; }
+    public required int Y { get; init; }
+    public required int Step { get; init; }
+
+    public void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Screen;
+        int y = r.Y + Y;
+        foreach (string line in Lines)
+        {
+            var t = gfx.Ui.GetSmall(line);
+            gfx.Sb.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, y), Color.White);
+            y += Step;
+        }
+    }
+}

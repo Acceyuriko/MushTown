@@ -19,13 +19,20 @@ public static partial class Export
     public static bool RunPanel(string name, string outDir)
     {
         var ui = WzRoot.LoadCategory(ExporterPaths.DataDir, "UI");
+        // The two map exporters read the same two categories, so load them once
+        // (LoadCategory does not cache).
+        if (name == "map")
+        {
+            var map = WzRoot.LoadCategory(ExporterPaths.DataDir, "Map");
+            var str = WzRoot.LoadCategory(ExporterPaths.DataDir, "String");
+            return ExportMapUi(ui, map, str, outDir) && ExportWorldMap(ui, map, str, outDir);
+        }
         return name switch
         {
             "inventory" => ExportInventoryUi(ui, outDir),
             "stat" => ExportStatUi(ui, outDir),
             "skill" => ExportSkillUi(ui, outDir),
             "quest" => ExportQuestUi(ui, outDir),
-            "map" => ExportMapUi(ui, WzRoot.LoadCategory(ExporterPaths.DataDir, "Map"), WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir),
             "keys" => ExportKeyUi(ui, outDir),
             "menu" => ExportMenuUi(ui, outDir),
             "quickmenu" => ExportQuickMenuUi(ui, outDir),
@@ -180,7 +187,7 @@ public static partial class Export
         }
         // The game panels: one export step per panel.
         if (!ExportInventoryUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, outDir)
-            || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir)
+            || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportWorldMap(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir)
             || !ExportMenuUi(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir)
             || !ExportShopUi(ui, outDir) || !ExportBuffUi(ui, outDir)
             || !ExportGuideUi(ui, outDir) || !ExportPartyUi(ui, outDir))

@@ -37,7 +37,9 @@ public partial class MushTownGame
     {
         var w = WindowFor(action);
         if (w == null) return;
+        bool wasOpen = w.Show;
         w.Show = true;
+        if (!wasOpen) w.OnShown(); // an open window keeps what the player typed
         w.Dirty = true; // the window opens with fresh content
         if (!Pinned(w)) Raise(w); // on top of the ones already open
     }

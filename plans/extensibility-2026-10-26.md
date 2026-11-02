@@ -628,6 +628,92 @@ minArtW = 167（官方 minWidth 185 减左右边框），minArtH = 50（MushTown
 1. `grep "new Invoke" MushTown.Client/Panels/HudMap.cs` 里属于小地图的那一处归零。
 2. `--shot minimap` 和改动前不一样是**预期**的：窗口尺寸从固定值改成跟每张地图的底图走，底图不再缩放。四张图各拍一张：`--screen minimap` / `minimapbig` / `minimapnpc` / `minimapfilter`。
 3. 手测：拖标题条；点两个面板右上角的 X 关掉面板（小地图窗口本身没有 X，关不掉）；加减号切大小布局（大布局多出图标和名字列）；点 NPC 按钮出列表（悬停行出 tooltip，`--shot logs/npctip.png --screen minimapnpc` 能拍）；点过滤器按钮出小窗，勾选 `All`/`You` 或它们上面的段标题行能改变地图上的点（其它 8 行只记状态）；外框尺寸随地图变化（`--map 1000000` 和 `--travel 2000000` 对比，后者底图 202×61 最宽）。小地图常显，所以所有游戏截图的那一块都会变，这是预期的。
+## 3.12 N4b 大地图（2026-11-02 用户定）
+
+用户 2026-11-02 给了 9 张官方截图和交互说明。素材全部核对过：都在 `UI/UIMap.img/WorldMap`、`Map.wz/WorldMap`、`MapHelper.img/worldMap`。
+
+### 用户定的范围
+
+1. **窗口按 WZ 来**：主窗一块（左栏 + 地图区同属 `backgrnd` 852×561），搜索窗一块（`WorldMapSearch/backgrnd` 182×325）。参考图里看着像三块，是版本差异，不拆。
+2. **数据范围**：一级根节点（根 `WorldMap.img` 和它的 15 个一级区域）全部导出；二级及之后只导出含有我们地图的那些。实测我们 15 张图只落在 `WorldMap.img` 和 `WorldMap000.img` 里，所以现在导 16 张。
+3. **搜索只搜我们有的**。
+4. **书签窗、导航、传送冷却都不做**。
+
+### 数据（`Map.wz/WorldMap`）
+
+每个 `WorldMapXXX.img`：
+
+| 节点 | 用途 |
+|---|---|
+| `info/parentMap` | 上一级，向上 chevron 用 |
+| `info/WorldMap` | 自己 |
+| `BaseImg/0` | 底图（约 640×470），`origin` 是中心（320,235） |
+| `MapList/<n>` | `spot`（相对底图中心的坐标）、`type`（图标下标）、`mapNo/0..N`（这张节点代表哪些地图） |
+| `MapLink/<n>` | `link/linkMap`（进哪张世界地图）、`link/linkImg`（高亮块，尺寸随区域变，53×41 到 269×217）、`toolTip`（名字） |
+
+坐标换算（对着底图画过点，验证过）：
+
+```
+节点像素 = worldMapPos + BaseImg.origin + MapList.spot
+链接像素 = worldMapPos + BaseImg.origin - linkImg.origin
+```
+
+`worldMapPos = (198,75)`，在 `UI/UIMap.img/WorldMap` 里。`linkImg` 是**鼠标移上去才画的高亮块**：底图已经画了暗的那块，悬停时把这张亮的贴上去（用户 2026-11-02 指出「地图块 hover 会高亮地图块，这里应该是有 wz 素材的」）。
+
+### 素材
+
+| 用途 | 节点 | 尺寸 |
+|---|---|---|
+| 主窗 | `UIMap.img/WorldMap/backgrnd` | 852×561 |
+| 左栏标题 | `mapInfo/layer:mapNameNormal` | 168×59，在 (7,28) |
+| 左栏正文 | `mapInfo/layer:mapInfoNormal` | 168×344，在 (7,97) |
+| 搜索窗 | `WorldMapSearch/backgrnd` | 182×325 |
+| 工具条 5 个按钮 | `button:goToUpperWorldMap` / `goToCurrentMap` / `search` / `bookMark` / `navigation` | 37×25，x = 205/247/709/751/793，y = 40 |
+| 关闭 | `button:close` | 11×11，在 (829,12) |
+| 地图节点 | `MapHelper.img/worldMap/mapImage/<type>` | 20×20 / 14×14 / 70×33 等，`type` 直接当下标 |
+| 当前位置 | `MapHelper.img/worldMap/curPos/0..7` | 27×33，8 帧上下浮动 |
+| 选中 | `MapHelper.img/worldMap/selectPos/0` | 21×25 |
+| 左栏行图标 | `mapInfo/lifeNpc/icon`、`lifeMob/icon` | 20×20 |
+| 左栏 NPC 名 | `mapInfo/lifeNpc/font:normal` 青 `FF66FFFF` | Arial 12，`vector:namePos (22,2)` |
+| 左栏怪物名 | `mapInfo/lifeMob/font:normal` 红 `FFFF0066` | 同上 |
+| 左栏按钮 | `button:teleport` 122×36 (11,476)、`button:navigationStart` 160×36 (11,516)、`button:premiumTeleport0` 36×36 (135,476) | 后两个本期不接功能，画 disabled |
+| 搜索行图标 | `WorldMapSearch/resultNpc/icon` 等 | 20×20 / 16×20 |
+| 节点 tooltip | `UIWindow2.img/ToolTip/WorldMap/{Line,Mob,Npc}` | 代码拼，不是整张图 |
+
+### 客户端
+
+一个窗口加一块挂板（用户 2026-11-02 定「按两块设计」）：
+
+- `WorldMapWindow`：852×561。左栏（`titleInfo` 的 MAP INFO 标题 + 地图名 + 等级框 + NPC/怪物列表）+ 地图区（底图、节点、链接点击区、红色图钉、蓝色箭头）+ 工具条按钮 + 关闭。位置 `layouts/panel-map.json`。
+- 搜索板：182×325，贴在主窗右边缘（x = 851），跟着主窗走。输入框、类型下拉、搜索按钮、关闭、结果列表。只搜 `assets/maps/*.json` 里有的地图、NPC、怪物。
+
+交互（对应用户的 9 条）：
+
+1. 打开定位到当前所在地图的世界地图，当前节点画红色图钉。
+2. 左栏 NPC 行 hover 出 tooltip。（立绘没做，见「还没做」。）
+3. 链接区 hover 高亮 + 显示名字（`toolTip`），点击进那张世界地图（只有导出了的才可点，其余画出来但点不动）。
+4. 向上 chevron 读 `info/parentMap`。
+5. 点节点 -> 蓝色箭头；再点同一个节点 -> `UtilDlgEx` 确认框 -> 是该图就传送。节点下没有我们的地图时，点了只换箭头，不弹框。
+6. 搜索框输入 -> 结果列表（只列我们有的）。
+7. 节点 hover -> tooltip：地图名 + 怪物 + NPC（只有我们有的地图有这三样）。
+8. 点搜索结果 -> 跳到那张地图所在的世界地图，选中那个节点。
+9. 顶部三个下拉（用户定 3 级）：世界（只有 Maple World）/ 区域（根图的 15 个链接名）/ 地图（该区域里我们有的节点名）。第 4 个框不画。
+
+### 还没做
+
+- 左栏 NPC 行的立绘：tooltip 只有名字，没有头像图。
+- 左栏的等级范围框：`MapData`/`MobData` 没有等级字段，要补得先扩导出。
+- 等级范围过滤：搜索板的两个等级框是背景图烘的，不接功能。
+- 书签窗（`bookMark`）、书签菜单、导航按钮、传送冷却、`BtFilterApplied` 那一套。
+- 二级以下的世界地图（Nautilus、Sleepywood、Kerning Tower…）：底图上有链接图，但点不动。导出器只收根图加根图链接指向的一级区域；以后我们的地图落到二级，这里会静默少导一张，要改成按「包含我们的地图」递归收集。
+- 怪物/NPC 的全球搜索：只有 15 张图的数据，搜不到范围外的。
+
+### 验收
+
+1. `--shot worldmap` 拍出来和参考图一致：左栏在左，地图区带节点和图钉；`--shot worldmapsearch` 带搜索板；`--shot worldmapask` 摆确认框。
+2. `--shot worldmap --map 1000000`：图钉在点数上（Amherst 那一点）。
+3. 手测：点节点出蓝箭头，再点出确认框；向上 chevron 回到 Maple World；点 Maple Island 链接进 Maple Island；拖窗口；关窗。
+
 ## 4. 分片
 
 工期按每周约 10 小时估。每周一个 commit（用户规矩）；2 周的片第 1 周提交能 build + test 的中间态，第 2 周完成；每片结束停下验收，先 review 后提交。

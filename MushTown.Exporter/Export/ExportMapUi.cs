@@ -9,6 +9,29 @@ namespace MushTown.Exporter;
 // must match the client (MushTown.Client/Panels/HudMap.cs and Ui/Minimap.cs).
 public static partial class Export
 {
+    // The Base tree keeps the Map/ folder in front of every map path, the
+    // category tree does not. Both map exporters need the same two strings.
+    public static (string Cat, string Pre) MapTree(WzRoot map)
+    {
+        bool baseTree = map.Find("WorldMap/WorldMap.img/BaseImg/0") == null;
+        return baseTree ? ("", "Map/") : ("Map", "");
+    }
+
+    // The entry of one map id in String.wz Map.img: the ids are grouped by world
+    // folder, so the folder name is not part of the path.
+    public static Wz_Node? MapEntry(Wz_Node mapImg, int id, out string world)
+    {
+        world = "";
+        foreach (Wz_Node w in mapImg.Nodes)
+        {
+            var entry = w.Nodes[id.ToString()];
+            if (entry == null) continue;
+            world = w.Text;
+            return entry;
+        }
+        return null;
+    }
+
     public static bool ExportMapUi(WzRoot ui, WzRoot map, WzRoot str, string outDir)
     {
         string dir = Path.Combine(outDir, "ui");
@@ -44,10 +67,7 @@ public static partial class Export
             ("user", "user"), ("npc", "npc"), ("startnpc", "npcstart"),
             ("endnpc", "npcend"), ("portal", "portal"),
         };
-        // The Base tree keeps the Map/ folder in front of every path.
-        bool baseTree = map.Find("WorldMap/WorldMap.img/BaseImg/0") == null;
-        string mapCat = baseTree ? "" : "Map";
-        string mapPre = baseTree ? "Map/" : "";
+        var (mapCat, mapPre) = MapTree(map);
         foreach (var (node, name) in dots)
             if (!UiPng.Save(map, mapCat, $"{mapPre}MapHelper.img/minimap/{node}", Path.Combine(dir, $"mini_dot_{name}.png"))) return false;
         // The map marks of the big minimap header (Map/MapHelper.img/mark).
@@ -94,75 +114,6 @@ public static partial class Export
             if (!UiPng.Save(ui, "UI", $"UIMap.img/WorldMap/button:close/{state}/0", Path.Combine(dir, $"map_x{name}.png"))) return false;
         if (!UiPng.Save(ui, "UI", "UIMap.img/WorldMap/backgrnd", Path.Combine(dir, "wm_frame.png"))) return false;
 
-        // The scroll bar of the map list (the official VScr111: the track and
-        // the cursor). The panel art has the "Cooldown" label baked in at the
-        // bottom, so a long list needs the official scroll bar.
-        if (!UiPng.Save(ui, "UI", "Basic.img/VScr111/enabled/base", Path.Combine(dir, "wm_scroll_base.png"))) return false;
-        if (!UiPng.Save(ui, "UI", "Basic.img/VScr111/enabled/thumb0", Path.Combine(dir, "wm_scroll_thumb.png"))) return false;
-
-        // The world map art and the region marks (Map/WorldMap/WorldMap.img).
-        // The Base tree keeps the "Map/" folder in the path, a Map.wz root
-        // does not; the link inside the node wants the same treatment.
-        if (!UiPng.TryRead(map, mapCat, $"{mapPre}WorldMap/WorldMap.img/BaseImg/0", out var world, out var origin))
-        {
-            Console.WriteLine("world map art not found: Map/WorldMap/WorldMap.img/BaseImg/0");
-            return false;
-        }
-        WzNodeUtil.SavePng(world, Path.Combine(dir, "wm_world.png"));
-
-        var list = map.Find(mapPre + "WorldMap/WorldMap.img/MapList");
-        if (list == null)
-        {
-            Console.WriteLine("world map list not found: Map/WorldMap/WorldMap.img/MapList");
-            return false;
-        }
-
-        // The region map of every region (MapLink): the towns of the region
-        // and the maps in every town. The world map list holds the old map
-        // ids, so the town list is the source for the newer ones.
-        var links = map.Find(mapPre + "WorldMap/WorldMap.img/MapLink");
-        if (links == null)
-        {
-            Console.WriteLine("world map links not found: Map/WorldMap/WorldMap.img/MapLink");
-            return false;
-        }
-        var regionMaps = new Dictionary<string, string>();
-        foreach (Wz_Node link in links.Nodes)
-        {
-            string tip = link.Nodes["toolTip"]?.Value as string ?? "";
-            string linkMap = link.Nodes["link"]?.Nodes["linkMap"]?.Value as string ?? "";
-            if (tip != "" && linkMap != "") regionMaps[tip] = linkMap;
-        }
-
-        var regions = new List<object>();
-        foreach (Wz_Node child in list.Nodes)
-        {
-            string title = child.Nodes["title"]?.Value as string ?? "";
-            var spot = child.Nodes["spot"]?.Value as Wz_Vector;
-            if (title == "" || spot == null) continue; // the towns and the links have no title
-            var ids = new List<int>();
-            var mapNo = child.Nodes["mapNo"];
-            if (mapNo != null) ids.AddRange(mapNo.Nodes.Select(n => n.GetValueEx<int>(0)));
-            // the towns of the region map: their maps are in the region too
-            if (!regionMaps.TryGetValue(title, out string? linkMap))
-            {
-                Console.WriteLine($"world map region '{title}' has no region map (MapLink)");
-                return false;
-            }
-            var towns = map.Find(mapPre + "WorldMap/" + linkMap + ".img/MapList");
-            if (towns == null)
-            {
-                Console.WriteLine($"world map region map not found: Map/WorldMap/{linkMap}.img/MapList");
-                return false;
-            }
-            foreach (Wz_Node town in towns.Nodes)
-            {
-                var townMaps = town.Nodes["mapNo"];
-                if (townMaps == null) continue;
-                ids.AddRange(townMaps.Nodes.Select(n => n.GetValueEx<int>(0)));
-            }
-            regions.Add(new { Title = title, X = (origin?.X ?? 0) + spot.X, Y = (origin?.Y ?? 0) + spot.Y, Maps = ids.Distinct().ToList() });
-        }
 
         // The official map names (String.wz Map.img: {world}/{map id}).
         var mapImg = str.Find("Map.img") ?? str.Find("String/Map.img");
@@ -176,25 +127,22 @@ public static partial class Export
         foreach (int id in ExportList.Load("maps"))
         {
             string name = "", street = "";
-            foreach (Wz_Node world2 in mapImg.Nodes)
+            var entry = MapEntry(mapImg, id, out string world);
+            if (entry != null)
             {
-                var entry = world2.Nodes[id.ToString()];
-                if (entry == null) continue;
                 name = entry.Nodes["mapName"]?.Value as string ?? "";
                 street = entry.Nodes["streetName"]?.Value as string ?? "";
-                worldName = world2.Text; // the world folder our maps live in
-                break;
+                worldName = world; // the world folder our maps live in
             }
             names.Add(new { Id = id, Name = name, Street = street });
         }
 
         WriteJson(Path.Combine(dir, "mapui.json"), new
         {
-            World = new { Image = "ui/wm_world.png", Regions = regions },
             Channel = new { World = worldName },
             Maps = names,
         });
-        Console.WriteLine($"map ui: {regions.Count} regions, {names.Count} map names");
+        Console.WriteLine($"map ui: {names.Count} map names");
         return true;
     }
 }

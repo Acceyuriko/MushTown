@@ -319,8 +319,6 @@ public partial class MushTownGame : Game
             string shotName = Path.GetFileNameWithoutExtension(_shotPath)!;
             if (shotName.Contains("guideboss")) _guideWindow.SetTab(1);
             if (shotName.Contains("guidespecial")) _guideWindow.SetTab(2);
-            // a shot named *scroll* scrolls the map list of the world map
-            if (shotName.Contains("scroll")) _worldMapWindow.ScrollToEnd();
             // the world map travel: the shot lands on the map it travelled to
             if (_shotTravel != 0)
             {
@@ -470,7 +468,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -524,8 +522,9 @@ public partial class MushTownGame : Game
         // Esc closes one layer. The chat keeps its own Esc (it leaves the input),
         // so the layer runs here, before the poll: a frame that closes a window
         // must not eat the click or the key the player pressed with it.
-        if (esc && !_chatWindow.Focused)
+        if (esc && !_chatWindow.Focused && !_worldMapWindow.SearchFocused)
         {
+            if (_worldMapWindow.EscLayer()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the world map closes its dialog and search board first
             if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
@@ -539,17 +538,24 @@ public partial class MushTownGame : Game
         bool held = ms.LeftButton == ButtonState.Pressed;
         InstallPendingKeys(); // a key window Save/Apply waits for this frame's poll
         _chatWindow.UpdateFrame(); // the wheel and a fold a click asked for last frame: that click already reached the open window
-        _input.Capture = _chatWindow.Focused; // typing must not fire the actions the same keys bind
+        if (_worldMapWindow.SearchFocused && click && !_worldMapWindow.SearchPanelAt(new Point(mx, my)))
+            _worldMapWindow.UnfocusSearch(); // the field must not keep the keyboard while the player clicks elsewhere
+        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused; // typing must not fire the actions the same keys bind
         _input.Poll(kb, new Point(mx, my), click, held, ms.ScrollWheelValue);
         // Enter starts a chat line: the input row only shows while one is typed.
         // The check sits before the chat block, so the Enter that sends a line
         // cannot open the next one.
-        if (!_chatWindow.Focused && !_menuWindow.Show && _talkNpc == 0 && _input.Fresh(Keys.Enter))
+        if (!_chatWindow.Focused && !_worldMapWindow.SearchFocused && !_menuWindow.Show && _talkNpc == 0 && _input.Fresh(Keys.Enter))
             _chatWindow.FocusInput(kb);
         if (_chatWindow.Focused)
         {
             _chatWindow.UpdateKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
             kb = new KeyboardState(); // the arrows and Up/Down must not move the character while typing
+        }
+        if (_worldMapWindow.SearchFocused)
+        {
+            _worldMapWindow.UpdateKeys(kb);
+            kb = new KeyboardState();
         }
         // Talk needs presence: walking out of reach closes the modal.
         if (_talkNpc != 0 && !_npcArts.Any(a => a.Spawn.NpcId == _talkNpc && InTalkReach(a)))
@@ -853,7 +859,7 @@ public partial class MushTownGame : Game
         ClearPeers(); // peers stay on the old map; their live states refill this one
         if (_localWorld != null) RefreshLocalMobs(); // the local world re-lists the new map
         else { ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); RespawnBuffLoops(); } // net: the server re-pushes them
-        _worldMapWindow.OnMapChanged(); // the list follows the player and marks the map we stand on
+        _worldMapWindow.OnMapChanged(); // the pin follows the player on an open world map
         _loadBeat = LoadBeat; // real map change: black beat (same-map jumps stay instant)
         _npcSayLayer.Enabled = false; // the beat starts now: hide the bubbles before this frame draws
     }
