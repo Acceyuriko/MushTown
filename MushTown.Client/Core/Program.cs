@@ -1,6 +1,6 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--aiticks <n>]]
+// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|equip|hud|skill|quest|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--aiticks <n>]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means menus.
 // --hit plants the player mid-swing next to the first mob (game shots only).
@@ -59,7 +59,7 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         else if (rest[i] == "--frame") { ok = int.TryParse(rest[i + 1], out shotFrame) && shotFrame >= 0; i += 2; }
         else if (rest[i] == "--facing" && rest[i + 1] == "left") { shotFacingRight = false; i += 2; }
         else if (rest[i] == "--facing" && rest[i + 1] == "right") { shotFacingRight = true; i += 2; }
-        else if (rest[i] == "--screen" && (rest[i + 1] is "saves" or "server" or "chars" or "chars2" or "job" or "job2" or "setup" or "delete" or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask")) { shotScreen = rest[i + 1]; i += 2; }
+        else if (rest[i] == "--screen" && (rest[i + 1] is "saves" or "server" or "chars" or "chars2" or "job" or "job2" or "setup" or "delete" or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask")) { shotScreen = rest[i + 1]; i += 2; }
         else if (rest[i] == "--skilltab") { ok = int.TryParse(rest[i + 1], out shotSkillTab) && shotSkillTab is >= 0 and <= 2; i += 2; }
         else ok = false;
     }
@@ -73,10 +73,10 @@ if (shotTalk != 0 && shotScreen is not ("talk" or "shop")) ok = false; // --talk
 if (shotJob != 0 && shotScreen is not ("job" or "job2")) ok = false; // --job rides only with the job screens
 if (shotScreen == "talk" && shotTalk == 0) ok = false; // the talk screen needs its NPC
 if (shotScreen == "shop" && shotTalk == 0) ok = false; // the shop screen needs its keeper
-if (shotTravel != 0 && shotScreen is not (null or "worldmap")) ok = false; // --travel needs the game or the world map
+if (shotTravel != 0 && shotScreen is not (null or "worldmap" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter")) ok = false; // --travel needs the game, the world map or the minimap
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|hud|skill|quest|talk|settings|shop] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|equip|hud|skill|quest|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>]]");
     Environment.ExitCode = 1;
     return;
 }

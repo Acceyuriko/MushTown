@@ -37,13 +37,13 @@ public sealed class Panel : Component, IDrawable
 // corner piece gives the border size.
 public static class NineSlice
 {
-    public static void Draw(UiGfx gfx, string stem, Rectangle r)
+    public static void Draw(UiGfx gfx, string stem, Rectangle r, bool center = true)
     {
         var nw = gfx.Tex("ui/" + stem + "_nw.png"); var ne = gfx.Tex("ui/" + stem + "_ne.png");
         var sw = gfx.Tex("ui/" + stem + "_sw.png"); var se = gfx.Tex("ui/" + stem + "_se.png");
         var n = gfx.Tex("ui/" + stem + "_n.png"); var s = gfx.Tex("ui/" + stem + "_s.png");
         var w = gfx.Tex("ui/" + stem + "_w.png"); var e = gfx.Tex("ui/" + stem + "_e.png");
-        var c = gfx.Tex("ui/" + stem + "_c.png");
+
         gfx.Sb.Draw(nw, new Vector2(r.X, r.Y), Color.White);
         gfx.Sb.Draw(ne, new Vector2(r.Right - ne.Width, r.Y), Color.White);
         gfx.Sb.Draw(sw, new Vector2(r.X, r.Bottom - sw.Height), Color.White);
@@ -52,7 +52,7 @@ public static class NineSlice
         gfx.Sb.Draw(s, new Rectangle(r.X + sw.Width, r.Bottom - s.Height, r.Width - sw.Width - se.Width, s.Height), Color.White);
         gfx.Sb.Draw(w, new Rectangle(r.X, r.Y + nw.Height, w.Width, r.Height - nw.Height - sw.Height), Color.White);
         gfx.Sb.Draw(e, new Rectangle(r.Right - e.Width, r.Y + ne.Height, e.Width, r.Height - ne.Height - se.Height), Color.White);
-        gfx.Sb.Draw(c, new Rectangle(r.X + w.Width, r.Y + n.Height, r.Width - w.Width - e.Width, r.Height - n.Height - s.Height), Color.White);
+        if (center) gfx.Sb.Draw(gfx.Tex("ui/" + stem + "_c.png"), new Rectangle(r.X + w.Width, r.Y + n.Height, r.Width - w.Width - e.Width, r.Height - n.Height - s.Height), Color.White);
     }
 }
 
@@ -61,8 +61,9 @@ public static class NineSlice
 public sealed class Box : Component, IDrawable
 {
     private readonly string _stem;
-    public Box(string stem) => _stem = stem;
-    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, _stem, Owner.Get<Rect>()!.Screen);
+    private readonly bool _center;
+    public Box(string stem, bool center = true) { _stem = stem; _center = center; }
+    public void Draw(UiGfx gfx) => NineSlice.Draw(gfx, _stem, Owner.Get<Rect>()!.Screen, _center);
 }
 
 // Clickable rect: hit via Rect, action via OnClick. The Scene resolves
@@ -438,7 +439,7 @@ public sealed class HoverTip : Component
     {
         var t = gfx.Ui.GetSmall(_text());
         int w = t.Width + 12, h = t.Height + 6;
-        int x = Math.Clamp(mouse.X + 14, 0, MushTownGame.GameWidth - w);
+        int x = Math.Clamp(mouse.X + 14, 0, Math.Max(0, MushTownGame.GameWidth - w)); // a tip wider than the screen must not throw
         int y = _above ? mouse.Y - h - 6 : mouse.Y - h / 2;
         y = Math.Clamp(y, 0, MushTownGame.GameHeight - h);
         var box = new Rectangle(x, y, w, h);

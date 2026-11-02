@@ -66,9 +66,28 @@ public sealed class MiniMapData
     public int CenterX { get; set; }
     public int CenterY { get; set; }
 
+    public string Mark { get; set; } = ""; // the icon in the big header (MapHelper.img/mark)
+
+    // The pixel size of the canvas art. Width/Height are world units; the
+    // minimap window is sized to these instead.
+    public int ArtW { get; set; }
+    public int ArtH { get; set; }
+
     // World point to a dot inside a drawn box of drawW x drawH.
     public (int X, int Y) ToDot(float wx, float wy, int drawW, int drawH) =>
         ((int)((wx + CenterX) / Width * drawW), (int)((wy + CenterY) / Height * drawH));
+}
+
+// One row of the official minimap filter: the name, where it sits and where
+// its checkbox sits, all read from UIMap.img/MiniMap/filter.
+public sealed class MinimapFilterRow
+{
+    public string Row { get; set; } = "";
+    public string Name { get; set; } = "";
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int CheckX { get; set; }
+    public int CheckY { get; set; }
 }
 
 public sealed class BackItem
@@ -142,6 +161,7 @@ public static class PortalRules
 {
     public const int NoTarget = 999999999; // tm with no target (spawns, one-way entrances)
     public const int ArrivalLookUp = 10; // arrival search starts this far above the portal point
+    public const int Visible = 2; // pt of a portal the minimap draws
 }
 
 // One portal: ↑ walks into (Tm, Tn), unless Tm is NoTarget (a dead end).
@@ -149,6 +169,7 @@ public static class PortalRules
 public sealed class PortalItem
 {
     public string Pn { get; set; } = "";
+    public int Pt { get; set; } // the portal type: 0 spawn, 1 hidden, 2 visible, 6/7/10 script (the minimap draws only 2)
     public int X { get; set; }
     public int Y { get; set; }
     public int Tm { get; set; }

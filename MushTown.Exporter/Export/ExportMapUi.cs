@@ -6,35 +6,89 @@ namespace MushTown.Exporter;
 // map window (UIMap.img/WorldMap), the world map itself
 // (Map/WorldMap/WorldMap.img), and the world name the MENU window's channel
 // pill shows (read by MushTown.Client/Panels/HudMenu.cs). The file names
-// must match the client (MushTown.Client/Panels/HudMap.cs).
+// must match the client (MushTown.Client/Panels/HudMap.cs and Ui/Minimap.cs).
 public static partial class Export
 {
     public static bool ExportMapUi(WzRoot ui, WzRoot map, WzRoot str, string outDir)
     {
         string dir = Path.Combine(outDir, "ui");
 
-        // The minimap frame: the nine official slices (UIMap.img/MiniMap/MinMap).
-        foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se", "c" })
+        // The minimap frame: the eight official slices (UIMap.img/MiniMap/MinMap).
+        // The client draws the map picture in place of the centre slice.
+        foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se" })
             if (!UiPng.Save(ui, "UI", $"UIMap.img/MiniMap/MinMap/{piece}", Path.Combine(dir, $"mini_frame_{piece}.png"))) return false;
+        // The large layout frame (UIMap.img/MiniMap/MaxMap): the same slices,
+        // with a taller top bar that carries the map icon and the two names.
+        foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se" })
+            if (!UiPng.Save(ui, "UI", $"UIMap.img/MiniMap/MaxMap/{piece}", Path.Combine(dir, $"mini_frame_big_{piece}.png"))) return false;
 
         // The small buttons of the minimap frame (UIMap.img/MiniMap): the row
-        // at the top (the house, the open book, the pin, the person, the
-        // funnel) and the zoom pair (the minus and the plus). The disabled
-        // state is the art for the buttons that have no job yet.
+        // at the top (the open book, the person, the funnel) and the minus/plus
+        // pair that switches the layout.
         var miniButtons = new (string Node, string Name)[]
         {
-            ("BtTown", "town"),
             ("BtMap", "map"),
-            ("BtNavigation", "navi"),
             ("BtNpc", "npc"),
             ("BtFilter", "filter"),
             ("button:min", "zoomout"),
             ("button:max", "zoomin"),
         };
         foreach (var (node, name) in miniButtons)
-            foreach (var (state, suffix) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p"), ("disabled", "_d") })
+            foreach (var (state, suffix) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p") })
                 if (!UiPng.Save(ui, "UI", $"UIMap.img/MiniMap/{node}/{state}/0", Path.Combine(dir, $"mini_btn_{name}{suffix}.png"))) return false;
 
+        // The dots on the map (MapHelper.img/minimap): the player, an ordinary
+        // NPC, the quest givers (their own mark) and a portal.
+        var dots = new (string Node, string Name)[]
+        {
+            ("user", "user"), ("npc", "npc"), ("startnpc", "npcstart"),
+            ("endnpc", "npcend"), ("portal", "portal"),
+        };
+        // The Base tree keeps the Map/ folder in front of every path.
+        bool baseTree = map.Find("WorldMap/WorldMap.img/BaseImg/0") == null;
+        string mapCat = baseTree ? "" : "Map";
+        string mapPre = baseTree ? "Map/" : "";
+        foreach (var (node, name) in dots)
+            if (!UiPng.Save(map, mapCat, $"{mapPre}MapHelper.img/minimap/{node}", Path.Combine(dir, $"mini_dot_{name}.png"))) return false;
+        // The map marks of the big minimap header (Map/MapHelper.img/mark).
+        var marks = map.Find($"{mapPre}MapHelper.img/mark");
+        if (marks == null) { Console.WriteLine("MapHelper.img/mark not found"); return false; }
+        foreach (var child in marks.Nodes)
+            if (!UiPng.Save(map, mapCat, $"{mapPre}MapHelper.img/mark/{child.Text}", Path.Combine(dir, $"map_mark_{child.Text}.png"))) return false;
+
+        // The filter window (UIMap.img/MiniMap/filter): the panel art, which
+        // also carries the section titles and the small row icons.
+        if (!UiPng.Save(ui, "UI", "UIMap.img/MiniMap/filter/backgrnd", Path.Combine(dir, "mini_filter_bg.png"))) return false;
+
+        // The checkbox states (Basic.img/CheckBox/0..1): off and on.
+        for (int i = 0; i < 2; i++)
+            if (!UiPng.Save(ui, "UI", $"Basic.img/CheckBox/{i}", Path.Combine(dir, $"check_{i}.png"))) return false;
+
+        // The filter rows: where the official window puts the box and the name,
+        // and what the name says. Written as one json the client reads.
+        var filterNode = ui.Find("UIMap.img/MiniMap/filter");
+        if (filterNode == null) { Console.WriteLine("minimap filter not found"); return false; }
+        var rows = new List<object>();
+        foreach (var check in filterNode.Nodes)
+        {
+            string id = check.Text;
+            if (!id.StartsWith("check:")) continue;
+            string row = id["check:".Length..];
+            var info = filterNode.Nodes["checkInfo"]?.Nodes[row];
+            var lt = check.Nodes["lt"]?.Value as Wz_Vector;
+            if (lt == null) { Console.WriteLine($"filter row {row}: no lt"); return false; }
+            // The two section headers have no name of their own (the panel art
+            // writes it), so their checkbox is all there is to place.
+            var pos = (info?.Nodes["namePos"]?.Value as Wz_Vector) ?? lt;
+            string rowName = info?.Nodes["name"]?.GetValueEx<string>("") ?? "";
+            rows.Add(new { Row = row, Name = rowName, X = pos.X, Y = pos.Y, CheckX = lt.X, CheckY = lt.Y });
+        }
+        WriteJson(Path.Combine(dir, "mini_filter.json"), rows);
+
+        // The NPC list window (UIMap.img/MiniMap/npcList): the panel and the dot
+        // in front of every row.
+        if (!UiPng.Save(ui, "UI", "UIMap.img/MiniMap/npcList/backgrnd", Path.Combine(dir, "npclist_bg.png"))) return false;
+        if (!UiPng.Save(ui, "UI", "UIMap.img/MiniMap/npcList/icon/npc", Path.Combine(dir, "npclist_dot.png"))) return false;
         // The X button of the world map window and the world map window frame.
         foreach (var (state, name) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p") })
             if (!UiPng.Save(ui, "UI", $"UIMap.img/WorldMap/button:close/{state}/0", Path.Combine(dir, $"map_x{name}.png"))) return false;
@@ -49,16 +103,14 @@ public static partial class Export
         // The world map art and the region marks (Map/WorldMap/WorldMap.img).
         // The Base tree keeps the "Map/" folder in the path, a Map.wz root
         // does not; the link inside the node wants the same treatment.
-        bool baseTree = map.Find("WorldMap/WorldMap.img/BaseImg/0") == null;
-        string prefix = baseTree ? "Map/" : "";
-        if (!UiPng.TryRead(map, baseTree ? "" : "Map", prefix + "WorldMap/WorldMap.img/BaseImg/0", out var world, out var origin))
+        if (!UiPng.TryRead(map, mapCat, $"{mapPre}WorldMap/WorldMap.img/BaseImg/0", out var world, out var origin))
         {
             Console.WriteLine("world map art not found: Map/WorldMap/WorldMap.img/BaseImg/0");
             return false;
         }
         WzNodeUtil.SavePng(world, Path.Combine(dir, "wm_world.png"));
 
-        var list = map.Find(prefix + "WorldMap/WorldMap.img/MapList");
+        var list = map.Find(mapPre + "WorldMap/WorldMap.img/MapList");
         if (list == null)
         {
             Console.WriteLine("world map list not found: Map/WorldMap/WorldMap.img/MapList");
@@ -68,7 +120,7 @@ public static partial class Export
         // The region map of every region (MapLink): the towns of the region
         // and the maps in every town. The world map list holds the old map
         // ids, so the town list is the source for the newer ones.
-        var links = map.Find(prefix + "WorldMap/WorldMap.img/MapLink");
+        var links = map.Find(mapPre + "WorldMap/WorldMap.img/MapLink");
         if (links == null)
         {
             Console.WriteLine("world map links not found: Map/WorldMap/WorldMap.img/MapLink");
@@ -97,7 +149,7 @@ public static partial class Export
                 Console.WriteLine($"world map region '{title}' has no region map (MapLink)");
                 return false;
             }
-            var towns = map.Find(prefix + "WorldMap/" + linkMap + ".img/MapList");
+            var towns = map.Find(mapPre + "WorldMap/" + linkMap + ".img/MapList");
             if (towns == null)
             {
                 Console.WriteLine($"world map region map not found: Map/WorldMap/{linkMap}.img/MapList");

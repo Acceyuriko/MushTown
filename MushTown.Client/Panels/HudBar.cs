@@ -295,10 +295,14 @@ public partial class MushTownGame
         return o;
     }
 
-    // Panels stay reachable: 80px on screen sideways, title never above the top.
-    // A panel taller than the screen (the shop) keeps its whole body on screen.
-    private static Point ClampPanel(Point p, int w, int h = 40) =>
-        new(Math.Clamp(p.X, -w + 80, 1366 - 80), Math.Clamp(p.Y, 0, 768 - h));
+    // The one clamp of the UI: 80px of the window stays on screen sideways, the
+    // title never goes above the top. maxX and maxY limit the top-left corner;
+    // x >= -w + 80 keeps the right 80px visible. Windows with side panels pass
+    // tighter limits so the panels stay reachable.
+    internal static Point ClampBox(Point p, int w, int maxX, int maxY) =>
+        new(Math.Clamp(p.X, -w + 80, maxX), Math.Clamp(p.Y, 0, maxY));
+
+    private static Point ClampPanel(Point p, int w, int h = 40) => ClampBox(p, w, 1366 - 80, 768 - h);
 
     private Texture2D TexByKey(string key) => _textures[key]; // full keys ("ui/..."): all screens share one lookup
 

@@ -35,6 +35,13 @@ public abstract class UiWindow
     // the clicks that belong to the world.
     public virtual Point HitSize() => Rect().Size;
 
+    // The drag limits: at least 80px of the window stays on the screen. On the
+    // left it may hang out as far as -Width + 80 (the right 80px show), on the
+    // right as far as 1366 - 80 (the left 80px show); the top stays inside, so a
+    // window taller than the screen throws here. A window whose side panels
+    // must stay reachable overrides this.
+    public virtual Point ClampPos(Point p) => MushTownGame.ClampBox(p, Rect().Width, 1366 - 80, 768 - Rect().Bottom);
+
     // The title strip the player drags the window by, in the same local coords.
     public abstract Rectangle TitleRect();
 

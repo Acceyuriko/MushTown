@@ -162,7 +162,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
+                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
                 _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
@@ -173,6 +173,12 @@ public partial class MushTownGame
             if (shotScreen == "quest") _showQuest = true;
             if (shotScreen == "settings") _showSettings = true;
             if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
+            if (shotScreen is "minimapbig" or "minimapnpc" or "minimapfilter" && WindowFor(HotkeyAction.Minimap) is MinimapWindow mini)
+            {
+                if (shotScreen == "minimapbig") mini.SetBig();
+                if (shotScreen == "minimapnpc") mini.SetNpcList();
+                if (shotScreen == "minimapfilter") mini.SetFilter();
+            }
             if (shotScreen == "worldmap") ShowWindow(HotkeyAction.WorldMap);
             if (shotScreen == "keys") KeyWindow?.Open();
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);

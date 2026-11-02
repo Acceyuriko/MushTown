@@ -90,7 +90,8 @@ public partial class MushTownGame
                 throw new InvalidDataException($"map {_mapId}: npc art {s.NpcId} not exported");
     }
 
-    private string NpcName(int id) => _npcs.TryGetValue(id, out var n) ? n.Name : $"NPC {id}";
+    internal string NpcName(int id) => _npcs.TryGetValue(id, out var n) ? n.Name : $"NPC {id}";
+    internal List<string> NpcLines(int id) => _npcs[id].Says; // LoadMapData proved it exists
 
     private string MobName(int id)
     {
@@ -107,7 +108,8 @@ public partial class MushTownGame
         return name;
     }
 
-    private string QText(string raw)
+    // The WZ text macros (#b, #p2001#, ...) turned into what the player reads.
+    internal string QText(string raw)
     {
         var chara = _save?.Slots[_slot] ?? new CharaSlot { Name = "hero" };
         return QuestText.Render(raw, chara, (qid, idx) => _questLog.KillCount(chara, qid, idx), MobName, NpcName);
@@ -136,7 +138,7 @@ public partial class MushTownGame
 
     // The balloon an NPC wears instead of talking: 0 = a quest to take,
     // 1 = a quest under way, 2 = a quest to hand in, -1 = none.
-    private int NpcQuestIcon(int npc)
+    internal int NpcQuestIcon(int npc)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return -1;

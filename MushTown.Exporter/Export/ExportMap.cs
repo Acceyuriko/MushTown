@@ -229,6 +229,9 @@ public static partial class Export
         map.MiniMap.Height = Int(mm, "height");
         map.MiniMap.CenterX = Int(mm, "centerX");
         map.MiniMap.CenterY = Int(mm, "centerY");
+        map.MiniMap.ArtW = mmpng.Width;
+        map.MiniMap.ArtH = mmpng.Height;
+        map.MiniMap.Mark = info.Nodes["mapMark"]?.GetValueEx<string>("") ?? ""; // ?. runs no default on a missing node
         if (map.MiniMap.Width <= 0 || map.MiniMap.Height <= 0)
         {
             Console.WriteLine($"map {mapId}: miniMap has a bad rect");
@@ -299,6 +302,7 @@ public static partial class Export
                 var item = new PortalItem
                 {
                     Pn = Str(p, "pn"),
+                    Pt = Int(p, "pt"),
                     X = Int(p, "x"),
                     Y = Int(p, "y"),
                     Tm = Int(p, "tm"),

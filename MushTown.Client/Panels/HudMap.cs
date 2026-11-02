@@ -57,28 +57,36 @@ internal static class MapWindowParts
         return o;
     }
 
-    // The X in the corner: it closes the window.
-    public static GameObject Close(UiWindow win, Rectangle rect)
+    // The 11x11 X in the corner of a window or a panel: the caller says what it closes.
+    public static GameObject Close(Action close, Rectangle rect)
     {
         var o = new GameObject();
         o.Add(new Rect(rect));
-        o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => win.Show = false });
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = close });
         o.Add(new Image("ui/map_x"));
         return o;
     }
 }
 
-// The minimap window: the official v1.2 frame with the map of the current
-// map, the player, the portals, the row of five buttons and the zoom pair.
+// The minimap window: the official frame, the map picture with the dots, the
+// row of buttons, the layout pair and the two panels on its right side. Every
+// part is a component; the window measures itself, places them, and builds the
+// buttons, the NPC rows and the filter hit boxes.
 public sealed class MinimapWindow : UiWindow
 {
     private readonly MushTownGame _game;
-    private int _zoom = 1; // the zoom level of the map art (1 = the whole map)
+    private readonly MinimapState _state = new();
 
-    // The frame sizes come from the art: the side border is 9 wide, the top
-    // bar 30 tall and the bottom bar 10 tall. The buttons are 21x21.
-    private const int BorderX = 9, TopH = 30, BottomH = 10, BtnSize = 21;
-    private const int MaxZoom = 4;
+    // The frame art fixes these: the side border is 9 wide, the bottom bar 10
+    // tall, the buttons 21x21. They live in the layout file with the rest of
+    // the numbers (borderX, bottomH, btnSize), the defaults are the art size.
+    private int BorderX => Lay.Get("borderX", 9);
+    private int BottomH => Lay.Get("bottomH", 10);
+    private int BtnSize => Lay.Get("btnSize", 21);
+
+    private int TopH => Lay.Get(_state.Big ? "bigTop" : "smallTop", _state.Big ? 70 : 30);
+    private string Frame => _state.Big ? "mini_frame_big" : "mini_frame";
+    private int RowH => Lay.Get("listRowH", 18);
 
     public MinimapWindow(MushTownGame game) : base(HotkeyAction.Minimap) { _game = game; Show = true; } // the minimap is always on screen
 
@@ -86,124 +94,238 @@ public sealed class MinimapWindow : UiWindow
     public override void OnClosed() => Show = true;
 
     // Every number of this window lives in layouts/panel-minimap.json.
-    private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-minimap.json"));
+    private static PanelLayout Lay => MinimapLay.Lay;
+    private Rectangle _box; // measured on every rebuild
 
-    public override Rectangle Rect() => new(0, 0, _lay.Get("w", 185), _lay.Get("h", 160));
+    // The box is measured on every rebuild (map change, layout switch, panel
+    // open, first show), the frame asks for it every frame.
+    public override Rectangle Rect() => _box;
+
+    // The size rule of the reference client (UIMiniMap.cs: the canvas plus the
+    // frame borders, floored by the smallest map area and, in the large layout,
+    // by the names). Every map sizes itself, nothing is special cased.
+    private Rectangle Measure()
+    {
+        var mini = _game.GameMap.MiniMap;
+        int w = BorderX * 2 + Math.Max(Lay.Get("minArtW", 167), mini.ArtW);
+        if (_state.Big) w = Math.Max(w, NameRight() + BorderX);
+        int h = TopH + BottomH + Math.Max(Lay.Get("minArtH", 50), mini.ArtH);
+        return new Rectangle(0, 0, w, h);
+    }
+
+    // The right edge the two names reach: the street name starts at streetX,
+    // the map name at nameX, and the wider one decides.
+    private int NameRight()
+    {
+        var name = MapUi.Name(_game.GameMap.MapId);
+        int street = Lay.Get("streetX", 50), x = Lay.Get("nameX", 50);
+        return Math.Max(street + TextWidth(name.Street), x + TextWidth(name.Name));
+    }
+
+    // The baked text is the real measure. A build only happens after
+    // LoadContent, so the fonts are always there.
+    private int TextWidth(string text) => text == "" ? 0 : _game.Ui.GetSmall(text).Width;
+
+    // The window plus the open panels: the rebuild and the drag clamp both use
+    // these rects, so a panel move cannot drift between them.
+    private (int W, int H) Extent()
+    {
+        int w = Rect().Width, h = Rect().Height;
+        if (_state.NpcList) { w = Math.Max(w, NpcListRect().Right); h = Math.Max(h, NpcListRect().Bottom); }
+        if (_state.Filter) { w = Math.Max(w, FilterRect().Right); h = Math.Max(h, FilterRect().Bottom); }
+        return (w, h);
+    }
+
+    // The side panels must stay on the screen, so a window that has one open
+    // cannot hang over the right or bottom edge.
+    public override Point ClampPos(Point p)
+    {
+        if (!HasPanels) return base.ClampPos(p);
+        var span = Extent();
+        return MushTownGame.ClampBox(p, Rect().Width, 1366 - span.W, 768 - span.H);
+    }
+
+    private bool HasPanels => _state.NpcList || _state.Filter;
+
     public override Rectangle TitleRect() => new(0, 0, Rect().Width, TopH);
-    public override Point LayoutPos() => new(_lay.Get("x", 0), _lay.Get("y", 0));
+    public override Point LayoutPos() => new(Lay.Get("x", 0), Lay.Get("y", 0));
 
     // The map area inside the frame.
-    private Rectangle Well() => new(BorderX, TopH,
-        Rect().Width - BorderX * 2, Rect().Height - TopH - BottomH);
+    private Rectangle Well() => new(BorderX, TopH, Rect().Width - BorderX * 2, Rect().Height - TopH - BottomH);
+
+    // The panels stand on the right of the window, one pixel over it: the NPC
+    // list art has a see through left column, the filter art does not, and the
+    // 1px overlap hides the seam either way.
+    private int PanelX => Rect().Width + Lay.Get("panelGap", -1);
+    private int PanelY => Lay.Get("panelY", 0);
+    private int NpcListH => Lay.Get("listH", 286);
+    private int FilterY => _state.NpcList ? PanelY + NpcListH + Lay.Get("panelGap", -1) : PanelY;
+    private Rectangle NpcListRect() => new(PanelX, PanelY, Lay.Get("listW", 184), NpcListH);
+    private Rectangle FilterRect() => new(PanelX, FilterY, Lay.Get("filterW", 133), Lay.Get("filterH", 286));
 
     public override void Build()
     {
-        foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se", "c" })
+        _box = Measure();
+        Pos = ClampPos(Pos); // a wider layout or an open panel may push it off the screen
+        foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se" })
+        {
             _game.LoadTexture($"ui/mini_frame_{piece}.png");
-        foreach (string name in new[] { "town", "map", "navi", "npc", "filter", "zoomout", "zoomin" })
-            foreach (string state in new[] { "_n.png", "_h.png", "_p.png", "_d.png" })
+            _game.LoadTexture($"ui/mini_frame_big_{piece}.png");
+        }
+        foreach (string name in new[] { "map", "npc", "filter", "zoomout", "zoomin" })
+            foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
                 _game.LoadTexture($"ui/mini_btn_{name}{state}");
+        foreach (string dot in new[] { "user", "npc", "npcstart", "npcend", "portal" })
+            _game.LoadTexture($"ui/mini_dot_{dot}.png");
+        foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
+            _game.LoadTexture($"ui/map_x{state}");
+        _game.LoadTexture("ui/mini_filter_bg.png");
+        _game.LoadTexture("ui/npclist_bg.png");
+        _game.LoadTexture("ui/npclist_dot.png");
+        _game.LoadTexture("ui/check_0.png");
+        _game.LoadTexture("ui/check_1.png");
         _game.LoadTexture(_game.GameMap.MiniMap.Image);
+        string mark = _game.GameMap.MiniMap.Mark;
+        if (mark != "") _game.LoadTexture($"ui/map_mark_{mark}.png");
 
         Host.Clear();
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window box: the children ride it
-        root.Add(new Invoke(gfx => Draw(gfx, root.Get<Rect>()!.Screen.Location)));  // the map, the dots and the names
-        root.Add(new Box("mini_frame")); // the frame on top of the map
+
+        var art = new GameObject();
+        art.Add(new Rect(Well()));
+        art.Add(new MinimapArt { Game = _game, State = _state });
+        root.AddChild(art);
+
+        // The frame goes over the map: as a child it draws after the art, and its
+        // center is off because the map itself fills the well.
+        var frame = new GameObject();
+        frame.Add(new Rect(Rect()));
+        frame.Add(new Box(Frame, center: false));
+        root.AddChild(frame);
+
+        if (_state.Big)
+        {
+            var head = new GameObject();
+            head.Add(new Rect(new Rectangle(0, 0, Rect().Width, TopH)));
+            head.Add(new MinimapHeader { Game = _game });
+            root.AddChild(head);
+        }
+        if (_state.NpcList) root.AddChild(NpcListPanel());
+        if (_state.Filter) root.AddChild(FilterPanel());
+
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         AddRow(root);
-        AddZoom(root);
+        AddLayout(root);
         Host.AddChild(root);
     }
 
-    // The row of five buttons on the top bar: the house, the book, the
-    // pin, the person and the funnel. The book opens the world map. The
-    // other four have no job yet, so they show the official disabled art
-    // and cannot be clicked.
+    // The three buttons on the top bar, right aligned like the official window
+    // (the vectors live in the layout file): the book opens the world map, the
+    // person the NPC list, the funnel the filter.
     private void AddRow(GameObject root)
     {
-        string[] names = { "town", "map", "navi", "npc", "filter" };
-        for (int i = 0; i < names.Length; i++)
+        (string Name, Action Click)[] row =
+        {
+            ("map", () => _game.ShowWindow(HotkeyAction.WorldMap)),
+            ("npc", () => { _state.NpcList = !_state.NpcList; Dirty = true; }),
+            ("filter", () => { _state.Filter = !_state.Filter; Dirty = true; })
+        };
+        for (int i = 0; i < row.Length; i++)
         {
             var b = new GameObject();
-            b.Add(new Rect(new Rectangle(_lay.Get("rowX", 61) + i * _lay.Get("rowPitch", 22),
-                _lay.Get("rowY", 4), BtnSize, BtnSize)));
-            if (names[i] == "map")
-            {
-                b.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _game.ShowWindow(HotkeyAction.WorldMap) });
-                b.Add(new Image("ui/mini_btn_map"));
-            }
-            else b.Add(new Picture($"ui/mini_btn_{names[i]}_d.png"));
+            b.Add(new Rect(new Rectangle(Rect().Width + Lay.Get("rowRight", -26) - (row.Length - 1 - i) * Lay.Get("rowPitch", 22),
+                Lay.Get("rowY", 4), BtnSize, BtnSize)));
+            b.Add(new Button { Kind = ButtonKind.Click, OnClick = row[i].Click });
+            b.Add(new Image($"ui/mini_btn_{row[i].Name}"));
             root.AddChild(b);
         }
     }
 
-    // The zoom pair on the top bar: the minus and the plus.
-    private void AddZoom(GameObject root)
+    // The minus and the plus switch the layout (the official pair is not a
+    // zoom): the small frame, then the big one with the map icon and names.
+    private void AddLayout(GameObject root)
     {
-        int x = _lay.Get("zoomX", 15), y = _lay.Get("zoomY", 4);
-        int pitch = _lay.Get("zoomPitch", 22);
+        int x = Lay.Get("zoomX", 6), y = Lay.Get("zoomY", 4);
+        int pitch = Lay.Get("zoomPitch", 22);
         var minus = new GameObject();
         minus.Add(new Rect(new Rectangle(x, y, BtnSize, BtnSize)));
-        minus.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _zoom = Math.Max(1, _zoom - 1) });
+        minus.Add(new Button { Kind = ButtonKind.Click, OnClick = () => SwitchLayout(false) });
         minus.Add(new Image("ui/mini_btn_zoomout"));
         root.AddChild(minus);
         var plus = new GameObject();
         plus.Add(new Rect(new Rectangle(x + pitch, y, BtnSize, BtnSize)));
-        plus.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _zoom = Math.Min(MaxZoom, _zoom + 1) });
+        plus.Add(new Button { Kind = ButtonKind.Click, OnClick = () => SwitchLayout(true) });
         plus.Add(new Image("ui/mini_btn_zoomin"));
         root.AddChild(plus);
     }
 
-    // The part of the map art we show: the whole art at zoom 1, a window
-    // around the player when zoomed in.
-    private Rectangle Source(int artW, int artH)
+    // The shots pose the panels and the large layout; a player uses the buttons.
+    public void SetBig() => SwitchLayout(true);
+    public void SetNpcList() { _state.NpcList = true; Dirty = true; }
+    public void SetFilter() { _state.Filter = true; Dirty = true; }
+
+    // The layout changes the frame, so the window is rebuilt once.
+    private void SwitchLayout(bool big)
     {
-        int w = Math.Max(1, artW / _zoom), h = Math.Max(1, artH / _zoom);
-        var mini = _game.GameMap.MiniMap;
-        int px = (int)((_game.PlayerX + mini.CenterX) / (float)mini.Width * artW);
-        int py = (int)((_game.PlayerY + mini.CenterY) / (float)mini.Height * artH);
-        return new Rectangle(Math.Clamp(px - w / 2, 0, artW - w), Math.Clamp(py - h / 2, 0, artH - h), w, h);
+        if (_state.Big == big) return;
+        _state.Big = big;
+        Dirty = true;
     }
 
-    // The map art in the well, the dots and the names.
-    private void Draw(UiGfx gfx, Point origin)
+    // The list of this map's NPCs, on the right of the window. The frame art
+    // already carries the NPC label.
+    private GameObject NpcListPanel()
     {
-        var well = Well();
-        well.Offset(origin);
-        var map = _game.GameMap;
-        var tex = gfx.Tex(map.MiniMap.Image);
-        var src = Source(tex.Width, tex.Height);
-        float s = Math.Min((float)well.Width / src.Width, (float)well.Height / src.Height);
-        var dest = new Rectangle(well.X + (int)((well.Width - src.Width * s) / 2),
-            well.Y + (int)((well.Height - src.Height * s) / 2), (int)(src.Width * s), (int)(src.Height * s));
-        gfx.Sb.Draw(tex, dest, src, Color.White);
+        int w = NpcListRect().Width;
+        var box = new GameObject();
+        box.Add(new Rect(NpcListRect()));
+        box.Add(new MinimapNpcList { Game = _game });
+        box.AddChild(MapWindowParts.Close(() => { _state.NpcList = false; Dirty = true; }, new Rectangle(w + Lay.Get("listCloseX", -21), Lay.Get("listCloseY", 11), 11, 11)));
 
-        // A dot on the map: the world point to a pixel in the shown art.
-        void Dot(float wx, float wy, Color ink)
+        for (int i = 0; i < Math.Min(_game.GameMap.Npcs.Count, MinimapNpcList.RowCount); i++)
         {
-            var (ax, ay) = map.MiniMap.ToDot(wx, wy, tex.Width, tex.Height);
-            if (ax < src.X || ay < src.Y || ax >= src.Right || ay >= src.Bottom) return; // outside the shown part
-            int x = dest.X + (int)((ax - src.X) * s), y = dest.Y + (int)((ay - src.Y) * s);
-            gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 1, y - 1, 3, 3), ink);
+            var n = _game.GameMap.Npcs[i];
+            int y = MinimapNpcList.RowY(i);
+            var row = new GameObject();
+            row.Add(new Rect(new Rectangle(0, y, w, RowH)));
+            row.Add(new HoverTip(() => NpcTip(n.NpcId)));
+            box.AddChild(row);
         }
-        foreach (var p in map.Portals) Dot(p.X, p.Y, new Color(80, 160, 255));
-        Dot(_game.PlayerX, _game.PlayerY, new Color(255, 220, 0));
-
-        // The street name and the map name (the official names) over the map.
-        var name = MapUi.Name(map.MapId);
-        Text(gfx, name.Street, well.X + _lay.Get("streetX", 8), well.Y + _lay.Get("streetY", 6), new Color(212, 225, 229));
-        Text(gfx, name.Name, well.X + _lay.Get("nameX", 8), well.Y + _lay.Get("nameY", 22), Color.White);
+        return box;
     }
 
-    // The name text with a dark shadow, so it reads over the map art.
-    private static void Text(UiGfx gfx, string text, int x, int y, Color ink)
+    // The name of the NPC and the first thing they say: what the tooltip of the
+    // list shows.
+    private string NpcTip(int id)
     {
-        if (text == "") return;
-        var t = gfx.Ui.GetSmall(text);
-        gfx.Sb.Draw(t, new Vector2(x + 1, y + 1), new Color(0, 0, 0, 160));
-        gfx.Sb.Draw(t, new Vector2(x, y), ink);
+        var says = _game.NpcLines(id);
+        // The first line, with the WZ macros (#b, #p2001#, ...) turned into text.
+        string line = says.Count > 0 ? _game.QText(says[0]) : "";
+        return line == "" ? _game.NpcName(id) : $"{_game.NpcName(id)}: {line}";
     }
+
+    // The filter panel: the official art, the official checkboxes and the rows
+    // the exporter read from the window.
+    private GameObject FilterPanel()
+    {
+        int w = FilterRect().Width;
+        var box = new GameObject();
+        box.Add(new Rect(FilterRect()));
+        box.Add(new MinimapFilter { State = _state });
+        box.AddChild(MapWindowParts.Close(() => { _state.Filter = false; Dirty = true; }, new Rectangle(w + Lay.Get("filterCloseX", -20), Lay.Get("filterCloseY", 11), 11, 11)));
+
+        foreach (var row in MinimapFilter.Rows)
+        {
+            var hit = new GameObject();
+            // The whole row toggles: the box spans the panel and is as tall as a row.
+            hit.Add(new Rect(new Rectangle(0, row.CheckY - Lay.Get("filterHitPad", 2), w, Lay.Get("filterRowH", 18))));
+            hit.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _state.Toggle(row.Row) });
+            box.AddChild(hit);
+        }
+        return box;
+    }
+
 }
 
 // The world map window: the whole world, with the regions. Click a region to
@@ -286,7 +408,7 @@ public sealed class WorldMapWindow : UiWindow
         go.Add(new Button { Kind = ButtonKind.Silent, OnClick = GoPicked }); // the travel plays the portal sound
         root.AddChild(go);
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
-        root.AddChild(MapWindowParts.Close(this, new Rectangle(_lay.Get("wcloseX", 829), _lay.Get("wcloseY", 12), 11, 11)));
+        root.AddChild(MapWindowParts.Close(() => Show = false, new Rectangle(_lay.Get("wcloseX", 829), _lay.Get("wcloseY", 12), 11, 11)));
         Host.AddChild(root);
     }
 

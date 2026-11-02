@@ -79,6 +79,7 @@ public partial class MushTownGame : Game
     private ChatWindow _chatWindow = null!; // the chat is always on screen
     private GuideWindow _guideWindow = null!; // the contents guide window
     private GuideCardWindow _guideCardWindow = null!; // the small guide popup
+    private MinimapWindow _minimap = null!; // the minimap window
     private WorldMapWindow _worldMapWindow = null!; // the world map window
     private readonly Dictionary<int, PeerArt> _remotes = new();
     private readonly PlateArt _heroPlate = new(); // the hero's tag rides the player object (SyncHeroPlate fills it)
@@ -154,7 +155,7 @@ public partial class MushTownGame : Game
             }
             _chatWindow.AddLine(_save?.Slots[_slot]?.Name ?? "Me", text);
         });
-        new MinimapWindow(this); // the new windows keep themselves in the list
+        _minimap = new MinimapWindow(this); // the new windows keep themselves in the list
         _worldMapWindow = new WorldMapWindow(this);
         new KeyConfigWindow(this);
         _partyWindow = new PartyWindow(this);
@@ -374,14 +375,19 @@ public partial class MushTownGame : Game
             if (portalDelays[i].Any(x => x <= 0))
                 throw new InvalidDataException($"map {mapId} portal {i} has a bad delay");
         // stale maps predate bgm/minimap: an empty image would load the assets
-        // dir as a png, a zero width would divide by zero in ToDot
-        if (map.Info.Bgm == "" || map.MiniMap.Image == "" || map.MiniMap.Width <= 0 || map.MiniMap.Height <= 0)
+        // folder as a png, a zero width or height would divide by zero in ToDot,
+        // and a map written before the minimap export has no ArtW/ArtH, so the
+        // well would not match the picture. Not a map this build can draw.
+        if (map.Info.Bgm == "" || map.MiniMap.Image == "" || map.MiniMap.Width <= 0 || map.MiniMap.Height <= 0
+            || map.MiniMap.ArtW <= 0 || map.MiniMap.ArtH <= 0)
             throw new InvalidDataException($"map {mapId} is stale: re-run export");
         // all checks passed: commit everything at once, so a bad map leaves
         // the old map untouched and the menu can retry cleanly
         _mapId = mapId;
         _map = map;
         _mover.Map = map; // the feet read the same ground
+        // the minimap window is sized by this map and shows its mark: rebuild it
+        _minimap.Dirty = true;
         _layers = layers;
         _spawnGround = spawnGround;
         _world.RemoveChild(_mapObj); // old furniture leaves with the old map (first load: never added, false)
@@ -441,6 +447,11 @@ public partial class MushTownGame : Game
         _fighter.AttackLock = 0;
     }
 
+    // The baked text, once the fonts are up: a window that sizes itself by a
+    // string reads it. Readable once LoadContent has run; every window build
+    // happens after that.
+    internal UiText Ui => _ui!;
+
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
@@ -459,7 +470,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "worldmap" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -904,13 +915,15 @@ public partial class MushTownGame : Game
     }
 
     // The mouse of a shot: *hptip* hovers the HP bar (the text tip), *itemtip*
-    // the ring in the demo bag (the item tooltip); every other shot has none.
+    // the ring in the demo bag (the item tooltip), *npctip* the first row of the
+    // NPC list; every other shot has none.
     // Shots never run Update, so the hover has to be refreshed at the draw.
     private (int X, int Y) ShotMouse()
     {
         string name = Path.GetFileNameWithoutExtension(_shotPath!)!;
         if (name.Contains("hptip")) return (600, 720);
         if (name.Contains("itemtip")) return (1283, 376);
+        if (name.Contains("npctip")) return (_minimap.Pos.X + _minimap.Rect().Width + 40, _minimap.Pos.Y + 39); // 41px into the panel (its left edge is 1px inside the window), the first row
         return (-10, -10);
     }
 
