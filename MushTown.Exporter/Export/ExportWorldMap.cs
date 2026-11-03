@@ -73,6 +73,10 @@ public static partial class Export
             for (int i = 0; i < 3; i++)
                 if (!UiPng.Save(ui, "UI", $"Basic.img/ComboBox21/{state}/{i}", Path.Combine(dir, $"wm_combo_{suffix}{i}.png"))) return false;
 
+        // The tooltip: the grey rule under the name and one bullet per kind.
+        foreach (var (node, name) in new[] { ("Line", "line"), ("Mob", "mob"), ("Npc", "npc") })
+            if (!UiPng.Save(ui, "UI", $"UIWindow2.img/ToolTip/WorldMap/{node}", Path.Combine(dir, $"wm_tip_{name}.png"))) return false;
+
         var root = map.Find($"{mapPre}WorldMap/WorldMap.img");
         if (root == null) { Console.WriteLine("world map not found: Map/WorldMap/WorldMap.img"); return false; }
         var helper = map.Find($"{mapPre}MapHelper.img/worldMap");

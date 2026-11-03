@@ -75,6 +75,9 @@
 - 世界地图数据在 **`Map/WorldMap/WorldMap.img`（不是 UI 分类）**：`BaseImg/0` 640×470（origin 320,235）；`MapList/<i>` = title + spot（图上像素 = 320+spot.X, 235+spot.Y）；`MapLink/<i>` 的 `link/linkMap` 是区域→区域图，`toolTip` 是链接名。**配对靠名字不按序号**（MapLink 15 条 vs MapList 13 个）；只读 MapList 会漏 1020000（Split Road of Destiny）→ 把区域图的城镇号并进去。根图 `WorldMap` 没有 `info/parentMap`（导出成 `""`，不是 null）。窗框 = `UI/UIMap.img/WorldMap/backgrnd` 852×561。
 - MAP INFO 栏只有 180 art 像素宽 → 长名要换行；宽度用官方 146（lifeRB.x − lifeLT.x）。`mapInfo` 自带 "Cooldown" 牌子（y≈477-495）→ 列表不能压到，要能滚；列表 14 行。滚动条轨道 x=165、长 296、滑块 67、宽 5，美术 = `Basic.img/VScr111`（滑块图只有 5×26）→ **按美术自己的尺寸画，不拉长**。官方滚轮一格 3 行。
 - 大地图顶部三个下拉 = `combo_{n,h,p}0..2`（4×20 / 77×20 / 17×20，盒 98×21，pitch 101）。确认框 = `Basic.img/sysPop`（top 318×30 / mid 318×17 / bottom 318×59，BtYes/BtNo 83×26 在 (73,14)/(162,14)）。`button:teleport` 是 Hyper Teleport Rock、`button:navigationStart` 是导航，都只有 disabled 图。
+- 下拉三块图的分工：0 = 左端盖（第一列灰边、圆角），1 = 中段（**只有最上一行是灰的**，左右两边都没边），2 = 右端盖 + 灰色的 ▼。**没有「无箭头的右端盖」**，所以列表行要收口只能拿 0 镜像。`selected` 那套和 `normal` 一样只有三块。
+- 大地图 tooltip 三张 = `UIWindow2.img/ToolTip/WorldMap/{Line,Mob,Npc}`：Line 251×1 纯 `#777777`；Mob / Npc 各 9×9（彩色圆角块 + 中间 M 形镂空，A=0；画在深色框上看着像黑图案）。**中间是透明的，不能九宫拉**。
+- 立绘直接有现成的，不用导：NPC = `assets/npc/<id>.png`（就是地图上画的那张，origin 在 json 里）；怪物 = `assets/mob/<id>/<idle>/0.png`。**不是每只怪都有 stand**（100001/100002/100005 只有 move/hit1/die1，6130101 只有 move/attack1/hit1/die1）→ 取 idle 要按「有 stand 用 stand，没有用 move」。
 
 ### 3.7 聊天 / 对话 / 组队 / GUIDE / 任务条 / 气泡 / buff / 快捷栏
 

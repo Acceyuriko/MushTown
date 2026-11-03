@@ -23,7 +23,9 @@ public sealed class MobArt : Component
 
     // The idle is stand, or move when the mob has no stand (the blue snail
     // crawls everywhere).
-    public string Idle => Data.Actions.Any(a => a.Name == "stand") ? "stand" : "move";
+    public string Idle => IdleOf(Data);
+
+    public static string IdleOf(MobData data) => data.Actions.Any(a => a.Name == "stand") ? "stand" : "move";
 
     // One action at a time: the tick and the draw read the same list.
     public void SetAction(string action)

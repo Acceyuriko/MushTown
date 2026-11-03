@@ -326,8 +326,7 @@ public sealed class WorldMapWindow : UiWindow
 {
     private readonly MushTownGame _game;
     private readonly WorldMapState _state = new();
-    private readonly CaretText _caret = new(MapLay.Lay); // the search name field
-    private readonly HashSet<Keys> _down = new(); // the keys of the last frame, for the typing repeat
+    private readonly TextField _field = new(MapLay.Lay); // the search name field
     private List<SearchHit> _hits = new(); // the last search
     private int _type;   // 0 map, 1 NPC, 2 mob
     private int _scroll; // the first result row on screen
@@ -340,13 +339,19 @@ public sealed class WorldMapWindow : UiWindow
     // One row of the result list.
     private sealed record SearchHit(string Name, int MapId, string Region, int Node, string Icon, Color Ink);
 
-    // Taking the field: the keys held right now count as already down, so they do
-    // not type a character the player pressed before the click.
+    // Taking the field. A click brings no key frame, so the field reads the
+    // keyboard itself and counts the held keys as already down.
     private void FocusSearch()
     {
-        _caret.Focused = true;
-        _down.Clear();
-        foreach (var key in Keyboard.GetState().GetPressedKeys()) _down.Add(key);
+        _field.Focus(Keyboard.GetState());
+        Dirty = true;
+    }
+
+    // The search button: the board appears and takes the field, or leaves.
+    private void ToggleSearch()
+    {
+        _state.Search = !_state.Search;
+        if (_state.Search) FocusSearch(); else _field.Unfocus();
         Dirty = true;
     }
 
@@ -357,7 +362,7 @@ public sealed class WorldMapWindow : UiWindow
         if (!_state.Search) return false;
         _state.Search = false;
         _state.OpenCombo = -1;
-        _caret.Focused = false;
+        _field.Unfocus();
         Dirty = true;
         return true;
     }
@@ -372,21 +377,31 @@ public sealed class WorldMapWindow : UiWindow
         Dirty = true;
     }
 
+    // The shot poses an open list: a player clicks a combo box.
+    public void PoseCombo(int index)
+    {
+        _state.OpenCombo = index;
+        Dirty = true;
+    }
+
     // The shot poses the search panel with a query: a player uses the search button.
     public void OpenSearch(string query)
     {
         _state.Search = true;
-        _caret.Focused = true;
-        _down.Clear();
-        _caret.Clear();
-        foreach (char c in query) _caret.Type(c);
+        _field.Focus(new KeyboardState());
+        _field.Clear();
+        foreach (char c in query) _field.Type(c);
         Run();
     }
 
     // The name field has the keys: the chat must not take them.
-    public bool SearchFocused => Show && _state.Search && _caret.Focused;
+    public bool SearchFocused => Show && _state.Search && _field.Focused;
 
-    public WorldMapWindow(MushTownGame game) : base(HotkeyAction.WorldMap) { _game = game; }
+    public WorldMapWindow(MushTownGame game) : base(HotkeyAction.WorldMap)
+    {
+        _game = game;
+        _field.Ink = Color.Black; // the search panel is white
+    }
 
     private static PanelLayout Lay => MapLay.Lay;
     private static int SearchW => Lay.Get("searchW", 182);
@@ -404,8 +419,8 @@ public sealed class WorldMapWindow : UiWindow
 
     public void UnfocusSearch()
     {
-        if (!_caret.Focused) return;
-        _caret.Focused = false;
+        if (!_field.Focused) return;
+        _field.Unfocus();
         Dirty = true;
     }
 
@@ -416,6 +431,9 @@ public sealed class WorldMapWindow : UiWindow
     {
         "ui/wm_frame.png", "ui/wm_info_top.png", "ui/wm_info_body.png",
         "ui/wm_cur.png", "ui/wm_select.png", "ui/wm_life_npc.png", "ui/wm_life_mob.png",
+        "ui/wm_tip_line.png", "ui/wm_tip_mob.png", "ui/wm_tip_npc.png",
+        "ui/tip_nw.png", "ui/tip_ne.png", "ui/tip_sw.png", "ui/tip_se.png",
+        "ui/tip_n.png", "ui/tip_s.png", "ui/tip_w.png", "ui/tip_e.png", "ui/tip_c.png",
         "ui/wm_combo_n0.png", "ui/wm_combo_n1.png", "ui/wm_combo_n2.png",
         "ui/wm_combo_h0.png", "ui/wm_combo_h1.png", "ui/wm_combo_h2.png",
         "ui/wm_combo_p0.png", "ui/wm_combo_p1.png", "ui/wm_combo_p2.png",
@@ -442,6 +460,9 @@ public sealed class WorldMapWindow : UiWindow
         }
         var region = WorldMapUi.Region(_state.Shown)!; // the json always carries it
         _game.LoadTexture(region.Image);
+        // The pictures of the left column rows: one per NPC and monster of our maps.
+        foreach (var (kind, id) in WorldMapUi.Lives())
+            _game.LoadTexture(kind == 0 ? $"npc/{id}.png" : _game.MobIdleFrame(id));
         // The node icons and the link plates this region draws. A plate is only
         // painted under the mouse, so it must be loaded before it first shows.
         foreach (int type in region.Nodes.Select(n => n.Type).Where(t => t >= 0).Distinct())
@@ -483,7 +504,7 @@ public sealed class WorldMapWindow : UiWindow
         // The link name goes last of the panels: a tip drawn inside the map area
         // would slide under the search board hanging on the right edge.
         var tip = new GameObject();
-        tip.Add(new WorldMapLinkTip { State = _state });
+        tip.Add(new WorldMapTip { Game = _game, State = _state });
         root.AddChild(tip);
         if (_confirm)
         {
@@ -512,11 +533,10 @@ public sealed class WorldMapWindow : UiWindow
         _state.Search = false;
         _state.OpenCombo = -1;
         _confirm = false;
-        _caret.Focused = false;
-        _caret.Clear();
+        _field.Unfocus();
+        _field.Clear();
         _hits.Clear();
         _scroll = 0;
-        _down.Clear();
     }
 
     private Rectangle CloseRect() => new(Lay.Get("wcloseX", 829), Lay.Get("wcloseY", 12), 11, 11);
@@ -543,54 +563,28 @@ public sealed class WorldMapWindow : UiWindow
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(px - icon.OX, py - icon.OY, icon.W, icon.H)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(i) });
-        o.Add(new HoverTip(() => Tip(node)));
+        o.Add(new WorldMapNodeMark { State = _state, Index = i });
         root.AddChild(o);
     }
-
-    // The node tooltip: the names of the maps we have here, then what lives on
-    // the first of them. A node of a region we did not export has no name.
-    private string Tip(WorldMapNode node)
-    {
-        var ours = node.Maps.Where(IsOurs).ToList();
-        if (ours.Count == 0) return node.Name;
-        var lines = new List<string>();
-        foreach (int id in ours) lines.Add(WorldMapUi.Name(id));
-        var file = WorldMapUi.MapFile(ours[0]);
-        foreach (int id in file.Life.Select(l => l.MobId).Distinct().Take(3)) lines.Add(_game.MobName(id));
-        foreach (int id in file.Npcs.Select(n => n.NpcId).Distinct().Take(3)) lines.Add(_game.NpcName(id));
-        return string.Join("  ", lines);
-    }
-
-    // The maps this game has: only those carry a destination and a life list.
-    private static bool IsOurs(int id) => MapUi.Data.Maps.Any(m => m.Id == id);
 
     // A click picks the node (the blue arrow follows the state, so no rebuild);
     // a second click on the picked node asks before travelling. The node may
     // stand for several of our maps, so the pick carries the map id as well.
     private void Pick(int i)
     {
-        _caret.Focused = false;
+        _field.Unfocus();
         var region = WorldMapUi.Region(_state.Shown)!;
         var node = region.Nodes[i];
         if (_state.Sel != i)
         {
             _state.Sel = i;
-            _state.SelMap = PickMap(node);
+            _state.SelMap = WorldMapUi.PickMap(node, _game.GameMap.MapId);
             return;
         }
         if (_state.SelMap == 0) return; // nowhere to go
         _confirmMapId = _state.SelMap;
         _confirm = true;
         Dirty = true;
-    }
-
-    // The map a node travels to: the one we stand on when it is there, else the
-    // first of ours.
-    private int PickMap(WorldMapNode node)
-    {
-        int here = _game.GameMap.MapId;
-        if (node.Maps.Contains(here) && IsOurs(here)) return here;
-        return node.Maps.FirstOrDefault(IsOurs);
     }
 
     // The toolbar: upper, locate and search work; the book mark and the
@@ -600,7 +594,7 @@ public sealed class WorldMapWindow : UiWindow
         int y = Lay.Get("btnY", 40), w = Lay.Get("btnW", 37), h = Lay.Get("btnH", 25);
         AddButton(root, "upper", Lay.Get("upperX", 205), y, w, h, Up);
         AddButton(root, "locate", Lay.Get("locateX", 247), y, w, h, Locate);
-        AddButton(root, "search", Lay.Get("searchX", 709), y, w, h, () => { _state.Search = !_state.Search; if (_state.Search) FocusSearch(); else _caret.Focused = false; Dirty = true; });
+        AddButton(root, "search", Lay.Get("searchX", 709), y, w, h, ToggleSearch);
         Disabled(root, "bookmark", Lay.Get("bookmarkX", 751), y, w, h);
         Disabled(root, "navi", Lay.Get("naviX", 793), y, w, h);
     }
@@ -638,7 +632,7 @@ public sealed class WorldMapWindow : UiWindow
         var (name, node) = Find(_game.GameMap.MapId);
         Switch(name);
         _state.Sel = node;
-        _state.SelMap = node < 0 ? 0 : PickMap(WorldMapUi.Region(name)!.Nodes[node]);
+        _state.SelMap = node < 0 ? 0 : WorldMapUi.PickMap(WorldMapUi.Region(name)!.Nodes[node], _game.GameMap.MapId);
     }
 
     private void Switch(string name)
@@ -674,7 +668,7 @@ public sealed class WorldMapWindow : UiWindow
     // the mouse if we exported that world map.
     private void ClickMap()
     {
-        _caret.Focused = false;
+        _field.Unfocus();
         Dirty = true;
         // The answer comes from the last draw, so the region may have been swapped
         // since: check the index against the links actually shown now.
@@ -707,27 +701,58 @@ public sealed class WorldMapWindow : UiWindow
         Dirty = true;
     }
 
-    // The top strip: world, region and map. The WZ gives four boxes; the fourth
-    // is the map name of the picked node, which the left column already shows.
+    // One combo box of the window: where it sits in the window, how wide it is,
+    // the text on it, its choices and what a pick does.
+    private sealed record Combo(int X, int Y, int W, Func<string> Text, Func<List<string>> Choices, Action<int> Pick);
+
+    // The four boxes: the world, the region and the map of the top strip, then
+    // the kind of thing the search looks for. The search one sits in the panel
+    // that hangs on the right edge, so its spot is the window spot as well.
+    // Built on every read: the layout can change under a running window.
+    private Combo[] Combos() => new[]
+    {
+        // The only world we have.
+        new Combo(Lay.Get("comboX", 294), Lay.Get("comboY", 42), Lay.Get("comboW", 98),
+            () => "Maple World", () => new List<string> { "Maple World" }, _ => Switch("WorldMap")),
+        new Combo(Lay.Get("comboX", 294) + Lay.Get("comboPitch", 101), Lay.Get("comboY", 42), Lay.Get("comboW", 98),
+            RegionText, () => WorldMapUi.Regions().Select(r => r.Text).ToList(),
+            row => Switch(WorldMapUi.Regions()[row].Target)),
+        new Combo(Lay.Get("comboX", 294) + Lay.Get("comboPitch", 101) * 2, Lay.Get("comboY", 42), Lay.Get("comboW", 98),
+            MapText, () => WorldMapUi.Ours(_state.Shown).Select(i => WorldMapUi.Region(_state.Shown)!.Nodes[i].Name).ToList(),
+            row =>
+            {
+                var nodes = WorldMapUi.Ours(_state.Shown);
+                _state.Sel = nodes[row];
+                _state.SelMap = WorldMapUi.PickMap(WorldMapUi.Region(_state.Shown)!.Nodes[nodes[row]], _game.GameMap.MapId);
+            }),
+        new Combo(Lay.Get("ww", 852) - 1 + Lay.Get("sInX", 15), Lay.Get("sTypeY", 74), Lay.Get("sInW", 152),
+            () => TypeName(_type), () => new List<string> { TypeName(0), TypeName(1), TypeName(2) },
+            row => { _type = row; Run(); }),
+    };
+
+    // The three boxes of the top strip. The WZ gives four, but the fourth is the
+    // map name of the picked node, which the left column already shows.
     private void AddCombos(GameObject root)
     {
-        int y = Lay.Get("comboY", 42), pitch = Lay.Get("comboPitch", 101), w = Lay.Get("comboW", 98);
-        AddCombo(root, 0, Lay.Get("comboX", 294), y, w, () => "Maple World");
-        AddCombo(root, 1, Lay.Get("comboX", 294) + pitch, y, w, RegionText);
-        AddCombo(root, 2, Lay.Get("comboX", 294) + pitch * 2, y, w, MapText);
+        for (int i = 0; i < 3; i++) AddCombo(root, Point.Zero, i);
     }
 
-    private void AddCombo(GameObject root, int index, int x, int y, int w, Func<string> text)
+    // One box, hung on a parent that sits at the window spot At (the search
+    // box hangs the type box on the panel, the strip hangs its own on the window).
+    private void AddCombo(GameObject parent, Point at, int index)
     {
+        var c = Combos()[index];
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(x, y, w, 20)));
-        o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Combo(index) });
-        o.Add(new WorldMapCombo { Text = text });
-        root.AddChild(o);
+        o.Add(new Rect(new Rectangle(c.X - at.X, c.Y - at.Y, c.W, BoxH)));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OpenCombo(index) });
+        o.Add(new ComboBox { Text = c.Text });
+        parent.AddChild(o);
     }
 
-    // A click on a combo opens its list, and a second click closes it.
-    private void Combo(int index)
+    private static int BoxH => Lay.Get("comboRowH", 20);
+
+    // A click on a combo opens its list, and a second click closes it (-1).
+    private void OpenCombo(int index)
     {
         _state.OpenCombo = _state.OpenCombo == index ? -1 : index;
         Dirty = true;
@@ -752,62 +777,33 @@ public sealed class WorldMapWindow : UiWindow
     private void AddComboList(GameObject root)
     {
         int index = _state.OpenCombo;
-        var choices = index switch
-        {
-            0 => new List<string> { "Maple World" }, // the only world we have
-            1 => WorldMapUi.Regions().Select(r => r.Text).ToList(),
-            2 => WorldMapUi.Ours(_state.Shown).Select(i => WorldMapUi.Region(_state.Shown)!.Nodes[i].Name).ToList(),
-            _ => new List<string> { TypeName(0), TypeName(1), TypeName(2) }, // the search type is the last one
-        };
-        var (x, top, w) = ComboBox(index);
-        int y = top + 20;
+        var c = Combos()[index];
+        var choices = c.Choices();
 
         var catcher = new GameObject();
         // The same rule as the confirm dialog: a click anywhere else closes the list.
         catcher.Add(new Rect(new Rectangle(-Pos.X, -Pos.Y, MushTownGame.GameWidth, MushTownGame.GameHeight)));
-        catcher.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Combo(-1) });
+        catcher.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OpenCombo(-1) });
         root.AddChild(catcher);
 
         var box = new GameObject();
-        box.Add(new Rect(new Rectangle(x, y, w, choices.Count * 20)));
-        box.Add(new WorldMapComboList { Rows = choices });
+        box.Add(new Rect(new Rectangle(c.X, c.Y + BoxH, c.W, choices.Count * BoxH)));
+        box.Add(new ComboBox { Rows = choices });
         for (int i = 0; i < choices.Count; i++)
         {
             int row = i;
             var o = new GameObject();
-            o.Add(new Rect(new Rectangle(0, i * 20, w, 20)));
+            o.Add(new Rect(new Rectangle(0, i * BoxH, c.W, BoxH)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => ComboPick(index, row) });
             box.AddChild(o);
         }
         root.AddChild(box);
     }
 
-    // Where a combo box sits in the window, and how wide it is.
-    private (int X, int Y, int W) ComboBox(int index) => index switch
-    {
-        1 => (Lay.Get("comboX", 294) + Lay.Get("comboPitch", 101), Lay.Get("comboY", 42), Lay.Get("comboW", 98)),
-        2 => (Lay.Get("comboX", 294) + Lay.Get("comboPitch", 101) * 2, Lay.Get("comboY", 42), Lay.Get("comboW", 98)),
-        3 => (Lay.Get("ww", 852) - 1 + Lay.Get("sTypeX", 15), Lay.Get("sTypeY", 74), Lay.Get("sTypeW", 152)),
-        _ => (Lay.Get("comboX", 294), Lay.Get("comboY", 42), Lay.Get("comboW", 98)),
-    };
-
     private void ComboPick(int combo, int row)
     {
         _state.OpenCombo = -1;
-        if (combo == 0) Switch("WorldMap"); // the world box only holds Maple World
-        else if (combo == 1)
-        {
-            var regions = WorldMapUi.Regions();
-            Switch(regions[row].Target);
-        }
-        else if (combo == 2)
-        {
-            var nodes = WorldMapUi.Ours(_state.Shown);
-
-            _state.Sel = nodes[row];
-            _state.SelMap = PickMap(WorldMapUi.Region(_state.Shown)!.Nodes[nodes[row]]);
-        }
-        else if (combo == 3) { _type = row; Run(); }
+        Combos()[combo].Pick(row);
         Dirty = true;
     }
 
@@ -820,18 +816,19 @@ public sealed class WorldMapWindow : UiWindow
         box.Add(new Rect(new Rectangle(x, 0, SearchW, Lay.Get("searchH", 325))));
         box.Add(new Picture("ui/wm_s_back.png"));
 
+        // The field is the left part of the input box: the magnifier sits in its
+        // right end, so the text stops before it.
         var input = new GameObject();
         input.Add(new Rect(new Rectangle(Lay.Get("sInX", 15), Lay.Get("sInY", 44),
             Lay.Get("sInW", 152), Lay.Get("sInH", 22))));
         input.Add(new Button { Kind = ButtonKind.Click, OnClick = FocusSearch });
-        input.Add(new WorldMapSearchText { Caret = _caret });
+        var field = new GameObject();
+        field.Add(new Rect(new Rectangle(4, 0, Lay.Get("sInW", 152) - Lay.Get("goInset", 18) - 8, Lay.Get("sInH", 22))));
+        field.Add(_field);
+        input.AddChild(field);
         box.AddChild(input);
 
-        var kind = new GameObject();
-        kind.Add(new Rect(new Rectangle(Lay.Get("sTypeX", 15), Lay.Get("sTypeY", 74), Lay.Get("sTypeW", 152), 20)));
-        kind.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Combo(3) });
-        kind.Add(new WorldMapCombo { Text = () => TypeName(_type) });
-        box.AddChild(kind);
+        AddCombo(box, new Point(x, 0), 3); // the kind of thing to look for
 
         AddHits(box);
 
@@ -844,7 +841,7 @@ public sealed class WorldMapWindow : UiWindow
         go.Add(new Image("ui/wm_s_go"));
         input.AddChild(go);
 
-        box.AddChild(MapWindowParts.Close(() => { _state.Search = false; _state.OpenCombo = -1; _caret.Focused = false; Dirty = true; },
+        box.AddChild(MapWindowParts.Close(() => { _state.Search = false; _state.OpenCombo = -1; _field.Unfocus(); Dirty = true; },
             new Rectangle(Lay.Get("sCloseX", 162), Lay.Get("sCloseY", 10), 11, 11)));
         root.AddChild(box);
     }
@@ -875,7 +872,7 @@ public sealed class WorldMapWindow : UiWindow
     {
         _hits = new List<SearchHit>();
         _scroll = 0;
-        string q = _caret.Text.Trim().ToLowerInvariant();
+        string q = _field.Text.Trim().ToLowerInvariant();
         if (q != "") Collect(q);
         Dirty = true;
     }
@@ -932,37 +929,22 @@ public sealed class WorldMapWindow : UiWindow
     // A click on a result shows that map on the world map and picks its node.
     private void ShowHit(SearchHit hit)
     {
-        _caret.Focused = false;
+        _field.Unfocus();
         Switch(hit.Region);
         _state.Sel = hit.Node;
         _state.SelMap = hit.MapId;
         Dirty = true;
     }
 
-    // The typing of the name field: Enter searches, Escape leaves, Backspace
-    // deletes and a letter goes in.
-    public void UpdateKeys(KeyboardState kb)
+    // The typing of the name field: Enter searches, Escape leaves the field, a
+    // held key repeats (the field owns that and the rest of the keys).
+    public void UpdateKeys(KeyboardState kb, float dtMs)
     {
-        foreach (var key in kb.GetPressedKeys())
+        switch (_field.Read(kb, dtMs))
         {
-            if (_down.Contains(key)) continue;
-            if (key == Keys.Enter) { Run(); continue; }
-            if (key == Keys.Escape) { _caret.Focused = false; continue; }
-            if (key == Keys.Back) { _caret.Backspace(); continue; }
-            char c = CharOf(key);
-            if (c == '\0') continue;
-            _caret.Type(c);
+            case FieldKey.Submit: Run(); break;
+            case FieldKey.Leave: _field.Unfocus(); break;
         }
-        _down.Clear();
-        foreach (var key in kb.GetPressedKeys()) _down.Add(key);
-    }
-
-    private static char CharOf(Keys key)
-    {
-        if (key >= Keys.A && key <= Keys.Z) return (char)('a' + (key - Keys.A));
-        if (key >= Keys.D0 && key <= Keys.D9) return (char)('0' + (key - Keys.D0));
-        if (key >= Keys.NumPad0 && key <= Keys.NumPad9) return (char)('0' + (key - Keys.NumPad0));
-        return key == Keys.Space ? ' ' : '\0';
     }
 
     // The wheel scrolls the result list.

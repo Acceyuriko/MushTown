@@ -58,6 +58,14 @@ public partial class MushTownGame
         return data;
     }
 
+    // The idle picture of a monster: the left column of the world map shows the
+    // first frame of the action the monster stands in.
+    internal string MobIdleFrame(int mob)
+    {
+        var data = LoadMob(mob);
+        return data.Actions.First(a => a.Name == MobArt.IdleOf(data)).Frames[0].Image;
+    }
+
     // A spawn the server pushed (or the local world listed): the view starts
     // at the live HP, so late joiners see wounded mobs as wounded.
     private void ApplySpawn(int uid, int mob, float x, float y, int maxHp, int hp)

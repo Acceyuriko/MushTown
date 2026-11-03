@@ -32,6 +32,22 @@ public sealed class Panel : Component, IDrawable
     }
 }
 
+// 3-slice stretched row: the two ends keep their size, the middle stretches.
+// The chat input line is built this way (ui/chat_input_{w,c,e}.png).
+public sealed class PanelH : Component, IDrawable
+{
+    private readonly string _left, _mid, _right;
+    public PanelH(string left, string mid, string right) { _left = left; _mid = mid; _right = right; }
+    public void Draw(UiGfx gfx)
+    {
+        var p = Owner.Get<Rect>()!.Screen;
+        var l = gfx.Tex(_left); var m = gfx.Tex(_mid); var r = gfx.Tex(_right);
+        gfx.Sb.Draw(l, new Vector2(p.X, p.Y), Color.White);
+        gfx.Sb.Draw(m, new Rectangle(p.X + l.Width, p.Y, p.Width - l.Width - r.Width, p.Height), Color.White);
+        gfx.Sb.Draw(r, new Vector2(p.Right - r.Width, p.Y), Color.White);
+    }
+}
+
 // The official nine piece frame: the corners stay, the edges and the center
 // stretch. The art names the pieces (ui/<stem>_nw.png and so on) and the
 // corner piece gives the border size.

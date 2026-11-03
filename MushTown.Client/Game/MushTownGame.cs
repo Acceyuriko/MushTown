@@ -31,6 +31,7 @@ public partial class MushTownGame : Game
     private readonly bool _host;
     private readonly string? _joinHost;
     private readonly string? _shotScreen;
+    private readonly (int X, int Y)? _shotHover; // --hover <x,y>: where the shot puts the mouse
     private readonly int _shotTalk; // --talk <npc>: which NPC the talk shot opens
     private readonly int _shotJob; // --job <id>: which class the job shot poses
     private readonly bool _shotHit;
@@ -109,8 +110,9 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null)
     {
+        _shotHover = shotHover;
         _shotPath = shotPath;
         _shotMap = shotMap;
         _shotTravel = shotTravel;
@@ -468,7 +470,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -554,7 +556,7 @@ public partial class MushTownGame : Game
         }
         if (_worldMapWindow.SearchFocused)
         {
-            _worldMapWindow.UpdateKeys(kb);
+            _worldMapWindow.UpdateKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
             kb = new KeyboardState();
         }
         // Talk needs presence: walking out of reach closes the modal.
@@ -920,12 +922,14 @@ public partial class MushTownGame : Game
         Exit();
     }
 
-    // The mouse of a shot: *hptip* hovers the HP bar (the text tip), *itemtip*
-    // the ring in the demo bag (the item tooltip), *npctip* the first row of the
-    // NPC list; every other shot has none.
+    // The mouse of a shot: --hover picks the point (the tips read it), else
+    // *hptip* hovers the HP bar (the text tip), *itemtip* the ring in the demo
+    // bag (the item tooltip), *npctip* the first row of the NPC list, and every
+    // other shot has none.
     // Shots never run Update, so the hover has to be refreshed at the draw.
     private (int X, int Y) ShotMouse()
     {
+        if (_shotHover is { } at) return (at.X, at.Y); // asked for: the tips read this point
         string name = Path.GetFileNameWithoutExtension(_shotPath!)!;
         if (name.Contains("hptip")) return (600, 720);
         if (name.Contains("itemtip")) return (1283, 376);

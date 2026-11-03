@@ -1,5 +1,5 @@
 {
-  "_help": "World map window in 1366x768 space. wx,wy,ww,wh is the window; worldX/worldY the map art inside it (the picture's own top left corner, 640x470); titleH is the title strip height. The left column: infoX/infoY is the header box (168x59, the map name goes here), infoBodyY the body box under it (168x344); nameX/nameY/nameW the map name inside the header; lifeX/lifeY/lifeStep/lifeRows the NPC and monster rows (the official lifeLT is 16,145 with a 20 px pitch); teleportX/teleportY and naviStartX/naviStartY the two disabled buttons under the list. The toolbar: btnY, btnW/btnH, upperX/locateX/searchX/bookmarkX/naviX are the five buttons on the title strip (the art is 37x25). The top strip: comboX/comboY/comboW/comboPitch place the three combo boxes. A map node's click box is its icon size, so it has no key here. The search panel hangs on the right edge: searchW/searchH, then sInX/sInY/sInW/sInH the name field, goInset/goSize the search button inside the field's right end, sTypeX/sTypeY/sTypeW its combo, sCloseX/sCloseY its X, and sListX/sListY/sRowW/sRowH/sRows the result rows. The confirm dialog: confirmW/confirmH (the sysPop art is 318 wide), popBottomH the bottom bar, popTextY/popTextStep the two lines, popYesX/popNoX/popBtnY and popBtnW/popBtnH the two buttons. wcloseX/wcloseY the window X. The minimap window has its own file (panel-minimap.json).",
+  "_help": "World map window in 1366x768 space. wx,wy,ww,wh is the window; worldX/worldY the map art inside it (the picture's own top left corner, 640x470); titleH is the title strip height. The left column: infoX/infoY is the header box (168x59, the map name goes here), infoBodyY the body box under it (168x344); nameX/nameY/nameW the map name inside the header; lifeX/lifeY/lifeStep/lifeRows the NPC and monster rows (the official lifeLT is 16,145 with a 20 px pitch); teleportX/teleportY and naviStartX/naviStartY the two disabled buttons under the list. The toolbar: btnY, btnW/btnH, upperX/locateX/searchX/bookmarkX/naviX are the five buttons on the title strip (the art is 37x25). The top strip: comboX/comboY/comboW/comboPitch place the three combo boxes. A map node's click box is its icon size, so it has no key here. The search panel hangs on the right edge: searchW/searchH, then sInX/sInY/sInW/sInH the name field (the type combo below it is as wide and starts at the same left edge), goInset/goSize the search button inside the field's right end, sTypeY its combo, sCloseX/sCloseY its X, and sListX/sListY/sRowW/sRowH/sRows the result rows. The confirm dialog: confirmW/confirmH (the sysPop art is 318 wide), popBottomH the bottom bar, popTextY/popTextStep the two lines, popYesX/popNoX/popBtnY and popBtnW/popBtnH the two buttons. wcloseX/wcloseY the window X. tipPad/tipRowH/tipW = the tooltip box padding, one row of its list and the widest picture or map name of a left column row (a longer name is cut). tipGap = the space around the grey rule, tipArtGap = the space under the picture, tipTextDy = the name inside its row, tipBullet = the icon column of a node row, tipDX = how far right of the cursor the box sits. comboRowH = the height of a combo box and of one row of its open list (the art is 20 tall, so this cannot change). lifeW = the hover width of a left column row (the row art is 146 wide, the name drawn on it reaches 152). caretDx/caretDy/caretW/caretH = the caret of the search field. The minimap window has its own file (panel-minimap.json).",
   "wx": 250,
   "wy": 30,
   "ww": 852,
@@ -46,9 +46,7 @@
   "goSize": 14,
   "sInW": 152,
   "sInH": 22,
-  "sTypeX": 15,
   "sTypeY": 74,
-  "sTypeW": 152,
   "sCloseX": 162,
   "sCloseY": 10,
   "sListX": 17,
@@ -67,5 +65,19 @@
   "popNoX": 162,
   "popBtnY": 14,
   "wcloseX": 829,
-  "wcloseY": 12
+  "wcloseY": 12,
+  "tipPad": 7,
+  "tipRowH": 14,
+  "tipW": 200,
+  "tipGap": 4,
+  "tipArtGap": 2,
+  "tipTextDy": 1,
+  "tipBullet": 14,
+  "tipDX": 16,
+  "comboRowH": 20,
+  "lifeW": 152,
+  "caretDx": 0,
+  "caretDy": 4,
+  "caretW": 1,
+  "caretH": 14
 }

@@ -8,7 +8,7 @@ namespace MushTown.Client;
 // The log frame, the filter tabs, the scroll bar, the chevron and the input
 // line are official art; the log text uses the game font. The window is on
 // the screen all the time. The lines live in ChatLog and the typed text in
-// CaretText: the window keeps the frame, the chevron and the keyboard.
+// TextField: the window keeps the frame, the chevron and the keyboard.
 public sealed class ChatWindow : UiWindow
 {
     // The art the exporter writes (assets/ui/chat_*.png).
@@ -32,13 +32,10 @@ public sealed class ChatWindow : UiWindow
     private readonly MushTownGame _game;
     private readonly Action<string> _send;
     private readonly ChatLog _log;
-    private readonly CaretText _caret;
-    private readonly HashSet<Keys> _down = new(); // the keys that were down last frame
+    private readonly TextField _field;
     private bool _minimised; // the chat is folded into one line
     private bool _partyTarget; // the line goes to the party instead of the world
     private int _wheel; // the wheel value of the last frame
-    private Keys _repeatKey = Keys.None; // the key the repeat is counting
-    private float _repeatMs;             // how long it has been held
     private bool _foldWhenDone;          // Enter opened the folded chat: it folds again when the input leaves
     private bool _foldPending;           // the fold waits for the next update: the click that caused it must reach the log or a tab first
     private readonly List<ChatLog.Run> _runs = new(); // the newest line, in the log colors (the log clears it each draw)
@@ -49,7 +46,7 @@ public sealed class ChatWindow : UiWindow
         _game = game;
         _send = send;
         _log = new ChatLog(_lay);
-        _caret = new CaretText(_lay);
+        _field = new TextField(_lay);
         Show = true;
         Pos = LayoutPos(); // the layout file gives the spot (the game sets it again on a reload)
         AddSystem("Welcome to MushTown."); // dummy lines: the log shows its two kinds
@@ -81,7 +78,7 @@ public sealed class ChatWindow : UiWindow
     // folded chat is one line.
     public override Point HitSize() => new(_lay.Get("w", 315), _minimised
         ? _lay.Get("minH", 20)
-        : _caret.Focused ? _lay.Get("inputY", 125) + _lay.Get("inputH", 25)
+        : _field.Focused ? _lay.Get("inputY", 125) + _lay.Get("inputH", 25)
         : _lay.Get("logY", 22) + _lay.Get("logH", 100));
 
     // The log frame: the official nine piece slice under the tabs.
@@ -140,20 +137,15 @@ public sealed class ChatWindow : UiWindow
     }
 
     // True while the input has the focus: the game gives the keys to the chat.
-    public bool Focused => _caret.Focused;
+    public bool Focused => _field.Focused;
 
     // Enter on the chat (or the Chat key): unfold the window if it is
-    // minimised (the input row is not drawn there), and seed the held keys so
-    // the key that opened the input is not typed into it on the next frame.
+    // minimised (the input row is not drawn there), and take the keys.
     public void FocusInput(KeyboardState kb)
     {
         if (_minimised) { Restore(); _foldWhenDone = true; } // Enter on the folded chat: it folds again when the line is done
-        _caret.Focused = true;
+        _field.Focus(kb);
         Dirty = true; // the typing row shows up
-        _repeatKey = Keys.None;
-        _repeatMs = 0;
-        _down.Clear();
-        foreach (var key in kb.GetPressedKeys()) _down.Add(key);
     }
 
     // The chat target: the line goes to the party instead of the world.
@@ -162,10 +154,8 @@ public sealed class ChatWindow : UiWindow
     // The input leaves: the typing row hides again (and the chat folds if Enter opened it).
     private void Unfocus()
     {
-        if (!_caret.Focused) return;
-        _caret.Focused = false;
-        _repeatKey = Keys.None; // a held key must not type into the input that just left
-        _repeatMs = 0;
+        if (!_field.Focused) return;
+        _field.Unfocus();
         if (_foldWhenDone) { _foldWhenDone = false; _foldPending = true; } // sending or a click outside folds it again, on the next update
         Dirty = true;
     }
@@ -180,8 +170,8 @@ public sealed class ChatWindow : UiWindow
 
     internal void TypeForShot(string text)
     {
-        _caret.Focused = true;
-        foreach (char c in text) _caret.Type(c);
+        _field.Focus(new KeyboardState());
+        foreach (char c in text) _field.Type(c);
     }
 
     // The target button swaps the target. Without a party there is no party
@@ -212,52 +202,18 @@ public sealed class ChatWindow : UiWindow
     // A system line (the Etc. tab).
     public void AddSystem(string text) => _log.AddSystem(text);
 
-    // How long a key is held before it repeats, and how fast it repeats after
-    // that (the OS defaults: about half a second, then 25 a second).
-    private const float RepeatDelayMs = 400f;
-    private const float RepeatRateMs = 40f;
-
     // The keys go into the input while it has the focus: Enter sends the
-    // line, Backspace deletes, Esc leaves the input, a held key repeats like
-    // it does in the rest of the system. A click outside the input line
-    // leaves the input too.
+    // line, Esc leaves the input, a held key repeats (the field owns that).
+    // A click outside the input line leaves the input too.
     public void UpdateKeys(KeyboardState kb, float dtMs)
     {
         var input = _game.Input;
         if (input.Click && !OnScreen(InputRect()).Contains(input.Mouse.X, input.Mouse.Y)) Unfocus();
-
-        var now = kb.GetPressedKeys();
-        foreach (var key in now)
+        switch (_field.Read(kb, dtMs))
         {
-            if (!_caret.Focused) break; // Enter sent the line: those keys go back to the game
-            if (_down.Contains(key)) continue; // held down: the repeat below handles it
-            if (key == Keys.Enter) { Send(); continue; }
-            if (key == Keys.Escape) { Unfocus(); continue; }
-            Press(key);
-            if (CharOf(key) == '\0' && key != Keys.Back) continue; // a key that types nothing does not stop the repeat
-            _repeatKey = key; // keep typing while it stays down
-            _repeatMs = 0;
+            case FieldKey.Submit: Send(); break;
+            case FieldKey.Leave: Unfocus(); break;
         }
-        if (_repeatKey != Keys.None && !kb.IsKeyDown(_repeatKey)) _repeatKey = Keys.None;
-        else if (_repeatKey != Keys.None)
-        {
-            _repeatMs += dtMs;
-            if (_repeatMs >= RepeatDelayMs)
-            {
-                Press(_repeatKey);
-                _repeatMs = Math.Min(_repeatMs - RepeatRateMs, RepeatDelayMs - RepeatRateMs); // a long stall must not dump a burst of characters
-            }
-        }
-        _down.Clear();
-        foreach (var key in now) _down.Add(key);
-    }
-
-    // One press: a character goes into the text, Backspace deletes.
-    private void Press(Keys key)
-    {
-        if (key == Keys.Back) { _caret.Backspace(); return; }
-        char c = CharOf(key);
-        if (c != '\0') _caret.Type(c);
     }
 
     // Enter: the line goes out, the input is cleared and the focus leaves
@@ -265,41 +221,12 @@ public sealed class ChatWindow : UiWindow
     // character shows the same line for a few seconds.
     private void Send()
     {
-        string text = _caret.Text.Trim();
-        _caret.Clear();
+        string text = _field.Text.Trim();
+        _field.Clear();
         Unfocus(); // clears the repeat state too
         if (text == "") return;
         _send(text);
         _game.ShowBalloon(text);
-    }
-
-    // The typed character for a key (letters, digits, space, the usual marks).
-    private static char CharOf(Keys key)
-    {
-        if (key >= Keys.A && key <= Keys.Z) return (char)('a' + (key - Keys.A));
-        if (key >= Keys.D0 && key <= Keys.D9) return (char)('0' + (key - Keys.D0));
-        if (key >= Keys.NumPad0 && key <= Keys.NumPad9) return (char)('0' + (key - Keys.NumPad0));
-        return key switch
-        {
-            Keys.Space => ' ',
-            Keys.OemPeriod => '.',
-            Keys.OemComma => ',',
-            Keys.OemMinus => '-',
-            Keys.OemQuestion => '?',
-            Keys.OemQuotes => '\'',
-            Keys.OemSemicolon => ';',
-            Keys.OemPlus => '=',
-            Keys.OemOpenBrackets => '[',
-            Keys.OemCloseBrackets => ']',
-            Keys.OemBackslash => '\\',
-            Keys.OemPipe => '|',
-            Keys.Divide => '/',
-            Keys.Multiply => '*',
-            Keys.Add => '+',
-            Keys.Subtract => '-',
-            Keys.Decimal => '.',
-            _ => '\0',
-        };
     }
 
     public override void Build()
@@ -371,11 +298,18 @@ public sealed class ChatWindow : UiWindow
         // the input line and the chat target show only while a line is typed
         // (Enter starts one): the log is on the screen all the time, the
         // typing row is not.
-        if (_caret.Focused)
+        if (_field.Focused)
         {
+            // the input line: the official bar and the field inside it, which
+            // ends where the right cap starts
             var input = new GameObject();
             input.Add(new Rect(InputRect()));
-            input.Add(_caret);
+            input.Add(new PanelH("ui/chat_input_w.png", "ui/chat_input_c.png", "ui/chat_input_e.png"));
+            var field = new GameObject();
+            field.Add(new Rect(new Rectangle(_lay.Get("fieldX", 71), 0,
+                InputRect().Width - _lay.Get("fieldX", 71) - _lay.Get("capW", 7), InputRect().Height)));
+            field.Add(_field);
+            input.AddChild(field);
             root.AddChild(input);
 
             // the chat target button: it shows where the line goes now (the
