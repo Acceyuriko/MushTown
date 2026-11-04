@@ -28,9 +28,13 @@ public partial class MushTownGame
     {
         var frame = m.Frames[m.Frame];
         var tex = _textures[frame.Image];
-        // WZ mob art has no origin: center-bottom anchor at the feet
-        int x = (int)Math.Floor(m.X) - tex.Width / 2;
-        int y = (int)Math.Floor(m.Y) - tex.Height;
+        // The WZ origin is the anchor; a flipped draw mirrors it around the feet,
+        // so the left edge comes from the shared flip math (same as NpcTopLeft).
+        int feetX = (int)Math.Floor(m.X);
+        int x = m.FacingRight
+            ? SceneMath.FlipDrawX(feetX, -frame.OriginX, tex.Width)
+            : feetX - frame.OriginX;
+        int y = (int)Math.Floor(m.Y) - frame.OriginY;
         DrawTexture(frame.Image, x, y, m.FacingRight); // raw art faces left; the AI faces along
         if (m.Hp >= m.MaxHp || m.Hp <= 0) return; // fresh and dying mobs hide their bar
         int px = (int)Math.Floor(m.X) - BarWidth / 2 - _camera.X, py = y - 8 - _camera.Y;
@@ -106,7 +110,7 @@ public partial class MushTownGame
         m.Hp = hpLeft;
         m.SetAction(hpLeft == 0 ? "die1" : "hit1");
         PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, m.Data.Boss) : "hit");
-        float bodyH = _textures[m.Frames[0].Image].Height;
+        float bodyH = m.Frames[0].OriginY; // origin to feet: where the head is
         float headY = m.Y - bodyH;
         var num = TakeNumber();
         num.Text = damage.ToString(); num.X = m.X; num.Y = headY;

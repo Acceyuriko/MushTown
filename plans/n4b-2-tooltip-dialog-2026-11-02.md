@@ -96,7 +96,9 @@
 
 **怪帧时间**（用户 2026-11-03）：`ExportMob` 原来每帧写死 100ms，比原版快一倍（蜗牛看着「鬼畜」）。原版不是固定帧率，是每帧一个 ms。数据在 `Data/Packs/Mob_*.ms` 的 `Mob/<id>.img/<动作>/<帧>/delay`（用户指出后找到：`WzRoot.LoadBase` 现在会加载 `Packs/*.ms`），导出逐帧读，缺省 180。
 
-**怪属性以 WZ 为准**（用户 2026-11-03）：`Mob/<id>.img/info` 里有全套官方的 maxHP/exp/speed/PADamage/PDRate/boss。导出映射：MaxHp=maxHP、Exp=exp、Def=PDRate/100、Touch=PADamage、Speed=100+speed px/s、Boss=boss；只有 Aggro（追击范围）WZ 没有，保留自调。之前写的「WZ 没有 hp/exp」是错的，数据在 Packs 里没加载。改完导出必须重跑 `export`；旧的 `assets/` 没有 `StandDelays` 会在启动时报错。
+**怪帧 origin / NPC 帧编号**（用户 2026-11-04）：怪每帧导出 WZ `origin`（`OriginX/Y`），客户端按该像素贴到脚点（X/Y 都用 origin），不再统一按图中心-底部。NPC 的 stand 帧按实际存在的序号排序后重写成 0,1,2…；旧实现按 0..count-1 连续取，遇缺号会截断，现在不会，读到坏帧为止。
+
+**怪属性以 WZ 为准**（用户 2026-11-03）：`Mob/<id>.img/info` 里有全套官方的 maxHP/exp/speed/PADamage/PDRate/boss。导出映射：MaxHp=maxHP、Exp=exp、Def=PDRate/100、Touch=PADamage、Speed=100+speed px/s、Boss=boss；只有 Aggro（追击范围）WZ 没有，保留自调。之前写的「WZ 没有 hp/exp」是错的，数据在 Packs 里没加载。改完导出必须重跑 `export`；旧的 `assets/` 没有 `StandDelays` 会在启动时报错，没有 `OriginX/Y` 的怪物帧会把锚点当成 (0,0)。
 
 ## 不做
 

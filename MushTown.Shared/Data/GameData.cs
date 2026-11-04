@@ -255,6 +255,11 @@ public sealed class MobFrame
 
     // Frame time in ms, from the WZ delay node (180 when a single-frame action has none).
     public int Delay { get; set; }
+
+    // The frame's anchor in the picture (the WZ origin): this pixel lands on the
+    // mob's feet. Frames differ, so it is per frame, not a constant.
+    public int OriginX { get; set; }
+    public int OriginY { get; set; }
 }
 
 // Item def: assets/item/{id}.json. Potions heal (Hp/Mp from the WZ spec

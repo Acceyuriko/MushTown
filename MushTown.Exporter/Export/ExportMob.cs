@@ -39,9 +39,9 @@ public static partial class Export
     // One mob's art + stats. The structure tree is not in Data/Mob: it lives in
     // Data/Packs/Mob_*.ms, where Mob/<art>.img holds one 1x1 stub per frame with
     // origin and delay, and _outlink points at the real png in Mob/_Canvas.
-    // Frames sort by number (die1 starts at 1, not 0). The origin is not
-    // exported: the client anchors a mob at the picture's centre-bottom, which
-    // matches most frames but can be a few px off on some (known debt).
+    // Frames sort by number (die1 starts at 1, not 0). Each frame carries its
+    // own origin: the client puts that pixel on the mob's feet (the frames of
+    // one action are cropped differently).
     private static bool ExportMob(WzRoot mob, WzRoot str, int mobId, string outDir, HashSet<string> saved)
     {
         var img = mob.Find($@"Mob\{Mobs[mobId].art}.img");
@@ -98,15 +98,23 @@ public static partial class Export
             int i = 0;
             foreach ((int _, Wz_Node f) in frames.OrderBy(t => t.key))
             {
-                var png = WzNodeUtil.ResolveLink(mob, f)?.Value as Wz_Png;
-                if (png == null)
+                // A stub carries origin and delay; a uol frame points at one.
+                var frameNode = WzNodeUtil.ResolveUol(f);
+                var (png, origin) = WzNodeUtil.ReadCanvas(mob, f);
+                if (png == null || origin == null)
                 {
-                    Console.WriteLine($"mob {mobId} {action.Text} frame {f.Text}: no png");
+                    Console.WriteLine($"mob {mobId} {action.Text} frame {f.Text}: no png or origin");
                     return false;
                 }
                 string path = $"mob/{mobId}/{action.Text}/{i}.png";
                 SaveOnce(png, Path.Combine(outDir, path), saved);
-                outAction.Frames.Add(new MobFrame { Image = path, Delay = Int(f, "delay", 180) });
+                outAction.Frames.Add(new MobFrame
+                {
+                    Image = path,
+                    Delay = Int(frameNode, "delay", 180),
+                    OriginX = origin.X,
+                    OriginY = origin.Y,
+                });
                 i++;
             }
             if (outAction.Frames.Count == 0)
