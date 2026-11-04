@@ -69,15 +69,14 @@ public partial class MushTownGame
     private void DrawNpc(NpcArt a)
     {
         var n = a.Spawn;
-        var top = NpcTopLeft(n);
         // The frame comes from the same component the world map tip uses.
-        string frame = a.Owner.Get<LifeStand>()!.ImageAt((float)_timeMs);
-        DrawTexture(frame, top.X, top.Y, n.FacingRight);
+        var (top, image) = NpcFrame(a);
+        DrawTexture(image, top.X, top.Y, n.FacingRight);
         var tag = _ui.GetSmall(_npcs[n.NpcId].Name);
         // The tag hangs under the middle of the art, not under the spawn point:
         // a flipped draw mirrors the picture around the origin, so the two are
         // not the same spot.
-        int cx = top.X + _textures[frame].Width / 2 - _camera.X;
+        int cx = top.X + _textures[image].Width / 2 - _camera.X;
         int tagY = n.Cy - _camera.Y + _balloonLay.Get("npcNameDown", 2); // the name sits under the feet
         int padX = _balloonLay.Get("npcNamePadX", 3);
         DrawTag(new Rectangle(cx - tag.Width / 2 - padX, tagY, tag.Width + padX * 2, _balloonLay.Get("npcNameH", 16)), tag);

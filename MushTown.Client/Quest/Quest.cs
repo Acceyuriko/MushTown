@@ -33,6 +33,8 @@ public partial class MushTownGame
                 throw new InvalidDataException($"npc {npc.NpcId} has no stand frames");
             if (npc.StandDelays.Any(d => d <= 0))
                 throw new InvalidDataException($"npc {npc.NpcId} has a bad stand delay");
+            if (npc.StandOrigins.Count != npc.StandDelays.Count)
+                throw new InvalidDataException($"npc {npc.NpcId}: stand origins are stale, re-run export");
             _npcs[npc.NpcId] = npc;
         }
         foreach (string f in Directory.GetFiles(questDir, "*.json"))

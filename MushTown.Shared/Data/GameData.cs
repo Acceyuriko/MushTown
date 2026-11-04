@@ -243,6 +243,9 @@ public static class DropKind
     public const int Item = 1;
 }
 
+// The WZ origin of one picture: this pixel of the frame sits on the feet.
+public readonly record struct Origin(int X, int Y);
+
 public sealed class MobAction
 {
     public string Name { get; set; } = ""; // stand, move, hit1, die1

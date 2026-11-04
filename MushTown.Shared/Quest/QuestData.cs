@@ -4,16 +4,14 @@ namespace MushTown.Shared;
 
 // Exported NPC file: assets/npc/{id}.png + assets/npc/{id}.json. The art is
 // the stand animation (Npc/_Canvas via _outlink; the loose node is a 1x1 stub),
-// Origin anchors the first frame like mob art (feet). Says is every String d0,
-// d1, ... line: the talk panel opens on the first, the bubble picks one at
-// random.
+// one origin per frame like mob art (feet). Says is every String d0, d1, ...
+// line: the talk panel opens on the first, the bubble picks one at random.
 public sealed class NpcData
 {
     public int NpcId { get; set; }
     public string Name { get; set; } = "";
     public List<string> Says { get; set; } = new();
-    public int OriginX { get; set; }
-    public int OriginY { get; set; }
+    public List<Origin> StandOrigins { get; set; } = new();
     // One delay per stand frame: the nth picture is npc/{id}.png when n is 0,
     // npc/{id}_n.png otherwise.
     public List<int> StandDelays { get; set; } = new();

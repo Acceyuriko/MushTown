@@ -7,9 +7,9 @@ namespace MushTown.Exporter;
 public static partial class Export
 {
     // One placed NPC: every stand frame (a 1x1 stub with _outlink into _Canvas)
-    // plus the origin of the first, the String name, and every greeting line
-    // (String d0, d1, ...; may be empty). The world map tip plays the frames, so
-    // an NPC that walks in place uses all of them.
+    // plus the origin of each, the String name, and every greeting line
+    // (String d0, d1, ...; may be empty). Each frame carries its own origin,
+    // so the client anchors each one by its own.
     private static bool ExportNpc(WzRoot npc, WzRoot str, int npcId, string outDir, HashSet<string> saved)
     {
         string name = str.Find($@"Npc.img\{npcId}\name")?.GetValueEx<string>("") ?? "";
@@ -43,24 +43,29 @@ public static partial class Export
             }
         keys.Sort();
         var delays = new List<int>();
-        Wz_Vector? origin = null;
+        var origins = new List<Origin>();
         int written = 0;
         foreach (int key in keys)
         {
             string path = $"{stem}/{key}";
             if (!UiPng.TryRead(npc, "Npc", path, out var png, out var at) || png.Width <= 1) break; // a stub ends the run
-            origin ??= at;
+            if (at == null)
+            {
+                Console.WriteLine($"npc {npcId} frame {key}: no origin");
+                return false;
+            }
+            origins.Add(new Origin(at.X, at.Y));
             delays.Add(Int(UiPng.Node(npc, path), "delay", 100));
             SaveOnce(png, Path.Combine(outDir, "npc", written == 0 ? $"{npcId}.png" : $"{npcId}_{written}.png"), saved);
             written++;
         }
-        if (delays.Count == 0 || origin == null)
+        if (delays.Count == 0)
         {
             Console.WriteLine($"npc {npcId}: stand art is a stub");
             return false;
         }
         WriteJson(Path.Combine(outDir, "npc", $"{npcId}.json"),
-            new NpcData { NpcId = npcId, Name = name, Says = says, OriginX = origin.X, OriginY = origin.Y, StandDelays = delays });
+            new NpcData { NpcId = npcId, Name = name, Says = says, StandOrigins = origins, StandDelays = delays });
         Console.WriteLine($"npc {npcId}: {name} stand frames {delays.Count}");
         return true;
     }

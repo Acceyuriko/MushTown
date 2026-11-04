@@ -242,6 +242,7 @@ public sealed class PartyTests
         b.SendName("friend", 58);
         a.SendState(10000, 0, 0, Net.ActStand, 0, true); // both stand on the map
         b.SendState(10000, 100, 0, Net.ActStand, 0, true);
+        WaitPeerState(a, b.PlayerId, 10000); // the list must see b's state
 
         a.SendPartyList();
         var list = WaitTakePlayers(a);
@@ -265,6 +266,7 @@ public sealed class PartyTests
         b.Connect("127.0.0.1", Net.Port + 29);
         a.SendState(10000, 0, 0, Net.ActStand, 0, true);
         b.SendState(10001, 100, 0, Net.ActStand, 0, true);
+        WaitPeerState(a, b.PlayerId, 10001); // the filter must see b on the other map
 
         a.SendPartyList();
         var list = WaitTakePlayers(a);
@@ -360,6 +362,9 @@ public sealed class PartyTests
         a.SendPartyInvite(b.PlayerId);
         WaitTakeAsk(b);
         a.SendPartyLeave(); // the leader leaves: the invite he sent is dead
+        // The empty list comes back after the server dropped the party, so the
+        // answer below cannot race ahead of the leave.
+        Assert.AreEqual(0, WaitTakeParty(a).Members.Length);
         b.SendPartyAnswer(true);
         AssertNo(() => b.TryTakeParty(out _));
         var line = WaitTakeChat(b); // the invited player hears that it failed
@@ -516,6 +521,9 @@ public sealed class PartyTests
         AssertNo(() => b.TryTakePartyAsk(out _));
 
         b.SendState(10000, 0, 0, 0, 0, true); // now the same map
+        // The invite reads the map the server stored: wait for the state it
+        // relayed, or the invite can arrive first and fail.
+        WaitPeerState(a, b.PlayerId, 10000);
         a.SendPartyInvite(b.PlayerId);
         WaitTakeAsk(b);
     }
@@ -958,6 +966,19 @@ public sealed class PartyTests
         }
         Assert.Fail("timed out waiting for a mob event");
         throw new InvalidOperationException("unreachable");
+    }
+
+    // Wait until the server has seen this peer on this map: it relays the state
+    // after storing it, so the next message cannot overtake the move.
+    private static void WaitPeerState(NetClient client, int id, int map)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            while (client.TryTake(out var e))
+                if (!e.Gone && e.Id == id && e.Map == map) return;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for the peer state");
     }
 
     private static PartyEvent WaitTakeParty(NetClient client)

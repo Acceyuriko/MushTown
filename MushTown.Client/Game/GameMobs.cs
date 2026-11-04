@@ -4,9 +4,10 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// One idle animation: the picture keys in the order they play and how long each
-// stays on screen.
-internal sealed record IdleArt(IReadOnlyList<string> Images, IReadOnlyList<int> Delays);
+// One idle animation: the picture keys in the order they play, how long each
+// stays on screen, and the origin each one is anchored by.
+internal sealed record IdleArt(
+    IReadOnlyList<string> Images, IReadOnlyList<int> Delays, IReadOnlyList<Origin> Origins);
 
 // Mobs: art loading, spawn/hit/move application, local world lifecycle.
 public partial class MushTownGame
@@ -29,7 +30,7 @@ public partial class MushTownGame
         var frame = m.Frames[m.Frame];
         var tex = _textures[frame.Image];
         // The WZ origin is the anchor; a flipped draw mirrors it around the feet,
-        // so the left edge comes from the shared flip math (same as NpcTopLeft).
+        // so the left edge comes from the shared flip math (same as NpcFrame).
         int feetX = (int)Math.Floor(m.X);
         int x = m.FacingRight
             ? SceneMath.FlipDrawX(feetX, -frame.OriginX, tex.Width)
@@ -68,9 +69,9 @@ public partial class MushTownGame
         return data;
     }
 
-    // The idle of one NPC or monster: the picture keys in the order they play
-    // and how long each stays. The left column of the world map and the NPC
-    // list of the minimap play the same one.
+    // The idle of one NPC or monster: the picture keys in the order they play,
+    // how long each stays, and the origin each is anchored by. The left column
+    // of the world map and the NPC list of the minimap play the same one.
     internal IdleArt LifeIdle(int kind, int id)
     {
         if (kind == 1)
@@ -78,12 +79,16 @@ public partial class MushTownGame
             if (_mobIdle.TryGetValue(id, out var mob)) return mob;
             var data = LoadMob(id);
             var frames = data.Actions.First(a => a.Name == data.Idle).Frames;
-            return _mobIdle[id] = new IdleArt(frames.Select(f => f.Image).ToList(), frames.Select(f => f.Delay).ToList());
+            return _mobIdle[id] = new IdleArt(
+                frames.Select(f => f.Image).ToList(),
+                frames.Select(f => f.Delay).ToList(),
+                frames.Select(f => new Origin(f.OriginX, f.OriginY)).ToList());
         }
         if (_npcIdle.TryGetValue(id, out var npc)) return npc;
-        var delays = _npcs[id].StandDelays; // LoadQuestData proved it has stand frames
+        var npcData = _npcs[id];
+        var delays = npcData.StandDelays; // LoadQuestData proved it has stand frames
         var images = delays.Select((_, i) => i == 0 ? $"npc/{id}.png" : $"npc/{id}_{i}.png").ToList();
-        return _npcIdle[id] = new IdleArt(images, delays);
+        return _npcIdle[id] = new IdleArt(images, delays, npcData.StandOrigins);
     }
 
     // A spawn the server pushed (or the local world listed): the view starts

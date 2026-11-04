@@ -21,7 +21,8 @@ public sealed class LifeTip : Component
     {
         string name = Stand.Name;
         var idle = Stand.Art;
-        var art = gfx.Tex(Stand.ImageAt(gfx.Time));
+        int frame = Stand.IndexAt(gfx.Time);
+        var art = gfx.Tex(idle.Images[frame]);
         var maps = WorldMapUi.Holds(Stand.Kind, Stand.Id);
 
         int pad = MapLay.Lay.Get("tipPad", 7);
@@ -29,21 +30,27 @@ public sealed class LifeTip : Component
         int room = MapLay.Lay.Get("tipW", 200); // the names are cut here: the box follows the mouse
         int artGap = MapLay.Lay.Get("tipArtGap", 2);
         var title = Text.Fit(gfx, name, room);
-        // The box keeps the room of the widest and tallest frame, so it does not
-        // jump while the animation plays.
-        int wide = 0, tall = 0;
-        foreach (string image in idle.Images)
+        // The box keeps the room of every frame around its origin, so the box
+        // does not jump while the animation plays.
+        int minX = 0, maxX = 0, minY = 0, maxY = 0;
+        for (int i = 0; i < idle.Images.Count; i++)
         {
-            var frame = gfx.Tex(image);
-            wide = Math.Max(wide, frame.Width);
-            tall = Math.Max(tall, frame.Height);
+            var pic = gfx.Tex(idle.Images[i]);
+            var origin = idle.Origins[i];
+            minX = Math.Min(minX, -origin.X);
+            maxX = Math.Max(maxX, pic.Width - origin.X);
+            minY = Math.Min(minY, -origin.Y);
+            maxY = Math.Max(maxY, pic.Height - origin.Y);
         }
+        int wide = maxX - minX, tall = maxY - minY;
         int inner = Math.Max(title.Width, wide);
         foreach (string map in maps) inner = Math.Max(inner, gfx.Ui.GetSmall("- " + map).Width);
         inner = Math.Max(Math.Min(inner, room), wide); // the picture is never cut
 
         var box = Head(gfx, anchor, title, inner, tall + artGap + maps.Count * rowH, out int y);
-        gfx.Sb.Draw(art, new Vector2(box.X + pad, y + tall - art.Height), Color.White); // the feet stay put
+        // The origin pixel lands on the same spot every frame: the feet stay put.
+        var feet = idle.Origins[frame];
+        gfx.Sb.Draw(art, new Vector2(box.X + pad - minX - feet.X, y - minY - feet.Y), Color.White);
         y += tall + artGap;
         foreach (string map in maps)
         {

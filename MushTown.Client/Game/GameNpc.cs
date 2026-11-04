@@ -26,22 +26,28 @@ public partial class MushTownGame
         OpenTalk(best.Spawn.NpcId);
     }
 
-    // The top left of an NPC's stand art, in world coordinates. The raw art
-    // faces left, so the flipped draw mirrors around the origin (avatar parts
-    // do the same). Every NPC anchor reads this, never the arithmetic twice.
-    private Point NpcTopLeft(NpcSpawn n)
+    // The frame playing now: where it lands in the world and which picture it
+    // is. The raw art faces left, so the flipped draw mirrors around the origin
+    // (avatar parts do the same). The feet stay put: the top left moves with
+    // each frame's own origin.
+    private (Point Top, string Image) NpcFrame(NpcArt a)
     {
-        var data = _npcs[n.NpcId];
-        var tex = _textures[$"npc/{n.NpcId}.png"];
-        int x = n.FacingRight ? SceneMath.FlipDrawX(n.X, -data.OriginX, tex.Width) : n.X - data.OriginX;
-        return new Point(x, n.Cy - data.OriginY);
+        var stand = a.Owner.Get<LifeStand>()!;
+        int frame = stand.IndexAt((float)_timeMs);
+        var image = stand.Art.Images[frame];
+        var origin = stand.Art.Origins[frame];
+        var n = a.Spawn;
+        int x = n.FacingRight
+            ? SceneMath.FlipDrawX(n.X, -origin.X, _textures[image].Width)
+            : n.X - origin.X;
+        return (new Point(x, n.Cy - origin.Y), image);
     }
 
-    // Where an NPC's head is on the screen: the middle of its stand art, its top edge.
-    private Point NpcHead(NpcSpawn n)
+    // Where an NPC's head is on the screen: the middle of the playing frame, its top edge.
+    private Point NpcHead(NpcArt a)
     {
-        var top = NpcTopLeft(n);
-        return new Point(top.X + _textures[$"npc/{n.NpcId}.png"].Width / 2 - _camera.X, top.Y - _camera.Y);
+        var (top, image) = NpcFrame(a);
+        return new Point(top.X + _textures[image].Width / 2 - _camera.X, top.Y - _camera.Y);
     }
 
     // The talk panel opens on this NPC.
@@ -58,13 +64,12 @@ public partial class MushTownGame
     {
         foreach (var a in _npcArts.OrderByDescending(a => a.Spawn.Cy)) // draw order: high feet on top, clicks match
         {
-            var n = a.Spawn;
-            var tex = _textures[$"npc/{n.NpcId}.png"];
-            var top = NpcTopLeft(n);
+            var (top, image) = NpcFrame(a);
+            var tex = _textures[image];
             var rect = new Rectangle(top.X - _camera.X, top.Y - _camera.Y, tex.Width, tex.Height);
             if (!HitRect(rect, gx, gy)) continue;
             if (!InTalkReach(a)) continue; // an overlapped NPC behind may be in reach
-            OpenTalk(n.NpcId);
+            OpenTalk(a.Spawn.NpcId);
             return;
         }
     }

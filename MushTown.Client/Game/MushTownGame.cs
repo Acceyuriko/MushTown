@@ -414,7 +414,7 @@ public partial class MushTownGame : Game
         foreach (var a in _npcArts)
         {
             var s = a.Spawn;
-            var mark = new NpcQuestMark { Icon = () => NpcQuestIcon(s.NpcId), Head = () => NpcHead(s), Lay = _balloonLay, Tail = QuestMarkTail };
+            var mark = new NpcQuestMark { Icon = () => NpcQuestIcon(s.NpcId), Head = () => NpcHead(a), Lay = _balloonLay, Tail = QuestMarkTail };
             NpcBalloon? balloon = null;
             if (_npcs[s.NpcId].Says.Count > 0)
                 balloon = new NpcBalloon
@@ -424,7 +424,7 @@ public partial class MushTownGame : Game
                     Text = QText,
                     Lay = _balloonLay,
                     Style = () => _balloonStyles[0],
-                    Head = () => NpcHead(s),
+                    Head = () => NpcHead(a),
                     Busy = () => _talkNpc != 0 || _showShop,
                 };
             npcs.Add((s.NpcId, mark, balloon));
