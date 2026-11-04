@@ -47,7 +47,7 @@ public static partial class Export
 
     public static void Run(string dataDir, string outDir)
     {
-        var baseRoot = WzRoot.LoadBase(dataDir);
+        var baseRoot = WzRoot.LoadBase(dataDir, packs: true);
         var saved = new HashSet<string>(); // png names are global: one set for all maps
         var maps = new Dictionary<int, MapData>();
         foreach (int mapId in MapIds)
@@ -118,7 +118,9 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
-        var mob = WzRoot.LoadCategory(dataDir, "Mob");
+        // Mob structure (origin/delay/_outlink) lives in Data/Packs/*.ms, not in
+        // Data/Mob; baseRoot already loaded them with the Base tree.
+        var mob = baseRoot;
         foreach (int mobId in Mobs.Keys.OrderBy(id => id))
         {
             if (!ExportMob(mob, str, mobId, outDir, saved))

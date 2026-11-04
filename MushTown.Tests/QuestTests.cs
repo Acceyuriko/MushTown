@@ -233,11 +233,12 @@ public class QuestTests
         Assert.IsTrue(ran);
     }
 
-    // The W15 acceptance bar, executable: a fresh hero walks the real chain
-    // files (quests/*.json + exported 1027) through the real quest calls and
-    // lands Lv11 (1445 total: 1115 kills + 330 rewards; Lv10 needs 1035).
+    // The guided chain sim: a fresh hero walks the real chain files
+    // (quests/*.json + exported 1027) through the real quest calls. The mob exp
+    // is the WZ value, so the chain ends at Lv6; W15's Lv10 target is on hold
+    // until the quest rewards are retuned (user decision 2026-11-04).
     [TestMethod]
-    public void ChainSim_GuidedPlayReachesLevel11()
+    public void ChainSim_GuidedPlayCompletesTheChain()
     {
         string root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
         string custom = Path.Combine(root, "quests");
@@ -287,9 +288,9 @@ public class QuestTests
         // snails live back on 20000, so the guide backtracks one map (kills
         // count by mob, not by map). Both snail quests hunt 100000: the sim
         // runs them one by one (10 kills), while holding both at once
-        // double-dips 5 (1270 total still lands Lv11). The hero accepts 1027
-        // on arrival (its LvMax 10 only gates the accept, and the hero is ~6)
-        // and turns it in last, back at Lucas.
+        // double-dips 5. The hero accepts 1027 on arrival (its LvMax 10 only
+        // gates the accept) and turns it in last, back at Lucas. With the WZ
+        // exp values the chain ends at Lv6.
         var log = new QuestLog(quests);
         foreach (int id in order.Take(4))
             RunChainQuest(chara, log, quests[id], pay);
@@ -300,8 +301,8 @@ public class QuestTests
         Assert.IsTrue(log.Complete(chara, 1027));
         log.TurnIn(chara, 1027);
         Progression.ApplyExp(chara, quests[1027].RewardExp);
-        Assert.AreEqual(11, chara.Level); // 1445 - 1250 = 195 into Lv11
-        Assert.AreEqual(195, chara.Exp);
+        Assert.AreEqual(6, chara.Level);
+        Assert.AreEqual(64, chara.Exp);
         Assert.AreEqual(310, chara.Mesos);
         Assert.AreEqual(28, chara.Use![ItemData.RedPotion]);
         Assert.AreEqual(15, chara.Use![ItemData.BluePotion]);

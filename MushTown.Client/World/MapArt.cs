@@ -23,6 +23,8 @@ public sealed class PortalComp : Component
     }
 }
 
+// An NPC placed in a map: where it stands and which way it looks. Its stand
+// animation is the LifeStand on the same object.
 public sealed class NpcArt : Component
 {
     public NpcSpawn Spawn = null!;

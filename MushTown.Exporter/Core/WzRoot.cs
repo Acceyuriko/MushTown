@@ -17,10 +17,20 @@ public sealed class WzRoot
 
     private WzRoot(Wz_Structure structure) => Structure = structure;
 
-    public static WzRoot LoadBase(string dataDir)
+    public static WzRoot LoadBase(string dataDir, bool packs = false)
     {
         var structure = new Wz_Structure();
         structure.LoadKMST1125DataWz(Path.Combine(dataDir, "Base", "Base.wz"));
+        // Mob/Skill structure trees are not in the category .wz files; the client keeps
+        // them in Data/Packs/*.ms. The official viewer loads them the same way.
+        if (packs)
+        {
+            string dir = Path.Combine(dataDir, "Packs");
+            if (!Directory.Exists(dir))
+                throw new DirectoryNotFoundException($"{dir} is missing: the Mob and Skill trees live there");
+            foreach (string ms in Directory.GetFiles(dir, "*.ms"))
+                structure.LoadMsFile(ms);
+        }
         return new WzRoot(structure);
     }
 

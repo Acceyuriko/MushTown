@@ -52,7 +52,7 @@ public partial class MushTownGame
             draws.Add(((int)Math.Floor(d.Y), () => DrawDrop(d)));
         }
         foreach (var a in _npcArts)
-            draws.Add((a.Spawn.Cy, () => DrawNpc(a.Spawn)));
+            draws.Add((a.Spawn.Cy, () => DrawNpc(a)));
         foreach ((int _, Action draw) in draws.OrderBy(d => d.y))
             draw();
 
@@ -63,20 +63,24 @@ public partial class MushTownGame
         _spriteBatch.End();
     }
 
-    // One NPC: stand sprite on its origin-anchored feet, name tag under the
+    // One NPC: its stand frame on its origin-anchored feet, name tag under the
     // feet. The quest balloon and the speech bubble are components (NpcQuestMark,
     // NpcBalloon), not drawn here.
-    private void DrawNpc(NpcSpawn n)
+    private void DrawNpc(NpcArt a)
     {
-        int feet = n.X;
+        var n = a.Spawn;
         var top = NpcTopLeft(n);
-        DrawTexture($"npc/{n.NpcId}.png", top.X, top.Y, n.FacingRight);
+        // The frame comes from the same component the world map tip uses.
+        string frame = a.Owner.Get<LifeStand>()!.ImageAt((float)_timeMs);
+        DrawTexture(frame, top.X, top.Y, n.FacingRight);
         var tag = _ui.GetSmall(_npcs[n.NpcId].Name);
-        int feetX = feet - _camera.X, tagY = n.Cy - _camera.Y + _balloonLay.Get("npcNameDown", 2); // the name sits under the feet
-        _spriteBatch.Draw(_pixel,
-            new Rectangle(feetX - tag.Width / 2 - _balloonLay.Get("npcNamePadX", 3), tagY, tag.Width + _balloonLay.Get("npcNamePadX", 3) * 2, _balloonLay.Get("npcNameH", 16)),
-            new Color(0, 0, 0, 120));
-        _spriteBatch.Draw(tag, new Vector2(feetX - tag.Width / 2, tagY), Color.White);
+        // The tag hangs under the middle of the art, not under the spawn point:
+        // a flipped draw mirrors the picture around the origin, so the two are
+        // not the same spot.
+        int cx = top.X + _textures[frame].Width / 2 - _camera.X;
+        int tagY = n.Cy - _camera.Y + _balloonLay.Get("npcNameDown", 2); // the name sits under the feet
+        int padX = _balloonLay.Get("npcNamePadX", 3);
+        DrawTag(new Rectangle(cx - tag.Width / 2 - padX, tagY, tag.Width + padX * 2, _balloonLay.Get("npcNameH", 16)), tag);
     }
 
     // The map without any characters: the chars screen reuses this as its backdrop.

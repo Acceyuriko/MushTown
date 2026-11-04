@@ -367,6 +367,7 @@ public partial class MushTownGame
         held.Add(new HeldItem(HeldArt)); // the piece in the inventory hand, or the action or skill a click picked up
         _uiScene.Add(held);
         var tips = new GameObject { NoHit = true, Z = TipZ }; // the last thing drawn: no layer can cover a tip
+        tips.Add(new TipAnchor());
         tips.Add(new Tips(() => _hand.Empty && !Holding, _items, _invLay, _statLay));
         _uiScene.Add(tips);
         SyncLayers(); // shots skip Update: without this the panels and windows draw empty there (first Update no-ops)

@@ -404,6 +404,7 @@ public partial class MushTownGame : Game
         {
             var o = new GameObject();
             _npcArts.Add(o.Add(new NpcArt { Spawn = s }));
+            o.Add(new LifeStand { Game = this, Kind = 0, Id = s.NpcId }); // the stand animation, same as the world map tip
             _mapObj.AddChild(o);
         }
         _world.AddChild(_mapObj);

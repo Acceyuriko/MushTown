@@ -76,6 +76,24 @@ is bigger and sits 2 pixels up and left). Check every state, not only `normal`.
 - A window frame is a nine-slice: `nw ne w e sw s se n s c`.
 - A list row is a `layer:backgrnd` plus the items in it.
 
+## Canvas and tree: the two paths
+
+The same picture has two paths, and they map 1:1:
+
+- `Mob/0100100.img/move/0` — a `png 1x1` stub with `origin`, `lt`, `rb`, `head`,
+  `delay` and `_outlink`.
+- `Mob/_Canvas/0100100.img/move/0` — the real 37x26 png.
+
+`_outlink` points from the stub to the canvas. **The other way: drop `_Canvas/`
+from the path.** `Mob/_Canvas/0100100.img/move/0` -> `Mob/0100100.img/move/0`.
+The exporter does this walk in `WzNodeUtil.ResolveLink`.
+
+Mob and Skill trees are **not** in `Data/Mob/Mob.wz` or `Data/Skill/Skill.wz`.
+They sit in `Data/Packs/*.ms` (`Mob_00000.ms`..`Mob_00003.ms`, `Skill_*.ms`).
+A loader must call `LoadMsFile` on every pack after opening `Base.wz` (the
+official viewer does this; `WzRoot.LoadBase(dir, packs: true)` does it too). So:
+`catdump Mob` shows `_Canvas` only; use `dump "Mob/<id>.img" 3` for the tree.
+
 ## The search workflow
 
 ### 1. Search by name
@@ -173,6 +191,8 @@ The rules of the project (see `AGENTS.md`):
 
 - `find` without a category walks the whole Base tree: 4+ minutes, one core at
   100%, and it locks `MushTown.Exporter.exe` so nothing else can run.
+- `catdump Mob` never finds `Mob/<id>.img`: that tree is in `Data/Packs`, not in
+  `Mob.wz`. Use `dump` (the Base tree, which loads the packs).
 - `catdump` on a big category prints a lot. Pipe it through `Select-String` or
   write it to a file; do not read it in the console.
 - A png node in the tree is often a 1x1 stub. The size in the tree is **not**

@@ -178,6 +178,14 @@ public sealed class MinimapWindow : UiWindow
         _game.LoadTexture(_game.GameMap.MiniMap.Image);
         string mark = _game.GameMap.MiniMap.Mark;
         if (mark != "") _game.LoadTexture($"ui/map_mark_{mark}.png");
+        // The tip of an NPC row of the list: the same box and grey rule the
+        // world map tips use.
+        if (_state.NpcList)
+        {
+            foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se", "c" })
+                _game.LoadTexture($"ui/tip_{piece}.png");
+            _game.LoadTexture("ui/wm_tip_line.png");
+        }
 
         Host.Clear();
         var root = new GameObject();
@@ -265,7 +273,8 @@ public sealed class MinimapWindow : UiWindow
     }
 
     // The list of this map's NPCs, on the right of the window. The frame art
-    // already carries the NPC label.
+    // already carries the NPC label. A row shows the same tip as a left column
+    // row of the world map.
     private GameObject NpcListPanel()
     {
         int w = NpcListRect().Width;
@@ -280,20 +289,17 @@ public sealed class MinimapWindow : UiWindow
             int y = MinimapNpcList.RowY(i);
             var row = new GameObject();
             row.Add(new Rect(new Rectangle(0, y, w, RowH)));
-            row.Add(new HoverTip(() => NpcTip(n.NpcId)));
+            row.Add(new Text
+            {
+                Value = () => _game.NpcName(n.NpcId),
+                X = Lay.Get("listTextX", 30),
+                W = w - Lay.Get("listTextX", 30),
+            });
+            row.Add(new LifeStand { Game = _game, Kind = 0, Id = n.NpcId });
+            row.Add(new LifeTip());
             box.AddChild(row);
         }
         return box;
-    }
-
-    // The name of the NPC and the first thing they say: what the tooltip of the
-    // list shows.
-    private string NpcTip(int id)
-    {
-        var says = _game.NpcLines(id);
-        // The first line, with the WZ macros (#b, #p2001#, ...) turned into text.
-        string line = says.Count > 0 ? _game.QText(says[0]) : "";
-        return line == "" ? _game.NpcName(id) : $"{_game.NpcName(id)}: {line}";
     }
 
     // The filter panel: the official art, the official checkboxes and the rows
@@ -460,9 +466,15 @@ public sealed class WorldMapWindow : UiWindow
         }
         var region = WorldMapUi.Region(_state.Shown)!; // the json always carries it
         _game.LoadTexture(region.Image);
-        // The pictures of the left column rows: one per NPC and monster of our maps.
-        foreach (var (kind, id) in WorldMapUi.Lives())
-            _game.LoadTexture(kind == 0 ? $"npc/{id}.png" : _game.MobIdleFrame(id));
+        // The pictures of the left column rows: every frame of the rows the
+        // column will show, because the tips play them.
+        int shown = WorldMapUi.ShownMapId(_state, _game.GameMap.MapId);
+        var lives = shown == 0
+            ? new List<(int Kind, int Id)>()
+            : WorldMapUi.LivesOf(shown).Take(Lay.Get("lifeRows", 14)).ToList();
+        foreach (var (kind, id) in lives)
+            foreach (string image in _game.LifeIdle(kind, id).Images)
+                _game.LoadTexture(image);
         // The node icons and the link plates this region draws. A plate is only
         // painted under the mouse, so it must be loaded before it first shows.
         foreach (int type in region.Nodes.Select(n => n.Type).Where(t => t >= 0).Distinct())
@@ -474,6 +486,7 @@ public sealed class WorldMapWindow : UiWindow
         root.Add(new Rect(Rect()));
         root.Add(new Picture("ui/wm_frame.png"));
         root.Add(new WorldMapInfo { Game = _game, State = _state });
+        AddLifeRows(root, lives);
         // The map area is one object: the plate, the name and the click all come
         // from the same pixel test, so they cannot disagree.
         var art = new GameObject();
@@ -504,6 +517,7 @@ public sealed class WorldMapWindow : UiWindow
         // The link name goes last of the panels: a tip drawn inside the map area
         // would slide under the search board hanging on the right edge.
         var tip = new GameObject();
+        tip.Add(new TipAnchor());
         tip.Add(new WorldMapTip { Game = _game, State = _state });
         root.AddChild(tip);
         if (_confirm)
@@ -579,6 +593,7 @@ public sealed class WorldMapWindow : UiWindow
         {
             _state.Sel = i;
             _state.SelMap = WorldMapUi.PickMap(node, _game.GameMap.MapId);
+            Dirty = true; // the info column names the picked map: its lists follow
             return;
         }
         if (_state.SelMap == 0) return; // nowhere to go
@@ -633,6 +648,7 @@ public sealed class WorldMapWindow : UiWindow
         Switch(name);
         _state.Sel = node;
         _state.SelMap = node < 0 ? 0 : WorldMapUi.PickMap(WorldMapUi.Region(name)!.Nodes[node], _game.GameMap.MapId);
+        Dirty = true; // the info column names the shown map: its lists follow
     }
 
     private void Switch(string name)
@@ -739,15 +755,29 @@ public sealed class WorldMapWindow : UiWindow
 
     // One box, hung on a parent that sits at the window spot At (the search
     // box hangs the type box on the panel, the strip hangs its own on the window).
+    // The text is a Text component of the same object: the pieces draw first.
     private void AddCombo(GameObject parent, Point at, int index)
     {
         var c = Combos()[index];
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(c.X - at.X, c.Y - at.Y, c.W, BoxH)));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OpenCombo(index) });
-        o.Add(new ComboBox { Text = c.Text });
+        o.Add(new ComboBox());
+        o.Add(new Text
+        {
+            Value = c.Text,
+            Ink = Color.Black,
+            X = Lay.Get("comboTextX", 6),
+            W = ComboTextW(c.W, arrow: true),
+        });
         parent.AddChild(o);
     }
+
+    // The room a combo text has: the box less the left edge, the right end (the
+    // arrow cap of a closed box, the mirrored cap of a list row) and its pad.
+    private static int ComboTextW(int w, bool arrow) =>
+        w - Lay.Get("comboTextX", 6) - (arrow ? Lay.Get("comboArrowW", 17) : Lay.Get("comboEndW", 4))
+        - Lay.Get("comboTextPad", 2);
 
     private static int BoxH => Lay.Get("comboRowH", 20);
 
@@ -770,6 +800,33 @@ public sealed class WorldMapWindow : UiWindow
     private string MapText()
     {
         return _state.Sel < 0 ? "" : WorldMapUi.Name(_state.SelMap);
+    }
+
+    // The NPC and monster rows of the left column: one object per row, so the
+    // picture, the name and the tip of the row are the same components as
+    // everywhere else. A row carries a LifeTip and the tip layer of the HUD
+    // draws whichever one the mouse is on.
+    private void AddLifeRows(GameObject root, List<(int Kind, int Id)> lives)
+    {
+        int x = Lay.Get("lifeX", 16), y = Lay.Get("lifeY", 145), step = Lay.Get("lifeStep", 20);
+        for (int i = 0; i < lives.Count; i++)
+        {
+            var (kind, id) = lives[i];
+            var row = new GameObject();
+            row.Add(new Rect(new Rectangle(x, y + i * step, Lay.Get("lifeW", 152), step)));
+            row.Add(new Picture(kind == 0 ? "ui/wm_life_npc.png" : "ui/wm_life_mob.png", 0, 0));
+            var stand = new LifeStand { Game = _game, Kind = kind, Id = id };
+            row.Add(new Text
+            {
+                Value = () => stand.Name, // the tip reads the same LifeStand: one name source
+                Ink = kind == 0 ? WorldMapInfo.NpcInk : WorldMapInfo.MobInk,
+                X = Lay.Get("lifeTextX", 22),
+                W = Lay.Get("lifeW", 152) - Lay.Get("lifeTextX", 22),
+            });
+            row.Add(stand);
+            row.Add(new LifeTip());
+            root.AddChild(row);
+        }
     }
 
     // The open list, and the click that closes it: the catcher is under the rows
@@ -795,6 +852,7 @@ public sealed class WorldMapWindow : UiWindow
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(0, i * BoxH, c.W, BoxH)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => ComboPick(index, row) });
+            o.Add(new Text { Value = () => choices[row], Ink = Color.Black, X = Lay.Get("comboTextX", 6), W = ComboTextW(c.W, arrow: false) });
             box.AddChild(o);
         }
         root.AddChild(box);
@@ -823,7 +881,7 @@ public sealed class WorldMapWindow : UiWindow
             Lay.Get("sInW", 152), Lay.Get("sInH", 22))));
         input.Add(new Button { Kind = ButtonKind.Click, OnClick = FocusSearch });
         var field = new GameObject();
-        field.Add(new Rect(new Rectangle(4, 0, Lay.Get("sInW", 152) - Lay.Get("goInset", 18) - 8, Lay.Get("sInH", 22))));
+        field.Add(new Rect(new Rectangle(6, 0, Lay.Get("sInW", 152) - Lay.Get("goInset", 18) - 10, Lay.Get("sInH", 22))));
         field.Add(_field);
         input.AddChild(field);
         box.AddChild(input);
@@ -859,7 +917,8 @@ public sealed class WorldMapWindow : UiWindow
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(lx, ly + i * rh, rw, rh)));
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => ShowHit(hit) });
-            o.Add(new WorldMapSearchRow { Name = hit.Name, Icon = hit.Icon, Ink = hit.Ink });
+            o.Add(new WorldMapSearchRow { Icon = hit.Icon });
+            o.Add(new Text { Value = () => hit.Name, Ink = hit.Ink, X = Lay.Get("sTextX", 22), W = rw - Lay.Get("sTextX", 22) });
             box.AddChild(o);
         }
     }

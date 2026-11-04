@@ -21,11 +21,10 @@ public sealed class MobArt : Component
     public int Frame;
     public float Timer;
 
-    // The idle is stand, or move when the mob has no stand (the blue snail
-    // crawls everywhere).
-    public string Idle => IdleOf(Data);
-
-    public static string IdleOf(MobData data) => data.Actions.Any(a => a.Name == "stand") ? "stand" : "move";
+    // The idle is stand, and move when the mob has none or its stand is a single
+    // picture: a still stand would freeze the mob and its tip (the snail only
+    // has one stand frame, its crawl is the move action).
+    public string Idle => Data.Idle;
 
     // One action at a time: the tick and the draw read the same list.
     public void SetAction(string action)
@@ -40,19 +39,23 @@ public sealed class MobArt : Component
         Data.Actions.FirstOrDefault(a => a.Name == action)?.Frames
             ?? throw new InvalidDataException($"mob {Mob} has no {action} action");
 
-    // The WZ art carries no delays, so every frame is 100ms. The last frame
-    // loops: a flinch goes back to the idle, the idles start over. Only the
-    // death ends the life: Frame lands on Frames.Count there, so a corpse
-    // must not be ticked or drawn again — CollectDead drops it first.
+    // Every frame carries its own delay from the WZ (the exporter reads
+    // Mob/<id>.img/<action>/<n>/delay). The last frame loops: a flinch goes back
+    // to the idle, the idles start over. Only the death ends the life: Frame
+    // lands on Frames.Count there, so a corpse must not be ticked or drawn
+    // again — CollectDead drops it first. A long tick (a lag spike) walks
+    // several frames, or the 50 ms frames would play too slow.
     public override void Update(float dt)
     {
         Timer += dt * 1000f;
-        if (Timer < Frames[Frame].Delay) return;
-        Timer -= Frames[Frame].Delay; // keep the overflow (single step: delays run >= 100ms, ticks 16ms)
-        if (++Frame < Frames.Count) return;
-        if (Action == "die1") { Owner.Dead = true; return; }
-        if (Action == "hit1") { Action = Idle; Frames = FramesOf(Idle); }
-        Frame = 0;
+        while (Timer >= Frames[Frame].Delay)
+        {
+            Timer -= Frames[Frame].Delay;
+            if (++Frame < Frames.Count) continue;
+            if (Action == "die1") { Owner.Dead = true; return; }
+            if (Action == "hit1") { Action = Idle; Frames = FramesOf(Idle); }
+            Frame = 0;
+        }
     }
 
     // The mobs that finished their death anim: the tree skipped them
@@ -68,6 +71,25 @@ public sealed class MobArt : Component
             world.RemoveChild(mobs[uid].Owner);
             mobs.Remove(uid);
         }
+    }
+}
+
+// The frame an idle animation shows at a given time: the delays of the frames
+// add up and the time runs through them again and again. A live mob plays its
+// frames on Update; a world map tip plays an NPC or a monster with this.
+public static class Idle
+{
+    public static int At(IReadOnlyList<int> delays, float timeMs)
+    {
+        int total = 0;
+        foreach (int delay in delays) total += delay;
+        int t = (int)(timeMs % total);
+        for (int i = 0; i < delays.Count; i++)
+        {
+            t -= delays[i];
+            if (t < 0) return i;
+        }
+        return delays.Count - 1;
     }
 }
 

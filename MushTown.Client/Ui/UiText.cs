@@ -6,6 +6,12 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
+// The band the eye centres a line of text on: from the top of a capital to the
+// baseline. A baked line keeps a row above the caps and the descenders below
+// the baseline, so a box that centres the whole picture reads a little high.
+// The band is measured once per font and every text component centres on it.
+public readonly record struct InkBand(int Top, int Height);
+
 // Bakes UI strings into textures with the MapleStory font. MonoGame has no
 // text without the content pipeline, so GDI+ renders white-on-transparent
 // once per string and the sprite batch tints it. Every string renders at
@@ -14,8 +20,13 @@ namespace MushTown.Client;
 public sealed class UiText : IDisposable
 {
     private readonly GraphicsDevice _gd;
-    private readonly PrivateFontCollection? _privateFonts;
-    private readonly FontFamily? _maple; // null without assets/fonts (falls back to system fonts)
+    // The two weights share a family name, so they live in two collections:
+    // adding both to one collection keeps only the first face for both styles.
+    private readonly PrivateFontCollection? _fontsLight;
+    private readonly PrivateFontCollection? _fontsBold;
+    private readonly FontFamily? _maple; // the light face: every font below
+    private readonly FontFamily? _mapleBold; // the bold face: the meso numbers
+    private readonly FontStyle _mapleStyle; // Regular, or Bold when only Bold is installed
     private readonly Font _font;
     private readonly Font _small;
     private readonly Font _mid;
@@ -38,23 +49,38 @@ public sealed class UiText : IDisposable
     private readonly List<Texture2D> _trash = new(); // the textures that left the cache
     private const int CacheCap = 512; // the cache size that makes room for new strings
 
+    // The cap band of the small font: the rows a row of text is centred on.
+    public InkBand SmallInk { get; }
+
     public UiText(GraphicsDevice gd, string fontsDir)
     {
         _gd = gd;
-        // Every font below builds Bold: Light may be absent, Bold must not.
+        // The Light file is the game font; the Bold file only feeds the meso
+        // numbers. Without the Light file the bold face stands in for both.
         string bold = Path.Combine(fontsDir, "Maplestory-Bold.ttf");
+        string light = Path.Combine(fontsDir, "Maplestory-Light.ttf");
+        if (File.Exists(light))
+        {
+            _fontsLight = new PrivateFontCollection();
+            _fontsLight.AddFontFile(light);
+            _maple = _fontsLight.Families[0];
+        }
         if (File.Exists(bold))
         {
-            _privateFonts = new PrivateFontCollection();
-            _privateFonts.AddFontFile(bold);
-            _maple = _privateFonts.Families[0];
+            _fontsBold = new PrivateFontCollection();
+            _fontsBold.AddFontFile(bold);
+            _mapleBold = _fontsBold.Families[0];
         }
+        _maple ??= _mapleBold;
+        // A bold-only install must ask GDI+ for Bold: the family has no Regular face.
+        _mapleStyle = _maple == _mapleBold && _mapleBold != null ? FontStyle.Bold : FontStyle.Regular;
         _font = Maple(22);
         _small = Maple(12);
+        SmallInk = MeasureBand(_small);
         _mid = Maple(16);
         // Meso keeps Arial as its missing-TTF fallback (Maple() falls back to YaHei).
-        _meso = _maple != null
-            ? new Font(_maple, 12, FontStyle.Bold, GraphicsUnit.Pixel)
+        _meso = _mapleBold != null
+            ? new Font(_mapleBold, 12, FontStyle.Bold, GraphicsUnit.Pixel)
             : new Font("Arial", 12, FontStyle.Bold, GraphicsUnit.Pixel);
         _list = Maple(MenuLayout.ListSize);
         _cancel = Maple(MenuLayout.CancelSize);
@@ -62,9 +88,9 @@ public sealed class UiText : IDisposable
         _setupError = Maple(SetupLayout.ErrorFont);
     }
 
-    // MapleStory Bold, or YaHei when the TTFs are missing.
+    // MapleStory Light, or YaHei when the TTFs are missing.
     private Font Maple(int px) => _maple != null
-        ? new Font(_maple, px, FontStyle.Bold, GraphicsUnit.Pixel)
+        ? new Font(_maple, px, _mapleStyle, GraphicsUnit.Pixel)
         : new Font("Microsoft YaHei", px, GraphicsUnit.Pixel);
 
     // Live layout reload rebuilds the menu fonts (sizes come from the file).
@@ -200,6 +226,27 @@ public sealed class UiText : IDisposable
         return lines;
     }
 
+    // The cap band of one font: a capital is baked bare and its ink rows are
+    // read. Runs once per font, so the picture is not kept in a cache.
+    private static InkBand MeasureBand(Font font)
+    {
+        using var img = new Bitmap(16, font.Height, PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(img);
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        using var brush = new SolidBrush(System.Drawing.Color.White);
+        g.DrawString("M", font, brush, 0, 0);
+        int top = -1, bottom = -1;
+        for (int y = 0; y < img.Height; y++)
+            for (int x = 0; x < img.Width; x++)
+                if (img.GetPixel(x, y).A > 0)
+                {
+                    if (top < 0) top = y;
+                    bottom = y;
+                    break;
+                }
+        return new InkBand(top, bottom - top + 1);
+    }
+
     private Texture2D Bake(string text, Font font)
     {
         using var bmp = new Bitmap(1, 1, PixelFormat.Format32bppArgb);
@@ -236,7 +283,8 @@ public sealed class UiText : IDisposable
 
     public void Dispose()
     {
-        _privateFonts?.Dispose();
+        _fontsLight?.Dispose();
+        _fontsBold?.Dispose();
         _font.Dispose();
         _small.Dispose();
         _mid.Dispose();

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MushTown.Shared;
 
 // OS cursor hotspot (assets/ui/cursor.json): the WZ origin of Cursor state 0.
@@ -213,20 +215,25 @@ public sealed class NpcSpawn
     public bool FacingRight { get; set; }
 }
 
-// Exported mob file: assets/mob/{id}.json. Stats are v1 feel numbers, not WZ:
-// the modern client keeps them server-side (no maxHP node anywhere in the data).
+// Exported mob file: assets/mob/{id}.json. Stats come from the WZ info node;
+// only Aggro is a v1 feel number (the WZ has no chase range).
 public sealed class MobData
 {
     public int MobId { get; set; }
     public string Name { get; set; } = "";
     public int MaxHp { get; set; }
-    public double Def { get; set; } // fraction of damage blocked, 0-1 (bwiki 防御; v1: nothing ignores it)
-    public int Exp { get; set; } // kill award (v1 feel number, like MaxHp: the modern client keeps it server-side)
+    public double Def { get; set; } // fraction of damage blocked, 0-1 (PDRate/100; v1: nothing ignores it)
+    public int Exp { get; set; } // kill award (the WZ exp node)
     public int Touch { get; set; } // contact damage (flat: mobs roll no variance in v1)
-    public int Speed { get; set; } // walk px/s (wander and chase share it)
+    public int Speed { get; set; } // walk px/s (100 + the WZ speed percent)
     public int Aggro { get; set; } // chase range in x px (0 = never chases)
     public bool Boss { get; set; } // v1 boss (Mushmom only): long grave, fat purse, wide touch, HP bar
     public List<MobAction> Actions { get; set; } = new();
+
+    // The idle action: stand when it has more than one frame, else move. A still
+    // stand would freeze the mob and its tip (the snail has only one stand frame).
+    [JsonIgnore]
+    public string Idle => Actions.FirstOrDefault(a => a.Name == "stand") is { Frames.Count: > 1 } ? "stand" : "move";
 }
 
 // Drop kinds on the DropSpawn wire shape (mesos pay an amount, items an id+count).
@@ -246,7 +253,7 @@ public sealed class MobFrame
 {
     public string Image { get; set; } = "";
 
-    // Frame time in ms. The WZ art carries no delays, so every frame is 100.
+    // Frame time in ms, from the WZ delay node (180 when a single-frame action has none).
     public int Delay { get; set; }
 }
 

@@ -29,6 +29,10 @@ public partial class MushTownGame
         foreach (string f in Directory.GetFiles(npcDir, "*.json"))
         {
             var npc = LoadJson<NpcData>(f);
+            if (npc.StandDelays.Count == 0)
+                throw new InvalidDataException($"npc {npc.NpcId} has no stand frames");
+            if (npc.StandDelays.Any(d => d <= 0))
+                throw new InvalidDataException($"npc {npc.NpcId} has a bad stand delay");
             _npcs[npc.NpcId] = npc;
         }
         foreach (string f in Directory.GetFiles(questDir, "*.json"))
@@ -72,11 +76,13 @@ public partial class MushTownGame
         }
     }
 
-    // Quest content pass: NPC stand textures (json already loaded in Initialize).
+    // Quest content pass: every stand frame of every NPC (json already loaded
+    // in Initialize). The world map tip plays them.
     private void LoadNpcTextures()
     {
         foreach (int id in _npcs.Keys)
-            LoadTexture($"npc/{id}.png");
+            foreach (string image in LifeIdle(0, id).Images)
+                LoadTexture(image);
     }
 
     // Static per map: draw/click read the NPC views (refs into _map.Npcs,

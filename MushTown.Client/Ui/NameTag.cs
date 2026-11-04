@@ -1,15 +1,17 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Character names, one draw for the select screen and the live game: a plain
-// black box, or the worn ring's plate (the ring def names its NameTag node).
+// Character names, one draw for the select screen and the live game: a
+// see-through black plate, or the worn ring's plate (the ring def names its NameTag node).
 public partial class MushTownGame
 {
     private readonly Dictionary<int, NameTagData> _tags = new(); // plate node -> slices + ink
     private readonly Dictionary<int, NameEvent> _names = new(); // peer id -> name + plate
     private const int NameDown = 6; // live-game tag gap below the feet (the select screen tunes its own)
+    private static readonly Color NamePlate = new(0, 0, 0, 120); // the see-through plate every plain tag wears
 
     // Plates ride the defs: every ring's NameTag node loads its slices here,
     // so exporter and client stay in sync with no shared list.
@@ -24,7 +26,7 @@ public partial class MushTownGame
         }
     }
 
-    // The worn ring's plate node (0 = plain black box). First ring wins.
+    // The worn ring's plate node (0 = the plain see-through black plate). First ring wins.
     private int PlateFor(List<int>? worn)
     {
         if (worn == null) return 0;
@@ -41,9 +43,7 @@ public partial class MushTownGame
         var tex = _ui.GetSmall(name);
         if (plate == 0 || !_tags.TryGetValue(plate, out var t)) // unknown plates (a foreign client) fall back to plain
         {
-            int x = cx - tex.Width / 2;
-            _spriteBatch.Draw(_pixel, new Rectangle(x - 3, topY, tex.Width + 6, 16), Color.Black);
-            _spriteBatch.Draw(tex, new Vector2(x, topY + (16 - tex.Height) / 2), Color.White);
+            DrawTag(new Rectangle(cx - tex.Width / 2 - 3, topY, tex.Width + 6, 16), tex);
             return;
         }
         var w = _textures[$"ui/tag/ring{plate}_w.png"];
@@ -62,5 +62,14 @@ public partial class MushTownGame
         _spriteBatch.Draw(e, new Vector2(x0 + span - t.EOx, topY - t.EOy), Color.White);
         _spriteBatch.Draw(tex, new Vector2(x0 + 6, topY - t.COy + (c.Height - tex.Height) / 2),
             new Color((t.Clr >> 16) & 255, (t.Clr >> 8) & 255, t.Clr & 255));
+    }
+
+    // The plain tag: the see-through plate and the name centered in it. The
+    // NPCs of a map wear the same one, so a player without a ring plate does
+    // not look different from them.
+    private void DrawTag(Rectangle box, Texture2D tex)
+    {
+        _spriteBatch.Draw(_pixel, box, NamePlate);
+        Text.Draw(_spriteBatch, _ui, tex, box, Color.White, TextLine.Middle, TextAlign.Center);
     }
 }

@@ -27,13 +27,17 @@ public static class UiPng
         return true;
     }
 
+    // The node behind a path (uol resolved): exporters that need more than the
+    // picture, like the delay of a frame, read here.
+    public static Wz_Node? Node(WzRoot root, string nodePath) => WzNodeUtil.ResolveUol(root.Find(nodePath));
+
     // Same link walk without the save: exporters needing the origin read here.
     public static bool TryRead(WzRoot root, string category, string nodePath,
         [NotNullWhen(true)] out Wz_Png? png, out Wz_Vector? origin)
     {
         png = null;
         origin = null;
-        Wz_Node? node = WzNodeUtil.ResolveUol(root.Find(nodePath));
+        Wz_Node? node = Node(root, nodePath);
         if (node == null)
         {
             Console.WriteLine($"node not found: {nodePath}");

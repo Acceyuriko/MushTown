@@ -74,25 +74,14 @@ internal static class WorldMapUi
         return list;
     }
 
-    // Every NPC and monster of the maps we exported, once each: the left column
-    // can show any of them, so the window loads their pictures at once.
-    private static List<(int Kind, int Id)>? _lives;
-
-    public static List<(int Kind, int Id)> Lives() => _lives ??= BuildLives();
-
-    private static List<(int Kind, int Id)> BuildLives()
+    // The NPCs and monsters one map shows: the left column lists them and the
+    // window loads their pictures. Same query, so the two cannot drift.
+    public static List<(int Kind, int Id)> LivesOf(int mapId)
     {
-        var seen = new HashSet<(int, int)>();
-        var list = new List<(int Kind, int Id)>();
-        foreach (var map in MapUi.Data.Maps)
-        {
-            var file = MapFile(map.Id);
-            foreach (var npc in file.Npcs)
-                if (seen.Add((0, npc.NpcId))) list.Add((0, npc.NpcId));
-            foreach (var life in file.Life)
-                if (seen.Add((1, life.MobId))) list.Add((1, life.MobId));
-        }
-        return list;
+        var file = MapFile(mapId);
+        return file.Npcs.Select(n => (Kind: 0, Id: n.NpcId))
+            .Concat(file.Life.Select(l => (Kind: 1, Id: l.MobId)))
+            .Distinct().ToList();
     }
 
     // The maps we exported that hold this NPC or monster, by name. The tip asks
@@ -111,6 +100,17 @@ internal static class WorldMapUi
         }
         _holds[(kind, id)] = list;
         return list;
+    }
+
+    // The map the left column describes: the picked one, else the map we stand
+    // on when it is on this world map. The header box names it and the window
+    // builds its NPC and monster rows from it.
+    public static int ShownMapId(WorldMapState state, int here)
+    {
+        if (state.Sel >= 0) return state.SelMap;
+        foreach (var node in Region(state.Shown)!.Nodes)
+            if (node.Maps.Contains(here)) return here;
+        return 0;
     }
 
     // The icon of one node type: every type a node uses has its picture exported.
@@ -147,7 +147,6 @@ public sealed class WorldMapState
     public int OpenCombo = -1; // which combo box lists its choices, -1 = none
     public int Hover = -1;     // the link under the mouse, -1 = none
     public int HoverNode = -1; // the node under the mouse, -1 = none
-    public (int Kind, int Id)? HoverLife; // the NPC or monster row under the mouse (kind 0 = NPC, 1 = monster)
     public bool Search;       // the search window is open
 }
 
@@ -240,8 +239,8 @@ public sealed class WorldMapArt : Component, IDrawable
     }
 }
 
-// The left column: the map name in the header box, the level range, then the
-// NPCs and monsters of that map. Only our maps have the two lists.
+// The left column: the map name in the header box. The NPC and monster rows are
+// objects of their own (the window builds them).
 public sealed class WorldMapInfo : Component, IDrawable
 {
     public required MushTownGame Game { get; init; }
@@ -250,79 +249,24 @@ public sealed class WorldMapInfo : Component, IDrawable
     internal static readonly Color NpcInk = new(0x66, 0xFF, 0xFF);
     internal static readonly Color MobInk = new(0xFF, 0x00, 0x66);
 
+    // The header box and the body box of the left column, and the name of the
+    // map they describe. The NPC and monster rows are objects of their own (the
+    // window builds them), so this only paints the column.
     public void Draw(UiGfx gfx)
     {
         var box = Owner.Get<Rect>()!.Screen;
-        State.HoverLife = null; // the rows below fill this in on the same frame
         gfx.Sb.Draw(gfx.Tex("ui/wm_info_top.png"), new Vector2(box.X + MapLay.Lay.Get("infoX", 7), box.Y + MapLay.Lay.Get("infoY", 28)), Color.White);
         gfx.Sb.Draw(gfx.Tex("ui/wm_info_body.png"), new Vector2(box.X + MapLay.Lay.Get("infoX", 7), box.Y + MapLay.Lay.Get("infoBodyY", 97)), Color.White);
 
         // What the panel describes: the picked map, or the picked node when we
         // have no map for it (then there is no life list). With no pick at all
         // there is nothing to name.
-        int mapId = ShownMapId();
+        int mapId = WorldMapUi.ShownMapId(State, Game.GameMap.MapId);
         string title = mapId != 0 ? WorldMapUi.Name(mapId)
             : State.Sel >= 0 ? WorldMapUi.Region(State.Shown)!.Nodes[State.Sel].Name : "";
         if (title == "") return;
-        gfx.Sb.Draw(WorldMapInfo.Fit(gfx, title, MapLay.Lay.Get("nameW", 120)), new Vector2(box.X + MapLay.Lay.Get("nameX", 20), box.Y + MapLay.Lay.Get("nameY", 51)), Color.White);
-        if (mapId == 0) return;
-
-        var file = WorldMapUi.MapFile(mapId);
-        int y = MapLay.Lay.Get("lifeY", 145);
-        int x = MapLay.Lay.Get("lifeX", 16);
-        int step = MapLay.Lay.Get("lifeStep", 20);
-        int rows = MapLay.Lay.Get("lifeRows", 14);
-        int used = 0;
-        var npcIcon = gfx.Tex("ui/wm_life_npc.png");
-        var mobIcon = gfx.Tex("ui/wm_life_mob.png");
-        // The same kind appears once: a map holds eight snails but lists one.
-        foreach (int id in file.Npcs.Select(n => n.NpcId).Distinct())
-        {
-            if (used++ >= rows) return;
-            gfx.Sb.Draw(npcIcon, new Vector2(box.X + x, box.Y + y), Color.White);
-            gfx.Sb.Draw(WorldMapInfo.Fit(gfx, Game.NpcName(id), 130), new Vector2(box.X + x + 22, box.Y + y + 2), NpcInk);
-            Mark(gfx, box, x, y, step, 0, id);
-            y += step;
-        }
-        foreach (int id in file.Life.Select(l => l.MobId).Distinct())
-        {
-            if (used++ >= rows) return;
-            gfx.Sb.Draw(mobIcon, new Vector2(box.X + x, box.Y + y), Color.White);
-            gfx.Sb.Draw(WorldMapInfo.Fit(gfx, Game.MobName(id), 130), new Vector2(box.X + x + 22, box.Y + y + 2), MobInk);
-            Mark(gfx, box, x, y, step, 1, id);
-            y += step;
-        }
+        gfx.Sb.Draw(Text.Fit(gfx, title, MapLay.Lay.Get("nameW", 120)), new Vector2(box.X + MapLay.Lay.Get("nameX", 20), box.Y + MapLay.Lay.Get("nameY", 51)), Color.White);
     }
-
-    // The row under the mouse says which NPC or monster it shows: a row carries
-    // no click, so the picture of it is the whole answer.
-    private void Mark(UiGfx gfx, Rectangle box, int x, int y, int step, int kind, int id)
-    {
-        if (gfx.Hovered != Owner) return;
-        if (!new Rectangle(box.X + x, box.Y + y, MapLay.Lay.Get("lifeW", 152), step).Contains(gfx.Mouse)) return;
-        State.HoverLife = (kind, id);
-    }
-
-    // A name longer than the row is cut with two dots, so it stays inside the box.
-    // The text is measured bare and the dots are added once: baking a texture per
-    // cut would fill the small-text cache with strings nobody draws.
-    public static Texture2D Fit(UiGfx gfx, string text, int width)
-    {
-        if (gfx.Ui.GetSmall(text).Width <= width) return gfx.Ui.GetSmall(text);
-        while (text.Length > 0 && gfx.Ui.GetSmall(text + "..").Width > width) text = text[..^1];
-        return gfx.Ui.GetSmall(text + "..");
-    }
-
-    // The map the left column describes: the picked one, else the map we stand
-    // on when it is on this world map.
-    private int ShownMapId()
-    {
-        if (State.Sel >= 0) return State.SelMap;
-        foreach (var node in WorldMapUi.Region(State.Shown)!.Nodes)
-            if (node.Maps.Contains(Game.GameMap.MapId)) return Game.GameMap.MapId;
-        return 0;
-    }
-
 }
 
 // The data shapes of ui/worldmap.json (PascalCase, like every other exported
@@ -388,12 +332,12 @@ public sealed class WorldMapLink
 }
 
 // One combo box: the official three pieces at their own sizes (the left cap, the
-// stretched middle, the right cap that carries the arrow) and the current choice
-// written on it. The open list is a second ComboBox whose Rows are set: one row
-// per choice, the row under the mouse in the mouse over pieces.
+// stretched middle, the right cap that carries the arrow). The open list is a
+// second ComboBox whose Rows are set: one row per choice, the row under the
+// mouse in the mouse over pieces. The text of the box and of its rows is a Text
+// component of the same object, drawn over the pieces.
 public sealed class ComboBox : Component, IDrawable
 {
-    public Func<string> Text { get; init; } = () => "";
     public IReadOnlyList<string>? Rows { get; init; }
 
     public void Draw(UiGfx gfx)
@@ -402,7 +346,7 @@ public sealed class ComboBox : Component, IDrawable
         if (Rows == null)
         {
             string state = gfx.Hovered != Owner ? "n" : gfx.Pressed ? "p" : "h";
-            Row(gfx, r, Text(), state, arrow: true);
+            Row(gfx, r, state, arrow: true);
             return;
         }
         // The row under the mouse wears the mouse over pieces, like the box.
@@ -410,39 +354,41 @@ public sealed class ComboBox : Component, IDrawable
         int at = gfx.Mouse.Y - r.Y;
         int over = gfx.Mouse.X >= r.X && gfx.Mouse.X < r.Right && at >= 0 && at < Rows.Count * rowH ? at / rowH : -1;
         for (int i = 0; i < Rows.Count; i++)
-            Row(gfx, new Rectangle(r.X, r.Y + i * rowH, r.Width, rowH), Rows[i], i == over ? "h" : "n", arrow: false);
+            Row(gfx, new Rectangle(r.X, r.Y + i * rowH, r.Width, rowH), i == over ? "h" : "n", arrow: false,
+                i == over ? ListOver : Color.White);
     }
+
+    // The pieces only change their arrow between states, and a list row has no
+    // arrow: a light blue wash is what makes the row under the mouse visible.
+    private static readonly Color ListOver = new(203, 226, 255);
 
     // One row of the pieces. A list row has no arrow, so its right end is the left
     // cap mirrored: the row keeps the edge the whole box has.
-    private static void Row(UiGfx gfx, Rectangle r, string text, string state, bool arrow)
+    private static void Row(UiGfx gfx, Rectangle r, string state, bool arrow, Color? tint = null)
     {
+        var ink = tint ?? Color.White;
         var l = gfx.Tex($"ui/wm_combo_{state}0.png");
         var m = gfx.Tex($"ui/wm_combo_{state}1.png");
         var t = gfx.Tex($"ui/wm_combo_{state}2.png");
         int end = arrow ? t.Width : l.Width;
-        gfx.Sb.Draw(l, new Vector2(r.X, r.Y), Color.White);
-        gfx.Sb.Draw(m, new Rectangle(r.X + l.Width, r.Y, r.Width - l.Width - end, m.Height), Color.White);
-        if (arrow) gfx.Sb.Draw(t, new Vector2(r.Right - t.Width, r.Y), Color.White);
-        else gfx.Sb.Draw(l, new Vector2(r.Right - l.Width, r.Y), null, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.FlipHorizontally, 0f);
-        gfx.Sb.Draw(WorldMapInfo.Fit(gfx, text, r.Width - 6 - end - 2), new Vector2(r.X + 6, r.Y + 3), Color.Black);
+        gfx.Sb.Draw(l, new Vector2(r.X, r.Y), ink);
+        gfx.Sb.Draw(m, new Rectangle(r.X + l.Width, r.Y, r.Width - l.Width - end, m.Height), ink);
+        if (arrow) gfx.Sb.Draw(t, new Vector2(r.Right - t.Width, r.Y), ink);
+        else gfx.Sb.Draw(l, new Vector2(r.Right - l.Width, r.Y), null, ink, 0f, Vector2.Zero, 1f, SpriteEffects.FlipHorizontally, 0f);
     }
 }
 
-// One row of the search results: the icon, the name, and the highlight plate
-// under the mouse.
+// One row of the search results: the icon and the highlight plate under the
+// mouse. The name is a Text component of the same object.
 public sealed class WorldMapSearchRow : Component, IDrawable
 {
-    public required string Name { get; init; }
     public required string Icon { get; init; }
-    public required Color Ink { get; init; }
 
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Screen;
         if (gfx.Hovered == Owner) gfx.Sb.Draw(gfx.Tex("ui/wm_s_row.png"), new Vector2(r.X, r.Y), Color.White);
         gfx.Sb.Draw(gfx.Tex(Icon), new Vector2(r.X, r.Y), Color.White);
-        gfx.Sb.Draw(WorldMapInfo.Fit(gfx, Name, r.Width - 22), new Vector2(r.X + 22, r.Y + 2), Ink);
     }
 }
 
@@ -461,7 +407,8 @@ public sealed class WorldMapNodeMark : Component, IDrawable
 
 // The tooltip of the official window: a block names itself, a node lists the
 // monsters and NPCs of its map. The grey rule and the two bullets are the art
-// the WZ carries for this tip, so the pieces are not invented here.
+// the WZ carries for this tip, so the pieces are not invented here. The tip of
+// an NPC or monster row is a LifeTip, drawn by the tip layer of the HUD.
 public sealed class WorldMapTip : Component, IDrawable
 {
     public required MushTownGame Game { get; init; }
@@ -471,49 +418,22 @@ public sealed class WorldMapTip : Component, IDrawable
 
     public void Draw(UiGfx gfx)
     {
-        if (State.HoverLife is { } life) DrawLife(gfx, life);
-        else if (State.HoverNode >= 0) DrawNode(gfx);
+        if (State.HoverNode >= 0) DrawNode(gfx);
         else if (State.Hover >= 0) DrawLink(gfx);
-    }
-
-    // A row of the left column: the name, the picture of the NPC or monster and
-    // the maps of ours that hold it.
-    private void DrawLife(UiGfx gfx, (int Kind, int Id) life)
-    {
-        string name = life.Kind == 0 ? Game.NpcName(life.Id) : Game.MobName(life.Id);
-        var art = gfx.Tex(life.Kind == 0 ? $"npc/{life.Id}.png" : Game.MobIdleFrame(life.Id));
-        var maps = WorldMapUi.Holds(life.Kind, life.Id);
-
-        int pad = MapLay.Lay.Get("tipPad", 7);
-        int rowH = MapLay.Lay.Get("tipRowH", 14);
-        int room = MapLay.Lay.Get("tipW", 200); // the names are cut here: the box follows the mouse
-        int artGap = MapLay.Lay.Get("tipArtGap", 2);
-        var title = WorldMapInfo.Fit(gfx, name, room);
-        int inner = Math.Max(title.Width, art.Width);
-        foreach (string map in maps) inner = Math.Max(inner, gfx.Ui.GetSmall(map).Width);
-        inner = Math.Max(Math.Min(inner, room), art.Width); // the picture is never cut
-
-        var box = Head(gfx, title, inner, art.Height + artGap + maps.Count * rowH, out int y);
-        gfx.Sb.Draw(art, new Vector2(box.X + pad, y), Color.White);
-        y += art.Height + artGap;
-        foreach (string map in maps)
-        {
-            gfx.Sb.Draw(WorldMapInfo.Fit(gfx, map, box.Width - pad * 2), new Vector2(box.X + pad, y), Color.White);
-            y += rowH;
-        }
     }
 
     private void DrawLink(UiGfx gfx)
     {
         string text = WorldMapUi.Region(State.Shown)!.Links[State.Hover].ToolTip;
         if (text == "") return;
-        var t = gfx.Ui.GetSmall(text);
+        int room = MapLay.Lay.Get("tipW", 200);
+        var t = Text.Fit(gfx, text, room);
         int pad = MapLay.Lay.Get("tipPad", 7);
         // The frame's two ends are 14 and 15 tall, so it cannot be shorter than that.
         int h = Math.Max(t.Height + pad * 2, gfx.Tex("ui/tip_nw.png").Height + gfx.Tex("ui/tip_s.png").Height);
-        var box = Place(gfx, t.Width + pad * 2, h);
+        var box = Anchor.At(gfx, t.Width + pad * 2, h);
         NineSlice.Draw(gfx, "tip", box);
-        gfx.Sb.Draw(t, new Vector2(box.X + pad, box.Y + (box.Height - t.Height) / 2), Color.White);
+        Text.Draw(gfx.Sb, gfx.Ui, t, new Rectangle(box.X + pad, box.Y, t.Width, box.Height), Color.White);
     }
 
     // A node: the name of the map over the grey rule, then one row per monster
@@ -536,44 +456,23 @@ public sealed class WorldMapTip : Component, IDrawable
         int pad = MapLay.Lay.Get("tipPad", 7);
         int rowH = MapLay.Lay.Get("tipRowH", 14);
         int col = MapLay.Lay.Get("tipBullet", 14); // the 9 px bullet and the gap before the name
-        int textDy = MapLay.Lay.Get("tipTextDy", 1);
-        var title = gfx.Ui.GetSmall(name);
+        int room = MapLay.Lay.Get("tipW", 200);
+        var title = Text.Fit(gfx, name, room);
         int inner = title.Width;
         foreach (var (_, text) in _rows) inner = Math.Max(inner, gfx.Ui.GetSmall(text).Width + col);
+        inner = Math.Min(inner, room);
 
-        var box = Head(gfx, title, inner, _rows.Count * rowH, out int y);
+        var box = LifeTip.Head(gfx, Anchor, title, inner, _rows.Count * rowH, out int y);
         foreach (var (art, text) in _rows)
         {
             gfx.Sb.Draw(art, new Vector2(box.X + pad, y + (rowH - art.Height) / 2), Color.White);
-            gfx.Sb.Draw(WorldMapInfo.Fit(gfx, text, box.Width - pad * 2 - col), new Vector2(box.X + pad + col, y + textDy), Color.White);
+            Text.Draw(gfx.Sb, gfx.Ui, Text.Fit(gfx, text, box.Width - pad * 2 - col),
+                new Rectangle(box.X + pad + col, y, box.Width - pad * 2 - col, rowH), Color.White);
             y += rowH;
         }
     }
 
-    // The head every tip of this window shares: the box, the name and the grey
-    // rule under it. The body starts at y and is bodyH tall.
-    private static Rectangle Head(UiGfx gfx, Texture2D title, int inner, int bodyH, out int y)
-    {
-        int pad = MapLay.Lay.Get("tipPad", 7);
-        int gap = MapLay.Lay.Get("tipGap", 4); // above and below the rule
-        var line = gfx.Tex("ui/wm_tip_line.png");
-        var box = Place(gfx, inner + pad * 2, pad + title.Height + gap + line.Height + gap + bodyH + pad);
-        NineSlice.Draw(gfx, "tip", box);
-        y = box.Y + pad;
-        gfx.Sb.Draw(title, new Vector2(box.X + pad, y), Color.White);
-        y += title.Height + gap;
-        gfx.Sb.Draw(line, new Rectangle(box.X + pad, y, box.Width - pad * 2, line.Height), Color.White);
-        y += line.Height + gap;
-        return box;
-    }
-
-    // The tip follows the mouse and stays on screen: to its right, held inside
-    // the screen edge, and level with the cursor.
-    private static Rectangle Place(UiGfx gfx, int w, int h)
-    {
-        var m = gfx.Mouse;
-        int x = Math.Clamp(m.X + MapLay.Lay.Get("tipDX", 16), 0, Math.Max(0, MushTownGame.GameWidth - w));
-        int y = Math.Clamp(m.Y - h / 2, 0, Math.Max(0, MushTownGame.GameHeight - h));
-        return new Rectangle(x, y, w, h);
-    }
+    // The box of this window's tips lands where every other tip does: the tip
+    // layer owns the anchor and this tip asks its own object for it.
+    private TipAnchor Anchor => Owner.Get<TipAnchor>()!;
 }

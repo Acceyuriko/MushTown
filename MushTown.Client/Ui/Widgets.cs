@@ -441,6 +441,26 @@ public sealed class Round : Component, IDrawable
     }
 }
 
+// Where a tip goes: its top left corner sits on the cursor's bottom right
+// corner, so the pointer never covers it. Near the right or bottom edge the tip
+// flips to the other side of the cursor first. The cursor art is 24x28 with its
+// hotspot at (0,3) (ui/cursor.json), so the corner is 24 right and 25 down.
+// The HUD tip layer owns one, and a window with its own tip layer adds one too,
+// so every tip of the game lands the same way.
+public sealed class TipAnchor : Component
+{
+    public Rectangle At(UiGfx gfx, int w, int h, bool above = false)
+    {
+        var m = gfx.Mouse;
+        int x = m.X + 24;
+        if (x + w > MushTownGame.GameWidth) x = m.X - w;
+        int y = above || m.Y + 25 + h > MushTownGame.GameHeight ? m.Y - h - 6 : m.Y + 25;
+        x = Math.Clamp(x, 0, MushTownGame.GameWidth - w);
+        y = Math.Clamp(y, 0, MushTownGame.GameHeight - h);
+        return new Rectangle(x, y, w, h);
+    }
+}
+
 // The dark rounded tip next to the cursor: the official shows one over the
 // HP/MP/EXP bars and over the quick menu icons. The component carries only the
 // text; the game draws it after every HUD layer, so a tip on a box deep in the
@@ -451,17 +471,14 @@ public sealed class HoverTip : Component
     private readonly bool _above; // the bottom line of the screen puts its tip over the cursor
     public HoverTip(Func<string> text, bool above = false) { _text = text; _above = above; }
 
-    public void DrawAt(UiGfx gfx, Point mouse)
+    public void DrawAt(UiGfx gfx, TipAnchor anchor)
     {
         var t = gfx.Ui.GetSmall(_text());
         int w = t.Width + 12, h = t.Height + 6;
-        int x = Math.Clamp(mouse.X + 14, 0, Math.Max(0, MushTownGame.GameWidth - w)); // a tip wider than the screen must not throw
-        int y = _above ? mouse.Y - h - 6 : mouse.Y - h / 2;
-        y = Math.Clamp(y, 0, MushTownGame.GameHeight - h);
-        var box = new Rectangle(x, y, w, h);
+        var box = anchor.At(gfx, w, h, _above);
         Round.Fill(gfx, box, 5, new Color(105, 110, 120)); // the 1px edge, then the rounded fill inside it
-        Round.Fill(gfx, new Rectangle(x + 1, y + 1, w - 2, h - 2), 4, new Color(40, 44, 52, 235));
-        gfx.Sb.Draw(t, new Vector2(x + 6, y + 3), Color.White);
+        Round.Fill(gfx, new Rectangle(box.X + 1, box.Y + 1, w - 2, h - 2), 4, new Color(40, 44, 52, 235));
+        Text.Draw(gfx.Sb, gfx.Ui, t, new Rectangle(box.X + 6, box.Y, w - 12, h), Color.White);
     }
 }
 

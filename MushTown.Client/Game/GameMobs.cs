@@ -4,11 +4,17 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
+// One idle animation: the picture keys in the order they play and how long each
+// stays on screen.
+internal sealed record IdleArt(IReadOnlyList<string> Images, IReadOnlyList<int> Delays);
+
 // Mobs: art loading, spawn/hit/move application, local world lifecycle.
 public partial class MushTownGame
 {
     private const int BarWidth = 40; // mob HP bar width, px
     private const int BossBarW = 400; // boss HP bar width, px
+    private readonly Dictionary<int, IdleArt> _npcIdle = new(); // the idle of an NPC, built once
+    private readonly Dictionary<int, IdleArt> _mobIdle = new(); // the idle of a monster, built once
 
     // Batch clear (a map switch): the Owner leaves the tree with the dict
     // entry. A single death goes through MobArt.CollectDead instead.
@@ -38,8 +44,8 @@ public partial class MushTownGame
         if (!_mobData.TryGetValue(mob, out var data))
         {
             data = LoadJson<MobData>(Path.Combine(_assetsDir, "mob", $"{mob}.json"));
-            if (!data.Actions.Any(a => a.Name is "stand" or "move"))
-                throw new InvalidDataException($"mob {mob} has no idle action");
+            if (!data.Actions.Any(a => a.Name == data.Idle))
+                throw new InvalidDataException($"mob {mob} has no {data.Idle} action");
             foreach (string need in new[] { "hit1", "die1" })
                 if (!data.Actions.Any(a => a.Name == need))
                     throw new InvalidDataException($"mob {mob} has no {need} action");
@@ -58,12 +64,22 @@ public partial class MushTownGame
         return data;
     }
 
-    // The idle picture of a monster: the left column of the world map shows the
-    // first frame of the action the monster stands in.
-    internal string MobIdleFrame(int mob)
+    // The idle of one NPC or monster: the picture keys in the order they play
+    // and how long each stays. The left column of the world map and the NPC
+    // list of the minimap play the same one.
+    internal IdleArt LifeIdle(int kind, int id)
     {
-        var data = LoadMob(mob);
-        return data.Actions.First(a => a.Name == MobArt.IdleOf(data)).Frames[0].Image;
+        if (kind == 1)
+        {
+            if (_mobIdle.TryGetValue(id, out var mob)) return mob;
+            var data = LoadMob(id);
+            var frames = data.Actions.First(a => a.Name == data.Idle).Frames;
+            return _mobIdle[id] = new IdleArt(frames.Select(f => f.Image).ToList(), frames.Select(f => f.Delay).ToList());
+        }
+        if (_npcIdle.TryGetValue(id, out var npc)) return npc;
+        var delays = _npcs[id].StandDelays; // LoadQuestData proved it has stand frames
+        var images = delays.Select((_, i) => i == 0 ? $"npc/{id}.png" : $"npc/{id}_{i}.png").ToList();
+        return _npcIdle[id] = new IdleArt(images, delays);
     }
 
     // A spawn the server pushed (or the local world listed): the view starts

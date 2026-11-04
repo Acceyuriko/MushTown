@@ -119,16 +119,13 @@ public sealed class MinimapNpcList : Component, IDrawable
         var box = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Tex("ui/npclist_bg.png"), box, Color.White);
 
-        // The rows: the dot, then the name, in the box the window defines.
+        // The rows: the dot here and the name in a Text component of the row
+        // object, so the line sits level with the dot like every other row.
         var dot = gfx.Tex("ui/npclist_dot.png");
-        var npcs = Game.GameMap.Npcs;
-        for (int i = 0; i < Math.Min(npcs.Count, RowCount); i++)
-        {
-            var n = npcs[i];
-            int y = box.Y + RowY(i);
-            gfx.Sb.Draw(dot, new Vector2(box.X + MinimapLay.Lay.Get("listIconX", 11), y + MinimapLay.Lay.Get("listIconDy", 4)), Color.White);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(Game.NpcName(n.NpcId)), new Vector2(box.X + MinimapLay.Lay.Get("listTextX", 30), y + MinimapLay.Lay.Get("listTextDy", 3)), Color.White);
-        }
+        int count = Math.Min(Game.GameMap.Npcs.Count, RowCount);
+        for (int i = 0; i < count; i++)
+            gfx.Sb.Draw(dot, new Vector2(box.X + MinimapLay.Lay.Get("listIconX", 11),
+                box.Y + RowY(i) + MinimapLay.Lay.Get("listIconDy", 4)), Color.White);
     }
 
     // Where a row sits inside the panel: the window places the hover boxes

@@ -36,7 +36,7 @@ switch (cmd)
 
     case "dump":
         if (!TryOptionalInt(2, 3, "depth", out int dumpDepth)) return;
-        Environment.ExitCode = Dump.Run(WzRoot.LoadBase(ExporterPaths.DataDir), Arg(1, ""), dumpDepth) ? 0 : 1;
+        Environment.ExitCode = Dump.Run(WzRoot.LoadBase(ExporterPaths.DataDir, packs: true), Arg(1, ""), dumpDepth) ? 0 : 1;
         return;
 
     case "catdump":
