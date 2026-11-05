@@ -63,9 +63,9 @@
 ### 3.5 面板
 
 - 背包 = `UIInventory.img/Inventory`：`backgrnd` 242×593 小窗、`FullBackgrnd` 800×546 宽窗；**官方格子 36px、间距 46、首格 (31,101)**；小窗 4 列、宽窗 16 列；6 页签。
-- 属性 = `UICharacterInfo.img`（STAT/EQUIP 两页），正文 472 宽；Combat Power 官方位留着但没公式，恒 0。小 X 官方出处 = `common/main/button:close/normal/0` 11×11（任务窗/技能窗都借它）；`Basic.img/BtClose` 12×12 蓝、`UIWindow.img/BtUIClose` 32×15。
+- 属性 = `UICharacterInfo.img`（STAT/EQUIP 两页），正文 472 宽；Combat Power 官方位留着但没公式，恒 0。小 X 官方出处 = `common/main/button:close/normal/0` 11×11（技能窗借它；任务窗用自己的 `UI/Quest.img/Main/questList|questInfo/button:close`）；`Basic.img/BtClose` 12×12 蓝、`UIWindow.img/BtUIClose` 32×15。
 - 技能 = `UIWindow2.img/Skill/main`（**不是**旧的 `UIWindow.img/Skill`）：没有详情框 → 说明框用 `UIToolTip.img/Skill/Frame`（九块 14~15px 边框的深色面板）画九宫。没有关闭钮 → 借小 X。蓝条 304×45；行图 140×35，**行距用 32**（裁到 32 高，8 行才放得进官方正文 y355）。
-- 任务 = `UI/UIWindow.img/Quest`：`backgrnd` 245×396 左列表 + `backgrnd2` 305×396 右详情，并排 550×396；标题和红线 y43..47 烤在左图里。**`Tab/disabled` 和 enabled 是同一批画布（sha256 相同）→ 没有"暗一档"的官方页签，别用 tint 假造。** 图标 `icon0`（黄 !，可交任务）13×14 / `icon1`（灰 !）13×14。进度条 `Gauge2/frame` 79×8（origin 39,4）+ `gauge` 1×4。**Quest 子树里没有关闭按钮**（顶层 `BtUIClose` 是 32×15 的 "X CLOSE" 大按钮）。
+- 任务 = `UI/Quest.img/Main`：左 `questList/backgrnd` 420×550 + 右 `questInfo/backgrnd` 322×550，并排 742×550。左列表三组 `questList/bottom/state/0..2`（0 Available / 1 In Progress / 2 Completed，377×27，opened/closed 带正常/悬停/按下），行选中 `bottom/selected` 367×24（origin 5,1）；WZ 没有单行鼠标悬停图，悬停也用这张。右详情空状态 `questInfo/layer:empty` 306×485 在 (8,30)，选中底 `layer:selected`；宽按钮 start/end 292×36 在 (15,471)，giveUp 86×24 在 (225,519)；奖励 EXP 33×26、meso 32×32，box 290×51，reward 标签 32×10。
 - 商店 = `UI/UINpcShop.img/Shop/backgrnd` = **380×681 整张窗**（10 行列表烤在图里）→ 整张画，行不用再画底。**5 张页签 art 一模一样，看不出选中** → 只把没选中的文字调暗（不改 PNG）；页签 art 70 宽、文字画在左 35px 处。行距 50。官方字体：标题 GyeokdongRg 14 淡蓝 (ffbecbd9)、页签 Arial 11 白、名字 Arial 12 黑、价格 Arial 12 粗黑。没有 close 钮 → 借 `Shop/Inventory/Normal/button:close/*/0` 27×27。681 高放不下 → 拖动要用高度夹住。空列表写 "No item"（官方图里没这句）。
 
 ### 3.6 地图类窗口
@@ -89,7 +89,9 @@
 - `UIParty.img` 还没用的：`partyHP` 九宫 = 别人头顶队伍血条；`GaugeBar` 半透明白九宫；`partyInfo` 成员信息窗；`partyMake` 官方建队窗；`submenu` 右键菜单（v1 不做）。
 - **没有"收到邀请"专用弹窗**（Notice、CancelRequests、FadeYesNo、UIParty 全部子节点都查过）→ 用 UtilDlgEx。`UserList/PopupInvite` 是"按名字邀请"的表单，不是收到邀请的框。
 - GUIDE 大窗 = `UIContentsGuide.img/Maximum`（在根目录）：backgrnd 642×627；`tab:mainTab` lt (20,74) rb (625,101)。**min/help 两个钮官方只有灰色图** → 画成不拉伸的 Picture。列表名字位置：boss x=45 起每行 +90；special x=40 起每列 +143、y=177；field 图标 x=127/236/323/410、y=130、名字在图标下 66。小窗 = `UIContentsGuide.img/Minimum`：backgrnd 135×115（可见只有 105，下面 10 行透明）；BtMainQuest/BtJob 84×67；Max 11×11、Close 13×13。卡片能点（主线开任务窗、职业开属性窗），绿加号开大窗。
-- 任务条 = `UI/Quest.img/Helper`：`topClosed` 222×28（标题烤在图里）、`topOpened` 222×26、`mid` 222×1、`bottom` 222×12（列表体，还没用）；数字 `qNum/0..9` 6×5。条上没任务时不画（官方如此）；条上的 art 不吃点击，只有两个钮吃。
+- 任务条 = `UI/Quest.img/Helper`：`topClosed` 222×28（标题烤在图里）、`topOpened` 222×26、`mid` 222×1、`bottom` 222×12（列表体，已用）；数字 `qNum/0..9` 6×5。条上没任务时不画（官方如此）；条上的 art 不吃点击，展开后的 body 整块吞点击、防止漏到世界，只有 bar 的两个钮和每行的 X 有动作；我们另在条顶部加拖动区，按住可移动整个助手。
+- 任务助手行 = `UI/Quest.img/Helper/questTitle`：`canvas:top|mid|bottom` 206 宽（6/1/6 高，竖向三段）、`button:close` 9×10 在行内 (192,4)；`vector:tag` (5,6)、`vector:name` (60,6)、`vector:detail` (19,26)。官方 questTitle 底板是黑框，我们不用；多任务直接一行接一行排，文字和 X 都画在 helper 的 body 上。
+- 任务窗的 "Add to Notifier" = `UI/Quest.img/Main/questInfo/helper/layer:helper`（97×13，origin −17,−524）和 `helper/check`（13×12）；勾选态就是 check 盖在空框上。
 - 说话气泡 = `UI/ChatBalloon.img/0` 九宫 + arrow 尾巴：宽 130、最多 3 行、4000ms、aboveFeet 74。`UI/ChatBalloon.img` 有 472 套样式，`Character/Ring/0111xxxx.img/info/chatBalloon` 是戒指→样式的官方字段（455 枚戒指有）。`popupSayEx/chatBalloon` 是深灰的说话弹窗，**不是** NPC 白气泡。
 - buff 栏 = `UI/StatusBar3.img/BuffSetting/favoriteBuff` 白半透九宫。`UI/BuffIcon.img/buff/0..8` 只是 1×1 占位（名字是 "Physical Attack" 之类），**不能当图标** → 用技能图标；时间 m:ss 白字四角黑描边压在图标右下（12px 放不进框里，官方也压）。
 - 快捷栏 = `UI/UIQuickSlot.img/quickSlot/backgrnd` 557×67 = **两排 16 格**（每格 35×33、pitch 35），条在官方 HUD 的 (810,691)；左边 4 格是 Ctrl/Alt/I/C 提示，剩 **12 格 = 快捷栏**（键 1-9、0、−、=）。**用这张（平格子、无边框）**；`StatusBar3.img/mainBar/quickSlot/backgrnd` 是同一张图加了亮边框，配套的 `layer:cover`（562×73，origin −10,0）要按原尺寸画在 −2,−3 才对，拉伸铺满会变成粗双线 —— 已弃用。

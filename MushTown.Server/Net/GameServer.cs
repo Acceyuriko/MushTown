@@ -31,6 +31,7 @@ public sealed partial class GameServer : IDisposable
     private readonly Dictionary<int, (string name, int plate)> _names = new(); // name tags per client (missing = CLI session)
     private readonly Dictionary<int, QuestData> _questDefs = new(); // quest defs (shared ref: one log per client over these)
     private readonly Dictionary<int, (QuestLog log, CharaSlot chara)> _questLogs = new(); // quest copies per client (missing = CLI or pre-Sync)
+    private readonly Dictionary<int, HashSet<int>> _questDropped = new(); // quests whose complete/forfeit already landed: a trailing Sync must not restore them
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private DiscoverResponder? _responder; // answers LAN scans while we run (same lifetime as the listener)
@@ -195,6 +196,7 @@ public sealed partial class GameServer : IDisposable
             _builds.Remove(id);
             _names.Remove(id);
             _questLogs.Remove(id);
+            _questDropped.Remove(id);
         }
         int party;
         lock (_partyOps) // the party change and its list go together
@@ -259,9 +261,9 @@ public sealed partial class GameServer : IDisposable
             OnQuestSync(id, payload);
             return;
         }
-        if ((payload[0] == Net.QuestAccept || payload[0] == Net.QuestComplete) && payload.Length == 5)
+        if ((payload[0] == Net.QuestAccept || payload[0] == Net.QuestComplete || payload[0] == Net.QuestAbandon) && payload.Length == 5)
         {
-            OnQuestIntent(id, payload[0] == Net.QuestComplete, BitConverter.ToInt32(payload, 1));
+            OnQuestIntent(id, payload[0] == Net.QuestComplete, payload[0] == Net.QuestAbandon, BitConverter.ToInt32(payload, 1));
             return;
         }
         if (payload[0] == Net.Attack && payload.Length == 1)
@@ -396,6 +398,16 @@ public sealed partial class GameServer : IDisposable
                 foreach (var kv in old.chara.QuestKills)
                     chara.QuestKills[kv.Key] = Math.Max(kv.Value, chara.QuestKills.TryGetValue(kv.Key, out int n) ? n : 0);
             }
+            // A Sync can trail a complete/forfeit: the client has not seen the
+            // answer yet, so its snapshot still names the quest. The server
+            // already removed it; do not let the union take it back.
+            if (_questDropped.TryGetValue(id, out var dropped))
+                foreach (int q in dropped)
+                {
+                    chara.Quests.Remove(q);
+                    if (_questDefs.TryGetValue(q, out var def))
+                        for (int i = 0; i < def.Kills.Count; i++) chara.QuestKills.Remove($"{q}:{i}");
+                }
             var log = new QuestLog(_questDefs);
             log.Sync(chara);
             _questLogs[id] = (log, chara);
@@ -410,13 +422,13 @@ public sealed partial class GameServer : IDisposable
         }
     }
 
-    // An accept/turn-in intent: the server runs the same act on its copy and
-    // confirms, so a client can only take what it may and turn in what it
-    // finished. A failed act answers nothing (the client pre-checks on the
-    // same state, so only a hacked client hears silence). Unknown quests
-    // (joiner customs the host lacks) and missing copies (CLI, pre-Sync)
-    // also answer nothing: logged, never fatal.
-    private void OnQuestIntent(int id, bool complete, int quest)
+    // An accept/turn-in/forfeit intent: the server runs the same act on its
+    // copy and confirms, so a client can only take what it may, turn in what
+    // it finished, and drop what it holds. A failed act answers nothing (the
+    // client pre-checks on the same state, so only a hacked client hears
+    // silence). Unknown quests (joiner customs the host lacks) and missing
+    // copies (CLI, pre-Sync) also answer nothing: logged, never fatal.
+    private void OnQuestIntent(int id, bool complete, bool abandon, int quest)
     {
         lock (_mobLock)
         {
@@ -425,9 +437,19 @@ public sealed partial class GameServer : IDisposable
                 _log($"client {id} asked about untracked quest {quest}");
                 return;
             }
-            bool ok = complete ? q.log.Complete(q.chara, quest) : q.log.Accept(q.chara, quest);
+            bool ok = abandon ? q.log.Abandon(q.chara, quest)
+                : complete ? q.log.Complete(q.chara, quest) : q.log.Accept(q.chara, quest);
             if (!ok) return;
-            Send(_clients[id], Net.Encode(Net.QuestOk, w => { w.Write(quest); w.Write(complete); }));
+            if (complete || abandon)
+            {
+                if (!_questDropped.TryGetValue(id, out var dropped))
+                    _questDropped[id] = dropped = new HashSet<int>();
+                dropped.Add(quest);
+            }
+            else if (_questDropped.TryGetValue(id, out var accepted))
+                accepted.Remove(quest);
+            if (abandon) Send(_clients[id], Net.Encode(Net.QuestGone, w => w.Write(quest)));
+            else Send(_clients[id], Net.Encode(Net.QuestOk, w => { w.Write(quest); w.Write(complete); }));
         }
     }
 

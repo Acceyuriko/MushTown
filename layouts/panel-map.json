@@ -61,6 +61,7 @@
   "popBtnH": 26,
   "popTextY": 38,
   "popTextStep": 17,
+  "popTextPad": 16,
   "popYesX": 73,
   "popNoX": 162,
   "popBtnY": 14,

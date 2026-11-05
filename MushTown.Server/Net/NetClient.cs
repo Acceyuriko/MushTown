@@ -183,6 +183,12 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.QuestComplete, w => w.Write(quest)));
     }
 
+    public void SendQuestAbandon(int quest)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.QuestAbandon, w => w.Write(quest)));
+    }
+
     // One chat line: only the text goes out. The server adds the player id
     // and the name and relays the line to every client.
     public void SendChat(string text)
@@ -344,6 +350,8 @@ public sealed class NetClient : IDisposable
         else if (p[0] == Net.QuestKill && p.Length == 13)
             _questEvents.Enqueue(new QuestEvent(true,
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9), false));
+        else if (p[0] == Net.QuestGone && p.Length == 5)
+            _questEvents.Enqueue(new QuestEvent(false, BitConverter.ToInt32(p, 1), 0, 0, false, true));
         else if (p[0] == Net.Name && p.Length > 9)
         {
             try

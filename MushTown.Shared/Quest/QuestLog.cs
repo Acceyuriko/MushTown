@@ -40,7 +40,8 @@ public sealed class QuestStateFactory
 
 public sealed class QuestLog : Component
 {
-    // Talk reach: clicking an NPC past this box does nothing.
+    // Talk reach: the Space action only talks to an NPC inside this box.
+    // Mouse clicks have no distance rule.
     public const int TalkDx = 90;
     public const int TalkDy = 90;
 
@@ -116,6 +117,16 @@ public sealed class QuestLog : Component
     // False for untaken quests (offer paths check NPCs they never took).
     public bool IsComplete(CharaSlot chara, int quest) =>
         chara.Quests.Contains(quest) && State(quest).IsComplete(chara);
+
+    // Forfeit: a taken quest leaves the log, its state and its kill counters.
+    public bool Abandon(CharaSlot chara, int quest)
+    {
+        if (!chara.Quests.Remove(quest)) return false;
+        for (int i = 0; i < Defs[quest].Kills.Count; i++)
+            chara.QuestKills.Remove($"{quest}:{i}");
+        _states.Remove(quest);
+        return true;
+    }
 
     // Turn-in (moves the state only; the caller pays out after this passes).
     // Counters go with the hunt: nothing reads them once the quest leaves

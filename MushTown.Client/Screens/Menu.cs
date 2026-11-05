@@ -54,6 +54,7 @@ public partial class MushTownGame
     private int _cursorH; // backbuffer height the OS cursor was last built for (0 = not built)
     private readonly CursorAnim _cursor = new(); // the brain: state + frame (the OS hands stay below)
     private bool _hoverGrab; // the mouse sits on something a click can pick up (no sfx: the cursor alone answers)
+    private bool _hoverNpc; // the mouse sits on a world NPC: the same hover cursor, no button id and no sfx
     private string _hoverId = ""; // last hovered button id (hover sfx plays on change)
 
     // One looping overlay clip: frames plus their player state.
@@ -162,7 +163,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
+                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
                 _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
@@ -170,7 +171,7 @@ public partial class MushTownGame
             if (shotScreen is "stat" or "hud") _showStat = true;
             if (shotScreen == "equip") { _showStat = true; _statTab = 1; _statDetail = ItemData.LongSword; }
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
-            if (shotScreen == "quest") _showQuest = true;
+            if (shotScreen is "quest" or "questask" or "questforfeit" or "questpick") _showQuest = true;
             if (shotScreen == "settings") _showSettings = true;
             if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
             if (shotScreen is "minimapbig" or "minimapnpc" or "minimapfilter" && WindowFor(HotkeyAction.Minimap) is MinimapWindow mini)
@@ -507,7 +508,7 @@ public partial class MushTownGame
     private void SyncCursorState(float dtMs)
     {
         bool pressed = Mouse.GetState().LeftButton == ButtonState.Pressed;
-        int want = CursorAnim.Select(_hoverId, _hoverGrab, _hand.Empty && !Holding, pressed);
+        int want = CursorAnim.Select(_hoverId, _hoverGrab, _hand.Empty && !Holding, pressed, _hoverNpc);
         CursorAnimData? data = want == 1 ? _hoverSet.Data : want == 2 ? _clickSet.Data : want == 3 ? _itemSet.Data : null;
         if (_cursor.Tick(want, data, dtMs)) ApplyCursor();
     }
@@ -603,6 +604,7 @@ public partial class MushTownGame
     private void UpdateMenu(float dtMs)
     {
         _hoverGrab = false; // menus have nothing to pick up
+        _hoverNpc = false; // the game's NPC hover ends with the game
         var ms = Mouse.GetState();
         var (gx, gy) = MouseGamePos(ms);
         bool click = ClickEdge(ms);
@@ -745,12 +747,15 @@ public partial class MushTownGame
         ClearDrops();
         DropNumbers();
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0; // modals never survive the exit (same map skips the reload that clears them)
+        CloseQuestConfirm(); // a stale teleport/forfeit question must not follow the character out
         _showShop = false; // NPC-bound like talk
         // In-game windows never survive the exit: a map list left open would
         // keep its wheel baseline across the character screen.
         CloseAllWindows();
         ClearHeld(); // a target a click picked up does not follow the character out
-        _talkKey = ""; _questKey = ""; _trackKey = ""; // cached #h names die with the char
+        _talkKey = ""; _questKey = ""; _qhBuiltKey = ""; _qhHidden = false; _qhListOpen = true; _qhCount = 0; _qhPos = QuestHelperLayoutPos(); _qhDrag = null; // cached helper rows die with the char
+        _questBuilt = false; _questBuiltKey = ""; _questSel = 0; _questDetail = null; _questDragged = false; _questPos = new Point(0, 0); _showQuest = false; // the next character starts with a closed, unselected window
+        for (int i = 0; i < _questGroupOpen.Length; i++) _questGroupOpen[i] = true;
         DropFx();
         _fighter.Cooldowns.Clear();
         _fighter.Buffs.Clear();

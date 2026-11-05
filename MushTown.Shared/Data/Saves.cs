@@ -174,5 +174,6 @@ public sealed class CharaSlot
     public Dictionary<int, int> SkillLv { get; set; } = new();
     public List<int> Quests { get; set; } = new(); // accepted quest ids
     public List<int> QuestsDone { get; set; } = new(); // turned-in quest ids
+    public List<int> QuestHelper { get; set; } = new(); // quests shown in the quest helper
     public Dictionary<string, int> QuestKills { get; set; } = new(); // "qid:index" -> capped kill count
 }

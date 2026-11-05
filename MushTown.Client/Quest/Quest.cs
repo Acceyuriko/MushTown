@@ -15,9 +15,15 @@ public partial class MushTownGame
     private int _talkNpc; // talking to (0 = none)
     private int _talkQuest; // quest in offer/turn-in flow (0 = menu)
     private int _talkPage; // page index within the current page list
+    private bool _talkByMouse; // opened by a click: no distance rule, walking away keeps it open
     private int _questSel; // selected quest in the window (0 = none)
-    private string _talkKey = "", _questKey = "", _trackKey = "";
-    private List<string> _talkLines = new(), _questLines = new(), _trackLines = new();
+    private QuestConfirmKind _questConfirm; // the open confirm popup
+    private int _questConfirmQuest; // the quest the popup asks about
+    private string _talkKey = "", _questKey = "";
+    private List<string> _talkLines = new(), _questLines = new();
+
+    // The popup under the quest window: the start travel and the forfeit ask.
+    private enum QuestConfirmKind { None, Start, Forfeit }
 
     // NPC + quest json (Initialize loads this before maps: art checks need
     // npc data; png textures need the device, so content loads them later).
@@ -61,12 +67,16 @@ public partial class MushTownGame
                 throw new InvalidDataException($"custom quest {f} has no name");
             if (q.Npc0 == 0 || q.Npc1 == 0)
                 throw new InvalidDataException($"custom quest {f} has no giver or turn-in");
+            if (!_npcs.ContainsKey(q.Npc0) || !_npcs.ContainsKey(q.Npc1))
+                throw new InvalidDataException($"custom quest {f} refers to an unexported npc");
+            if (WorldMapUi.Holds(0, q.Npc0).Count == 0)
+                throw new InvalidDataException($"custom quest {f} giver npc {q.Npc0} is not on any exported map");
             if (q.Pre.Any(p => p == 0))
                 throw new InvalidDataException($"custom quest {f} has a zero pre id");
             if (q.Kills.Any(k => k.Mob == 0 || k.Count == 0))
                 throw new InvalidDataException($"custom quest {f} has a zero kill");
-            if (q.Kills.Count > 9)
-                throw new InvalidDataException($"custom quest {f} has {q.Kills.Count} kills (v1 takes 9)");
+            if (q.Kills.Count > 4)
+                throw new InvalidDataException($"custom quest {f} has {q.Kills.Count} kills (the detail panel shows 4)");
             if (q.RewardExp < 0)
                 throw new InvalidDataException($"custom quest {f} has a negative exp reward");
             if (q.RewardMeso < 0)
@@ -117,10 +127,11 @@ public partial class MushTownGame
     }
 
     // The WZ text macros (#b, #p2001#, ...) turned into what the player reads.
-    internal string QText(string raw)
+    // Done text passes its own counters: turn-in already dropped the live ones.
+    internal string QText(string raw, Func<int, int, int>? kills = null)
     {
         var chara = _save?.Slots[_slot] ?? new CharaSlot { Name = "hero" };
-        return QuestText.Render(raw, chara, (qid, idx) => _questLog.KillCount(chara, qid, idx), MobName, NpcName);
+        return QuestText.Render(raw, chara, kills ?? ((qid, idx) => _questLog.KillCount(chara, qid, idx)), MobName, NpcName);
     }
 
     // One of our kills: quest counters tick up (capped per objective).
@@ -185,22 +196,35 @@ public partial class MushTownGame
     }
 
     // Shot poses through the real path: quest accepts custom 90001 with 2/5
-    // kills (window + tracker show live state), talk stands by the NPC and
-    // opens the menu. Missing quest/NPC/ground fails loud, like other poses.
+    // kills (three helper rows, the info panel stays empty), questpick selects
+    // 90001, questask/questforfeit pose the confirms, talk stands by the NPC
+    // and opens the menu. Missing quest/NPC/ground fails loud, like other poses.
     private void SetupShotQuests()
     {
-        if (_shotScreen is not ("quest" or "talk" or "shop")) return;
+        if (_shotScreen is not ("quest" or "questask" or "questforfeit" or "questpick" or "talk" or "shop")) return;
         _save ??= new SaveData();
         var chara = _save.Slots[_slot] ??= DemoChara();
-        if (_shotScreen == "quest")
+        if (_shotScreen is "quest" or "questask" or "questforfeit" or "questpick")
         {
+            if (_shotScreen == "questask")
+            {
+                if (!_questLog.CanAccept(chara, 36301))
+                    throw new InvalidDataException("questask shot needs quest 36301 to be available");
+                _questSel = 36301;
+                AskQuestStart(36301);
+                return;
+            }
             if (!_quests.TryGetValue(90001, out var q) || !_questLog.Accept(chara, 90001))
                 throw new InvalidDataException("quest shot needs custom quest 90001");
             if (q.Kills.Count == 0)
                 throw new InvalidDataException("quest shot needs custom quest 90001 with kills");
             for (int i = 0; i < 2; i++)
                 _questLog.BumpKills(chara, q.Kills[0].Mob); // 2 kills through the real path
-            _questSel = 90001;
+            _questLog.Accept(chara, 90002); // a second helper row
+            _questLog.Accept(chara, 1027);  // a third helper row
+            chara.QuestHelper.AddRange(new[] { 90001, 90002, 1027 });
+            _questSel = _shotScreen is "questforfeit" or "questpick" ? 90001 : 0; // quest shows the empty info panel
+            if (_shotScreen == "questforfeit") AskQuestForfeit(90001);
             return;
         }
         var npc = _npcArts.FirstOrDefault(a => a.Spawn.NpcId == _shotTalk)?.Spawn
@@ -248,17 +272,45 @@ public partial class MushTownGame
     {
         if (button == "Bye") { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; return; }
         if (button == "Next") { _talkPage++; return; }
-        var chara = _save?.Slots[_slot]!;
-        if (button == "Accept" && _questLog.CanAccept(chara, _talkQuest))
-        {
-            if (QuestServer()) _net!.SendQuestAccept(_talkQuest);
-            else if (_questLog.Accept(chara, _talkQuest)) ApplyQuestAccepted(_talkQuest);
-        }
-        if (button == "Complete" && _questLog.IsComplete(chara, _talkQuest))
-        {
-            if (QuestServer()) _net!.SendQuestComplete(_talkQuest);
-            else if (_questLog.Complete(chara, _talkQuest)) ApplyQuestCompleted(chara, _talkQuest);
-        }
+        if (button == "Accept") AcceptQuest(_talkQuest);
+        if (button == "Complete") CompleteQuest(_talkQuest);
+    }
+
+    // The accept act, shared by the talk dialog and the quest window's Start
+    // button. The callers check the same gate; net play only sends the intent.
+    private void AcceptQuest(int quest)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || !_questLog.CanAccept(chara, quest)) return;
+        if (QuestServer()) _net!.SendQuestAccept(quest);
+        else if (_questLog.Accept(chara, quest)) ApplyQuestAccepted(quest);
+    }
+
+    // The turn-in act, shared by the talk dialog and the quest window's
+    // Complete button.
+    private void CompleteQuest(int quest)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || !_questLog.IsComplete(chara, quest)) return;
+        if (QuestServer()) _net!.SendQuestComplete(quest);
+        else if (_questLog.Complete(chara, quest)) ApplyQuestCompleted(chara, quest);
+    }
+
+    // The Forfeit act: a taken quest leaves the log and its kill counters.
+    // Net play only sends the intent; the server confirms with QuestGone.
+    private void AbandonQuest(int quest)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || !chara.Quests.Contains(quest)) return;
+        if (QuestServer()) _net!.SendQuestAbandon(quest);
+        else if (_questLog.Abandon(chara, quest)) ApplyQuestAbandoned(quest);
+    }
+
+    private void ApplyQuestAbandoned(int quest)
+    {
+        LogEvent($"abandoned: {_quests[quest].Name}");
+        UntrackQuest(quest);
+        if (_questSel == quest) _questSel = 0;
     }
 
     // A fresh accept lands: log line, dialog closes.
@@ -276,6 +328,7 @@ public partial class MushTownGame
         LogEvent(rewards.Count > 0 ? $"completed: {q.Name} ({string.Join(", ", rewards)})" : $"completed: {q.Name}");
         GainExp(_questLog.TurnIn(chara, quest)); // payout lands before the EXP, like before
         PlaySfx("questclear");
+        UntrackQuest(quest);
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
         if (_questSel == quest) _questSel = 0; // turned in: drop the stale selection
     }
@@ -294,48 +347,143 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return;
-        if (q.Completed)
+        if (q.Abandoned)
+        {
+            if (_questLog.Abandon(chara, q.Quest)) ApplyQuestAbandoned(q.Quest);
+        }
+        else if (q.Completed)
         {
             if (_questLog.Complete(chara, q.Quest)) ApplyQuestCompleted(chara, q.Quest);
         }
         else if (_questLog.Accept(chara, q.Quest)) ApplyQuestAccepted(q.Quest);
     }
 
-    // The number of quests the tracker shows. The tracker writes two lines
-    // per quest (the name and the detail), so the count is half the lines.
-    private int QuestCount() => TrackerLines().Count / 2;
-
-    // Tracker lines (cached: quest state changes rarely, frames do not).
-    private List<string> TrackerLines()
+    // The quests the player registered, in registration order. Only accepted,
+    // known quests are listed: a completed or abandoned row drops out even if
+    // an old save still holds its id.
+    private List<QuestHelperRow> QuestHelperRows()
     {
         var chara = _save?.Slots[_slot];
-        if (chara == null || chara.Quests.Count == 0) return new List<string>();
-        string key = string.Join(";", chara.Quests.OrderBy(id => id)
-            .Select(id => _quests.TryGetValue(id, out var q)
-                ? id + ":" + string.Join(",", q.Kills.Select((_, i) => _questLog.KillCount(chara, id, i)))
-                : id + "?"));
-        if (key == _trackKey) return _trackLines;
-        _trackKey = key;
-        var lines = new List<string>();
-        foreach (int id in chara.Quests.OrderBy(x => x))
+        if (chara == null) return new List<QuestHelperRow>();
+        var rows = new List<QuestHelperRow>();
+        foreach (int id in chara.QuestHelper)
         {
-            if (!_quests.TryGetValue(id, out var q)) continue;
-            lines.Add(q.Name);
+            if (!chara.Quests.Contains(id) || !_quests.TryGetValue(id, out var q)) continue;
             var st = _questLog.State(id); // taken + known: the state exists
+            string detail;
             if (q.NeedItemsToComplete)
-                lines.Add("  Need items"); // v1 has no bag: say so instead of looping Talk-to
+                detail = "Need items"; // v1 has no bag: say so instead of looping Talk-to
             else if (st.IsComplete(chara))
-                lines.Add($"  Done - talk to {NpcName(q.Npc1)}");
-            else if (q.Kills.Count > 0)
-            {
-                int i = 0; // first unmet kill (some unmet: complete/item cases returned above)
-                while (i < q.Kills.Count && st.KillCount(chara, i) >= q.Kills[i].Count) i++;
-                lines.Add($"  {MobName(q.Kills[i].Mob)} {st.KillCount(chara, i)}/{q.Kills[i].Count}");
-            }
+                detail = "Ready to complete";
             else
-                lines.Add($"  Talk to {NpcName(q.Npc1)}");
+            {
+                int i = 0; // first unmet kill (zero kills without items is complete above)
+                while (i < q.Kills.Count && st.KillCount(chara, i) >= q.Kills[i].Count) i++;
+                detail = $"{MobName(q.Kills[i].Mob)} {st.KillCount(chara, i)}/{q.Kills[i].Count}";
+            }
+            rows.Add(new QuestHelperRow(id, q.Name, detail));
         }
-        _trackLines = lines;
-        return lines;
+        return rows;
+    }
+
+    // Is this accepted quest shown in the helper?
+    private bool QuestTracked(int quest)
+    {
+        var chara = _save?.Slots[_slot];
+        return chara != null && chara.Quests.Contains(quest) && chara.QuestHelper.Contains(quest);
+    }
+
+    // The Add to Notifier checkbox: add an accepted quest or take it out.
+    private void ToggleQuestHelper(int quest)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || !chara.Quests.Contains(quest)) return;
+        if (chara.QuestHelper.Remove(quest)) return;
+        chara.QuestHelper.Add(quest);
+        _qhHidden = false; // the player asked for a row: bring a hidden bar back
+    }
+
+    // A completed or abandoned quest has nothing left to watch.
+    private void UntrackQuest(int quest)
+    {
+        _save?.Slots[_slot]?.QuestHelper.Remove(quest);
+    }
+
+    // The quest window Start button: ask before the teleport. The player then
+    // walks up to the NPC in the talk window and takes the quest there.
+    private void AskQuestStart(int quest)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || !_questLog.CanAccept(chara, quest)) return;
+        _questConfirmQuest = quest;
+        _questConfirm = QuestConfirmKind.Start;
+    }
+
+    // The quest window Forfeit button: ask again. The yes runs the same
+    // abandon path as the old button.
+    private void AskQuestForfeit(int quest)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || !chara.Quests.Contains(quest)) return;
+        _questConfirmQuest = quest;
+        _questConfirm = QuestConfirmKind.Forfeit;
+    }
+
+    private void CloseQuestConfirm()
+    {
+        _questConfirm = QuestConfirmKind.None;
+        _questConfirmQuest = 0;
+    }
+
+    // Yes on the popup: the start travels next to the giver and opens its
+    // offer; the forfeit runs the abandon act and closes.
+    private void ConfirmQuest()
+    {
+        int quest = _questConfirmQuest;
+        var kind = _questConfirm;
+        CloseQuestConfirm();
+        if (kind == QuestConfirmKind.Forfeit) AbandonQuest(quest);
+        else if (kind == QuestConfirmKind.Start) TravelToQuestNpc(quest);
+    }
+
+    // Travel to the quest giver's map, stand beside it, and open the offer in
+    // the NPC talk window. The player still has to click Accept there.
+    private void TravelToQuestNpc(int quest)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || !_quests.TryGetValue(quest, out var q) || !_questLog.CanAccept(chara, quest)) return;
+        foreach (var map in MapUi.Data.Maps)
+        {
+            var file = WorldMapUi.MapFile(map.Id);
+            var spawn = file.Npcs.FirstOrDefault(n => n.NpcId == q.Npc0);
+            if (spawn == null) continue;
+            PlaySfx("portal");
+            _showQuest = false; // the talk modal takes the screen
+            _dragQuest = null;
+            if (map.Id != _mapId) EnterMap(map.Id); // same map: only the player moves
+            int x = spawn.X - 30;
+            _mover.X = x;
+            _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, x, spawn.Cy);
+            if (_mover.Ground == null)
+            {
+                x = spawn.X + 30;
+                _mover.X = x;
+                _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, x, spawn.Cy);
+            }
+            if (_mover.Ground == null) throw new InvalidDataException($"quest {quest} has no ground beside NPC {q.Npc0}");
+            _mover.Y = SceneMath.FootholdY(_mover.Ground, x);
+            _mover.OnTravel();
+            _mover.FacingRight = spawn.X > x;
+            _mover.Action = "stand1";
+            _frame = 0; _timerMs = 0; _shownAction = "stand1";
+            _fighter.AttackLock = 0;
+            ReseedPortalState();
+            SnapCamera();
+            OpenTalk(q.Npc0);
+            _talkQuest = quest;
+            _talkPage = 0;
+            return;
+        }
+        throw new InvalidDataException($"quest {quest} giver {q.Npc0} is not on any exported map");
     }
 }

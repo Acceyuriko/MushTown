@@ -50,27 +50,42 @@ public partial class MushTownGame
         return new Point(top.X + _textures[image].Width / 2 - _camera.X, top.Y - _camera.Y);
     }
 
-    // The talk panel opens on this NPC.
-    private void OpenTalk(int npcId)
+    // The talk panel opens on this NPC. A mouse-opened dialog ignores the
+    // distance rule for as long as it stays open; the Space action still
+    // picks only a near NPC.
+    private void OpenTalk(int npcId, bool byMouse = false)
     {
         _talkNpc = npcId;
         _talkQuest = 0;
         _talkPage = 0;
+        _talkByMouse = byMouse;
         PlaySfx("click");
     }
 
-    // Click an NPC in talk reach: the talk panel opens (too far: nothing).
-    private void NpcClick(int gx, int gy)
+    // The NPC under the mouse: the topmost sprite by draw order. The whole
+    // frame is the target, and there is no distance rule.
+    private NpcArt? NpcAt(int gx, int gy)
     {
-        foreach (var a in _npcArts.OrderByDescending(a => a.Spawn.Cy)) // draw order: high feet on top, clicks match
+        NpcArt? hit = null;
+        int hitCy = int.MinValue;
+        foreach (var a in _npcArts) // draw order: high feet on top, clicks match
         {
             var (top, image) = NpcFrame(a);
             var tex = _textures[image];
             var rect = new Rectangle(top.X - _camera.X, top.Y - _camera.Y, tex.Width, tex.Height);
-            if (!HitRect(rect, gx, gy)) continue;
-            if (!InTalkReach(a)) continue; // an overlapped NPC behind may be in reach
-            OpenTalk(a.Spawn.NpcId);
-            return;
+            if (HitRect(rect, gx, gy) && a.Spawn.Cy > hitCy)
+            {
+                hit = a;
+                hitCy = a.Spawn.Cy;
+            }
         }
+        return hit;
+    }
+
+    // Click an NPC anywhere on its picture: the dialog opens. No reach test.
+    private void NpcClick(int gx, int gy)
+    {
+        var npc = NpcAt(gx, gy);
+        if (npc != null) OpenTalk(npc.Spawn.NpcId, byMouse: true);
     }
 }

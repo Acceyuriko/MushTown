@@ -49,7 +49,7 @@ public partial class MushTownGame
     private bool _invBuilt, _statBuilt, _skillBuilt, _questBuilt, _settingsBuilt, _shopBuilt; // built at least once
     private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow tab flips (bag counts are static)
     private int _shopBuiltTab = -1; // the shop tab in the drawn scene
-    private List<int> _questBuiltRows = new();
+    private string _questBuiltKey = "";
     private List<int> _shopBuiltStock = new();
     private List<(int id, int count)> _shopBuiltSells = new();
     private int _talkBuiltNpc, _talkBuiltQuest, _talkBuiltPage;
@@ -111,12 +111,13 @@ public partial class MushTownGame
     {
         UpdateHudHover(gx, gy); // every frame (clicks return early below)
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
+        bool modal = _uiScene.ModalOpen; // a confirmation box owns the keys until it is answered
         // The key window does not block anything: the character keeps moving
         // and fighting on the saved preset, the item keys keep drinking, and
         // every panel key stays alive, so a skill can be dropped onto a key.
         // The draft only reaches the live keys on Save.
-        ItemEdges(_talkNpc == 0 && !_menuWindow.Show); // the item keys drink their potion
-        if (_talkNpc == 0)
+        ItemEdges(_talkNpc == 0 && !_menuWindow.Show && !modal); // the item keys drink their potion
+        if (_talkNpc == 0 && !modal)
         {
             bool any = false;
             foreach (var action in UiHotkeyOrder)
@@ -147,7 +148,7 @@ public partial class MushTownGame
         if (_dragQuest.HasValue)
         {
             if (!held) _dragQuest = null;
-            else { _questDragged = true; _questPos = ClampPanel(new Point(gx - _dragQuest.Value.X, gy - _dragQuest.Value.Y), QuestW); }
+            else { _questDragged = true; _questPos = ClampPanel(new Point(gx - _dragQuest.Value.X, gy - _dragQuest.Value.Y), QuestW, QuestH); }
         }
         if (_dragSettings.HasValue)
         {
@@ -161,6 +162,18 @@ public partial class MushTownGame
         {
             if (!held) _dragShop = null;
             else _shopPos = ClampPanel(new Point(gx - _dragShop.Value.X, gy - _dragShop.Value.Y), ShopW, ShopH);
+        }
+        if (_qhDrag.HasValue)
+        {
+            if (!held) _qhDrag = null;
+            else
+            {
+                int h = _qhListOpen && _qhCount > 0
+                    ? QuestHelperBodyH(_qhLay, _qhCount, Tex("qhelper_bottom.png").Height)
+                    : HelperBarH;
+                _qhPos = ClampPanel(new Point(gx - _qhDrag.Value.X, gy - _qhDrag.Value.Y), HelperBarW, h);
+                PlaceQuestHelper();
+            }
         }
         SyncPanels(); // tab flips and new rows rebuild (a drag only moves the host; hover ran first, so it lags one frame, like legacy)
         DragWindows(held, gx, gy); // the new windows move by their title
@@ -234,7 +247,9 @@ public partial class MushTownGame
     // Sets the grab cursor: the bag slots and the things a click can pick up.
     private void UpdateHudHover(int gx, int gy)
     {
-        SfxOnHover(_uiScene.Hover(gx, gy)); // one tree: the topmost object by Z takes the hover (the modal blanks the rest)
+        string id = _uiScene.Hover(gx, gy); // one tree: the topmost object by Z takes the hover (the modal blanks the rest)
+        _hoverNpc = id == "" && _uiScene.Hovered == null && !_uiScene.ModalOpen && _talkNpc == 0 && NpcAt(gx, gy) != null;
+        SfxOnHover(id);
         _hoverGrab = _uiScene.HoverButton is Slot || Grabbable(_uiScene.Hovered);
     }
 
@@ -265,7 +280,7 @@ public partial class MushTownGame
             else if (panel >= 0) { RaisePanel(panel); } // a panel too: windows and panels share the row
         }
         var hit = ClickTree(_uiScene, gx, gy); // one tree: the topmost object by Z takes the click
-        if (hit == null && _talkNpc == 0) NpcClick(gx, gy); // no UI took it: the world gets the click (the open dialog swallows it)
+        if (hit == null && _talkNpc == 0 && !_uiScene.ModalOpen) NpcClick(gx, gy); // no UI took it: the world gets the click (an open modal swallows it)
     }
 
     // A click or Esc changed what is open: the draw runs right after Update,
@@ -279,6 +294,7 @@ public partial class MushTownGame
     {
         SyncPanels();
         SyncWindows();
+        SyncQuestHelper();
     }
 
     // The panel id a hit object belongs to, or -1 (HUD, window, world).
@@ -300,7 +316,7 @@ public partial class MushTownGame
     // x >= -w + 80 keeps the right 80px visible. Windows with side panels pass
     // tighter limits so the panels stay reachable.
     internal static Point ClampBox(Point p, int w, int maxX, int maxY) =>
-        new(Math.Clamp(p.X, -w + 80, maxX), Math.Clamp(p.Y, 0, maxY));
+        new(Math.Clamp(p.X, -w + 80, maxX), Math.Clamp(p.Y, 0, Math.Max(0, maxY)));
 
     private static Point ClampPanel(Point p, int w, int h = 40) => ClampBox(p, w, 1366 - 80, 768 - h);
 
@@ -452,14 +468,15 @@ public partial class MushTownGame
     {
         _invHost.Enabled = _showInv; _statHost.Enabled = _showStat; _skillHost.Enabled = _showSkill; // a hidden panel stays in the tree, it just stops drawing and hitting
         _questHost.Enabled = _showQuest; _settingsHost.Enabled = _showSettings; _shopHost.Enabled = _showShop;
+        if (!_showQuest && _questConfirm != QuestConfirmKind.None) CloseQuestConfirm(); // a hidden window never keeps its question
         _talkHost.Enabled = _talkNpc != 0; // the dialog root is in the tree: showing it is all it takes
         if (!_invBuilt || _invTab != _invBuiltTab) { BuildInvScene(); _invBuilt = true; _invBuiltTab = _invTab; }
         if (!_statBuilt) { BuildStatScene(); _statBuilt = true; }
         if (!_skillBuilt || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuilt = true; _skillBuiltTab = _skillTab; }
         if (_showQuest) // the rows cost a list each call, and a hidden panel is not drawn: skip it
         {
-            var quests = QuestRows();
-            if (!_questBuilt || !quests.SequenceEqual(_questBuiltRows)) { BuildQuestScene(quests); _questBuilt = true; _questBuiltRows = quests; }
+            string key = QuestWindowKey();
+            if (!_questBuilt || key != _questBuiltKey) { BuildQuestScene(); _questBuilt = true; _questBuiltKey = key; }
         }
         if (!_settingsBuilt) { BuildSettingsScene(); _settingsBuilt = true; }
         if (_showShop && _shopStock != null)
@@ -479,7 +496,7 @@ public partial class MushTownGame
         PlaceHost(_invHost, _invPos, InvW, InvH);
         PlaceHost(_statHost, _statPos, StatW, StatH);
         PlaceHost(_skillHost, _skillPos, SkillW, SkillBodyH);
-        PlaceHost(_questHost, _questPos, QuestW, QuestBodyH);
+        PlaceHost(_questHost, _questPos, QuestW, QuestH);
         PlaceHost(_settingsHost, _settingsPos, SettingsW, _settingsLay.Get("titleH", 16) + SettingsBodyH);
         PlaceHost(_shopHost, _shopPos, ShopW, ShopH);
     }

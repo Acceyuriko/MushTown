@@ -67,6 +67,21 @@ public class QuestTests
         Assert.AreEqual(5, log.KillCount(chara, 90001, 0));
     }
 
+    // Forfeit drops the taken quest, its state and its kill counters.
+    [TestMethod]
+    public void Abandon_RemovesQuestStateAndCounters()
+    {
+        var chara = Chara();
+        var log = Log(KillQuest());
+        log.Accept(chara, 90001);
+        log.BumpKills(chara, 100000);
+        Assert.IsTrue(log.Abandon(chara, 90001));
+        Assert.IsFalse(chara.Quests.Contains(90001));
+        Assert.AreEqual(0, chara.QuestKills.Count);
+        Assert.ThrowsException<InvalidDataException>(() => log.State(90001)); // the state is gone too
+        Assert.IsFalse(log.Abandon(chara, 90001)); // already gone
+    }
+
     // Complete moves accepted -> done only when every kill lands (item quests
     // never complete; talk quests complete on turn-in with no kills at all).
     [TestMethod]

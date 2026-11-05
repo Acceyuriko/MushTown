@@ -3,14 +3,14 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The quest window (official UIWindow.img/Quest art) and the talk panel (modal).
+// The quest window (official UI/Quest.img/Main art) and the talk panel (modal).
 public partial class MushTownGame
 {
-    // The official quest art: the list panel (left) and the detail panel (right).
-    private const int QuestListW = 245;   // Quest/backgrnd
-    private const int QuestDetailW = 305; // Quest/backgrnd2
-    private const int QuestW = QuestListW + QuestDetailW;
-    private const int QuestBodyH = 396;   // both panels are 396 tall
+    // The official quest art: the list panel (left) and the info panel (right).
+    private const int QuestListW = 420;  // Quest.img/Main/questList/backgrnd
+    private const int QuestInfoW = 322;  // Quest.img/Main/questInfo/backgrnd
+    private const int QuestW = QuestListW + QuestInfoW;
+    private const int QuestH = 550;      // both panels are 550 tall
     private const int TalkW = 519;       // the dialogue box art is 519 wide
     private const int TalkTopH = 28;     // the top piece of the box
     private const int TalkBottomH = 44;  // the bottom piece (the button bar)
@@ -23,14 +23,31 @@ public partial class MushTownGame
     private static readonly PanelLayout _talkLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-talk.json"));
 
     // The quest art (the exporter writes these names).
-    private static readonly string[] QuestFiles = new[]
+    private static readonly string[] QuestFiles = BuildQuestFiles();
+
+    private static string[] BuildQuestFiles()
     {
-        "quest_list.png", "quest_detail.png", "quest_x.png",
-        "quest_tab0.png", "quest_tab1.png", "quest_tab2.png",
-        "quest_icon0.png", "quest_icon1.png",
-        "quest_basic.png", "quest_prob.png", "quest_reward.png",
-        "quest_gauge.png", "quest_gauge_fill.png",
-    };
+        var files = new List<string>
+        {
+            "quest_list.png", "quest_info.png", "quest_empty.png", "quest_selected.png", "quest_row_sel.png",
+            "quest_sec_info.png", "quest_sec_obj.png", "quest_box.png", "quest_reward.png",
+            "quest_exp.png", "quest_meso.png", "quest_npc_shadow.png",
+            "quest_close_n.png", "quest_close_h.png", "quest_close_p.png",
+            "quest_x_n.png", "quest_x_h.png", "quest_x_p.png",
+            "quest_start_n.png", "quest_start_h.png", "quest_start_p.png",
+            "quest_end_n.png", "quest_end_h.png", "quest_end_p.png",
+            "quest_giveup_n.png", "quest_giveup_h.png", "quest_giveup_p.png",
+            "qhelper_add.png", "qhelper_check.png",
+            "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png",
+            "wm_pop_yes_n.png", "wm_pop_yes_h.png", "wm_pop_yes_p.png",
+            "wm_pop_no_n.png", "wm_pop_no_h.png", "wm_pop_no_p.png",
+        };
+        for (int i = 0; i < 3; i++)
+            foreach (string state in new[] { "open", "close" })
+                foreach (string suffix in new[] { "n", "h", "p" })
+                    files.Add($"quest_grp{i}_{state}_{suffix}.png");
+        return files.ToArray();
+    }
 
     // The dialogue box art (UI/UIWindow2.img/UtilDlgEx) and its buttons.
     private static readonly string[] TalkFiles = new[]
@@ -43,140 +60,236 @@ public partial class MushTownGame
     };
 
     private bool _questDragged; // the player dragged the window: the file spot does not win
+    private readonly bool[] _questGroupOpen = { true, true, true }; // state index: 0 Available, 1 In Progress, 2 Completed
+    private static readonly int[] QuestGroupOrder = { 1, 0, 2 };    // what the list shows, top to bottom
+    private QuestInfoData? _questDetail; // the built detail (name, text, objectives, rewards)
 
-    private Rectangle QuestRect() => new(0, 0, QuestW, QuestBodyH);
-    private Rectangle QuestListRect() => new(0, 0, QuestListW, QuestBodyH);
-    private Rectangle QuestDetailRect() => new(QuestListW, 0, QuestDetailW, QuestBodyH);
+    private Rectangle QuestRect() => new(0, 0, QuestW, QuestH);
+    private Rectangle QuestInfoRect() => new(QuestListW, 0, QuestInfoW, QuestH);
 
-    // The QUEST strip on the list panel drags the window.
-    private Rectangle QuestTitleRect() => new(0, 0, QuestListW, _questLay.Get("titleH", 20));
-    private Rectangle QuestXRect()
-    {
-        var r = QuestDetailRect();
-        return new Rectangle(r.X + _questLay.Get("closeX", 288), r.Y + _questLay.Get("closeY", 2), 11, 11);
-    }
+    // The title strips drag the window.
+    private Rectangle QuestTitleRect() => new(0, 0, QuestListW, _questLay.Get("titleH", 27));
+    private Rectangle QuestInfoTitleRect() => new(QuestListW, 0, QuestInfoW, _questLay.Get("titleH", 27));
+    private Rectangle QuestXRect() => new(_questLay.Get("closeListX", 396), _questLay.Get("closeListY", 12),
+        Tex("quest_close_n.png").Width, Tex("quest_close_n.png").Height);
+    private Rectangle QuestInfoXRect() => new(QuestListW + _questLay.Get("closeInfoX", 293), _questLay.Get("closeInfoY", 2),
+        Tex("quest_x_n.png").Width, Tex("quest_x_n.png").Height);
 
-    // The selected quest, live (the kill counters change under the open panel).
-    private sealed record QuestDetailData(
-        string Name, string Level, List<string> Lines, List<(string Text, bool Done)> Kills,
-        List<string> Rewards, string TurnIn, int Percent);
-
-    private QuestDetailData? _questDetail; // the built detail (the header, the gauge and the body share it)
-
-    private void BuildQuestScene(List<int> accepted)
+    private void BuildQuestScene()
     {
         PlaceQuestWindow();
-        // The window opens on the first quest: without a pick the whole right
-        // panel (name, gauge, description) would stay empty.
-        if (_questSel == 0 && accepted.Count > 0) _questSel = accepted[0];
         foreach (string f in QuestFiles) LoadTexture("ui/" + f);
         _questHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(QuestRect())); // no Button: the body swallows, like the legacy fallthrough
         body.Add(new Picture("ui/quest_list.png", 0, 0));
-        body.Add(new Picture("ui/quest_detail.png", QuestListW, 0));
+        body.Add(new Picture("ui/quest_info.png", QuestListW, 0));
 
-        // The official tab labels (Available / In Progress / Complete). The WZ
-        // has no dimmer art for the other tabs, so all three draw the same.
-        int tx = _questLay.Get("tabX", 8), ty = _questLay.Get("tabY", 27), gap = _questLay.Get("tabGap", 10);
-        int w0 = Tex("quest_tab0.png").Width, w1 = Tex("quest_tab1.png").Width;
-        body.Add(new Picture("ui/quest_tab0.png", tx, ty));
-        body.Add(new Picture("ui/quest_tab1.png", tx + w0 + gap, ty));
-        body.Add(new Picture("ui/quest_tab2.png", tx + w0 + w1 + gap * 2, ty));
+        AddQuestGroups(body);
+        AddQuestInfo(body);
 
-        int maxRows = _questLay.Get("maxRows", 5);
-        for (int row = 0; row < accepted.Count && row < maxRows; row++) // draw shows the same rows the clicks take
-        {
-            int i = row; // for-loop variables capture shared: copy per row
-            int qid = accepted[i];
-            var rr = QuestRowRect(i);
-            var rb = new GameObject();
-            rb.Add(new Rect(rr));
-            var btn = new Button { LegacyId = "questrow" + i, Kind = ButtonKind.Click, OnClick = () => _questSel = qid };
-            rb.Add(btn);
-            // The row lights up under the mouse (the list panel is white, so
-            // the light is a blue fill drawn here).
-            rb.Add(new Invoke(gfx =>
-            {
-                if (gfx.HoverButton != btn) return;
-                gfx.Sb.Draw(gfx.Pixel, rb.Get<Rect>()!.Screen, new Color(90, 140, 200, 70));
-            }));
-            rb.Add(new Invoke(gfx => DrawQuestIcon(gfx, rb.Get<Rect>()!.Screen, qid)));
-            rb.Add(new LiveTint(() => QuestRowInk(qid), _questLay.Get("nameX", 22), _questLay.Get("nameY", 2)));
-            rb.Add(new RightLabel((ui, t) => ui.GetSmall(t), () => QuestLevelText(qid), rr.Width - _questLay.Get("levelX", 8), _questLay.Get("levelY", 3), new Color(120, 130, 145)));
-            rb.Add(new LiveLabel(() => QuestRowProgress(qid), _questLay.Get("nameX", 22), _questLay.Get("progY", 17), new Color(130, 140, 155)));
-            body.AddChild(rb);
-        }
+        body.AddChild(PanelButton(QuestTitleRect(), "", () => { _questDragged = true; _dragQuest = _uiScene.LastClick - _questPos; }));
+        body.AddChild(PanelButton(QuestInfoTitleRect(), "", () => { _questDragged = true; _dragQuest = _uiScene.LastClick - _questPos; }));
 
-        // The detail panel (right): the quest name, the level, the gauge.
-        var dr = QuestDetailRect();
-        var head = new GameObject { NoHit = true };
-        head.Add(new Rect(dr));
-        head.Add(new LiveLabel(() => QuestDetail()?.Name ?? "", _questLay.Get("headX", 30), _questLay.Get("headY", 32), Color.White, LabelFont.Mid));
-        head.Add(new LiveLabel(() => QuestDetail()?.Level ?? "", _questLay.Get("headX", 30), _questLay.Get("headLevelY", 58), new Color(195, 215, 235)));
-        head.Add(new Invoke(gfx => DrawQuestGauge(gfx, head.Get<Rect>()!.Screen)));
-        body.AddChild(head);
-
-        var text = new GameObject { NoHit = true };
-        text.Add(new Rect(QuestRect()));
-        text.Add(new Invoke(gfx => DrawQuestBody(gfx, text.Get<Rect>()!.Screen.Location)));
-        body.AddChild(text);
-
-        body.AddChild(PanelButton(QuestTitleRect(), "", () => { _questDragged = true; _dragQuest = _uiScene.LastClick - _questPos; })); // silent, like legacy
         var x = PanelButton(QuestXRect(), "x3", () => _showQuest = false, ButtonKind.Click);
-        x.Add(new Picture("ui/quest_x.png"));
+        x.Add(new Image("ui/quest_close"));
         body.AddChild(x);
+        var xi = PanelButton(QuestInfoXRect(), "x4", () => _showQuest = false, ButtonKind.Click);
+        xi.Add(new Image("ui/quest_x"));
+        body.AddChild(xi);
+        if (_questConfirm != QuestConfirmKind.None) body.AddChild(BuildQuestConfirm());
         _questHost.AddChild(body);
     }
 
     // The panel file owns the window spot until the player drags it.
     private void PlaceQuestWindow()
     {
-        if (!_questDragged) _questPos = new Point(_questLay.Get("x", 400), _questLay.Get("y", 110));
+        if (!_questDragged) _questPos = new Point(_questLay.Get("x", 312), _questLay.Get("y", 109));
     }
 
-    private Rectangle QuestRowRect(int i)
+    // The three collapsible groups: In Progress, Available, Completed. The bar
+    // art carries the title and the up/down chevron.
+    private void AddQuestGroups(GameObject body)
     {
-        int x = _questLay.Get("rowX", 8), y = _questLay.Get("rowY", 52), h = _questLay.Get("rowH", 30);
-        var r = QuestListRect();
-        return new Rectangle(r.X + x, r.Y + y + i * h, QuestListW - x * 2, h);
+        int y = _questLay.Get("groupY", 70);
+        int barH = _questLay.Get("groupH", 27);
+        int rowH = _questLay.Get("rowH", 26);
+        var groups = QuestGroups();
+        foreach (int g in QuestGroupOrder)
+        {
+            int group = g; // the closure reads the state index
+            bool open = _questGroupOpen[group];
+            var bar = PanelButton(new Rectangle(_questLay.Get("groupX", 19), y, _questLay.Get("rowW", 377), barH),
+                "qgrp" + group, () => ToggleQuestGroup(group), ButtonKind.Click);
+            bar.Add(new Image($"ui/quest_grp{group}_{(open ? "open" : "close")}"));
+            body.AddChild(bar);
+            y += barH;
+            if (!open) continue;
+            foreach (int qid in groups[group])
+            {
+                AddQuestRow(body, qid, y);
+                y += rowH;
+            }
+        }
     }
 
-    // The quest is ready to turn in (every kill done).
+    private void AddQuestRow(GameObject body, int qid, int y)
+    {
+        var rb = new GameObject();
+        rb.Add(new Rect(new Rectangle(_questLay.Get("rowX", 19), y, _questLay.Get("rowW", 377), _questLay.Get("rowH", 26))));
+        rb.Add(new Button { LegacyId = "questrow" + qid, Kind = ButtonKind.Click, OnClick = () => _questSel = qid });
+        rb.Add(new QuestRowArt(() => _questSel == qid, _questLay.Get("rowSelX", 5), _questLay.Get("rowSelY", 1)));
+        rb.Add(new QuestRowText(() => QuestRowTextData(qid), _questLay.Get("rowNameX", 10),
+            _questLay.Get("rowTextPad", 70), _questLay.Get("rowLevelRight", 8), _questLay.Get("rowLevelDy", 6)));
+        body.AddChild(rb);
+    }
+
+    // The right panel: the empty message, or the selected quest.
+    private void AddQuestInfo(GameObject body)
+    {
+        var info = new GameObject();
+        info.Add(new Rect(QuestInfoRect()));
+        var d = QuestDetail();
+        if (d == null)
+        {
+            info.Add(new Picture("ui/quest_empty.png", _questLay.Get("emptyX", 8), _questLay.Get("emptyY", 30)));
+        }
+        else
+        {
+            info.Add(new Picture("ui/quest_selected.png", _questLay.Get("selX", 8), _questLay.Get("selY", 30)));
+            info.Add(new Picture("ui/quest_npc_shadow.png", _questLay.Get("npcShadowX", 242), _questLay.Get("npcShadowY", 103)));
+            var stand = new LifeStand { Game = this, Kind = 0, Id = d.NpcId };
+            info.Add(new QuestNpcPortrait(stand, _questLay.Get("npcX", 263), _questLay.Get("npcY", 108)));
+            info.AddChild(MakeLine(d.Name, _questLay.Get("nameX", 29), _questLay.Get("nameY", 70), _questLay.Get("nameW", 200), Color.White));
+            info.AddChild(MakeLine(d.Level, _questLay.Get("lvX", 29), _questLay.Get("lvY", 88), _questLay.Get("lvW", 120), new Color(0xAB, 0xB5, 0xBB)));
+            info.Add(new QuestInfoBody(() => QuestDetail(), _questLay));
+            AddQuestAction(info);
+        }
+        body.AddChild(info);
+    }
+
+    // A fixed line of small text at an offset of its object.
+    private static GameObject MakeLine(string value, int x, int y, int w, Color ink)
+    {
+        var o = new GameObject { NoHit = true };
+        o.Add(new Rect(new Rectangle(x, y, w, 16)));
+        o.Add(new Text { Value = () => value, Ink = ink, Line = TextLine.Top });
+        return o;
+    }
+
+    // The wide button under the info panel: Start for an available quest,
+    // Complete for a ready turn-in, and Forfeit for a taken quest. Forfeit
+    // uses the official giveUp art at its WZ spot (225,519).
+    private void AddQuestAction(GameObject info)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return;
+        int quest = _questSel;
+        string stem = "";
+        Action? action = null;
+        if (_questLog.CanAccept(chara, quest))
+        {
+            stem = "quest_start";
+            action = () => AskQuestStart(quest); // teleport to the giver first
+        }
+        else if (chara.Quests.Contains(quest))
+        {
+            if (_questLog.State(quest).IsComplete(chara))
+            {
+                stem = "quest_end";
+                action = () => CompleteQuest(quest); // turn in from here
+            }
+            AddGiveUp(info, quest);
+            AddQuestHelperButton(info, quest);
+        }
+        if (action == null) return;
+        var art = Tex(stem + "_n.png");
+        var b = PanelButton(new Rectangle(_questLay.Get("startX", 15), _questLay.Get("startY", 471), art.Width, art.Height),
+            "quest" + stem, action, ButtonKind.Click);
+        b.Add(new Image("ui/" + stem));
+        info.AddChild(b);
+    }
+
+    private void AddGiveUp(GameObject info, int quest)
+    {
+        var art = Tex("quest_giveup_n.png");
+        var b = PanelButton(new Rectangle(_questLay.Get("giveupX", 225), _questLay.Get("giveupY", 519), art.Width, art.Height),
+            "questgiveup", () => AskQuestForfeit(quest), ButtonKind.Click);
+        b.Add(new Image("ui/quest_giveup"));
+        info.AddChild(b);
+    }
+
+    // The official Add to Notifier checkbox: a taken quest can join or leave
+    // the helper. The checked art is the small blue tick over the empty box.
+    private void AddQuestHelperButton(GameObject info, int quest)
+    {
+        var art = Tex("qhelper_add.png");
+        var b = PanelButton(new Rectangle(_questLay.Get("helperX", 17), _questLay.Get("helperY", 524), art.Width, art.Height),
+            "questhelper", () => ToggleQuestHelper(quest), ButtonKind.Click);
+        b.Add(new Picture("ui/qhelper_add.png", 0, 0));
+        if (QuestTracked(quest)) b.Add(new Picture("ui/qhelper_check.png", 0, 0));
+        info.AddChild(b);
+    }
+
+    // The system popup over the quest window: teleport-to-giver for Start,
+    // and a second ask before Forfeit. The two buttons are the official yes
+    // and no art.
+    private GameObject BuildQuestConfirm()
+    {
+        int w = _questLay.Get("confirmW", 318), h = _questLay.Get("confirmH", 143);
+        var box = new Rectangle((QuestW - w) / 2, (QuestH - h) / 2, w, h);
+        var q = _quests[_questConfirmQuest];
+        var lines = _questConfirm == QuestConfirmKind.Start
+            ? new List<string> { $"Will you teleport to {NpcName(q.Npc0)}?", q.Name }
+            : new List<string> { "Forfeit this quest?", q.Name };
+        var o = SysPopUi.Build(box, lines, ConfirmQuest, CloseQuestConfirm, _questLay);
+        o.Modal = true; // the rest of the window waits behind the question
+        return o;
+    }
+
+    // One of the three groups, by state index: 0 Available, 1 In Progress,
+    // 2 Completed. Unknown quest ids stay hidden, like the tracker.
+    private List<int>[] QuestGroups()
+    {
+        var groups = new[] { new List<int>(), new List<int>(), new List<int>() };
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return groups;
+        groups[0] = _quests.Values.Where(q => _questLog.CanAccept(chara, q.QuestId)).Select(q => q.QuestId).OrderBy(id => id).ToList();
+        groups[1] = chara.Quests.Where(id => _quests.ContainsKey(id)).OrderBy(id => id).ToList();
+        groups[2] = chara.QuestsDone.Where(id => _quests.ContainsKey(id)).OrderBy(id => id).ToList();
+        return groups;
+    }
+
+    // The tree rebuild key: the visible rows, the open groups and the pick.
+    private string QuestWindowKey()
+    {
+        var groups = QuestGroups();
+        return $"{_questSel}:{QuestReady(_questSel)}:{QuestTracked(_questSel)}:{_questConfirm}:{_questConfirmQuest}|" +
+               string.Join("", _questGroupOpen.Select(b => b ? "1" : "0")) + "|" +
+               string.Join("/", groups.Select(g => string.Join(",", g)));
+    }
+
+    private void ToggleQuestGroup(int group)
+    {
+        _questGroupOpen[group] = !_questGroupOpen[group];
+        if (!_questGroupOpen[group] && QuestGroups()[group].Contains(_questSel)) _questSel = 0;
+    }
+
+    // The quest is taken and ready to turn in (every kill done). An available
+    // or completed quest has no live state: the take check comes first.
     private bool QuestReady(int qid)
     {
         var c = _save?.Slots[_slot];
-        return c != null && _questLog.State(qid).IsComplete(c);
+        return c != null && c.Quests.Contains(qid) && _questLog.State(qid).IsComplete(c);
     }
 
-    // The list icon: the yellow "!" when the quest is ready to turn in.
-    private void DrawQuestIcon(UiGfx gfx, Rectangle rr, int qid)
+    // The quest row: the name (green when ready) and the level.
+    private (string Name, string Level, Color Ink) QuestRowTextData(int qid)
     {
-        gfx.Sb.Draw(gfx.Tex(QuestReady(qid) ? "ui/quest_icon0.png" : "ui/quest_icon1.png"),
-            new Vector2(rr.X + _questLay.Get("iconX", 4), rr.Y + _questLay.Get("iconY", 2)), Color.White);
-    }
-
-    // The quest row in the list: the name (gold when selected) and the state.
-    private (string Text, Color Ink) QuestRowInk(int qid)
-    {
-        bool done = QuestReady(qid);
-        // The list panel is white: the name needs a dark ink, not white.
-        var ink = qid == _questSel ? new Color(255, 220, 0) : done ? new Color(0, 150, 0) : new Color(45, 50, 60);
-        return ((done ? "? " : "") + _quests[qid].Name, ink);
-    }
-
-    // The row's second line: the first unmet kill, or the turn-in hint.
-    private string QuestRowProgress(int qid)
-    {
-        var c = _save?.Slots[_slot];
-        if (c == null || !_quests.TryGetValue(qid, out var q)) return "";
-        if (QuestReady(qid)) return "Ready to turn in";
-        for (int i = 0; i < q.Kills.Count; i++)
-        {
-            int n = _questLog.KillCount(c, qid, i);
-            if (n < q.Kills[i].Count) return $"{MobName(q.Kills[i].Mob)} {n}/{q.Kills[i].Count}";
-        }
-        return "";
+        bool done = _save?.Slots[_slot]?.QuestsDone.Contains(qid) == true;
+        bool ready = !done && QuestReady(qid);
+        var ink = ready ? new Color(0, 130, 0) : done ? new Color(120, 120, 120) : new Color(45, 50, 60);
+        return ((ready ? "? " : "") + _quests[qid].Name, QuestLevelText(qid), ink);
     }
 
     private string QuestLevelText(int qid)
@@ -186,98 +299,41 @@ public partial class MushTownGame
             : "";
     }
 
-    // The selected quest's detail (null when nothing is selected). It is
-    // built once per change and reused by the header, the gauge and the body.
-    private QuestDetailData? QuestDetail()
+    // The selected quest's detail (null when nothing is selected or the pick
+    // is not in any group). It is built once per change; kill counters ride the
+    // key, so an open panel shows the live numbers.
+    private QuestInfoData? QuestDetail()
     {
-        var c = _save?.Slots[_slot];
-        if (c == null || !_quests.TryGetValue(_questSel, out var sel) || !c.Quests.Contains(_questSel)) return null;
-        // Counters ride the key: a kill under the open panel rebuilds it.
-        string key = _questSel + ":" + string.Join(",", sel.Kills.Select((_, i) => _questLog.KillCount(c, _questSel, i)));
+        var chara = _save?.Slots[_slot];
+        if (chara == null || !_quests.TryGetValue(_questSel, out var sel)) return null;
+        bool taken = chara.Quests.Contains(_questSel);
+        bool done = chara.QuestsDone.Contains(_questSel);
+        if (!taken && !done && !_questLog.CanAccept(chara, _questSel)) return null;
+        string kills = taken ? string.Join(",", sel.Kills.Select((_, i) => _questLog.KillCount(chara, _questSel, i))) : "";
+        string key = $"{_questSel}:{taken}:{done}:{kills}";
         if (key != _questKey)
         {
             _questKey = key;
-            _questLines = _ui.Wrap(QText(sel.Progress), _questLay.Get("bodyW", 268));
-            var kills = new List<(string, bool)>();
-            int have = 0, need = 0;
+            string raw = done ? sel.Done : taken ? sel.Progress : sel.Offer;
+            _questLines = _ui.Wrap(QText(raw,
+                done ? (qid, idx) => _quests.TryGetValue(qid, out var q) && idx >= 0 && idx < q.Kills.Count ? q.Kills[idx].Count : 0 : null),
+                _questLay.Get("infoTextW", 250));
+            var objectives = new List<(string, bool)>();
             for (int i = 0; i < sel.Kills.Count; i++)
             {
-                int n = _questLog.KillCount(c, _questSel, i);
-                have += Math.Min(n, sel.Kills[i].Count);
-                need += sel.Kills[i].Count;
-                kills.Add(($"{MobName(sel.Kills[i].Mob)} {n}/{sel.Kills[i].Count}", n >= sel.Kills[i].Count));
+                int n = done ? sel.Kills[i].Count : taken ? _questLog.KillCount(chara, _questSel, i) : 0;
+                objectives.Add(($"{MobName(sel.Kills[i].Mob)} {n}/{sel.Kills[i].Count}", n >= sel.Kills[i].Count));
             }
-            _questDetail = new QuestDetailData(sel.Name, QuestLevelText(_questSel), _questLines, kills,
-                sel.RewardLines(id => _items[id].Name),
-                sel.NeedItemsToComplete ? "Need items" : $"Turn in: {NpcName(sel.Npc1)}",
-                need > 0 ? have * 100 / need : 0);
+            var rewards = new List<QuestRewardIcon>();
+            if (sel.RewardExp > 0) rewards.Add(new("ui/quest_exp.png", "x" + sel.RewardExp, _questLay.Get("rewardExpDy", 6))); // png has 11 empty rows at the bottom
+            if (sel.RewardMeso > 0) rewards.Add(new("ui/quest_meso.png", "x" + sel.RewardMeso));
+            foreach (var r in sel.RewardItems)
+                rewards.Add(new(_items[r.Item].Image, "x" + r.Count));
+            string footer = done || taken ? "" : $"Talk to {NpcName(sel.Npc0)}";
+            _questDetail = new QuestInfoData(sel.Name, QuestLevelText(_questSel), done ? sel.Npc1 : sel.Npc0,
+                _questLines, objectives, footer, rewards);
         }
         return _questDetail;
-    }
-
-    // The header's progress bar (the official Gauge2 art).
-    private void DrawQuestGauge(UiGfx gfx, Rectangle dr)
-    {
-        var d = QuestDetail();
-        if (d == null) return;
-        int x = dr.X + _questLay.Get("gaugeX", 200), y = dr.Y + _questLay.Get("gaugeY", 64);
-        gfx.Sb.Draw(gfx.Tex("ui/quest_gauge.png"), new Vector2(x, y), Color.White);
-        int w = _questLay.Get("gaugeW", 75) * d.Percent / 100;
-        if (w > 0)
-            gfx.Sb.Draw(gfx.Tex("ui/quest_gauge_fill.png"), new Rectangle(x + _questLay.Get("gaugeInX", 2),
-                y + _questLay.Get("gaugeInY", 2), w, _questLay.Get("gaugeFillH", 4)), Color.White);
-    }
-
-    // The body of the detail panel: the official section titles with the
-    // description, the kills, the reward and the turn-in line. It stops at
-    // the bottom bar, so a long quest does not draw over the buttons.
-    // origin = the window's screen corner: the body is hand drawn.
-    private void DrawQuestBody(UiGfx gfx, Point origin)
-    {
-        var d = QuestDetail();
-        if (d == null) return;
-        int x = origin.X + QuestListW + _questLay.Get("bodyX", 14);
-        int y = origin.Y + _questLay.Get("bodyY", 124);
-        int lh = _questLay.Get("lineH", 16);
-        int bottom = y + _questLay.Get("bodyH", 240);
-        var ink = new Color(45, 50, 60);
-        bool full = false; // the body is full: nothing more is drawn
-        void Art(string key, int gap)
-        {
-            if (full) return;
-            var t = gfx.Tex("ui/" + key);
-            if (y + t.Height > bottom) { full = true; return; }
-            gfx.Sb.Draw(t, new Vector2(x, y), Color.White);
-            y += gap;
-        }
-        void Line(string text, Color color)
-        {
-            if (full) return;
-            if (y + lh > bottom) { full = true; return; }
-            gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(x, y), color);
-            y += lh;
-        }
-        Art("quest_basic.png", _questLay.Get("secGap", 14));
-        foreach (string line in d.Lines) Line(line, ink);
-        y += _questLay.Get("secSpace", 4);
-        Art("quest_prob.png", _questLay.Get("secGap", 14));
-        foreach (var k in d.Kills) Line(k.Text, k.Done ? new Color(0, 130, 0) : ink);
-        y += _questLay.Get("secSpace", 4);
-        Art("quest_reward.png", _questLay.Get("rewardGap", 20));
-        foreach (string line in d.Rewards) Line(line, ink);
-        y += _questLay.Get("secSpace", 4);
-        Line(d.TurnIn, new Color(190, 130, 0));
-    }
-
-    // Quest window: accepted quests on top (click to select), the selected
-    // quest's progress below (objectives with live counts + turn-in).
-    private List<int> QuestRows()
-    {
-        var chara = _save?.Slots[_slot];
-        // Unknown ids (removed custom file, stale save) hide everywhere: the
-        // tracker skips them too, so draw, click, and tracker agree.
-        return chara == null ? new List<int>()
-            : chara.Quests.Where(id => _quests.ContainsKey(id)).OrderBy(id => id).ToList();
     }
 
     // The talk panel (modal): the official dialogue box, the NPC name on

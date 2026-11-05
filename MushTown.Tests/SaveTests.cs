@@ -159,11 +159,13 @@ public class SaveTests
             chara.Quests.Add(90001);
             chara.QuestsDone.Add(90002);
             chara.QuestKills["90001:0"] = 2;
+            chara.QuestHelper.Add(90001);
             store.Save(path);
             var slot = SaveStore.Load(path).Saves[0]!.Slots[0]!;
             Assert.IsTrue(slot.Quests.Contains(90001));
             Assert.IsTrue(slot.QuestsDone.Contains(90002));
             Assert.AreEqual(2, slot.QuestKills["90001:0"]);
+            Assert.IsTrue(slot.QuestHelper.Contains(90001));
         }
         finally
         {

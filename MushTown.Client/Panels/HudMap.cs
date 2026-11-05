@@ -659,25 +659,13 @@ public sealed class WorldMapWindow : UiWindow
         Dirty = true;
     }
 
-    // The official system popup (Basic.img/sysPop): a top cap, a stretchable
-    // middle and a bottom bar that carries the two buttons.
+    // The official system popup: the same box the quest window uses.
     private void AddConfirm(GameObject root)
     {
         int w = Lay.Get("confirmW", 318), h = Lay.Get("confirmH", 143);
         var box = new Rectangle((Rect().Width - w) / 2, (Rect().Height - h) / 2, w, h);
-        var o = new GameObject();
-        o.Add(new Rect(box));
-        o.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
-        o.Add(new SysPopText
-        {
-            Y = Lay.Get("popTextY", 38),
-            Step = Lay.Get("popTextStep", 17),
-            Lines = new List<string> { "Will you teleport to this map?", WorldMapUi.Name(_confirmMapId) },
-        });
-        int by = h - Lay.Get("popBottomH", 59) + Lay.Get("popBtnY", 14);
-        o.AddChild(PopButtonAt("ui/wm_pop_yes", Lay.Get("popYesX", 73), by, Go));
-        o.AddChild(PopButtonAt("ui/wm_pop_no", Lay.Get("popNoX", 162), by, Cancel));
-        root.AddChild(o);
+        root.AddChild(SysPopUi.Build(box,
+            new List<string> { "Will you teleport to this map?", WorldMapUi.Name(_confirmMapId) }, Go, Cancel, Lay));
     }
 
     // A click on the map area: leave the search field, then open the link under
@@ -696,14 +684,6 @@ public sealed class WorldMapWindow : UiWindow
     }
 
 
-    private GameObject PopButtonAt(string stem, int x, int y, Action onClick)
-    {
-        var o = new GameObject();
-        o.Add(new Rect(new Rectangle(x, y, Lay.Get("popBtnW", 83), Lay.Get("popBtnH", 26))));
-        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
-        o.Add(new Image(stem)); // the official button art already carries its label
-        return o;
-    }
     private void Go()
     {
         // Asking to go to the map we stand on would reload it: just close.

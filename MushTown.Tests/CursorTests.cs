@@ -26,6 +26,7 @@ public sealed class CursorTests
     public void Select_HoverBlink()
     {
         Assert.AreEqual(1, CursorAnim.Select("save0", false, true, false));
+        Assert.AreEqual(1, CursorAnim.Select("", false, true, false, hoverWorld: true)); // a world NPC: same hover cursor, no button
     }
 
     [TestMethod]

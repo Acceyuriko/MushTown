@@ -101,6 +101,20 @@ public class SceneTests
         Assert.AreSame(modal, scene.TopAt(5, 5));
     }
 
+    // The HUD asks the scene whether a modal is open before it lets a click
+    // or the NPC hover through. A disabled modal is not in the way.
+    [TestMethod]
+    public void ModalOpen_TracksEnabledModals()
+    {
+        var scene = new Scene();
+        Assert.IsFalse(scene.ModalOpen);
+        var modal = new GameObject { Modal = true };
+        scene.Add(modal);
+        Assert.IsTrue(scene.ModalOpen);
+        modal.Enabled = false;
+        Assert.IsFalse(scene.ModalOpen);
+    }
+
     // The rects a tree holds are local: Layout adds the parents' offsets.
     [TestMethod]
     public void Layout_NestsTheOffsets()

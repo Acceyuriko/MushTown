@@ -8,11 +8,10 @@ namespace MushTown.Exporter;
 // worldmap.json (MushTown.Client/Ui/WorldMap.cs) and loads the pictures by name.
 public static partial class Export
 {
-    // The pictures of the window that are not part of the frame.
-    private static readonly (string Node, string Name)[] WorldMapParts =
+    // The shared system popup (Basic.img/sysPop): the world map confirmation
+    // and the quest teleport/forfeit boxes both draw it.
+    private static readonly (string Node, string Name)[] SysPopParts =
     {
-        ("UIMap.img/WorldMap/mapInfo/layer:mapNameNormal", "wm_info_top"),
-        ("UIMap.img/WorldMap/mapInfo/layer:mapInfoNormal", "wm_info_body"),
         ("Basic.img/sysPop/back/top", "wm_pop_top"),
         ("Basic.img/sysPop/back/mid", "wm_pop_mid"),
         ("Basic.img/sysPop/back/bottom", "wm_pop_bottom"),
@@ -22,12 +21,28 @@ public static partial class Export
         ("Basic.img/sysPop/button/BtNo/normal/0", "wm_pop_no_n"),
         ("Basic.img/sysPop/button/BtNo/mouseOver/0", "wm_pop_no_h"),
         ("Basic.img/sysPop/button/BtNo/pressed/0", "wm_pop_no_p"),
+    };
+
+    // The pictures of the window that are not part of the frame.
+    private static readonly (string Node, string Name)[] WorldMapParts =
+    {
+        ("UIMap.img/WorldMap/mapInfo/layer:mapNameNormal", "wm_info_top"),
+        ("UIMap.img/WorldMap/mapInfo/layer:mapInfoNormal", "wm_info_body"),
         ("UIMap.img/WorldMap/mapInfo/lifeNpc/icon", "wm_life_npc"),
         ("UIMap.img/WorldMap/mapInfo/lifeMob/icon", "wm_life_mob"),
         ("UIMap.img/WorldMap/mapInfo/button:premiumTeleport0/disabled/0", "wm_premium_d"),
         ("UIMap.img/WorldMap/mapInfo/button:teleport/disabled/0", "wm_teleport_d"),
         ("UIMap.img/WorldMap/mapInfo/button:navigationStart/disabled/0", "wm_navi_d"),
     };
+
+    // The popup is shared by the quest window: both panel exports call this,
+    // so a fresh `panel quest` run still has the confirmation art.
+    public static bool ExportSysPop(WzRoot ui, string outDir)
+    {
+        foreach (var (node, name) in SysPopParts)
+            if (!UiPng.Save(ui, "UI", node, Path.Combine(outDir, "ui", $"{name}.png"))) return false;
+        return true;
+    }
 
     // upper, locate and search work; book mark and navigation are drawn
     // disabled, so only their disabled art is exported.
@@ -45,6 +60,7 @@ public static partial class Export
         string dir = Path.Combine(outDir, "ui");
         var (mapCat, mapPre) = MapTree(map);
 
+        if (!ExportSysPop(ui, outDir)) return false;
         foreach (var (node, name) in WorldMapParts)
             if (!UiPng.Save(ui, "UI", node, Path.Combine(dir, $"{name}.png"))) return false;
         foreach (var (node, name, enabled) in WorldMapButtons)

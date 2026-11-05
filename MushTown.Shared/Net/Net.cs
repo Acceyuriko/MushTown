@@ -39,6 +39,8 @@ public static class Net
     public const byte PartyPlayers = 31; // server -> client: int n + n * (int id, string name, int level)
 
     public const byte ExpShare = 32; // server -> client: int exp (a party member's share of a kill)
+    public const byte QuestAbandon = 33; // client -> server: int quest (forfeit intent; server confirms with QuestGone)
+    public const byte QuestGone = 34; // server -> client: int quest (the forfeit landed on the server's copy)
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -137,7 +139,7 @@ public readonly record struct DropEvent(
 
 // One quest event from the server: a confirmed intent (Kill false, Quest +
 // Completed set) or an authoritative kill counter (Kill true, Quest/Index/Count).
-public readonly record struct QuestEvent(bool Kill, int Quest, int Index, int Count, bool Completed);
+public readonly record struct QuestEvent(bool Kill, int Quest, int Index, int Count, bool Completed, bool Abandoned = false);
 
 // One chat line from the server: who said what (the sender name and the
 // text). The server adds the name to every line.

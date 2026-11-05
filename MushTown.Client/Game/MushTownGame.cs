@@ -421,7 +421,7 @@ public partial class MushTownGame : Game
                 {
                     Lines = _npcs[s.NpcId].Says,
                     Mark = mark,
-                    Text = QText,
+                    Text = raw => QText(raw),
                     Lay = _balloonLay,
                     Style = () => _balloonStyles[0],
                     Head = () => NpcHead(a),
@@ -471,7 +471,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -531,6 +531,7 @@ public partial class MushTownGame : Game
             if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
             var escChara = _save?.Slots[_slot];
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
+            if (_showQuest && _questConfirm != QuestConfirmKind.None) { CloseQuestConfirm(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the quest question first
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
             if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the top of the raise row
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
@@ -548,7 +549,7 @@ public partial class MushTownGame : Game
         // Enter starts a chat line: the input row only shows while one is typed.
         // The check sits before the chat block, so the Enter that sends a line
         // cannot open the next one.
-        if (!_chatWindow.Focused && !_worldMapWindow.SearchFocused && !_menuWindow.Show && _talkNpc == 0 && _input.Fresh(Keys.Enter))
+        if (!_chatWindow.Focused && !_worldMapWindow.SearchFocused && !_menuWindow.Show && !_uiScene.ModalOpen && _talkNpc == 0 && _input.Fresh(Keys.Enter))
             _chatWindow.FocusInput(kb);
         if (_chatWindow.Focused)
         {
@@ -560,8 +561,9 @@ public partial class MushTownGame : Game
             _worldMapWindow.UpdateKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
             kb = new KeyboardState();
         }
-        // Talk needs presence: walking out of reach closes the modal.
-        if (_talkNpc != 0 && !_npcArts.Any(a => a.Spawn.NpcId == _talkNpc && InTalkReach(a)))
+        // Talk opened by Space needs presence: walking out of reach closes it.
+        // A mouse-opened dialog has no distance rule and stays.
+        if (_talkNpc != 0 && !_talkByMouse && !_npcArts.Any(a => a.Spawn.NpcId == _talkNpc && InTalkReach(a)))
         {
             _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
             _talkHost.Enabled = false; // the one early layer write: this frame's hover and click run later and would still see the modal
@@ -569,16 +571,21 @@ public partial class MushTownGame : Game
 
         if (RightEdge(ms) && Holding) { ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
         UpdateHud(kb, click, held, mx, my);
-        // The MENU window is modal for the character: while it is open the
-        // character ignores the keys. The key window is not: editing keys
-        // still leaves the saved preset live, so the character keeps acting
-        // (MapleStory does the same), and Save swaps the table at the next
-        // Update. The draft never reaches the live table before Save.
-        bool blocked = _menuWindow.Show;
+        // The MENU window and a confirmation box are modal for the character:
+        // while either is open the character ignores the keys. The key window
+        // is not: editing keys still leaves the saved preset live, so the
+        // character keeps acting (MapleStory does the same), and Save swaps
+        // the table at the next Update. The draft never reaches the live table
+        // before Save.
+        bool blocked = _menuWindow.Show || _uiScene.ModalOpen;
+        // A talk dialog is modal for the mouse but not for the feet: Space-opened
+        // talk must close when the player walks out of reach. Only the other
+        // modals take the movement keys.
+        bool movementBlocked = _menuWindow.Show || (_uiScene.ModalOpen && _talkNpc == 0);
         // Talk runs after the HUD: a same-frame panel key and Talk both fire
         // (the HUD's guards see _talkNpc still 0; a modal window blocks Talk).
-        if (_talkNpc == 0 && !blocked && !Holding && _input.Fresh(HotkeyAction.Talk)) TalkNearest(); // a piece in hand would float over the dialog
-        if (blocked) kb = new KeyboardState();
+        if (_talkNpc == 0 && !blocked && !Holding && !_uiScene.ModalOpen && _input.Fresh(HotkeyAction.Talk)) TalkNearest(); // a piece in hand would float over the dialog; a confirmation box owns the screen
+        if (movementBlocked) kb = new KeyboardState();
         SyncCursorState((float)gameTime.ElapsedGameTime.TotalMilliseconds);
         if (_loadBeat > 0) _loadBeat--;
         _npcSayLayer.Enabled = _loadBeat == 0; // the black beat covers the world: the bubbles hide with it
@@ -1009,11 +1016,12 @@ public partial class MushTownGame : Game
         if (_ui != null) _ui.RefreshFonts(); // null only on the ctor reload, before content loads
         _invPos = new Point(0, 0); _invPlaced = false; _invBuilt = false; // the inventory takes its spot from its own file again
         _statPos = new Point(0, 0); _statPlaced = false; _statBuilt = false; // the stat window takes its spot from its own file again
-        _questPos = new Point(0, 0); _questDragged = false; _questBuilt = false; // the quest window takes its spot from its own file again
+        _questPos = new Point(0, 0); _questDragged = false; _questBuilt = false; _questKey = ""; // the quest window takes its spot from its own file again
         _skillPos = new Point(0, 0); _skillDragged = false; _skillBuilt = false; // the skill window takes its spot from its own file again
         _settingsPos = SettingsLayoutPos(); _settingsBuilt = false;
         _shopPos = new Point(0, 0); _shopPlaced = false; _shopBuilt = false; // the shop window takes its spot from its own file again
-        _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; // a reload mid-drag drops the grab
+        _qhPos = QuestHelperLayoutPos(); _qhBuiltKey = ""; // the quest helper takes its spot from its own file again
+        _dragInv = null; _dragStat = null; _dragSkill = null; _dragQuest = null; _dragSettings = null; _dragShop = null; _qhDrag = null; // a reload mid-drag drops the grab
         foreach (var w in UiWindow.List) { w.Pos = w.LayoutPos(); w.Dirty = true; w.Drag = null; } // the new windows go back to the file spot
         if (_contentLoaded) BuildScreenScene(); // ctor reload skips: no textures yet
         return errors;

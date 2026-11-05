@@ -36,7 +36,7 @@ public sealed class QuestData
     public List<string> Say0 { get; set; } = new(); // accept pages (Say/0/0 + yes/*)
     public List<string> Say1 { get; set; } = new(); // turn-in pages (Say/1/0 + yes/*)
     public string Stop { get; set; } = ""; // Say/1/stop/0 or stop/mob/0 (not done yet)
-    public List<QuestKill> Kills { get; set; } = new(); // Check/1/mob, key order; v1 takes at most 9 (detail block + single-digit #a order)
+    public List<QuestKill> Kills { get; set; } = new(); // Check/1/mob, key order; #a order is a single digit; the detail panel shows 4
     public bool NeedItemsToComplete { get; set; } // Check/1/item non-empty: v1 cannot verify, never completes
     public bool NeedItemsToAccept { get; set; } // Check/0/item non-empty: v1 cannot accept
     public int RewardExp { get; set; } // Act/1/exp (TalkAction grants it through GainExp, like kills)

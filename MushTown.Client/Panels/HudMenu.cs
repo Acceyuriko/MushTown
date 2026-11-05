@@ -253,7 +253,7 @@ public partial class MushTownGame
         bool down = FreshKey(kb, Keys.Down, ref _menuDownWasDown);
         bool tab = FreshKey(kb, Keys.Tab, ref _menuTabWasDown);
         bool enter = FreshKey(kb, Keys.Enter, ref _menuEnterWasDown);
-        if (!_menuWindow.Show || _talkNpc != 0) return; // a talk bubble covers the menu: it owns the keys
+        if (!_menuWindow.Show || _talkNpc != 0 || _uiScene.ModalOpen) return; // a talk bubble or a confirmation box covers the menu: it owns the keys
         if (left) _menuWindow.MoveCursor(-1, 0);
         if (right || tab) _menuWindow.MoveCursor(1, 0);
         if (up) _menuWindow.MoveCursor(0, -1);

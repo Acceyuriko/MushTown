@@ -714,6 +714,48 @@ minArtW = 167（官方 minWidth 185 减左右边框），minArtH = 50（MushTown
 2. `--shot worldmap --map 1000000`：图钉在点数上（Amherst 那一点）。
 3. 手测：点节点出蓝箭头，再点出确认框；向上 chevron 回到 Maple World；点 Maple Island 链接进 Maple Island；拖窗口；关窗。
 
+## 3.13 N6 任务窗（2026-11-04 用户定）
+
+### 素材
+- 左窗 `UI/Quest.img/Main/questList`，420×550，标题 QUEST 烧在图里。
+- 右窗 `UI/Quest.img/Main/questInfo`，322×550，标题 QUEST INFO 烧在图里。
+- 分组条 `questList/bottom/state/0..2`：0=Available、1=In Progress、2=Completed，各 377×27，`opened`/`closed` 两套（字和箭头都烧在图里）。
+- 空状态 `questInfo/layer:empty` 306×485，画在 (8,30)；选中态 `questInfo/layer:selected`。
+- 宽按钮 `questInfo/button:startQuest`（Start）和 `button:endQuest`（Complete），292×36，位置 (15,471)；`button:giveUp`（Forfeit）86×24，位置 (225,519)。
+- 奖励区 `questInfo/summary/reward`：EXP 33×26、金币 32×32 图标；`summary/canvas:detail`="Info"、`canvas:target`="Objective" 各 283×22；`box/layer:boxS` 290×51。
+- 登记到任务助手：`questInfo/helper/layer:helper`（"Add to Notifier" 97×13，位置 (17,524)）和 `helper/check` 13×12。
+- 任务助手行：`Helper/questTitle/button:close` 9×10；行内 `vector:tag` (5,6)、`name` (60,6)、`detail` (19,26)。官方 `canvas:top|mid|bottom` 黑底板不用，文字和 X 直接画在 helper body 上。
+- 确认弹框复用世界地图的 `Basic.img/sysPop`：`wm_pop_top|mid|bottom` 318 宽、`wm_pop_yes|no` 83×26。
+
+### 布局
+- 窗口 742×550，x=312、y=109（居中）；数字全在 `layouts/panel-quest.json`。
+- 左窗：不要 All/Story/Repeat/Guide/Cash tab，不要 Job/Skill/Area/Boss/Content/System/Event 勾选，也不要 "All Quests" 标题。
+- 列表从上到下固定三组：In Progress → Available → Completed。每组条可以点开/收起，默认全开。
+- 行：377×26，名字在左、等级在右；选中行画 `bottom/selected` 367×24。WZ 没有行 hover 图，hover 也用同一张 `bottom/selected`。
+- 右窗：没选任务画 `layer:empty`；选了任务画 `layer:selected`，任务名 (29,70)、等级 (29,88)、NPC 脚踩 (263,108)、NPC 阴影 (242,103)。
+- 任务详情按状态取 `Offer`（可接）/`Progress`（进行中）/`Done`（已完成），`#a` 计数照常渲染。
+- NPC 立绘：复用 `LifeStand` + `IdleArt`，按每帧自己的 origin 画，不导单张 png。NPC 取任务的 Npc0（已完成取 Npc1）。
+- 按钮：可接的任务显示 Start，点了先弹传送确认，传到 Npc0 身边并打开它的 Offer，玩家在 NPC 对话里点 Accept；进行中且完成的任务显示 Complete，点了原地完成；进行中显示 Forfeit，点了弹二次确认。
+- 登记：进行中的任务显示官方 "Add to Notifier" 勾选钮，勾上后该任务进入任务助手；勾掉或助手行右侧 X 都会移除。
+- 奖励：图标和数量横排，格式 `EXP x20`、`meso x10000`；图标用 `summary/reward/icon/exp`、`summary/reward/icon/meso`，数量前加 `x`。
+- 任务助手：只显示已登记的任务；行从上到下排列，名字和进度左对齐，X 在行右端；多行时用 `qhelper_mid` 拉长、`qhelper_bottom` 收尾（参考原版多任务排版，不复制原版 UI）；条顶部可拖动整个助手。
+
+### 交互
+- 鼠标悬停 NPC：光标用按钮悬停那个（`Basic.img/Cursor/1`，`CursorAnim` state 1），不是系统手型。NPC 不在 UI 树里，单独给 `CursorAnim.Select` 加一个 `hoverWorld` 参数，不播 hover 音效。
+- 鼠标点 NPC：`NpcAt` 按当前帧矩形命中，不限距离；点中任何地方都开对话。
+- 空格 Talk：保持原规则，只选最近且在 `TalkDx/TalkDy` 内的 NPC。
+- 鼠标点开的对话要记 `_talkByMouse`，走路离开范围不自动关；空格开的照旧会自动关。
+- 任务窗的传送/放弃确认框复用世界地图 `sysPop` 的盒子、文字和 Yes/No 按钮；Esc 先关确认框。
+
+### 验收
+- `--shot quest` 截图：左三组、右空状态都对；`--shot questpick` 截图：右窗有名字、等级、会动的 NPC、Info、Objective、奖励（横排 `x` 数量）。
+- 进行中的任务显示 Forfeit；点 Forfeit 弹二次确认，确认后任务离开日志、回到 Available；单人 / 多人（服务器确认）都一致。
+- 可接任务点 Start 先弹传送确认，传到 NPC 身边并打开 Offer；在 NPC 对话里点 Accept 后才进入日志。同图传送只移动角色，不重载地图。`--shot questask` 摆这个确认框。
+- 进行中的任务有 "Add to Notifier"；勾选后助手出现该行，行右侧 X 能移除；助手同时显示多条任务时按行排列；按住条顶部能拖动助手。`--shot questforfeit` 摆放弃确认框。
+- 三组都能收起/展开；选中任务再收组会取消选中。
+- 悬停 NPC 是 hover 指针；远距离点 NPC 能对话；空格仍只对近处 NPC 生效。
+- 序列门禁全绿。
+
 ## 4. 分片
 
 工期按每周约 10 小时估。每周一个 commit（用户规矩）；2 周的片第 1 周提交能 build + test 的中间态，第 2 周完成；每片结束停下验收，先 review 后提交。
@@ -883,3 +925,4 @@ minArtW = 167（官方 minWidth 185 减左右边框），minArtH = 50（MushTown
 57. K3 的三条做法（2026-10-30）：①手上的东西存在游戏上，类型就是 `BindTarget?`（`Held`，只装 Ui/Skill，由 `Hold` 的调用方保证），不放键窗里——技能窗和快捷槽都要用它；②拿起不改 draft，只有放下才改，所以 Esc 和右键永远"什么都没变"；③键窗开着时条带画 draft（`SlotTarget` → `DraftOn`），关着时画实时表。第三条是为了"放到槽上立刻能看到"：条带和键盘是同一批键，draft 是它们唯一的真相。draft 没覆盖某个键时（比如 demo 的 D1/D3 绑着药水），条带仍画实时表上的那个道具，tooltip 也跟着图标走。
 58. 道具还不能抓（2026-10-30）：§3.6 第 5 条只做了技能。`Pickable` 只认 `Ui` 和 `Skill` 两种目标，槽里的道具点不动，也没法从背包抓起放到槽上。背包拿起归背包窗那片。
 59. 三个可放区都先问"最上面那个对象是不是我的"（2026-10-30，review 补）：键格和动作池用 `OnKeyWindow`（走父链到窗口的 `Host`），快捷槽用 `Array.IndexOf(_cells, TopAt)`（-1 = 没点到或被盖住）。被别的窗口或面板盖住的点不收，点击归那个窗口——否则开键窗再开技能窗，技能窗底边压在池子上，点那里想放回去会把绑定清掉，而且点击被吞。只挡放下；点一下拿起走 `ClickTree`，本来就落在最上面的对象上。
+60. NPC 对话窗参考图 3（UtilDlgEx 风格：NPC 头像 + 文字 + NEXT/OK）不在 N6 里（2026-11-04 用户定）。N6 只做任务窗，这个对话框等 N6 验收后单开一片。

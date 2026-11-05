@@ -248,28 +248,6 @@ public sealed class BarNumber : Component, IDrawable
     }
 }
 
-// Quest tracker lines (matches DrawTracker). The lines are right aligned:
-// the right edge comes from the layout file.
-public sealed class Tracker : Component, IDrawable
-{
-    private readonly Func<List<string>> _lines;
-    private readonly int _right, _top;
-    public Tracker(Func<List<string>> lines, int right, int top) { _lines = lines; _right = right; _top = top; }
-    public void Draw(UiGfx gfx)
-    {
-        int y = _top;
-        var lines = _lines();
-        for (int i = 0; i < lines.Count; i++) // name/detail pairs: even lines are gold names
-        {
-            var t = gfx.Ui.GetSmall(lines[i]);
-            int x = _right - t.Width;
-            gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 4, y - 2, t.Width + 8, 16), new Color(0, 0, 0, 120));
-            gfx.Sb.Draw(t, new Vector2(x, y), i % 2 == 0 ? new Color(255, 220, 0) : Color.White);
-            y += 16;
-        }
-    }
-}
-
 // Boss HP bar (matches DrawBossBar).
 public sealed class BossBar : Component, IDrawable
 {
@@ -786,6 +764,39 @@ public sealed class ChatScrollBar : Component, IDrawable
     }
 }
 
+// The official system popup (Basic.img/sysPop): a top cap, a stretchable
+// middle and a bottom bar that carries the two buttons. The world map uses it
+// for its teleport question; the quest window uses the same popup for its own.
+public static class SysPopUi
+{
+    public static GameObject Build(Rectangle box, IReadOnlyList<string> lines, Action yes, Action no, PanelLayout lay)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(box));
+        o.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
+        o.Add(new SysPopText
+        {
+            Y = lay.Get("popTextY", 38),
+            Step = lay.Get("popTextStep", 17),
+            MaxWidth = box.Width - lay.Get("popTextPad", 16),
+            Lines = lines,
+        });
+        int by = box.Height - lay.Get("popBottomH", 59) + lay.Get("popBtnY", 14);
+        o.AddChild(ButtonAt("ui/wm_pop_yes", lay.Get("popYesX", 73), by, yes, lay));
+        o.AddChild(ButtonAt("ui/wm_pop_no", lay.Get("popNoX", 162), by, no, lay));
+        return o;
+    }
+
+    private static GameObject ButtonAt(string stem, int x, int y, Action onClick, PanelLayout lay)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(x, y, lay.Get("popBtnW", 83), lay.Get("popBtnH", 26))));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+        o.Add(new Image(stem)); // the official button art already carries its label
+        return o;
+    }
+}
+
 // The lines of the popup, centred on the blue body. The list is built once when
 // the popup opens, so a redraw does not allocate.
 public sealed class SysPopText : Component, IDrawable
@@ -793,6 +804,7 @@ public sealed class SysPopText : Component, IDrawable
     public required IReadOnlyList<string> Lines { get; init; }
     public required int Y { get; init; }
     public required int Step { get; init; }
+    public required int MaxWidth { get; init; }
 
     public void Draw(UiGfx gfx)
     {
@@ -800,7 +812,7 @@ public sealed class SysPopText : Component, IDrawable
         int y = r.Y + Y;
         foreach (string line in Lines)
         {
-            var t = gfx.Ui.GetSmall(line);
+            var t = Text.Fit(gfx, line, MaxWidth);
             gfx.Sb.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, y), Color.White);
             y += Step;
         }

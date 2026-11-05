@@ -4,8 +4,8 @@ using MushTown.Shared;
 namespace MushTown.Tests;
 
 // The quest protocol over loopback: the client syncs its save's state, the
-// server judges intents and kills on its own copy, QuestOk/QuestKill come
-// back. Silence (Sleep + no event) proves the server said no.
+// server judges intents and kills on its own copy, QuestOk/QuestKill/QuestGone
+// come back. Silence (Sleep + no event) proves the server said no.
 [TestClass]
 public sealed class QuestProtocolTests
 {
@@ -60,6 +60,61 @@ public sealed class QuestProtocolTests
         a.SendQuestComplete(Hunt);
         Thread.Sleep(300);
         Assert.IsFalse(a.TryTakeQuest(out _)); // 0/2 kills: silence
+    }
+
+    // A forfeit lands (QuestGone) and drops the server's copy: a repeat is
+    // silent, and the quest can be accepted again.
+    [TestMethod]
+    public void Loopback_Abandon_AckedThenRepeatSilent()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(9);
+        assets.AddQuest(Hunt, Snail, 2);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 53);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 53);
+
+        a.SendQuestSync(Chara(7, Hunt));
+        a.SendQuestAbandon(Hunt);
+        var gone = WaitTakeQuest(a);
+        Assert.IsTrue(gone.Abandoned);
+        Assert.AreEqual(Hunt, gone.Quest);
+
+        a.SendQuestAbandon(Hunt);
+        Thread.Sleep(300);
+        Assert.IsFalse(a.TryTakeQuest(out _)); // already gone: silence
+
+        a.SendQuestAccept(Hunt);
+        var ok = WaitTakeQuest(a);
+        Assert.IsFalse(ok.Kill);
+        Assert.AreEqual(Hunt, ok.Quest);
+        Assert.IsFalse(ok.Completed);
+    }
+
+    // A stale Sync taken before QuestGone still names the forfeited quest.
+    // The server already removed it, so the union must not restore it.
+    [TestMethod]
+    public void Loopback_Abandon_StaleSync_DoesNotRestore()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(9);
+        assets.AddQuest(Hunt, Snail, 2);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 54);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 54);
+
+        a.SendQuestSync(Chara(7, Hunt));
+        a.SendQuestAbandon(Hunt);
+        Assert.IsTrue(WaitTakeQuest(a).Abandoned);
+
+        a.SendQuestSync(Chara(7, Hunt)); // the old snapshot: still taken
+        a.SendQuestAccept(Hunt);
+        var ok = WaitTakeQuest(a);
+        Assert.IsFalse(ok.Kill);
+        Assert.AreEqual(Hunt, ok.Quest);
+        Assert.IsFalse(ok.Completed);
     }
 
     // Two snails, one swing: both kills tick the server's copy (counts 1

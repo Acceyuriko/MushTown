@@ -90,6 +90,10 @@ public sealed class Scene
         return hit != null && AnyModal(_roots) && !InsideModal(hit) ? null : hit;
     }
 
+    // Is any open modal in the tree? TopAt returns null outside it, so the
+    // HUD also needs this to keep a blank click and the NPC hover out.
+    public bool ModalOpen => AnyModal(_roots);
+
     // Fills every Rect.Screen from the tree: one walk, the parent's origin plus
     // the local offset. Hit, hover and draw all read Screen, so a moved window
     // is a moved root, not a rebuilt tree.
