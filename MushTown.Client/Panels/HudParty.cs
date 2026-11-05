@@ -61,7 +61,13 @@ public sealed class PartyWindow : UiWindow
         root.Add(new LiveLabel(() => PartyWorld.MaxMembers.ToString(), wnd.X + _lay.Get("num2X", 103), wnd.Y + _lay.Get("numY", 107), new Color(51, 51, 51)));
         if (_game.PartyMembers.Length == 0)
             root.Add(new Picture("ui/party_none.png", wnd.X + _lay.Get("noneDx", -1), wnd.Y + _lay.Get("noneDy", -1)));
-        root.AddChild(Members());
+        for (int i = 0; i < _game.PartyMembers.Length && i < PartyWorld.MaxMembers; i++)
+        {
+            var row = new GameObject { NoHit = true }; // the rows take no clicks
+            row.Add(new Rect(RowRect(i)));
+            row.Add(new PartyMemberRow(_game.PartyMembers[i], i == 0));
+            root.AddChild(row);
+        }
 
         // the buttons: alone we make a party, in a party we leave or invite
         if (_game.PartyMembers.Length == 0)
@@ -89,28 +95,23 @@ public sealed class PartyWindow : UiWindow
         Host.AddChild(root);
     }
 
-    // The member rows: the official row art, the leader mark, the online
+    // One member row: the official row art, the leader mark, the online
     // mark, the name and the level.
-    private GameObject Members()
+    private sealed class PartyMemberRow : Component, IDrawable
     {
-        var o = new GameObject { NoHit = true };
-        o.Add(new Invoke(DrawMembers));
-        return o;
-    }
+        private readonly PartyMember _member;
+        private readonly bool _leader;
+        public PartyMemberRow(PartyMember member, bool leader) { _member = member; _leader = leader; }
 
-    private void DrawMembers(UiGfx gfx)
-    {
-        var members = _game.PartyMembers;
-        for (int i = 0; i < members.Length && i < PartyWorld.MaxMembers; i++)
+        public void Draw(UiGfx gfx)
         {
-            var r = RowRect(i);
-            r.Offset(ScreenBox().Location);
+            var r = Owner.Get<Rect>()!.Screen;
             gfx.Sb.Draw(gfx.Tex("ui/party_row.png"), new Vector2(r.X, r.Y), Color.White);
-            if (i == 0) // the first member is the leader
+            if (_leader)
                 gfx.Sb.Draw(gfx.Tex("ui/party_leader.png"), new Vector2(r.X + _lay.Get("leaderX", 25), r.Y + _lay.Get("leaderY", 11)), Color.White);
             gfx.Sb.Draw(gfx.Tex("ui/party_online.png"), new Vector2(r.X + _lay.Get("stateX", 10), r.Y + _lay.Get("stateY", 13)), Color.White);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(members[i].Name), new Vector2(r.X + _lay.Get("nameX", 43), r.Y + _lay.Get("nameY", 13)), new Color(51, 51, 51));
-            gfx.Sb.Draw(gfx.Ui.GetSmall(members[i].Level.ToString()), new Vector2(r.X + _lay.Get("levelX", 159), r.Y + _lay.Get("levelY", 13)), new Color(51, 51, 51));
+            gfx.Sb.Draw(gfx.Ui.GetSmall(_member.Name), new Vector2(r.X + _lay.Get("nameX", 43), r.Y + _lay.Get("nameY", 13)), new Color(51, 51, 51));
+            gfx.Sb.Draw(gfx.Ui.GetSmall(_member.Level.ToString()), new Vector2(r.X + _lay.Get("levelX", 159), r.Y + _lay.Get("levelY", 13)), new Color(51, 51, 51));
         }
     }
 }
@@ -160,8 +161,7 @@ public sealed class PartySearchWindow : UiWindow
             var r = RowRect(i);
             var row = new GameObject();
             row.Add(new Rect(r));
-            row.Add(new Picture("ui/party_search_row.png", 0, 0));
-            row.Add(new Invoke(gfx => DrawRow(gfx, row.Get<Rect>()!.Screen, players[n])));
+            row.Add(new PartySearchRow(players[n]));
 
             // the invite button of the row
             var btn = new GameObject();
@@ -177,11 +177,20 @@ public sealed class PartySearchWindow : UiWindow
         Host.AddChild(root);
     }
 
-    // The name and the level of a row: the official spots.
-    private void DrawRow(UiGfx gfx, Rectangle r, PartyMember p)
+    // One search row: the official row art, the name and the level. The
+    // invite button is a child of the same row.
+    private sealed class PartySearchRow : Component, IDrawable
     {
-        gfx.Sb.Draw(gfx.Ui.GetSmall(p.Name), new Vector2(r.X + _lay.Get("searchNameX", 22), r.Y + _lay.Get("searchNameY", 12)), Color.Black);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(p.Level.ToString()), new Vector2(r.X + _lay.Get("searchLevelX", 143), r.Y + _lay.Get("searchLevelY", 12)), Color.Black);
+        private readonly PartyMember _player;
+        public PartySearchRow(PartyMember player) { _player = player; }
+
+        public void Draw(UiGfx gfx)
+        {
+            var r = Owner.Get<Rect>()!.Screen;
+            gfx.Sb.Draw(gfx.Tex("ui/party_search_row.png"), new Vector2(r.X, r.Y), Color.White);
+            gfx.Sb.Draw(gfx.Ui.GetSmall(_player.Name), new Vector2(r.X + _lay.Get("searchNameX", 22), r.Y + _lay.Get("searchNameY", 12)), Color.Black);
+            gfx.Sb.Draw(gfx.Ui.GetSmall(_player.Level.ToString()), new Vector2(r.X + _lay.Get("searchLevelX", 143), r.Y + _lay.Get("searchLevelY", 12)), Color.Black);
+        }
     }
 }
 

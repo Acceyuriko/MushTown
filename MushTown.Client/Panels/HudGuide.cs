@@ -19,11 +19,6 @@ public sealed class GuideWindow : UiWindow
     // Open another tab of the window (the shot mode uses it).
     public void SetTab(int tab) => _tab = tab;
 
-    // The sample entries of the lists: the game has no new content yet.
-    private static readonly string[] FieldNames = { "New Field", "New Quest", "New Field", "New Quest" };
-    private static readonly string[] BossNames = { "New Boss", "New Boss", "New Boss" };
-    private static readonly string[] SpecialNames = { "New Story", "New Growth", "New Contest" };
-
     // The art sizes of the guide window (the official frame is 642x627).
     private const int GuideW = 642, GuideH = 627;
 
@@ -52,7 +47,7 @@ public sealed class GuideWindow : UiWindow
         var root = new GameObject();
         root.Add(new Rect(Rect())); // the window box: the children ride it
         root.Add(new Picture("ui/guide_bg.png"));
-        root.Add(new Invoke(gfx => Draw(gfx, root.Get<Rect>()!.Screen)));
+        root.Add(new GuideBody(this));
         for (int i = 0; i < 3; i++) root.AddChild(Tab(i));
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         root.AddChild(CloseButton()); // the X sits on the title strip: it must be hit first
@@ -94,49 +89,63 @@ public sealed class GuideWindow : UiWindow
         return o;
     }
 
-    // The content of the open tab.
-    private void Draw(UiGfx gfx, Rectangle r)
+    // The body of the guide window: the open tab's list art and its sample
+    // names. It reads the open tab every frame, so switching tabs never
+    // rebuilds the window.
+    private sealed class GuideBody : Component, IDrawable
     {
-        if (_tab == 0) DrawField(gfx, r);
-        else if (_tab == 1) DrawBoss(gfx, r);
-        else DrawSpecial(gfx, r);
-    }
+        private static readonly string[] FieldNames = { "New Field", "New Quest", "New Field", "New Quest" };
+        private static readonly string[] BossNames = { "New Boss", "New Boss", "New Boss" };
+        private static readonly string[] SpecialNames = { "New Story", "New Growth", "New Contest" };
 
-    // The field tab: the list background and the new content icons.
-    private void DrawField(UiGfx gfx, Rectangle r)
-    {
-        gfx.Sb.Draw(gfx.Tex("ui/guide_field.png"), new Vector2(r.X + _lay.Get("fieldX", 19), r.Y + _lay.Get("fieldY", 105)), Color.White);
-        int[] xs = { _lay.Get("item0X", 127), _lay.Get("item1X", 236), _lay.Get("item2X", 323), _lay.Get("item3X", 410) };
-        for (int i = 0; i < FieldNames.Length; i++)
+        private readonly GuideWindow _owner;
+        public GuideBody(GuideWindow owner) { _owner = owner; }
+
+        public void Draw(UiGfx gfx)
         {
-            int x = r.X + xs[i];
-            int y = r.Y + _lay.Get("itemY", 114);
-            gfx.Sb.Draw(gfx.Tex($"ui/guide_item_{i}.png"), new Vector2(x, y), Color.White);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(FieldNames[i]), new Vector2(x, y + _lay.Get("nameDy", 64)), Color.White);
+            var r = Owner.Get<Rect>()!.Screen;
+            int tab = _owner._tab;
+            if (tab == 0) DrawField(gfx, r);
+            else if (tab == 1) DrawBoss(gfx, r);
+            else DrawSpecial(gfx, r);
         }
-    }
 
-    // The boss tab: the list background and the boss names in the slots.
-    private void DrawBoss(UiGfx gfx, Rectangle r)
-    {
-        gfx.Sb.Draw(gfx.Tex("ui/guide_boss.png"), new Vector2(r.X + _lay.Get("listX", 10), r.Y + _lay.Get("listY", 102)), Color.White);
-        for (int i = 0; i < BossNames.Length; i++)
+        // The field tab: the list background and the new content icons.
+        private void DrawField(UiGfx gfx, Rectangle r)
         {
-            int x = r.X + _lay.Get("bossNameX", 45);
-            int y = r.Y + _lay.Get("bossNameY", 142) + i * _lay.Get("bossNameStep", 90);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(BossNames[i]), new Vector2(x, y), Color.White);
+            gfx.Sb.Draw(gfx.Tex("ui/guide_field.png"), new Vector2(r.X + _lay.Get("fieldX", 19), r.Y + _lay.Get("fieldY", 105)), Color.White);
+            int[] xs = { _lay.Get("item0X", 127), _lay.Get("item1X", 236), _lay.Get("item2X", 323), _lay.Get("item3X", 410) };
+            for (int i = 0; i < FieldNames.Length; i++)
+            {
+                int x = r.X + xs[i];
+                int y = r.Y + _lay.Get("itemY", 114);
+                gfx.Sb.Draw(gfx.Tex($"ui/guide_item_{i}.png"), new Vector2(x, y), Color.White);
+                gfx.Sb.Draw(gfx.Ui.GetSmall(FieldNames[i]), new Vector2(x, y + _lay.Get("nameDy", 64)), Color.White);
+            }
         }
-    }
 
-    // The special tab: the list background and the names in the columns.
-    private void DrawSpecial(UiGfx gfx, Rectangle r)
-    {
-        gfx.Sb.Draw(gfx.Tex("ui/guide_special.png"), new Vector2(r.X + _lay.Get("listX", 10), r.Y + _lay.Get("listY", 102)), Color.White);
-        for (int i = 0; i < SpecialNames.Length; i++)
+        // The boss tab: the list background and the boss names in the slots.
+        private void DrawBoss(UiGfx gfx, Rectangle r)
         {
-            int x = r.X + _lay.Get("specialNameX", 40) + i * _lay.Get("specialNameStepX", 143);
-            int y = r.Y + _lay.Get("specialNameY", 177);
-            gfx.Sb.Draw(gfx.Ui.GetSmall(SpecialNames[i]), new Vector2(x, y), Color.White);
+            gfx.Sb.Draw(gfx.Tex("ui/guide_boss.png"), new Vector2(r.X + _lay.Get("listX", 10), r.Y + _lay.Get("listY", 102)), Color.White);
+            for (int i = 0; i < BossNames.Length; i++)
+            {
+                int x = r.X + _lay.Get("bossNameX", 45);
+                int y = r.Y + _lay.Get("bossNameY", 142) + i * _lay.Get("bossNameStep", 90);
+                gfx.Sb.Draw(gfx.Ui.GetSmall(BossNames[i]), new Vector2(x, y), Color.White);
+            }
+        }
+
+        // The special tab: the list background and the names in the columns.
+        private void DrawSpecial(UiGfx gfx, Rectangle r)
+        {
+            gfx.Sb.Draw(gfx.Tex("ui/guide_special.png"), new Vector2(r.X + _lay.Get("listX", 10), r.Y + _lay.Get("listY", 102)), Color.White);
+            for (int i = 0; i < SpecialNames.Length; i++)
+            {
+                int x = r.X + _lay.Get("specialNameX", 40) + i * _lay.Get("specialNameStepX", 143);
+                int y = r.Y + _lay.Get("specialNameY", 177);
+                gfx.Sb.Draw(gfx.Ui.GetSmall(SpecialNames[i]), new Vector2(x, y), Color.White);
+            }
         }
     }
 }

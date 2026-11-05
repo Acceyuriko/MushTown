@@ -191,7 +191,7 @@
    - `Image(stem, on, onSuffix)`（已加，N5 用）：`on` 为真时换成 `stem + onSuffix`，默认后缀 `_p`；预设钮和 Combo Key 钮用它，PRESETS 1/2/3 传 `_c` 画绿勾。
    - 聊天片（N3）：`CaretText`（输入文字 + 光标闪烁）、`ChatLog`（折行复用 `UiText.Wrap`，日志 + 标签 + 滚动）。见 §3.9。
    - 任务片（N6）：`TextLines`（多行文字，每行可不同颜色）。
-   - GUIDE 片（N7）：`ClipPlayer`（序列帧播放，喂 `UiClip`）。
+   - 第一个真正用到序列帧的窗口片：`ClipPlayer`（序列帧播放，喂 `UiClip`）；GUIDE 没有序列帧，N7 没加（§8 第 17 条）。
    - 现有 `Picture / Label / LiveLabel / Bar / Image / Round / Fill / InvSlot` 继续用。
 2. **共享画法**（`Ui/AvatarArt.cs`，**已建**）：`MergeParts` / `DrawAvatar` / `DrawAvatarOnScreen`（把相机压到 0,0 再画，UI 上的娃娃都是屏幕像素）+ `AvatarPreview` 组件（owner 矩形的左上角 = 脚）。创建角色预览已用它；Character Info / Equip 里的娃娃等那个窗加 `dollX/dollY` 布局键再接一行（那时 `AvatarPreview` 才需要 `worn` 参数）。选角格一页 12 个娃娃和石柱/传送门交织，留给 N8。
 3. **专用组件**：只给一个窗口用、又要读那个窗口私有状态的，做成窗口文件里的 private 嵌套类，不做成通用件。例如 `KeyCap` / `ActionCell` / `FilterBox`（HudKeyConfig，N5 的 5 个）、`ChatLog`（HudChat）。
@@ -756,6 +756,22 @@ minArtW = 167（官方 minWidth 185 减左右边框），minArtH = 50（MushTown
 - 悬停 NPC 是 hover 指针；远距离点 NPC 能对话；空格仍只对近处 NPC 生效。
 - 序列门禁全绿。
 
+## 3.14 N7 组队 + GUIDE（2026-11-05）
+
+### 做什么
+- 组队窗：成员行 `PartyMemberRow`、搜索行 `PartySearchRow`，每行一个对象；行内不再用 `Invoke`。
+- GUIDE：正文 `GuideBody` 直接挂在窗口根上，读 `_tab` 每帧画当前页；三个 tab 共用这一个组件。
+- 两个窗口的 `new Invoke` 归零；全仓从 7 降到 4（`HudChat` 1、`MenuSetup` 2、`MenuChars` 1，属 N3/N8）。
+- 行为、像素、布局键不变；没有加 `ClipPlayer`，GUIDE 现在没有序列帧，等第一个真用到的窗口再加（§8 第 17 条）。
+
+### 验收
+- `party` / `partysearch` / `partyask` / `guide` / `guideboss` / `guidespecial` / `guidecard` 七张 `--shot` 与改动前逐字节一致（`logs/n7_before` / `logs/n7_final`）。
+- format、build（0 警告 0 错误）、test（74 + 304）全绿。
+- 手测：成员行、队长标记、在线标记、名字等级；满 6 人邀请钮是灰图；搜索行邀请钮 hover 和点击；GUIDE 三个页签来回切；拖标题条、点 X。
+
+### 审查
+- 独立审查（2026-11-05，自主模式）：无 P0/P1；两条 P2 已处理：三个绘制组件改成窗口内 private 嵌套类；§3.2 的 `ClipPlayer` 说明改成“第一个真正用到序列帧的窗口片”，与本节一致。
+
 ## 4. 分片
 
 工期按每周约 10 小时估。每周一个 commit（用户规矩）；2 周的片第 1 周提交能 build + test 的中间态，第 2 周完成；每片结束停下验收，先 review 后提交。
@@ -789,7 +805,7 @@ minArtW = 167（官方 minWidth 185 减左右边框），minArtH = 50（MushTown
 | N4a (P1) | 小地图（做完了，2026-11-02）。组件化 4 个；窗口尺寸跟每张地图的底图走；三个按钮（大地图 / NPC 列表 / 过滤器）、加减号切布局、拖动标题条、点 X 都能用；右侧 NPC 列表和过滤器面板带 X。详见 §3.11 | 1 周 |
 | N4b (P1) | 大地图（后做）。窗口已经在跑（`--shot worldmap` 能出图，点区域看地图名、拖动、关闭都能用），剩：`HudMap.cs` 里最后那一处 `new Invoke` 归零、按 §3.11 的组件拆法把大地图也拆开、尺寸和位置数字搬进 `layouts/`、和参考实现逐字节对一遍 | 1 周 |
 | N6 (P2) | 任务窗 | 1 周 |
-| N7 (P2) | 组队 + GUIDE | 1.5 周 |
+| N7 (P2) | 组队 + GUIDE。**已做（2026-11-05）**：成员行、搜索行、GUIDE 正文组件化，两个窗口的 `new Invoke` 归零；7 张截图逐字节一致。详见 §3.14 | 1.5 周 |
 | N9 (P1) | 聊天气泡样式：官方 `UI/ChatBalloon.img/0` 九宫 + 尾巴 + 黑字，最多 3 行；用户 2026-10-31 说样式不对，**排在 N3 之后**，具体改哪里开工时确认 | 0.5 周 |
 | N8 (P2) | 选角 + 创建角色 | 2 周 |
 
