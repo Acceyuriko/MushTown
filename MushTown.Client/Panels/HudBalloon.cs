@@ -39,11 +39,19 @@ public partial class MushTownGame
             LoadTexture($"ui/balloon_{style}_arrow.png");
         }
         for (int i = 0; i < 3; i++)
-            _questMarks[i] = LoadJson<QuestMarkData>(Path.Combine(_assetsDir, "ui", $"npc_quest_{i}.json"));
+        {
+            var mark = LoadJson<QuestMarkData>(Path.Combine(_assetsDir, "ui", $"npc_quest_{i}.json"));
+            if (mark.Delays.Count == 0 || mark.Delays.Any(d => d <= 0)
+                || mark.TailX.Count != mark.Delays.Count || mark.TailY.Count != mark.Delays.Count)
+                throw new InvalidDataException($"quest balloon {i}: frame data is stale, re-run export");
+            _questMarks[i] = mark;
+            for (int frame = 0; frame < mark.Delays.Count; frame++)
+                LoadTexture($"ui/npc_quest_{i}_{frame}.png");
+        }
     }
 
-    // Where quest balloon n hangs from: the tail tip inside its own picture.
-    internal Point QuestMarkTail(int icon) => new(_questMarks[icon].TailX, _questMarks[icon].TailY);
+    // The animation of quest balloon n.
+    internal QuestMarkData QuestMark(int icon) => _questMarks[icon];
 
     // The style of the worn chat ring: the first ring wins, 0 is the plain balloon.
     // (*balloonring* shots pose the pink ring, the way *chatmin* poses a fold.)

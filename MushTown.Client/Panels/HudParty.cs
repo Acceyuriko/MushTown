@@ -269,12 +269,12 @@ public sealed class PartyAskWindow : UiWindow
         var yes = new GameObject();
         yes.Add(new Rect(BtnRect(0)));
         yes.Add(new Button { LegacyId = "partyask_yes", Kind = ButtonKind.Click, OnClick = () => _game.PartyAnswer(true) });
-        yes.Add(new TalkButton("talk_dlg_btyes", "", "partyask_yes", () => _game.HoverId, 2));
+        yes.Add(new TalkButton("talk_dlg_btyes", "partyask_yes", () => _game.HoverId));
         root.AddChild(yes);
         var no = new GameObject();
         no.Add(new Rect(BtnRect(1)));
         no.Add(new Button { LegacyId = "partyask_no", Kind = ButtonKind.Click, OnClick = () => _game.PartyAnswer(false) });
-        no.Add(new TalkButton("talk_dlg_btno", "", "partyask_no", () => _game.HoverId, 2));
+        no.Add(new TalkButton("talk_dlg_btno", "partyask_no", () => _game.HoverId));
         root.AddChild(no);
         Host.AddChild(root);
     }

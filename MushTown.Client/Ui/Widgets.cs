@@ -577,12 +577,18 @@ public sealed class LiveTint : Component, IDrawable
 {
     private readonly Func<(string Text, Color Ink)> _row;
     private readonly int _dx, _dy;
-    public LiveTint(Func<(string Text, Color Ink)> row, int dx, int dy) { _row = row; _dx = dx; _dy = dy; }
+    private readonly bool _underline;
+    public LiveTint(Func<(string Text, Color Ink)> row, int dx, int dy, bool underline = false)
+    { _row = row; _dx = dx; _dy = dy; _underline = underline; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Screen;
         var (text, ink) = _row();
-        gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(r.X + _dx, r.Y + _dy), ink);
+        var t = gfx.Ui.GetSmall(text);
+        int x = r.X + _dx, y = r.Y + _dy;
+        gfx.Sb.Draw(t, new Vector2(x, y), ink);
+        if (_underline && gfx.Hovered == Owner)
+            gfx.Sb.Draw(gfx.Pixel, new Rectangle(x, y + gfx.Ui.SmallInk.Top + gfx.Ui.SmallInk.Height + 1, t.Width, 1), ink);
     }
 }
 
@@ -591,7 +597,8 @@ public sealed class TalkBody : Component, IDrawable
 {
     private readonly Func<List<string>> _lines;
     private readonly int _dx, _dy, _step;
-    public TalkBody(Func<List<string>> lines, int dx, int dy, int step) { _lines = lines; _dx = dx; _dy = dy; _step = step; }
+    public TalkBody(Func<List<string>> lines, int dx, int dy, int step)
+    { _lines = lines; _dx = dx; _dy = dy; _step = step; }
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Screen;
@@ -628,20 +635,17 @@ public sealed class TalkFrame : Component, IDrawable
 }
 
 // One dialogue button: the official blank button art (UtilDlgEx
-// BtOK/BtClose/BtYes/BtNo) with the label written on it.
+// BtOK/BtClose/BtYes/BtNo); the official art carries the label.
 public sealed class TalkButton : Component, IDrawable
 {
-    private readonly string _stem, _label, _id;
+    private readonly string _stem, _id;
     private readonly Func<string> _hover;
-    private readonly int _dy;
-    public TalkButton(string stem, string label, string id, Func<string> hover, int dy) { _stem = stem; _label = label; _id = id; _hover = hover; _dy = dy; }
+    public TalkButton(string stem, string id, Func<string> hover) { _stem = stem; _id = id; _hover = hover; }
     public void Draw(UiGfx gfx)
     {
         var b = Owner.Get<Rect>()!.Screen;
         string state = _hover() == _id ? (gfx.Pressed ? "_p.png" : "_h.png") : "_n.png";
         gfx.Sb.Draw(gfx.Tex($"ui/{_stem}{state}"), new Vector2(b.X, b.Y), Color.White);
-        var t = gfx.Ui.GetSmall(_label);
-        gfx.Sb.Draw(t, new Vector2(b.X + (b.Width - t.Width) / 2, b.Y + _dy), Color.Black);
     }
 }
 

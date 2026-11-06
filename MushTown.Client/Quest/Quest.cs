@@ -14,6 +14,7 @@ public partial class MushTownGame
     private readonly Dictionary<int, string> _mobNames = new();
     private int _talkNpc; // talking to (0 = none)
     private int _talkQuest; // quest in offer/turn-in flow (0 = menu)
+    private int _talkReward; // the quest whose reward page is open (0 = none)
     private int _talkPage; // page index within the current page list
     private bool _talkByMouse; // opened by a click: no distance rule, walking away keeps it open
     private int _questSel; // selected quest in the window (0 = none)
@@ -21,6 +22,7 @@ public partial class MushTownGame
     private int _questConfirmQuest; // the quest the popup asks about
     private string _talkKey = "", _questKey = "";
     private List<string> _talkLines = new(), _questLines = new();
+    private bool _talkSpaceWasDown;
 
     // The popup under the quest window: the start travel and the forfeit ask.
     private enum QuestConfirmKind { None, Start, Forfeit }
@@ -101,8 +103,8 @@ public partial class MushTownGame
     // never copies). Talk ends with the map; missing art fails loud, not at draw.
     private void EndTalkAndCheckNpcs()
     {
-        _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
-        _showShop = false; // the shop is NPC-bound too: a new map closes it
+        _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
+        _showShop = false; _shopBuyId = 0; _shopNotice = ""; _shopBuyField.Unfocus(); // the shop is NPC-bound too: a new map closes it
         foreach (var s in _map.Npcs)
             if (!_npcs.ContainsKey(s.NpcId))
                 throw new InvalidDataException($"map {_mapId}: npc art {s.NpcId} not exported");
@@ -181,16 +183,17 @@ public partial class MushTownGame
             var npc = _npcs[_talkNpc];
             return new List<string> { npc.Says.Count > 0 ? npc.Says[0] : npc.Name };
         }
-        bool offer = !chara.Quests.Contains(q.QuestId);
-        if (offer) return q.Say0.Count > 0 ? q.Say0 : new List<string> { q.Offer };
-        if (_questLog.State(q.QuestId).IsComplete(chara)) // turn-in path: taken, so the state exists
+        if (_talkReward != 0)
         {
-            // Turn-in ends with the payout preview (a copy: Say1 is live data).
-            var pages = new List<string>(q.Say1.Count > 0 ? q.Say1 : new List<string> { q.Done });
+            // The payout page after a turn-in: NPC line, blank line, reward list.
             var rewards = q.RewardLines(id => _items[id].Name);
-            if (rewards.Count > 0) pages.Add("Reward:\n" + string.Join("\n", rewards));
-            return pages;
+            string head = q.Done != "" ? q.Done : "Thank you.";
+            return new List<string> { rewards.Count > 0 ? head + "\n\nReward:\n" + string.Join("\n", rewards) : head };
         }
+        bool offer = !chara.Quests.Contains(q.QuestId);
+        if (offer) return q.Say0.Count > 0 ? new List<string>(q.Say0) : new List<string> { q.Offer };
+        if (_questLog.State(q.QuestId).IsComplete(chara)) // turn-in path: taken, so the state exists
+            return q.Say1.Count > 0 ? new List<string>(q.Say1) : new List<string> { q.Done };
         string stop = q.Stop != "" ? q.Stop : "You are not done yet.";
         return new List<string> { stop };
     }
@@ -239,12 +242,63 @@ public partial class MushTownGame
         _frame = 0;
         _talkNpc = npc.NpcId;
         _talkQuest = 0;
+        _talkReward = 0;
         _talkPage = 0;
+        // The talk shots can pose the two quest pages without clicking through them.
+        string shotName = Path.GetFileNameWithoutExtension(_shotPath!);
+        if (_shotScreen == "talk" && shotName.Contains("accept"))
+        {
+            if (!_questLog.CanAccept(chara, 90002))
+                throw new InvalidDataException("talkaccept shot needs quest 90002 to be available");
+            _talkQuest = 90002;
+        }
+        else if (_shotScreen == "talk" && shotName.Contains("yes"))
+        {
+            if (!_questLog.CanAccept(chara, 90002))
+                throw new InvalidDataException("talkyes shot needs quest 90002 to be available");
+            _talkQuest = 90002;
+            _talkPage = TalkPages().Count - 1;
+        }
+        else if (_shotScreen == "talk" && shotName.Contains("complete"))
+        {
+            if (!chara.Quests.Contains(90002) && !_questLog.Accept(chara, 90002))
+                throw new InvalidDataException("talkcomplete shot needs quest 90002 to be available");
+            _talkQuest = 90002;
+            _talkPage = TalkPages().Count - 1;
+        }
+        else if (_shotScreen == "talk" && shotName.Contains("reward"))
+        {
+            if (!chara.Quests.Contains(90002) && !_questLog.Accept(chara, 90002))
+                throw new InvalidDataException("talkreward shot needs quest 90002 to be available");
+            _talkQuest = 90002;
+            CompleteQuest(90002);
+        }
         if (_shotScreen == "shop") // the same call the talk entry makes (non-keepers fail loud)
         {
             if (!NpcHasShop(npc.NpcId))
                 throw new InvalidDataException($"NPC {_shotTalk} keeps no shop");
             OpenShop(npc.NpcId);
+            if (shotName.Contains("invuse"))
+            {
+                _shopInvTab = 1;
+                var rows = ShopBagRows(1);
+                if (rows.Count > 0) _shopInvSelId = rows[0].id;
+            }
+            else if (shotName.Contains("buyback"))
+            {
+                var rows = ShopBagRows(1);
+                if (rows.Count == 0)
+                    throw new InvalidDataException("shopbuyback shot needs a potion in the bag");
+                SellToShop(rows[0].id);
+                _shopTab = 1;
+            }
+            else if (shotName.Contains("buy") && _shopStock.Count > 0)
+            {
+                OpenBuyPopup(_shopStock[0]);
+                _shopBuyField.SetText("3");
+            }
+            if (shotName.Contains("broke"))
+                _shopNotice = "Not enough mesos.\nYou need 5,500 mesos.";
         }
     }
 
@@ -256,8 +310,16 @@ public partial class MushTownGame
     private void OpenShop(int npc)
     {
         _shopStock = _shops[npc].Stock;
-        _shopTab = 0; // the shop opens on the buy tab
-        _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+        _shopTab = 0; // the shop opens on its stock tab
+        _shopInvTab = 0;
+        _shopSelId = _shopStock.Count > 0 ? _shopStock[0] : 0;
+        _shopInvSelId = 0;
+        _shopLastId = 0;
+        _shopLastAt = 0;
+        _shopNotice = "";
+        _shopBuyId = 0;
+        _shopBuilt = false;
+        _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
         _showShop = true;
         RaisePanel(5);
     }
@@ -270,9 +332,15 @@ public partial class MushTownGame
     // the intent: the drain applies it once the server confirms.
     private void TalkAction(string button)
     {
-        if (button == "Bye") { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; return; }
+        if (button == "End Chat" || button == "No" || button == "OK")
+        {
+            _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
+            return;
+        }
+        if (button == "Chat") { _talkQuest = 0; _talkReward = 0; _talkPage = 0; return; }
+        if (button == "Prev") { if (_talkPage > 0) _talkPage--; return; }
         if (button == "Next") { _talkPage++; return; }
-        if (button == "Accept") AcceptQuest(_talkQuest);
+        if (button == "Yes") AcceptQuest(_talkQuest);
         if (button == "Complete") CompleteQuest(_talkQuest);
     }
 
@@ -317,7 +385,7 @@ public partial class MushTownGame
     private void ApplyQuestAccepted(int quest)
     {
         LogEvent($"accepted: {_quests[quest].Name}");
-        _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+        _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
     }
 
     // A turn-in lands: receipt log, payout, EXP, sfx, dialog closes.
@@ -329,7 +397,16 @@ public partial class MushTownGame
         GainExp(_questLog.TurnIn(chara, quest)); // payout lands before the EXP, like before
         PlaySfx("questclear");
         UntrackQuest(quest);
-        _talkNpc = 0; _talkQuest = 0; _talkPage = 0;
+        if (_talkNpc != 0 && _talkQuest == quest)
+        {
+            _talkReward = quest; // keep the dialog open on the reward page
+            _talkPage = 0;
+            _talkKey = "";
+        }
+        else
+        {
+            _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
+        }
         if (_questSel == quest) _questSel = 0; // turned in: drop the stale selection
     }
 

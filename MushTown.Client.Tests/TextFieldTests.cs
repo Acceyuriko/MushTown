@@ -31,6 +31,19 @@ public class TextFieldTests
         Assert.AreEqual("hi", field.Text); // the keys of one frame type in the order the state lists them
     }
 
+    [TestMethod]
+    public void Type_ReplaceOnTypeReplacesTheDefaultOnce()
+    {
+        var field = Focused();
+        field.SetText("1");
+        field.ReplaceOnType = true;
+        field.Read(new KeyboardState(Keys.D5), 16);
+        Assert.AreEqual("5", field.Text);
+        field.Read(new KeyboardState(), 16); // the key comes up
+        field.Read(new KeyboardState(Keys.D2), 16);
+        Assert.AreEqual("52", field.Text);
+    }
+
     // A held key types once, then waits 400 ms and repeats every 40 ms.
     [TestMethod]
     public void Read_RepeatsAHeldKeyAfterTheDelay()
@@ -104,6 +117,22 @@ public class TextFieldTests
         field.Focus(new KeyboardState(Keys.A));
         Hold(field, 1);
         Assert.AreEqual("aa", field.Text);
+    }
+
+    [TestMethod]
+    public void Type_DigitsOnlyAndShortLimit()
+    {
+        var field = Focused();
+        field.DigitsOnly = true;
+        field.Limit = 3;
+        field.Type('a');
+        field.Type('7');
+        field.Type('2');
+        field.Type('9');
+        field.Type('5');
+        Assert.AreEqual("729", field.Text);
+        field.SetText("12345");
+        Assert.AreEqual("123", field.Text);
     }
 
     [TestMethod]

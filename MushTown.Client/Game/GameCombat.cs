@@ -122,7 +122,8 @@ public partial class MushTownGame
         _mover.Y = SceneMath.FootholdY(_mover.Ground, _map.Info.SpawnX);
         ResetMotion();
         SnapCamera();
-        _talkNpc = 0; _talkQuest = 0; _talkPage = 0; // death teleports: no reload on the same map, so end talk here
+        _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0; // death teleports: no reload on the same map, so end talk here
+        _showShop = false; _shopBuyId = 0; _shopNotice = ""; _shopBuyField.Unfocus(); // and the NPC-bound shop
         LogEvent("you died");
     }
 

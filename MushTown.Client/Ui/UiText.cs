@@ -51,6 +51,7 @@ public sealed class UiText : IDisposable
 
     // The cap band of the small font: the rows a row of text is centred on.
     public InkBand SmallInk { get; }
+    public InkBand MesoInk { get; } // the same band for the bold meso font
 
     public UiText(GraphicsDevice gd, string fontsDir)
     {
@@ -82,6 +83,7 @@ public sealed class UiText : IDisposable
         _meso = _mapleBold != null
             ? new Font(_mapleBold, 12, FontStyle.Bold, GraphicsUnit.Pixel)
             : new Font("Arial", 12, FontStyle.Bold, GraphicsUnit.Pixel);
+        MesoInk = MeasureBand(_meso);
         _list = Maple(MenuLayout.ListSize);
         _cancel = Maple(MenuLayout.CancelSize);
         _setupName = Maple(SetupLayout.NameFont);

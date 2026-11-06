@@ -21,6 +21,7 @@ public partial class MushTownGame
 
     // The dialogue box numbers live in layouts/panel-talk.json.
     private static readonly PanelLayout _talkLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-talk.json"));
+    private int _talkTextY = -1; // first text line, centred in the white area
 
     // The quest art (the exporter writes these names).
     private static readonly string[] QuestFiles = BuildQuestFiles();
@@ -52,11 +53,13 @@ public partial class MushTownGame
     // The dialogue box art (UI/UIWindow2.img/UtilDlgEx) and its buttons.
     private static readonly string[] TalkFiles = new[]
     {
-        "talk_dlg_top.png", "talk_dlg_mid.png", "talk_dlg_bottom.png",
+        "talk_dlg_top.png", "talk_dlg_mid.png", "talk_dlg_bottom.png", "talk_dlg_nameplate.png",
         "talk_dlg_btok_n.png", "talk_dlg_btok_h.png", "talk_dlg_btok_p.png",
         "talk_dlg_btclose_n.png", "talk_dlg_btclose_h.png", "talk_dlg_btclose_p.png",
         "talk_dlg_btyes_n.png", "talk_dlg_btyes_h.png", "talk_dlg_btyes_p.png",
         "talk_dlg_btno_n.png", "talk_dlg_btno_h.png", "talk_dlg_btno_p.png",
+        "talk_dlg_btprev_n.png", "talk_dlg_btprev_h.png", "talk_dlg_btprev_p.png",
+        "talk_dlg_btnext_n.png", "talk_dlg_btnext_h.png", "talk_dlg_btnext_p.png",
     };
 
     private bool _questDragged; // the player dragged the window: the file spot does not win
@@ -336,22 +339,47 @@ public partial class MushTownGame
         return _questDetail;
     }
 
-    // The talk panel (modal): the official dialogue box, the NPC name on
-    // the top tab, one page of text, the quest entries under it and the
-    // buttons in the blue bar at the bottom. The height follows the text.
+    // The talk panel (modal): the official portrait-left dialogue box. The
+    // NPC and the grey name plate sit in the visible grey column, the white
+    // column carries the text. Quest entries and the two turn-in choices stay
+    // inside that white column; END CHAT is centred in the blue bar and the
+    // action buttons sit at the bottom-right of the white area.
     private void BuildTalkScene()
     {
         foreach (string f in TalkFiles) LoadTexture("ui/" + f);
         _talkHost.Clear();
-        // The dialogue spot: the body under it is local. The rect is reused, so
-        // a rebuild for another NPC moves the modal box instead of stacking one.
         var box = TalkBox();
         PlaceHost(_talkHost, box.Location, box.Size.X, box.Size.Y);
         var body = new GameObject();
-        body.Add(new Rect(TalkRect())); // no Button: talk swallows every click, like the legacy guard
+        body.Add(new Rect(TalkRect())); // no Button: talk swallows every click
         body.Add(new TalkFrame());
-        body.Add(new Label(_npcs[_talkNpc].Name, _talkLay.Get("nameDx", 14), _talkLay.Get("nameDy", 5)) { Tint = new Color(60, 60, 60) });
-        body.Add(new TalkBody(() => TalkLines(), _talkLay.Get("textDx", 295), _talkLay.Get("textDy", 28), _talkLay.Get("lineStep", 13)));
+
+        var stand = new LifeStand { Game = this, Kind = 0, Id = _talkNpc };
+        int portraitH = TalkPortraitHeight();
+        int plateH = Tex("talk_dlg_nameplate.png").Height;
+        int leftH = portraitH + _talkLay.Get("nameGap", 1) + plateH;
+        int leftTop = _talkLay.Get("leftTop", 13);
+        int leftBottom = box.Height - TalkBottomH + _talkLay.Get("leftBottom", 16);
+        int feetY = leftTop + (leftBottom - leftTop - leftH) / 2 + portraitH;
+        body.Add(new QuestNpcPortrait(stand, _talkLay.Get("npcPortraitX", 76), feetY));
+        var plate = new GameObject { NoHit = true };
+        plate.Add(new Rect(new Rectangle(_talkLay.Get("namePlateX", 24), feetY + _talkLay.Get("nameGap", 1),
+            Tex("talk_dlg_nameplate.png").Width, plateH)));
+        plate.Add(new Picture("ui/talk_dlg_nameplate.png", 0, 0));
+        plate.Add(new Text { Value = () => _npcs[_talkNpc].Name, Ink = Color.White, Align = TextAlign.Center });
+        body.AddChild(plate);
+
+        int step = _talkLay.Get("lineStep", 15);
+        int entryRows = _talkQuest == 0 ? TalkEntries(_talkNpc).Count + (NpcHasShop(_talkNpc) ? 1 : 0) : 0;
+        int choiceRows = _talkQuest != 0 && TalkShowChoices() ? 2 : 0;
+        int contentRows = TalkLines().Count + entryRows + choiceRows;
+        int contentH = contentRows == 0 ? 0 : (contentRows - 1) * step + Ui.SmallInk.Height
+            + (choiceRows > 0 ? 6 : 0);
+        int whiteTop = _talkLay.Get("whiteTop", 15);
+        int whiteBottom = box.Height - TalkBottomH + _talkLay.Get("whiteBottom", 8);
+        _talkTextY = whiteTop + Math.Max(0, (whiteBottom - whiteTop - contentH) / 2);
+        body.Add(new TalkBody(() => TalkLines(), _talkLay.Get("textDx", 155), _talkTextY, step));
+
         if (_talkQuest == 0)
         {
             var entries = TalkEntries(_talkNpc);
@@ -360,22 +388,31 @@ public partial class MushTownGame
                 int r = i; // for-loop variables capture shared: copy per row
                 int q = entries[r].quest;
                 bool offer = entries[r].offer;
-                var eb = PanelButton(TalkEntryRect(r), "talkentry" + r, () => { _talkQuest = entries[r].quest; _talkPage = 0; }, ButtonKind.Click);
+                var eb = PanelButton(TalkEntryRect(r), "talkentry" + r, () => { _talkQuest = entries[r].quest; _talkReward = 0; _talkPage = 0; }, ButtonKind.Click);
                 eb.Add(new LiveTint(() =>
                 {
                     var c = _save?.Slots[_slot];
                     bool ready = !offer && c != null && _questLog.State(q).IsComplete(c);
-                    var ink = offer || ready ? new Color(150, 90, 0) : new Color(60, 60, 60);
                     string mark = offer ? "! " : ready ? "? " : "";
-                    return (mark + _quests[q].Name, ink);
-                }, 0, 0));
+                    return (mark + _quests[q].Name, new Color(47, 109, 181));
+                }, 0, 0, true));
                 body.AddChild(eb);
             }
             if (NpcHasShop(_talkNpc))
             {
                 var sb = PanelButton(TalkEntryRect(entries.Count), "talkshop", () => OpenShop(_talkNpc), ButtonKind.Click);
-                sb.Add(new Label("Shop", 0, 0) { Tint = new Color(150, 90, 0) });
+                sb.Add(new LiveTint(() => ("Shop", new Color(47, 109, 181)), 0, 0, true));
                 body.AddChild(sb);
+            }
+        }
+        else if (TalkShowChoices())
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                int r = i; // for-loop variables capture shared: copy per row
+                var cb = PanelButton(TalkChoiceRect(r), "talkchoice" + r, () => TalkAction(r == 0 ? "Complete" : "Chat"), ButtonKind.Click);
+                cb.Add(new LiveTint(() => (r == 0 ? "Complete quest" : "Normal chat", new Color(47, 109, 181)), 0, 0, true));
+                body.AddChild(cb);
             }
         }
         var buttons = TalkButtons();
@@ -383,88 +420,144 @@ public partial class MushTownGame
         {
             int r = i; // for-loop variables capture shared: copy per row
             var bb = PanelButton(TalkBtnRect(r, buttons.Count), "talkbtn" + r, () => TalkAction(buttons[r]), ButtonKind.Click);
-            bb.Add(new TalkButton(TalkBtnArt(buttons[r]), buttons[r], "talkbtn" + r, () => _hoverId, _talkLay.Get("btnTextDy", 2)));
+            bb.Add(new TalkButton(TalkBtnArt(buttons[r]), "talkbtn" + r, () => _hoverId));
             body.AddChild(bb);
         }
         _talkHost.AddChild(body);
     }
 
-    // The official dialogue buttons: the art is blank, the label is ours.
+    // The official dialogue buttons already carry their labels.
     private static string TalkBtnArt(string label) => label switch
     {
-        "Accept" => "talk_dlg_btyes",
-        "Complete" => "talk_dlg_btclose",
-        "Next" => "talk_dlg_btok",
-        _ => "talk_dlg_btno",
+        "End Chat" => "talk_dlg_btclose",
+        "Prev" => "talk_dlg_btprev",
+        "Next" => "talk_dlg_btnext",
+        "Yes" => "talk_dlg_btyes",
+        "No" => "talk_dlg_btno",
+        _ => "talk_dlg_btok",
     };
 
-    // The button width follows the official art (40, 91 and 57 wide).
+    // The button width follows the official art (40, 57 and 91 wide).
     private static int TalkBtnWidth(string label) => label switch
     {
-        "Complete" => 91,
-        "Next" => 40,
-        _ => 57,
+        "End Chat" => 91,
+        "Yes" or "No" => 57,
+        _ => 40,
     };
 
-    // The dialogue box on the screen: the top piece, the text rows and the
-    // bottom piece. The body inside it is local.
+    // The dialogue box on the screen: top cap + text / entries / choices +
+    // bottom bar. minH keeps the portrait and name plate in their grey column.
     private Rectangle TalkBox()
     {
-        int rows = TalkLines().Count + (_talkQuest == 0 ? TalkEntries(_talkNpc).Count : 0)
-            + (_talkQuest == 0 && NpcHasShop(_talkNpc) ? 1 : 0); // the Shop row in menu mode
-        int h = TalkTopH + rows * _talkLay.Get("lineStep", 13) + TalkBottomH;
+        int lines = TalkLines().Count;
+        int entries = _talkQuest == 0 ? TalkEntries(_talkNpc).Count + (NpcHasShop(_talkNpc) ? 1 : 0) : 0;
+        int step = _talkLay.Get("lineStep", 15);
+        int choices = TalkShowChoices() ? 2 * step + 8 : 12;
+        int contentRows = lines + entries + (TalkShowChoices() ? 2 : 0);
+        int whiteTop = _talkLay.Get("whiteTop", 15);
+        int contentH = contentRows == 0 ? 0 : (contentRows - 1) * step + Ui.SmallInk.Height;
+        int h = TalkTopH + _talkLay.Get("textDy", 36) + (lines + entries) * step
+            + choices + TalkBottomH;
+        h = Math.Max(h, whiteTop + contentH + (TalkShowChoices() ? 8 : 0)
+            + TalkBottomH - _talkLay.Get("whiteBottom", 8));
+        int leftH = TalkPortraitHeight() + _talkLay.Get("nameGap", 1) + Tex("talk_dlg_nameplate.png").Height;
+        h = Math.Max(h, TalkTopH + TalkBottomH + leftH + 4);
+        h = Math.Max(h, _talkLay.Get("minH", 170));
         return new Rectangle((MushTownGame.GameWidth - TalkW) / 2, _talkLay.Get("centerY", 340) - h / 2, TalkW, h);
     }
 
-    // The dialogue box inside the talk root.
+    // The first frame of the NPC stand art: enough to size the left column.
+    private int TalkPortraitHeight()
+    {
+        string image = $"npc/{_talkNpc}.png";
+        LoadTexture(image);
+        return _textures[image].Height;
+    }
+
     private Rectangle TalkRect() => new(0, 0, TalkW, TalkBox().Height);
 
     private List<string> TalkLines()
     {
-        // Counters ride the key: a kill under the open modal re-renders #a.
         var chara = _save?.Slots[_slot];
         var quest = _quests.GetValueOrDefault(_talkQuest);
         string kills = quest == null || chara == null ? ""
             : string.Join(",", quest.Kills.Select((_, i) => _questLog.KillCount(chara, _talkQuest, i)));
-        string key = $"{_talkNpc}:{_talkQuest}:{_talkPage}:{kills}";
+        string key = $"{_talkNpc}:{_talkQuest}:{_talkReward}:{_talkPage}:{_talkLay.Get("textW", 342)}:{kills}";
         if (key != _talkKey)
         {
             _talkKey = key;
-            _talkLines = _ui.Wrap(QText(TalkPages()[_talkPage]), _talkLay.Get("textW", 208));
+            _talkLines = _ui.Wrap(QText(TalkPages()[_talkPage]), _talkLay.Get("textW", 342));
         }
         return _talkLines;
     }
 
     private List<string> TalkButtons()
     {
+        if (_talkReward != 0) return new List<string> { "End Chat", "OK" };
         var q = _quests.GetValueOrDefault(_talkQuest);
-        if (q == null) return new List<string> { "Bye" };
-        var chara = _save?.Slots[_slot]!; // quest mode needs an entry click, which needs a chara
+        var chara = _save?.Slots[_slot];
+        if (q == null || chara == null) return new List<string> { "End Chat" };
         bool last = _talkPage >= TalkPages().Count - 1;
-        bool offer = !chara.Quests.Contains(q.QuestId);
-        if (offer) return last ? new List<string> { "Accept", "Bye" } : new List<string> { "Next", "Bye" };
-        if (_questLog.State(q.QuestId).IsComplete(chara)) return last ? new List<string> { "Complete", "Bye" } : new List<string> { "Next", "Bye" };
-        return new List<string> { "Bye" };
+        bool offer = !chara.Quests.Contains(q.QuestId) && !chara.QuestsDone.Contains(q.QuestId);
+        if (offer)
+            return last
+                ? new List<string> { "End Chat", "No", "Yes" } // Yes/No answers: no PREV
+                : _talkPage > 0 ? new List<string> { "End Chat", "Prev", "Next" } : new List<string> { "End Chat", "Next" };
+        bool complete = _questLog.State(q.QuestId).IsComplete(chara);
+        if (!complete) return new List<string> { "End Chat" };
+        return last
+            ? _talkPage > 0 ? new List<string> { "End Chat", "Prev" } : new List<string> { "End Chat" }
+            : _talkPage > 0 ? new List<string> { "End Chat", "Prev", "Next" } : new List<string> { "End Chat", "Next" };
+    }
+
+    // The turn-in choice rows: only on the last page of a ready turn-in.
+    private bool TalkShowChoices()
+    {
+        if (_talkReward != 0) return false;
+        var q = _quests.GetValueOrDefault(_talkQuest);
+        var chara = _save?.Slots[_slot];
+        if (q == null || chara == null || !chara.Quests.Contains(q.QuestId)) return false;
+        return _questLog.State(q.QuestId).IsComplete(chara) && _talkPage >= TalkPages().Count - 1;
+    }
+
+    private Rectangle TalkChoiceRect(int i)
+    {
+        var r = TalkRect();
+        int step = _talkLay.Get("lineStep", 15);
+        int top = r.Y + TalkTextTop() + TalkLines().Count * step + 6;
+        int maxTop = r.Bottom - TalkBottomH - 2 * step - 6;
+        top = Math.Min(top, maxTop);
+        return new Rectangle(r.X + _talkLay.Get("textDx", 155),
+            top + i * step, _talkLay.Get("textW", 342), step);
     }
 
     private Rectangle TalkBtnRect(int i, int n)
     {
         var r = TalkRect();
         var buttons = TalkButtons();
-        int gap = _talkLay.Get("btnGap", 8);
+        if (buttons[i] == "End Chat")
+            return new Rectangle(r.X + _talkLay.Get("endX", 24),
+                r.Bottom - TalkBtnH - _talkLay.Get("btnY", 7), TalkBtnWidth("End Chat"), TalkBtnH);
+        int gap = _talkLay.Get("actionGap", 8);
         int total = 0;
-        for (int k = 0; k < n; k++) total += TalkBtnWidth(buttons[k]) + gap;
+        for (int k = 1; k < n; k++) total += TalkBtnWidth(buttons[k]) + gap;
         total -= gap;
-        int x = r.X + (r.Width - total) / 2;
-        for (int k = 0; k < i; k++) x += TalkBtnWidth(buttons[k]) + gap;
-        return new Rectangle(x, r.Bottom - TalkBtnH - _talkLay.Get("btnY", 10), TalkBtnWidth(buttons[i]), TalkBtnH);
+        int whiteRight = r.Right - _talkLay.Get("whiteRight", 10);
+        int x = whiteRight - _talkLay.Get("actionRight", 8) - total;
+        for (int k = 1; k < i; k++) x += TalkBtnWidth(buttons[k]) + gap;
+        int actionBottom = r.Bottom - TalkBottomH + _talkLay.Get("actionBottom", 16);
+        return new Rectangle(x, actionBottom - _talkLay.Get("actionY", 8) - TalkBtnH,
+            TalkBtnWidth(buttons[i]), TalkBtnH);
     }
 
     private Rectangle TalkEntryRect(int i)
     {
         var r = TalkRect();
-        int step = _talkLay.Get("lineStep", 13);
-        int y = r.Y + _talkLay.Get("textDy", 28) + TalkLines().Count * step + i * step;
-        return new Rectangle(r.X + _talkLay.Get("entryDx", 16), y, _talkLay.Get("entryW", 240), step);
+        int step = _talkLay.Get("lineStep", 15);
+        int y = r.Y + TalkTextTop() + TalkLines().Count * step + i * step;
+        return new Rectangle(r.X + _talkLay.Get("entryDx", 155), y,
+            _talkLay.Get("entryW", 342), step);
     }
+
+    private int TalkTextTop() => _talkTextY >= 0 ? _talkTextY : _talkLay.Get("textDy", 36);
 }

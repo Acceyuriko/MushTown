@@ -92,12 +92,28 @@ public static partial class Export
 
         // The balloons an NPC wears instead of talking: 0 = a quest to take,
         // 1 = a quest under way, 2 = a quest to hand in (UIWindow2.img/QuestIcon).
+        // Every state is an animation: keep every frame and its own delay/tail.
         for (int i = 0; i < 3; i++)
         {
-            if (!UiPng.Save(ui, $"UIWindow2.img/QuestIcon/{i}/0", Path.Combine(dir, $"npc_quest_{i}.png"))) return false;
-            if (!UiPng.TryRead(ui, "UI", $"UIWindow2.img/QuestIcon/{i}/0", out var icon, out _) || icon == null) return false;
-            WriteJson(Path.Combine(dir, $"npc_quest_{i}.json"), MeasureTail(icon));
-
+            var data = new QuestMarkData();
+            for (int frame = 0; ; frame++)
+            {
+                string path = $"UIWindow2.img/QuestIcon/{i}/{frame}";
+                var node = UiPng.Node(ui, path);
+                if (node == null) break;
+                if (!UiPng.Save(ui, path, Path.Combine(dir, $"npc_quest_{i}_{frame}.png"))) return false;
+                if (!UiPng.TryRead(ui, "UI", path, out var icon, out _) || icon == null) return false;
+                data.Delays.Add(Int(node, "delay", 150));
+                var tail = MeasureTail(icon);
+                data.TailX.Add(tail.TailX);
+                data.TailY.Add(tail.TailY);
+            }
+            if (data.Delays.Count == 0)
+            {
+                Console.WriteLine($"quest balloon {i}: no frames");
+                return false;
+            }
+            WriteJson(Path.Combine(dir, $"npc_quest_{i}.json"), data);
         }
 
         Console.WriteLine($"chat ui: frame, folded frame, 2 tabs, input bar, chevron, {BalloonStyles.Length} speech balloons, 3 NPC quest balloons");
@@ -106,7 +122,7 @@ public static partial class Export
 
     // Where the tail tip of a quest balloon sits in its own picture: the middle
     // of its lowest drawn row. The WZ origin is the picture centre, not the tail.
-    private static QuestMarkData MeasureTail(Wz_Png png)
+    private static (int TailX, int TailY) MeasureTail(Wz_Png png)
     {
         using var bmp = png.ExtractPng();
         int bottom = -1, left = int.MaxValue, right = -1;
@@ -115,7 +131,7 @@ public static partial class Export
                 if (bmp.GetPixel(x, y).A > 40) bottom = y;
         for (int x = 0; x < bmp.Width; x++)
             if (bmp.GetPixel(x, bottom).A > 40) { left = Math.Min(left, x); right = Math.Max(right, x); }
-        return new QuestMarkData { TailX = (left + right) / 2, TailY = bottom };
+        return ((left + right) / 2, bottom);
     }
     // The NPC talk art: the quest helper list window (UI/Quest.img/Helper),
     // the dialogue frame the client uses for its text boxes
@@ -214,6 +230,7 @@ public static partial class Export
         if (!UiPng.Save(ui, "UIWindow2.img/UtilDlgEx/notice", Path.Combine(dir, "talk_dlg_textarea.png"))) return false;
         if (!UiPng.Save(ui, "UIWindow2.img/UtilDlgEx/line", Path.Combine(dir, "talk_dlg_scrollline.png"))) return false;
         if (!UiPng.Save(ui, "UIWindow2.img/UtilDlgEx/bar", Path.Combine(dir, "talk_dlg_scrollbar.png"))) return false;
+        if (!UiPng.Save(ui, "UIWindow2.img/UtilDlgEx/bar", Path.Combine(dir, "talk_dlg_nameplate.png"))) return false;
         foreach (var (node, name) in new[] { ("dot0", "talk_dlg_dot0"), ("dot1", "talk_dlg_dot1") })
             if (!UiPng.Save(ui, $"UIWindow2.img/UtilDlgEx/{node}", Path.Combine(dir, $"{name}.png"))) return false;
 
@@ -224,6 +241,8 @@ public static partial class Export
             ("BtClose", "talk_dlg_btclose"),
             ("BtYes", "talk_dlg_btyes"),
             ("BtNo", "talk_dlg_btno"),
+            ("BtPrev", "talk_dlg_btprev"),
+            ("BtNext", "talk_dlg_btnext"),
         })
             foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
                 if (!UiPng.Save(ui, $"UIWindow2.img/UtilDlgEx/{node}/{state}/0", Path.Combine(dir, $"{name}_{suffix}.png"))) return false;

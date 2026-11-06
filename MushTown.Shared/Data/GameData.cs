@@ -389,12 +389,13 @@ public sealed class BalloonStyleData
     public int Color { get; set; } // the text color (ARGB)
 }
 
-// Where a quest balloon hangs from: the tail tip inside its own picture
-// (assets/ui/npc_quest_<n>.json). The WZ origin is the centre, not the tail.
+// One quest balloon animation (assets/ui/npc_quest_<n>.json): one delay and
+// one tail tip per frame. The WZ origin is the centre, not the tail.
 public sealed class QuestMarkData
 {
-    public int TailX { get; set; }
-    public int TailY { get; set; }
+    public List<int> Delays { get; set; } = new();
+    public List<int> TailX { get; set; } = new();
+    public List<int> TailY { get; set; } = new();
 }
 // Exported name tag plate: assets/ui/tag/ring{node}.json + ring{node}_{w,c,e}.png.
 // A 3-slice bar (UI NameTag.img node): origins anchor each canvas (draw pos =

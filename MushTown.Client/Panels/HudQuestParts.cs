@@ -10,13 +10,15 @@ public sealed class QuestRowArt : Component, IDrawable
 {
     private readonly Func<bool> _selected;
     private readonly int _selX, _selY;
-    public QuestRowArt(Func<bool> selected, int selX, int selY) { _selected = selected; _selX = selX; _selY = selY; }
+    public QuestRowArt(Func<bool> selected, int selX, int selY)
+    { _selected = selected; _selX = selX; _selY = selY; }
 
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Screen;
-        if (_selected() || gfx.Hovered == Owner)
-            gfx.Sb.Draw(gfx.Tex("ui/quest_row_sel.png"), new Vector2(r.X + _selX, r.Y + _selY), Color.White);
+        if (!_selected() && gfx.Hovered != Owner) return;
+        var art = gfx.Tex("ui/quest_row_sel.png");
+        gfx.Sb.Draw(art, new Vector2(r.X + _selX, r.Y + _selY), Color.White);
     }
 }
 

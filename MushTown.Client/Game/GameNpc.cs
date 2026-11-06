@@ -57,6 +57,7 @@ public partial class MushTownGame
     {
         _talkNpc = npcId;
         _talkQuest = 0;
+        _talkReward = 0;
         _talkPage = 0;
         _talkByMouse = byMouse;
         PlaySfx("click");

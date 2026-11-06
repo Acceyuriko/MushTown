@@ -11,7 +11,7 @@ public sealed class NpcQuestMark : Component, IDrawable
     public required Func<int> Icon; // the quest state of this NPC
     public required Func<Point> Head; // the NPC's head on the screen
     public required PanelLayout Lay;  // layouts/panel-balloon.json
-    public required Func<int, Point> Tail; // the tail tip of icon n in its own picture
+    public required Func<int, QuestMarkData> Data; // the animation of icon n
 
     public bool Showing => Icon() >= 0;
 
@@ -19,11 +19,13 @@ public sealed class NpcQuestMark : Component, IDrawable
     {
         int icon = Icon();
         if (icon < 0) return;
-        var art = gfx.Tex($"ui/npc_quest_{icon}.png");
+        var data = Data(icon);
+        int scale = Math.Max(1, Lay.Get("npcMarkDelayScale", 1));
+        int frame = Idle.At(data.Delays, gfx.Time / scale); // the delays add up and loop
+        var art = gfx.Tex($"ui/npc_quest_{icon}_{frame}.png");
         var head = Head();
-        var tail = Tail(icon);
-        int x = head.X - tail.X; // the tail points at the middle of the head
-        int y = head.Y - tail.Y - Lay.Get("npcMarkAbove", 2);
+        int x = head.X - data.TailX[frame]; // the tail points at the middle of the head
+        int y = head.Y - data.TailY[frame] - Lay.Get("npcMarkAbove", 2);
         gfx.Sb.Draw(art, new Vector2(x, y), Color.White);
     }
 }

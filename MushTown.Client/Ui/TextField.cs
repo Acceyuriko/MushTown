@@ -11,8 +11,8 @@ public enum FieldKey { None, Submit, Leave }
 // A typed line: the text, the blinking caret and the key repeat. The window
 // owns it and hands it the keys while it has the focus; the box it draws in is
 // the owner's rect. The caret numbers come from the panel layout (caretDx = the
-// gap from the end of the text, caretDy = the top of the box, caretW/caretH =
-// the size), so the chat and the world map search keep their own spots.
+// gap from the end of the text, caretW/caretH = the size); its top is the middle
+// of the field, so every input puts the caret on the same line.
 public sealed class TextField : Component, IDrawable
 {
     private const int MaxChars = 100; // the typed text stops here
@@ -23,6 +23,9 @@ public sealed class TextField : Component, IDrawable
 
     private readonly PanelLayout _lay;
     private readonly HashSet<Keys> _down = new(); // the keys of the last frame: a held key is not a new press
+    public bool DigitsOnly; // the shop quantity accepts digits only
+    public bool ReplaceOnType; // the next typed character replaces the whole line
+    public int Limit = MaxChars;
     private string _text = "";
     private Keys _repeatKey = Keys.None; // the key the repeat is counting
     private float _repeatMs;             // how long it has been held
@@ -38,8 +41,12 @@ public sealed class TextField : Component, IDrawable
 
     public void Type(char c)
     {
-        if (_text.Length < MaxChars) _text += c;
+        if (DigitsOnly && !char.IsDigit(c)) return;
+        if (ReplaceOnType) { _text = ""; ReplaceOnType = false; }
+        if (_text.Length < Limit) _text += c;
     }
+
+    public void SetText(string text) => _text = text.Length <= Limit ? text : text[..Limit];
 
     private void Backspace()
     {
@@ -117,8 +124,9 @@ public sealed class TextField : Component, IDrawable
             gfx.Sb.Draw(t, new Rectangle(box.X, box.Y + (box.Height - t.Height) / 2, w, t.Height),
                 new Rectangle(t.Width - w, 0, w, t.Height), Ink);
         if (!Focused || (int)(gfx.Time / BlinkMs) % 2 == 1) return;
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(box.X + w + _lay.Get("caretDx", 1), box.Y + _lay.Get("caretDy", 6),
-            _lay.Get("caretW", 1), _lay.Get("caretH", 12)), Ink);
+        int caretH = _lay.Get("caretH", 12);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(box.X + w + _lay.Get("caretDx", 1),
+            box.Y + (box.Height - caretH) / 2, _lay.Get("caretW", 1), caretH), Ink);
     }
 
     // The typed character for a key (letters, digits, space, the usual marks).

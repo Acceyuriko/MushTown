@@ -48,11 +48,9 @@ public partial class MushTownGame
     private readonly GameObject _talkHost = new() { Modal = true, Z = TalkZ }; // the NPC dialog: one root carries the modal flag
     private bool _invBuilt, _statBuilt, _skillBuilt, _questBuilt, _settingsBuilt, _shopBuilt; // built at least once
     private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow tab flips (bag counts are static)
-    private int _shopBuiltTab = -1; // the shop tab in the drawn scene
     private string _questBuiltKey = "";
-    private List<int> _shopBuiltStock = new();
-    private List<(int id, int count)> _shopBuiltSells = new();
-    private int _talkBuiltNpc, _talkBuiltQuest, _talkBuiltPage;
+    private int _talkBuiltNpc, _talkBuiltQuest, _talkBuiltPage, _talkBuiltLines;
+    private bool _talkBuiltChoices;
     private string _talkBuiltButtons = "", _talkBuiltEntries = "";
     private UiGfx _gfx = null!;
     private bool _contentLoaded; // the scene build needs textures (popup height reads them)
@@ -238,7 +236,7 @@ public partial class MushTownGame
             case 2: CloseSkillWindow(); break;
             case 3: _showQuest = false; _dragQuest = null; break;
             case 4: CloseSettings(); break; // the one close path for the options window
-            case 5: _showShop = false; _dragShop = null; break;
+            case 5: _showShop = false; _dragShop = null; _shopBuyId = 0; _shopNotice = ""; _shopBuyField.Unfocus(); break;
         }
     }
 
@@ -481,16 +479,29 @@ public partial class MushTownGame
         if (!_settingsBuilt) { BuildSettingsScene(); _settingsBuilt = true; }
         if (_showShop && _shopStock != null)
         {
-            var sells = ShopSellRows();
-            if (!_shopBuilt || !ReferenceEquals(_shopStock, _shopBuiltStock) || !sells.SequenceEqual(_shopBuiltSells) || _shopTab != _shopBuiltTab)
-            { BuildShopScene(sells); _shopBuilt = true; _shopBuiltStock = _shopStock; _shopBuiltSells = sells; _shopBuiltTab = _shopTab; }
+            string key = ShopSceneKey();
+            if (!_shopBuilt || key != _shopBuiltKey)
+            {
+                BuildShopScene();
+                _shopBuilt = true;
+                _shopBuiltKey = key;
+            }
         }
         if (_talkNpc != 0) // gated: TalkButtons needs an open talk (same exposure as the legacy chain)
         {
             string buttons = string.Join(",", TalkButtons());
-            string entriesKey = _talkQuest == 0 ? string.Join(",", TalkEntries(_talkNpc).Select(e => e.quest)) : ""; // offers are level-gated: ids, not count (LvMax can swap at the same count)
-            if (_talkNpc != _talkBuiltNpc || _talkQuest != _talkBuiltQuest || _talkPage != _talkBuiltPage || buttons != _talkBuiltButtons || entriesKey != _talkBuiltEntries)
-            { BuildTalkScene(); _talkBuiltNpc = _talkNpc; _talkBuiltQuest = _talkQuest; _talkBuiltPage = _talkPage; _talkBuiltButtons = buttons; _talkBuiltEntries = entriesKey; }
+            string entriesKey = _talkQuest == 0 ? string.Join(",", TalkEntries(_talkNpc).Select(e => $"{e.quest}:{(e.offer ? 1 : 0)}")) : ""; // offers are level-gated: the flag and ids, not the count
+            bool choices = TalkShowChoices();
+            int lines = TalkLines().Count;
+            if (_talkNpc != _talkBuiltNpc || _talkQuest != _talkBuiltQuest || _talkPage != _talkBuiltPage
+                || buttons != _talkBuiltButtons || entriesKey != _talkBuiltEntries
+                || choices != _talkBuiltChoices || lines != _talkBuiltLines)
+            {
+                BuildTalkScene();
+                _talkBuiltNpc = _talkNpc; _talkBuiltQuest = _talkQuest; _talkBuiltPage = _talkPage;
+                _talkBuiltButtons = buttons; _talkBuiltEntries = entriesKey;
+                _talkBuiltChoices = choices; _talkBuiltLines = lines;
+            }
         }
         // The spots go on the hosts last: a build may clamp or place its panel.
         PlaceHost(_invHost, _invPos, InvW, InvH);

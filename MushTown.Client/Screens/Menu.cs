@@ -749,6 +749,13 @@ public partial class MushTownGame
         _talkNpc = 0; _talkQuest = 0; _talkPage = 0; // modals never survive the exit (same map skips the reload that clears them)
         CloseQuestConfirm(); // a stale teleport/forfeit question must not follow the character out
         _showShop = false; // NPC-bound like talk
+        _shopPlaced = false; // the next character starts at the layout spot
+        _shopPos = new Point(0, 0);
+        _shopBuybacks.Clear(); // the next character must not see this one's sold items
+        _shopBuyId = 0;
+        _shopNotice = "";
+        _shopBuyField.Unfocus();
+        _shopBuilt = false;
         // In-game windows never survive the exit: a map list left open would
         // keep its wheel baseline across the character screen.
         CloseAllWindows();

@@ -38,12 +38,40 @@ public class ShopTests
     }
 
     [TestMethod]
+    public void Buy_Count_ChargesOnceForTheWholeStack()
+    {
+        var hero = Hero(100);
+        Assert.IsTrue(Shop.Buy(hero, ItemData.RedPotion, 3, Def(ItemData.RedPotion, 3), 4));
+        Assert.AreEqual(88, hero.Mesos);
+        Assert.AreEqual(4, hero.Use![ItemData.RedPotion]);
+    }
+
+    [TestMethod]
+    public void Buy_Count_NotEnoughMesos_ChangesNothing()
+    {
+        var hero = Hero(100);
+        Assert.IsFalse(Shop.Buy(hero, ItemData.RedPotion, 30, Def(ItemData.RedPotion, 30), 4));
+        Assert.AreEqual(100, hero.Mesos);
+        Assert.IsNull(hero.Use);
+    }
+
+    [TestMethod]
     public void Buy_Equip_GoesToTheEquipBag()
     {
         var hero = Hero(100);
         Assert.IsTrue(Shop.Buy(hero, ItemData.Mop, 50, Def(ItemData.Mop, 50, "Wp")));
         Assert.AreEqual(50, hero.Mesos);
         Assert.AreEqual(1, hero.EquipBag![ItemData.Mop]);
+        Assert.IsNull(hero.Use);
+    }
+
+    [TestMethod]
+    public void Buy_Equip_Count_ChargesOnceForTheWholeStack()
+    {
+        var hero = Hero(1000);
+        Assert.IsTrue(Shop.Buy(hero, ItemData.Mop, 50, Def(ItemData.Mop, 50, "Wp"), 4));
+        Assert.AreEqual(800, hero.Mesos);
+        Assert.AreEqual(4, hero.EquipBag![ItemData.Mop]);
         Assert.IsNull(hero.Use);
     }
 

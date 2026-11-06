@@ -7,21 +7,22 @@ public static class Shop
 {
     public static int SellPrice(int price) => price <= 0 ? 0 : Math.Max(1, price / 2); // a 0-price item (cash gear) sells for nothing
 
-    public static bool Buy(CharaSlot chara, int id, int price, ItemData def)
+    public static bool Buy(CharaSlot chara, int id, int price, ItemData def, int count = 1)
     {
-        if (chara.Mesos < price) return false;
-        chara.Mesos -= price;
+        long total = (long)price * count;
+        if (chara.Mesos < total) return false;
+        chara.Mesos -= (int)total;
         // the item goes to the bag it belongs to: equips to the equip bag,
         // everything else to the use bag (the sell list looks there).
         if (def.Slot != null)
         {
             chara.EquipBag ??= new Dictionary<int, int>();
-            chara.EquipBag[id] = chara.EquipBag.GetValueOrDefault(id) + 1;
+            chara.EquipBag[id] = chara.EquipBag.GetValueOrDefault(id) + count;
         }
         else
         {
             chara.Use ??= new Dictionary<int, int>();
-            chara.Use[id] = chara.Use.GetValueOrDefault(id) + 1;
+            chara.Use[id] = chara.Use.GetValueOrDefault(id) + count;
         }
         return true;
     }

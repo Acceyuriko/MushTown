@@ -32,8 +32,9 @@ public sealed class Text : Component, IDrawable
     // tags (which draw into the world batch, not a UiGfx) both come through here,
     // so the two axes are laid out in one place.
     public static void Draw(SpriteBatch sb, UiText ui, Texture2D t, Rectangle box, Color ink,
-        TextLine line = TextLine.Middle, TextAlign align = TextAlign.Left)
+        TextLine line = TextLine.Middle, TextAlign align = TextAlign.Left, InkBand? band = null)
     {
+        var inkBand = band ?? ui.SmallInk;
         int x = align switch
         {
             TextAlign.Center => box.X + (box.Width - t.Width) / 2,
@@ -43,11 +44,11 @@ public sealed class Text : Component, IDrawable
         int top = line switch
         {
             TextLine.Top => box.Y,
-            TextLine.Bottom => box.Bottom - ui.SmallInk.Height,
-            _ => box.Y + (box.Height - ui.SmallInk.Height) / 2,
+            TextLine.Bottom => box.Bottom - inkBand.Height,
+            _ => box.Y + (box.Height - inkBand.Height) / 2,
         };
         // The baked picture keeps an empty row above the caps: pull it up.
-        sb.Draw(t, new Vector2(x, top - ui.SmallInk.Top), ink);
+        sb.Draw(t, new Vector2(x, top - inkBand.Top), ink);
     }
 
     // A string longer than its room is cut with two dots, so it stays in the
