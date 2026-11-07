@@ -13,6 +13,9 @@ public sealed partial class GameServer
     // lock: two members leaving at the same time must not push their lists
     // in the wrong order (the client would keep a member who left).
     private readonly object _partyOps = new();
+    // HP percent per player, reported by that player's client. A player that
+    // has not reported yet is at 100. Guarded by _partyOps.
+    private readonly Dictionary<int, int> _partyHp = new();
     private const int LevelGate = 5; // the official gate: five levels below the killer
 
     // The player makes a party and leads it.
@@ -107,11 +110,27 @@ public sealed partial class GameServer
     {
         lock (_partyOps)
         {
+            _partyHp.Remove(id);
             int party = _party.PartyOf(id);
             _party.Leave(id);
             if (party != 0) PushParty(party);
         }
         Send(_clients[id], PartyEmptyFrame());
+    }
+
+    // A member reports its HP percent. Only a big change reaches the server
+    // (the client filters), so a party list is not sent every frame.
+    private void OnPartyHp(int id, int pct)
+    {
+        if (pct > 100) return; // a bad byte from a foreign client
+        lock (_partyOps)
+        {
+            int party = _party.PartyOf(id);
+            if (party == 0) return;
+            if (_partyHp.TryGetValue(id, out int old) && old == pct) return;
+            _partyHp[id] = pct;
+            PushParty(party);
+        }
     }
 
     // A party chat line: the server adds the name and relays it to the
@@ -163,7 +182,8 @@ public sealed partial class GameServer
     {
         var members = _party.Members(party);
         var list = new List<PartyMember>();
-        foreach (int m in members) list.Add(new PartyMember(m, PlayerName(m), PlayerLevel(m)));
+        foreach (int m in members)
+            list.Add(new PartyMember(m, PlayerName(m), PlayerLevel(m), _partyHp.GetValueOrDefault(m, 100)));
         var frame = Net.Encode(Net.PartyInfo, w => WriteMembers(w, list));
         foreach (int m in members)
             if (_clients.TryGetValue(m, out var c)) Send(c, frame);
@@ -178,6 +198,7 @@ public sealed partial class GameServer
             w.Write(m.Id);
             w.Write(m.Name);
             w.Write(m.Level);
+            w.Write(m.HpPct);
         }
     }
 

@@ -201,6 +201,7 @@ public sealed partial class GameServer : IDisposable
         int party;
         lock (_partyOps) // the party change and its list go together
         {
+            _partyHp.Remove(id);
             party = _party.PartyOf(id);
             _party.Leave(id);
             if (party != 0) PushParty(party); // the party sees the member leave
@@ -244,6 +245,11 @@ public sealed partial class GameServer : IDisposable
         if (payload[0] == Net.PartyList && payload.Length == 1)
         {
             OnPartyList(id);
+            return;
+        }
+        if (payload[0] == Net.PartyHp && payload.Length == 2)
+        {
+            OnPartyHp(id, payload[1]);
             return;
         }
         if (payload[0] == Net.Name)

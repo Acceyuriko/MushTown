@@ -239,6 +239,13 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.PartyList, w => { }));
     }
 
+    // Report our HP percent to the party (the client sends only big changes).
+    public void SendPartyHp(int pct)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.PartyHp, w => w.Write((byte)pct)));
+    }
+
     private void SendFrame(byte[] frame)
     {
         try
@@ -400,7 +407,7 @@ public sealed class NetClient : IDisposable
                 int n = r.ReadInt32();
                 if (n < 0 || n > 64) throw new FormatException("bad party count");
                 var members = new PartyMember[n];
-                for (int i = 0; i < n; i++) members[i] = new PartyMember(r.ReadInt32(), r.ReadString(), r.ReadInt32());
+                for (int i = 0; i < n; i++) members[i] = new PartyMember(r.ReadInt32(), r.ReadString(), r.ReadInt32(), r.ReadInt32());
                 _partyEvents.Enqueue(new PartyEvent(members));
             }
             catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
@@ -417,7 +424,7 @@ public sealed class NetClient : IDisposable
                 int n = r.ReadInt32();
                 if (n < 0 || n > 64) throw new FormatException("bad player count");
                 var players = new PartyMember[n];
-                for (int i = 0; i < n; i++) players[i] = new PartyMember(r.ReadInt32(), r.ReadString(), r.ReadInt32());
+                for (int i = 0; i < n; i++) players[i] = new PartyMember(r.ReadInt32(), r.ReadString(), r.ReadInt32(), r.ReadInt32());
                 _partyPlayersEvents.Enqueue(new PartyPlayersEvent(players));
             }
             catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal

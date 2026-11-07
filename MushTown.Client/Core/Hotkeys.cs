@@ -6,8 +6,8 @@ namespace MushTown.Client;
 // Every action a key can open. The key window lists every official icon of
 // the KeyConfig art, implemented or not: an action with no window behind it
 // simply does nothing when its key fires, so the pool doubles as the list of
-// what is still missing. PartySearch, PartyAsk, GuideCard and Settings have
-// no icon of their own, so the pool has no cell for them.
+// what is still missing. PartySearch, PartyAsk, PartyHp, GuideCard and
+// Settings have no icon of their own, so the pool has no cell for them.
 public enum HotkeyAction
 {
     Inventory,   // I
@@ -19,6 +19,7 @@ public enum HotkeyAction
     Party,       // P
     PartySearch, // no key: the party window opens the search window
     PartyAsk,    // no key: the server sends the invite
+    PartyHp,     // no key: the party window's Show Member HP switch opens it
     Settings,    // no default key: the options window is opened from the MENU
     KeyConfig,   // OemPipe (\)
     Menu,        // L

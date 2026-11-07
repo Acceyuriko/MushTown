@@ -190,10 +190,18 @@ public partial class MushTownGame
             if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);
             if (shotScreen is "party" or "partysearch" or "partyask")
             {
-                // the demo party: the shot shows the member rows
-                PartyMembers = new[] { new PartyMember(1, "Sugar", 42), new PartyMember(2, "hero", 7) };
+                // the demo party: the shot shows the member rows and the HP panel
+                PartyMembers = new[] { new PartyMember(1, "Sugar", 42, 100), new PartyMember(2, "hero", 7, 62) };
                 PartyPlayers = new[] { new PartyMember(3, "Sugar", 42), new PartyMember(4, "hero", 7) };
                 PartyAsk = new PartyAskEvent(1, "Sugar");
+                if (shotScreen == "party")
+                {
+                    // one live peer, so the shot also shows the bar over a head
+                    // (left of the party window, so the whole bar is visible)
+                    ApplyRemote(new RemoteEvent(false, 2, _mapId, _mover.X - 150, _mover.Y, Net.ActStand, 0, true));
+                    PartyHpVisible = true;
+                    ShowWindow(HotkeyAction.PartyHp);
+                }
                 ShowWindow(HotkeyAction.Party);
                 if (shotScreen == "partysearch") ShowWindow(HotkeyAction.PartySearch);
                 if (shotScreen == "partyask") ShowWindow(HotkeyAction.PartyAsk);

@@ -162,6 +162,7 @@ public partial class MushTownGame : Game
         new KeyConfigWindow(this);
         _partyWindow = new PartyWindow(this);
         _partySearchWindow = new PartySearchWindow(this);
+        _partyHpWindow = new PartyHpWindow(this);
         _guideWindow = new GuideWindow(this);
         _guideCardWindow = new GuideCardWindow(this);
         _menuWindow = new MenuWindow(this);
@@ -612,6 +613,7 @@ public partial class MushTownGame : Game
         if (_fighter.RegenDue) PayoutRegen();
         if (_save?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
             c.Hp = Math.Min(c.Hp, Progression.BuffedMaxHp(c.Level, OwnHpPct()));
+        SendPartyHpIfChanged();
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
         // (portal also fires on walking in with Up held; grab and jump use held keys)

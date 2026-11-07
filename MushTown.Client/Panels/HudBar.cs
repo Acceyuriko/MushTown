@@ -22,6 +22,7 @@ public partial class MushTownGame
         "hud_expback.png", "hud_expcover.png", "hud_expgauge.png",
         "hud_qslot.png",
         "hud_coin.png", "hud_stathilong.png", "hud_statx.png",
+        "party_head_graduation.png", "party_head_bar.png", "party_head_gauge.png",
     };
     private readonly Dictionary<int, ItemData> _items = new();
     private ManifestData _manifest = null!;

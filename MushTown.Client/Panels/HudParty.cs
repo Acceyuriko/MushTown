@@ -41,7 +41,7 @@ public sealed class PartyWindow : UiWindow
             "party_btn_make_n.png", "party_btn_make_h.png", "party_btn_make_p.png",
             "party_btn_out_n.png", "party_btn_out_h.png", "party_btn_out_p.png",
             "party_btn_invite_n.png", "party_btn_invite_h.png", "party_btn_invite_p.png",
-            "party_btn_invite_d.png",
+            "party_btn_invite_d.png", "party_check_off.png", "party_check_on.png",
         })
             _game.LoadTexture("ui/" + f);
 
@@ -88,6 +88,18 @@ public sealed class PartyWindow : UiWindow
                 root.AddChild(MushTownGame.ArtButton(invite, "ui/party_btn_invite", _game.OpenPartySearch));
             else
                 root.Add(new Picture("ui/party_btn_invite_d.png", invite.X, invite.Y));
+        }
+
+        // the Show Member HP switch: a small official toggle, not a button.
+        // Without a party the noParty layer covers the row, so the switch is
+        // not drawn at all.
+        if (_game.PartyMembers.Length > 0)
+        {
+            var hpToggle = new GameObject();
+            hpToggle.Add(new Rect(new Rectangle(wnd.X + _lay.Get("hpToggleX", 463), wnd.Y + _lay.Get("hpToggleY", 107), _lay.Get("hpToggleW", 30), _lay.Get("hpToggleH", 13))));
+            hpToggle.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _game.SetPartyHpVisible(!_game.PartyHpVisible) });
+            hpToggle.Add(new Picture(_game.PartyHpVisible ? "ui/party_check_on.png" : "ui/party_check_off.png", 0, 0));
+            root.AddChild(hpToggle);
         }
 
         root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
@@ -288,9 +300,12 @@ public partial class MushTownGame
     internal PartyMember[] PartyMembers = Array.Empty<PartyMember>();
     internal PartyMember[] PartyPlayers = Array.Empty<PartyMember>();
     internal PartyAskEvent? PartyAsk;
+    internal bool PartyHpVisible;
     private readonly PartyWindow _partyWindow;
     private readonly PartySearchWindow _partySearchWindow;
     private readonly PartyAskWindow _partyAskWindow;
+    private readonly PartyHpWindow _partyHpWindow;
+    private int _sentPartyHp = -1; // the percent the server has for us; -1 = send on the next frame
 
     // The local player leads the party when it is the first member of the
     // list. Alone (no server) the player leads it.
@@ -317,6 +332,38 @@ public partial class MushTownGame
     }
     internal void PartyLeave() => _net?.SendPartyLeave();
 
+    // The Show Member HP switch: the panel follows it while a party exists.
+    internal void SetPartyHpVisible(bool on)
+    {
+        PartyHpVisible = on;
+        if (on && PartyMembers.Length > 0) ShowWindow(HotkeyAction.PartyHp);
+        else _partyHpWindow.Show = false;
+        _partyWindow.Dirty = true;
+    }
+
+    // Report our HP percent when it changed by more than five points. The
+    // server stores it and sends the party list again.
+    private void SendPartyHpIfChanged()
+    {
+        if (_net == null || !_net.Connected || PartyMembers.Length == 0) return;
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return;
+        int maxHp = Progression.BuffedMaxHp(chara.Level, OwnHpPct());
+        int pct = chara.Hp * 100 / maxHp;
+        if (_sentPartyHp >= 0 && Math.Abs(pct - _sentPartyHp) <= 5) return;
+        _sentPartyHp = pct;
+        _net.SendPartyHp(pct);
+    }
+
+    // The HP percent of one party member, or -1 when the player is not in
+    // our party (the over-head bar uses this).
+    internal int PartyHpOf(int id)
+    {
+        foreach (var m in PartyMembers)
+            if (m.Id == id) return m.HpPct;
+        return -1;
+    }
+
     // The search window lists the players of the map: the server sends them.
     internal void OpenPartySearch()
     {
@@ -328,9 +375,32 @@ public partial class MushTownGame
     // A new member list: the party window shows it.
     internal void SetPartyMembers(PartyMember[] members)
     {
+        bool wasEmpty = PartyMembers.Length == 0;
+        bool sameRoster = !wasEmpty && PartyMembers.Length == members.Length;
+        if (sameRoster)
+            for (int i = 0; i < members.Length; i++)
+                if (PartyMembers[i].Id != members[i].Id || PartyMembers[i].Name != members[i].Name || PartyMembers[i].Level != members[i].Level)
+                {
+                    sameRoster = false;
+                    break;
+                }
+        bool rowCountChanged = PartyMembers.Length != members.Length;
         PartyMembers = members;
-        if (members.Length == 0) _chatWindow.SetPartyTarget(false); // no party: the lines go to the world
-        _partyWindow.Dirty = true;
+        if (rowCountChanged) _partyHpWindow.Pos = _partyHpWindow.ClampPos(_partyHpWindow.Pos);
+        if (wasEmpty && members.Length > 0) _sentPartyHp = -1; // a new party needs our current HP
+        if (members.Length == 0)
+        {
+            PartyHpVisible = false; // no party: the switch goes back to off
+            _chatWindow.SetPartyTarget(false); // no party: the lines go to the world
+            _partyHpWindow.Show = false;
+        }
+        else if (PartyHpVisible)
+        {
+            bool wasShown = _partyHpWindow.Show;
+            if (!wasShown) ShowWindow(HotkeyAction.PartyHp);
+            else if (rowCountChanged) _partyHpWindow.Dirty = true; // the row count may have changed
+        }
+        if (!sameRoster) _partyWindow.Dirty = true;
     }
 
     // A new invite list: the search window shows it.
@@ -353,8 +423,11 @@ public partial class MushTownGame
         PartyMembers = Array.Empty<PartyMember>();
         PartyPlayers = Array.Empty<PartyMember>();
         PartyAsk = null;
+        PartyHpVisible = false;
+        _sentPartyHp = -1;
         _chatWindow.SetPartyTarget(false);
         _partyWindow.Dirty = true;
+        _partyHpWindow.Show = false;
         _partyAskWindow.Show = false;
         _partySearchWindow.Show = false;
     }

@@ -32,15 +32,16 @@ public static class Net
     public const byte PartyInvite = 24; // client -> server: int target (the target gets the ask)
     public const byte PartyAsk = 25;    // server -> client: int from, string name (the invite)
     public const byte PartyAnswer = 26; // client -> server: byte accept
-    public const byte PartyInfo = 27;   // server -> client: int n + n * (int id, string name, int level)
+    public const byte PartyInfo = 27;   // server -> client: int n + n * (int id, string name, int level, int hpPct)
     public const byte PartyLeave = 28;  // client -> server: leave the party
     public const byte PartyChat = 29;   // client -> server: string text; the server relays string name, string text to the party
     public const byte PartyList = 30;   // client -> server: the players of my map (the invite list)
-    public const byte PartyPlayers = 31; // server -> client: int n + n * (int id, string name, int level)
+    public const byte PartyPlayers = 31; // server -> client: int n + n * (int id, string name, int level, int hpPct)
 
     public const byte ExpShare = 32; // server -> client: int exp (a party member's share of a kill)
     public const byte QuestAbandon = 33; // client -> server: int quest (forfeit intent; server confirms with QuestGone)
     public const byte QuestGone = 34; // server -> client: int quest (the forfeit landed on the server's copy)
+    public const byte PartyHp = 35; // client -> server: byte HP percent (0..100)
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -145,14 +146,16 @@ public readonly record struct QuestEvent(bool Kill, int Quest, int Index, int Co
 // text). The server adds the name to every line.
 public readonly record struct ChatEvent(string Name, string Text);
 
-// One party member: the id, the name and the level.
-public readonly record struct PartyMember(int Id, string Name, int Level);
+// One party member: the id, the name, the level and the HP percent. A player
+// that has not reported HP yet is at 100.
+public readonly record struct PartyMember(int Id, string Name, int Level, int HpPct = 100);
 
 // The party member list from the server. An empty list means no party. The
 // first member is the leader.
 public readonly record struct PartyEvent(PartyMember[] Members);
 
-// The players of the map, for the invite list: the id, the name and the level.
+// The players of the map, for the invite list: the id, the name, the level and
+// the HP percent.
 public readonly record struct PartyPlayersEvent(PartyMember[] Players);
 
 // An invite to join a party: who asked. The client answers the server.

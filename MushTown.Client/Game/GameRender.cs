@@ -36,6 +36,9 @@ public partial class MushTownGame
             draws.Add((ry, () =>
             {
                 DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight);
+                int hpPct = PartyHpOf(r.Id);
+                if (hpPct >= 0)
+                    DrawPartyHeadHp(BodyCenterX(rx, Net.ActionName(r.Action), r.Frame, r.FacingRight, null) - _camera.X, ry - _camera.Y, hpPct);
                 if (plate.HasName)
                     DrawName(rx - _camera.X, ry + NameDown - _camera.Y, plate.Name, plate.Plate);
             }
@@ -61,6 +64,18 @@ public partial class MushTownGame
         DrawNumbers();
 
         _spriteBatch.End();
+    }
+
+    // The red HP bar over a party member's head: the UIParty party gauge.
+    // screenX is the peer's center, feetY its feet in screen pixels.
+    private void DrawPartyHeadHp(int screenX, int feetY, int pct)
+    {
+        var graduation = _textures["ui/party_head_graduation.png"];
+        var bar = _textures["ui/party_head_bar.png"];
+        var gauge = _textures["ui/party_head_gauge.png"];
+        int x = screenX - graduation.Width / 2;
+        int y = feetY - PartyWindow._lay.Get("headUp", 86) - graduation.Height;
+        PartyGauge.Draw(_spriteBatch, graduation, bar, gauge, x, y, pct);
     }
 
     // One NPC: its stand frame on its origin-anchored feet, name tag under the

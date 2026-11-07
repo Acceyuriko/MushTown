@@ -42,6 +42,66 @@ public sealed class PartyTests
         Assert.AreEqual(b.PlayerId, atA.Members[1].Id);
     }
 
+    // A reported HP percent reaches the other member; a player outside the
+    // party has nobody to hear it.
+    [TestMethod]
+    public void Loopback_PartyHpReachesThePartyOnly()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(10000);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 37);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        using var c = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 37);
+        b.Connect("127.0.0.1", Net.Port + 37);
+        c.Connect("127.0.0.1", Net.Port + 37);
+        a.SendName("hero", 58);
+        b.SendName("friend", 58);
+        Join(a, b);
+
+        a.SendPartyHp(37);
+        var atB = WaitTakeParty(b);
+        Assert.AreEqual(37, atB.Members.Single(m => m.Id == a.PlayerId).HpPct);
+        Assert.AreEqual(100, atB.Members.Single(m => m.Id == b.PlayerId).HpPct);
+
+        c.SendPartyHp(12);
+        AssertNo(() => b.TryTakeParty(out _));
+    }
+
+    // A member that leaves and joins again starts at full HP.
+    [TestMethod]
+    public void Loopback_PartyHpResetsAfterRejoin()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(10000);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 55);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 55);
+        b.Connect("127.0.0.1", Net.Port + 55);
+        a.SendName("hero", 58);
+        b.SendName("friend", 58);
+        Join(a, b);
+
+        a.SendPartyHp(37);
+        Assert.AreEqual(37, WaitTakeParty(b).Members.Single(m => m.Id == a.PlayerId).HpPct);
+        WaitTakeParty(a); // the same list on the reporting side
+
+        a.SendPartyLeave();
+        Assert.AreEqual(0, WaitTakeParty(a).Members.Length);
+        Assert.AreEqual(1, WaitTakeParty(b).Members.Length); // b is the new leader
+
+        b.SendPartyInvite(a.PlayerId);
+        WaitTakeAsk(a);
+        a.SendPartyAnswer(true);
+        WaitTakeParty(a);
+        var back = WaitTakeParty(b);
+        Assert.AreEqual(100, back.Members.Single(m => m.Id == a.PlayerId).HpPct);
+    }
+
     // A decline leaves the party empty: the invitee stays alone.
     [TestMethod]
     public void Loopback_DeclineKeepsTheTargetAlone()

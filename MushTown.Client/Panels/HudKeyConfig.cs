@@ -48,8 +48,8 @@ public sealed class KeyConfigWindow : UiWindow
     // The game actions in the grid: every icon of the official KeyConfig art,
     // in its icon order. An action with no window behind it is still here on
     // purpose: pressing its key does nothing, and the pool then tells the
-    // player (and us) what is not built yet. GuideCard, PartySearch and
-    // PartyAsk have no icon of their own, so they are not in the pool.
+    // player (and us) what is not built yet. GuideCard, PartySearch, PartyAsk,
+    // PartyHp and Settings have no icon of their own, so they are not in the pool.
     private static readonly (HotkeyAction Action, int Icon)[] Actions =
     {
         (HotkeyAction.Equip, 0),
