@@ -51,6 +51,7 @@ public sealed class UiText : IDisposable
 
     // The cap band of the small font: the rows a row of text is centred on.
     public InkBand SmallInk { get; }
+    public InkBand MidInk { get; } // the same band for the middle font
     public InkBand MesoInk { get; } // the same band for the bold meso font
 
     public UiText(GraphicsDevice gd, string fontsDir)
@@ -79,6 +80,7 @@ public sealed class UiText : IDisposable
         _small = Maple(12);
         SmallInk = MeasureBand(_small);
         _mid = Maple(16);
+        MidInk = MeasureBand(_mid);
         // Meso keeps Arial as its missing-TTF fallback (Maple() falls back to YaHei).
         _meso = _mapleBold != null
             ? new Font(_mapleBold, 12, FontStyle.Bold, GraphicsUnit.Pixel)

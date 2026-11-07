@@ -25,17 +25,16 @@ public static partial class Export
         // The left tabs: one blank cyan tab, in its normal and selected states.
         files.Add(("UINpcShop.img/Shop/tab:npc/normal/0", "shop_tab_n.png"));
         files.Add(("UINpcShop.img/Shop/tab:npc/selected/0", "shop_tab_s.png"));
-        // The buy-quantity popup (the same frame the official shop uses).
-        files.Add(("_Canvas/UINpcShop.img/popup/Buy/top/canvas:backgrnd", "shop_buy_top.png"));
-        files.Add(("_Canvas/UINpcShop.img/popup/Buy/mid_buyForCoin1/canvas:backgrnd", "shop_buy_mid.png"));
-        files.Add(("_Canvas/UINpcShop.img/popup/Buy/bottom/canvas:bottom", "shop_buy_bottom.png"));
+        // The shared quantity MAX button (the same art SkillSequence uses).
+        foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
+            files.Add(($"UINpcShop.img/popup/Buy/mid_buyForCoin1/button:Max/{state}/0", $"shop_max_{suffix}.png"));
         // The close button: the same X the other windows use.
         foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
             files.Add(($"UINpcShop.img/Inventory/Normal/button:close/{state}/0", $"shop_x_{suffix}.png"));
         foreach ((string node, string file) in files)
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))
                 return false;
-        if (!ExportSysPop(ui, outDir)) return false; // the notice box and the buy popup share this art
+        if (!ExportSysPop(ui, outDir)) return false; // the notice box and the quantity popup share this art
         Console.WriteLine($"shop: {files.Count} files");
         return true;
     }

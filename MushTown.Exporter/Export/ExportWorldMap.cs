@@ -8,13 +8,14 @@ namespace MushTown.Exporter;
 // worldmap.json (MushTown.Client/Ui/WorldMap.cs) and loads the pictures by name.
 public static partial class Export
 {
-    // The shared system popup (Basic.img/sysPop): the world map confirmation
-    // and the quest teleport/forfeit boxes both draw it.
+    // The shared system popup (Basic.img/sysPop): the world map confirmation,
+    // the quest teleport/forfeit boxes and the shop's number-input popup.
     private static readonly (string Node, string Name)[] SysPopParts =
     {
         ("Basic.img/sysPop/back/top", "wm_pop_top"),
         ("Basic.img/sysPop/back/mid", "wm_pop_mid"),
         ("Basic.img/sysPop/back/bottom", "wm_pop_bottom"),
+        ("Basic.img/sysPop/back/textBox", "wm_pop_textbox"),
         ("Basic.img/sysPop/button/BtYes/normal/0", "wm_pop_yes_n"),
         ("Basic.img/sysPop/button/BtYes/mouseOver/0", "wm_pop_yes_h"),
         ("Basic.img/sysPop/button/BtYes/pressed/0", "wm_pop_yes_p"),

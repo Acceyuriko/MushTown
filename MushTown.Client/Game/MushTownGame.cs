@@ -524,7 +524,7 @@ public partial class MushTownGame : Game
         // Esc closes one layer. The chat keeps its own Esc (it leaves the input),
         // so the layer runs here, before the poll: a frame that closes a window
         // must not eat the click or the key the player pressed with it.
-        if (esc && _shopBuyId == 0 && !_chatWindow.Focused && !_worldMapWindow.SearchFocused)
+        if (esc && _shopQtyId == 0 && !_chatWindow.Focused && !_worldMapWindow.SearchFocused)
         {
             if (_worldMapWindow.EscLayer()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the world map closes its dialog and search board first
             if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
@@ -532,7 +532,7 @@ public partial class MushTownGame : Game
             if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
             if (_showQuest && _questConfirm != QuestConfirmKind.None) { CloseQuestConfirm(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the quest question first
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
-            if (_showShop && _shopNotice != "") { _shopNotice = ""; _shopBuyField.Unfocus(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the notice closes before its shop
+            if (_showShop && _shopNotice != "") { _shopNotice = ""; _shopQtyField.Unfocus(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the notice closes before its shop
             if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the top of the raise row
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
@@ -544,14 +544,18 @@ public partial class MushTownGame : Game
         _chatWindow.UpdateFrame(); // the wheel and a fold a click asked for last frame: that click already reached the open window
         if (_worldMapWindow.SearchFocused && click && !_worldMapWindow.SearchPanelAt(new Point(mx, my)))
             _worldMapWindow.UnfocusSearch(); // the field must not keep the keyboard while the player clicks elsewhere
-        bool shopBuyOpen = _shopBuyId != 0;
-        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || _shopBuyId != 0; // typing must not fire the actions the same keys bind
+        bool shopPopupOpen = _shopQtyId != 0;
+        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || shopPopupOpen; // typing must not fire the actions the same keys bind
         _input.Poll(kb, new Point(mx, my), click, held, ms.ScrollWheelValue);
-        if (shopBuyOpen) UpdateShopBuyKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
+        if (shopPopupOpen)
+        {
+            UpdateShopPopupKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
+            UpdateShopPopupWheel();
+        }
         // Enter starts a chat line: the input row only shows while one is typed.
         // The check sits before the chat block, so the Enter that sends a line
         // cannot open the next one.
-        if (!_chatWindow.Focused && !_worldMapWindow.SearchFocused && !_menuWindow.Show && !_uiScene.ModalOpen && _talkNpc == 0 && !shopBuyOpen && _input.Fresh(Keys.Enter))
+        if (!_chatWindow.Focused && !_worldMapWindow.SearchFocused && !_menuWindow.Show && !_uiScene.ModalOpen && _talkNpc == 0 && !shopPopupOpen && _input.Fresh(Keys.Enter))
             _chatWindow.FocusInput(kb);
         if (_chatWindow.Focused)
         {
@@ -587,11 +591,11 @@ public partial class MushTownGame : Game
         // character keeps acting (MapleStory does the same), and Save swaps
         // the table at the next Update. The draft never reaches the live table
         // before Save.
-        bool blocked = _menuWindow.Show || _uiScene.ModalOpen || _shopBuyId != 0;
+        bool blocked = _menuWindow.Show || _uiScene.ModalOpen || _shopQtyId != 0;
         // A talk dialog is modal for the mouse but not for the feet: Space-opened
         // talk must close when the player walks out of reach. Only the other
         // modals take the movement keys.
-        bool movementBlocked = _menuWindow.Show || _shopBuyId != 0 || (_uiScene.ModalOpen && _talkNpc == 0);
+        bool movementBlocked = _menuWindow.Show || _shopQtyId != 0 || (_uiScene.ModalOpen && _talkNpc == 0);
         // Talk runs after the HUD: a same-frame panel key and Talk both fire
         // (the HUD's guards see _talkNpc still 0; a modal window blocks Talk).
         if (_talkNpc == 0 && !blocked && !Holding && !_uiScene.ModalOpen && _input.Fresh(HotkeyAction.Talk)) TalkNearest(); // a piece in hand would float over the dialog; a confirmation box owns the screen

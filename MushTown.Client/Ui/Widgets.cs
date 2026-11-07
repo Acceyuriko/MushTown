@@ -174,7 +174,7 @@ public sealed class Picture : Component, IDrawable
     }
 }
 
-// Baked-text sizes a LiveLabel can ask for.
+// Baked-text sizes a live label or Text can ask for.
 public enum LabelFont { Small, Mid }
 
 // Live baked text at a rect offset (UiText caches by string, so steady

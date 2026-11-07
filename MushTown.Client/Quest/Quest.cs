@@ -104,7 +104,7 @@ public partial class MushTownGame
     private void EndTalkAndCheckNpcs()
     {
         _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
-        _showShop = false; _shopBuyId = 0; _shopNotice = ""; _shopBuyField.Unfocus(); // the shop is NPC-bound too: a new map closes it
+        _showShop = false; _shopQtyId = 0; _shopNotice = ""; _shopQtyField.Unfocus(); // the shop is NPC-bound too: a new map closes it
         foreach (var s in _map.Npcs)
             if (!_npcs.ContainsKey(s.NpcId))
                 throw new InvalidDataException($"map {_mapId}: npc art {s.NpcId} not exported");
@@ -289,13 +289,22 @@ public partial class MushTownGame
                 var rows = ShopBagRows(1);
                 if (rows.Count == 0)
                     throw new InvalidDataException("shopbuyback shot needs a potion in the bag");
-                SellToShop(rows[0].id);
+                SellToShop(rows[0].id, 1);
                 _shopTab = 1;
+            }
+            else if (shotName.Contains("sell"))
+            {
+                _shopInvTab = 1;
+                var rows = ShopBagRows(1);
+                if (rows.Count == 0)
+                    throw new InvalidDataException("shopsell shot needs a potion in the bag");
+                OpenQuantityPopup(true, rows[0].id);
+                _shopQtyField.SetText(Math.Min(3, rows[0].count).ToString());
             }
             else if (shotName.Contains("buy") && _shopStock.Count > 0)
             {
-                OpenBuyPopup(_shopStock[0]);
-                _shopBuyField.SetText("3");
+                OpenQuantityPopup(false, _shopStock[0]);
+                _shopQtyField.SetText("3");
             }
             if (shotName.Contains("broke"))
                 _shopNotice = "Not enough mesos.\nYou need 5,500 mesos.";
@@ -317,7 +326,7 @@ public partial class MushTownGame
         _shopLastId = 0;
         _shopLastAt = 0;
         _shopNotice = "";
-        _shopBuyId = 0;
+        _shopQtyId = 0;
         _shopBuilt = false;
         _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
         _showShop = true;

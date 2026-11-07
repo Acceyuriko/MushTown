@@ -27,13 +27,15 @@ public static class Shop
         return true;
     }
 
-    public static bool Sell(CharaSlot chara, int id, ItemData def)
+    public static bool Sell(CharaSlot chara, int id, ItemData def, int count = 1)
     {
         var bag = def.Slot != null ? chara.EquipBag : chara.Use;
-        if (bag == null || !bag.TryGetValue(id, out int count) || count <= 0) return false;
-        if (count == 1) bag.Remove(id);
-        else bag[id] = count - 1;
-        chara.Mesos += SellPrice(def.Price);
+        if (bag == null || count <= 0 || !bag.TryGetValue(id, out int owned) || owned < count) return false;
+        long gain = (long)SellPrice(def.Price) * count;
+        if (chara.Mesos + gain > int.MaxValue) return false;
+        if (owned == count) bag.Remove(id);
+        else bag[id] = owned - count;
+        chara.Mesos += (int)gain;
         return true;
     }
 }

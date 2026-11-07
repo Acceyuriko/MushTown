@@ -8,9 +8,9 @@ namespace MushTown.Client;
 public enum TextLine { Top, Middle, Bottom }
 public enum TextAlign { Left, Center, Right }
 
-// One line of small text in the box of its object: a name, a menu option, a
-// label. The line is centred on the cap band of the font, so every row of the
-// same height reads level and no caller adds an offset of its own.
+// One line of text in the box of its object: a name, a menu option, a label.
+// The line is centred on the cap band of the font, so every row of the same
+// height reads level and no caller adds an offset of its own.
 public sealed class Text : Component, IDrawable
 {
     public required Func<string> Value { get; init; }
@@ -19,13 +19,15 @@ public sealed class Text : Component, IDrawable
     public int W { get; init; } // 0 = the rest of the box
     public TextLine Line { get; init; } = TextLine.Middle;
     public TextAlign Align { get; init; } = TextAlign.Left;
+    public LabelFont Font { get; init; } = LabelFont.Small;
 
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Screen;
         int boxW = W > 0 ? W : r.Width - X;
-        var t = Fit(gfx, Value(), boxW);
-        Draw(gfx.Sb, gfx.Ui, t, new Rectangle(r.X + X, r.Y, boxW, r.Height), Ink, Line, Align);
+        var t = Font == LabelFont.Mid ? gfx.Ui.GetMid(Value()) : Fit(gfx, Value(), boxW);
+        Draw(gfx.Sb, gfx.Ui, t, new Rectangle(r.X + X, r.Y, boxW, r.Height), Ink, Line, Align,
+            Font == LabelFont.Mid ? gfx.Ui.MidInk : null);
     }
 
     // One line of small text in a box: the component above and the world's name

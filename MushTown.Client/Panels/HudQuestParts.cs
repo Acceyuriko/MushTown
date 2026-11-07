@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -42,14 +43,16 @@ public sealed class QuestRowText : Component, IDrawable
     }
 }
 
-// The animated NPC of the quest info panel: the same LifeStand the map NPC
-// and the world map tip carry. The feet stay on (x, y); every frame's own
-// origin moves the top left.
+// An animated NPC portrait: the quest info panel and the shop counter. The
+// same LifeStand the map NPC and the world map tip carry. The feet stay on
+// (x, y); every frame's own origin moves the top left.
 public sealed class QuestNpcPortrait : Component, IDrawable
 {
     private readonly LifeStand _stand;
     private readonly int _x, _y;
-    public QuestNpcPortrait(LifeStand stand, int x, int y) { _stand = stand; _x = x; _y = y; }
+    private readonly bool _faceRight;
+    public QuestNpcPortrait(LifeStand stand, int x, int y, bool faceRight = false)
+    { _stand = stand; _x = x; _y = y; _faceRight = faceRight; }
 
     public void Draw(UiGfx gfx)
     {
@@ -57,7 +60,10 @@ public sealed class QuestNpcPortrait : Component, IDrawable
         var idle = _stand.Art;
         int frame = _stand.IndexAt(gfx.Time);
         var origin = idle.Origins[frame];
-        gfx.Sb.Draw(gfx.Tex(idle.Images[frame]), new Vector2(r.X + _x - origin.X, r.Y + _y - origin.Y), Color.White);
+        var tex = gfx.Tex(idle.Images[frame]);
+        int x = _faceRight ? SceneMath.FlipDrawX(r.X + _x, -origin.X, tex.Width) : r.X + _x - origin.X;
+        gfx.Sb.Draw(tex, new Vector2(x, r.Y + _y - origin.Y), null, Color.White, 0f, Vector2.Zero, 1f,
+            _faceRight ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
     }
 }
 

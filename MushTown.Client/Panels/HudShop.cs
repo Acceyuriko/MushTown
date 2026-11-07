@@ -23,11 +23,14 @@ public partial class MushTownGame
     private double _shopLastAt;
     private string _shopNotice = "";
     private string _shopBuiltKey = "";
-    private int _shopBuyId; // the stock row whose quantity popup is open (0 = none)
-    private readonly TextField _shopBuyField = new(_shopLay) { DigitsOnly = true, Limit = 5 };
+    private int _shopQtyId; // the row whose quantity popup is open (0 = none)
+    private bool _shopQtySelling;
+    private readonly TextField _shopQtyField = new(_shopLay) { DigitsOnly = true, Limit = 10 };
+    private int _shopWheel; // the wheel value when the quantity popup opened
     private readonly Dictionary<int, List<(int id, int count)>> _shopBuybacks = new();
 
     private const int ShopRowCount = 10;
+    private const int MaxBuyQuantity = 999;
 
     private int ShopLeftW => _shopLay.Get("w", 380);
     private int ShopW => ShopLeftW + _shopLay.Get("invW", 324);
@@ -123,56 +126,126 @@ public partial class MushTownGame
         }
     }
 
-    // Double-click on a stock row opens the official quantity popup. The
-    // field starts at 1 and is already focused; Enter buys, Escape closes.
-    private void OpenBuyPopup(int id)
+    // Double-click on a stock or bag row opens the shared quantity popup. The
+    // field starts at 1 and is already focused; Enter confirms, Escape closes.
+    private void OpenQuantityPopup(bool selling, int id)
     {
-        _shopBuyId = id;
-        _shopBuyField.SetText("1");
-        _shopBuyField.ReplaceOnType = true;
-        _shopBuyField.Ink = Color.Black;
-        _shopBuyField.Focus(Keyboard.GetState());
+        _shopQtyId = id;
+        _shopQtySelling = selling;
+        _shopWheel = _input.Wheel;
+        _shopQtyField.SetText("1");
+        _shopQtyField.ReplaceOnType = true;
+        _shopQtyField.Ink = Color.Black;
+        _shopQtyField.Focus(Keyboard.GetState());
     }
 
-    private void CloseBuyPopup()
+    private void CloseQuantityPopup()
     {
-        _shopBuyField.Unfocus();
-        _shopBuyId = 0;
+        _shopQtyField.Unfocus();
+        _shopQtyId = 0;
     }
 
-    private int ShopBuyCount()
+    private int ShopQuantityCount()
     {
-        return int.TryParse(_shopBuyField.Text, out int n) ? n : 0;
+        return int.TryParse(_shopQtyField.Text, out int n) ? n : 0;
     }
 
     private void ConfirmBuy()
     {
-        int count = ShopBuyCount();
-        if (count <= 0) return;
-        int id = _shopBuyId;
-        CloseBuyPopup();
+        int count = ShopQuantityCount();
+        int id = _shopQtyId;
+        CloseQuantityPopup();
         BuyFromShop(id, count);
     }
 
     // The quantity field owns the keys while its popup is open.
-    private void UpdateShopBuyKeys(KeyboardState kb, float dtMs)
+    private void UpdateShopPopupKeys(KeyboardState kb, float dtMs)
     {
-        var key = _shopBuyField.Read(kb, dtMs);
-        if (key == FieldKey.Leave) CloseBuyPopup();
-        else if (key == FieldKey.Submit) ConfirmBuy();
+        bool selling = _shopQtySelling;
+        var key = _shopQtyField.Read(kb, dtMs);
+        ClampQuantity();
+        if (key == FieldKey.Leave) CloseQuantityPopup();
+        else if (key == FieldKey.Submit)
+        {
+            if (selling) ConfirmSell();
+            else ConfirmBuy();
+        }
     }
 
-    private void SellToShop(int id)
+    // The field always shows the number that will be bought or sold: at least
+    // 1, at most the cap.
+    private int ShopQuantityMax() => _shopQtySelling ? ShopBagCount(_shopQtyId) : MaxBuyQuantity;
+
+    private void ClampQuantity()
+    {
+        int max = ShopQuantityMax();
+        string text = Math.Clamp(int.TryParse(_shopQtyField.Text, out int n) ? n : 0, 1, max).ToString();
+        if (_shopQtyField.Text == text) return;
+        _shopQtyField.SetText(text);
+        _shopQtyField.ReplaceOnType = true;
+    }
+
+    // The wheel over the input steps the number by one. A wheel notch is 120.
+    private void UpdateShopPopupWheel()
+    {
+        int delta = _input.Wheel - _shopWheel;
+        _shopWheel = _input.Wheel;
+        if (delta == 0 || _shopQtyId == 0) return;
+        if (!ShopQuantityFieldRect().Contains(_input.Mouse)) return;
+        int step = delta / 120;
+        if (step == 0) step = Math.Sign(delta);
+        AdjustQuantity(step);
+    }
+
+    private Rectangle ShopPopupRect()
+    {
+        int w = _shopLay.Get("qtyW", 318);
+        int h = _shopLay.Get("qtyH", 150);
+        return new Rectangle(_shopLay.Get("qtyX", (ShopW - w) / 2), _shopLay.Get("qtyY", (ShopH - h) / 2), w, h);
+    }
+
+    private Rectangle ShopQuantityFieldRect()
+    {
+        var popup = ShopPopupRect();
+        return new Rectangle(_shopPos.X + popup.X + _shopLay.Get("qtyFieldX", 48),
+            _shopPos.Y + popup.Y + _shopLay.Get("qtyFieldY", 62),
+            _shopLay.Get("qtyFieldW", 200), _shopLay.Get("qtyFieldH", 20));
+    }
+
+    private void AdjustQuantity(int step)
+    {
+        int max = ShopQuantityMax();
+        _shopQtyField.SetText(Math.Clamp((long)ShopQuantityCount() + step, 1, max).ToString());
+        _shopQtyField.ReplaceOnType = true;
+    }
+
+    private int ShopBagCount(int id)
     {
         var chara = _save?.Slots[_slot];
-        if (chara == null) return;
+        if (chara == null) return 0;
+        return _equips.Contains(id)
+            ? chara.EquipBag?.GetValueOrDefault(id) ?? 0
+            : chara.Use?.GetValueOrDefault(id) ?? 0;
+    }
+
+    private void ConfirmSell()
+    {
+        if (!SellToShop(_shopQtyId, ShopQuantityCount())) return;
+        CloseQuantityPopup();
+    }
+
+    private bool SellToShop(int id, int count)
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return false;
         var def = _items[id];
-        if (!Shop.Sell(chara, id, def)) return;
+        if (!Shop.Sell(chara, id, def, count)) return false;
         var list = ShopBuyback();
         int at = list.FindIndex(r => r.id == id);
-        if (at >= 0) list[at] = (id, list[at].count + 1);
-        else list.Add((id, 1));
-        LogEvent($"sold {def.Name} for {Shop.SellPrice(def.Price):#,##0} mesos");
+        if (at >= 0) list[at] = (id, list[at].count + count);
+        else list.Add((id, count));
+        LogEvent($"sold {def.Name} x{count} for {(long)Shop.SellPrice(def.Price) * count:#,##0} mesos");
+        return true;
     }
 
     private void BuyBackFromShop(int id)
@@ -206,7 +279,7 @@ public partial class MushTownGame
             string.Join("|", ShopBagRows(0).Select(r => $"{r.id}:{r.count}")) + "/" +
             string.Join("|", ShopBagRows(1).Select(r => $"{r.id}:{r.count}"));
         string buyback = string.Join("|", ShopBuyback().Select(r => $"{r.id}:{r.count}"));
-        return $"{_shopTab}:{_shopInvTab}:{ShopNpc()}:{_shopNotice}:{_shopBuyId}:{_shopStock?.Count}|{bag}|{buyback}";
+        return $"{_shopTab}:{_shopInvTab}:{ShopNpc()}:{_shopNotice}:{_shopQtyId}:{_shopQtySelling}:{_shopStock?.Count}|{bag}|{buyback}";
     }
 
     private void LoadShopArt()
@@ -219,13 +292,12 @@ public partial class MushTownGame
         LoadTexture("ui/shop_tab_s.png");
         LoadTexture("ui/shop_inv_meso.png");
         LoadTexture("ui/shop_meso.png");
-        foreach (string f in new[] { "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png" })
+        foreach (string f in new[] { "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png", "wm_pop_textbox.png" })
             LoadTexture("ui/" + f);
         foreach (string s in new[] { "n", "h", "p" }) LoadTexture($"ui/shop_x_{s}.png");
         foreach (string s in new[] { "n", "h", "p" }) LoadTexture($"ui/wm_pop_yes_{s}.png");
         foreach (string s in new[] { "n", "h", "p" }) LoadTexture($"ui/wm_pop_no_{s}.png");
-        foreach (string f in new[] { "shop_buy_top.png", "shop_buy_mid.png", "shop_buy_bottom.png" })
-            LoadTexture("ui/" + f);
+        foreach (string s in new[] { "n", "h", "p" }) LoadTexture($"ui/shop_max_{s}.png");
     }
 
     private GameObject ShopRow(Rectangle rect, bool inv, int id, string name, int count, string price, string legacyId, Action act)
@@ -287,57 +359,46 @@ public partial class MushTownGame
         return o;
     }
 
-    // The official buy-quantity popup: top (icon/name), middle (input and
-    // prices) and bottom (confirmation buttons). It sits over the shop pair.
-    private GameObject ShopBuyPopup()
+    // The shared number-input popup: the same sysPop frame the system dialogs
+    // use. One prompt line, the official input box and MAX button, then Yes/Cancel.
+    // Buying and selling both use it; only the prompt, max and confirm differ.
+    private GameObject ShopQuantityPopup()
     {
-        int topH = _shopLay.Get("buyTopH", 159);
-        int midH = _shopLay.Get("buyMidH", 156);
-        int bottomH = _shopLay.Get("buyBottomH", 112);
-        int w = _shopLay.Get("buyW", 392);
-        int h = topH + midH + bottomH;
-        int x = _shopLay.Get("buyX", (ShopW - w) / 2);
-        int y = _shopLay.Get("buyY", (ShopH - h) / 2);
+        var box = ShopPopupRect();
         var popup = new GameObject();
-        popup.Add(new Rect(new Rectangle(x, y, w, h)));
-        popup.AddChild(PictureAt("ui/shop_buy_top.png", 0, 0, w, topH));
-        popup.AddChild(PictureAt("ui/shop_buy_mid.png", 0, topH, w, midH));
-        popup.AddChild(PictureAt("ui/shop_buy_bottom.png", 0, topH + midH, w, bottomH));
-
-        var item = _items[_shopBuyId];
-        var icon = new GameObject();
-        icon.Add(new Rect(new Rectangle(_shopLay.Get("buyIconX", 171), _shopLay.Get("buyIconY", 75),
-            _shopLay.Get("buyIconW", 50), _shopLay.Get("buyIconH", 50))));
-        icon.Add(new ShopIcon(item.Image));
-        popup.AddChild(icon);
-        popup.AddChild(ShopPopupText(() => item.Name, 0, _shopLay.Get("buyNameY", 132), w, 18,
-            Color.White, TextAlign.Center));
+        popup.Add(new Rect(box));
+        popup.AddChild(PictureAt("ui/wm_pop_top.png", 0, 0, box.Width, 30));
+        popup.AddChild(PictureAt("ui/wm_pop_mid.png", 0, 30, box.Width, 17));
+        popup.AddChild(PictureAt("ui/wm_pop_textbox.png", 0, 47, box.Width, 44));
+        popup.AddChild(PictureAt("ui/wm_pop_bottom.png", 0, 91, box.Width, 59));
+        popup.AddChild(ShopPopupText(() => _shopQtySelling ? "How many do you want to sell?" : "How many do you want to buy?",
+            0, _shopLay.Get("qtyTextY", 34), box.Width, _shopLay.Get("qtyTextH", 17)));
 
         var input = new GameObject();
-        input.Add(new Rect(new Rectangle(_shopLay.Get("buyInputX", 124), _shopLay.Get("buyInputY", 199),
-            _shopLay.Get("buyInputW", 57), _shopLay.Get("buyInputH", 20))));
-        input.Add(_shopBuyField);
+        input.Add(new Rect(new Rectangle(_shopLay.Get("qtyFieldX", 48), _shopLay.Get("qtyFieldY", 62),
+            _shopLay.Get("qtyFieldW", 200), _shopLay.Get("qtyFieldH", 20))));
+        input.Add(_shopQtyField);
         popup.AddChild(input);
 
-        popup.AddChild(ShopPopupText(() => "Price", _shopLay.Get("buyPriceX", 56),
-            _shopLay.Get("buyPriceY", 260), 90, 16, new Color(188, 254, 252)));
-        popup.AddChild(ShopPopupText(() => $"{item.Price:#,##0}", _shopLay.Get("buyPriceX", 56),
-            _shopLay.Get("buyPriceY", 260), 300, 16, Color.White, TextAlign.Right));
-        popup.AddChild(ShopPopupText(() => "Total", _shopLay.Get("buyPriceX", 56),
-            _shopLay.Get("buyTotalY", 283), 90, 16, new Color(188, 254, 252)));
-        popup.AddChild(ShopPopupText(() => $"{(long)item.Price * ShopBuyCount():#,##0}",
-            _shopLay.Get("buyPriceX", 56), _shopLay.Get("buyTotalY", 283), 300, 16,
-            Color.White, TextAlign.Right));
-
-        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("buyYesX", 109), _shopLay.Get("buyYesY", 377), 83, 26),
-            "ui/wm_pop_yes", ConfirmBuy));
-        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("buyNoX", 200), _shopLay.Get("buyNoY", 377), 83, 26),
-            "ui/wm_pop_no", CloseBuyPopup));
+        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("qtyMaxX", 250), _shopLay.Get("qtyMaxY", 61),
+            _shopLay.Get("qtyMaxW", 41), _shopLay.Get("qtyMaxH", 23)), "ui/shop_max", SetQuantityMax));
+        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("qtyYesX", 73), _shopLay.Get("qtyYesY", 105), 83, 26),
+            "ui/wm_pop_yes", () => { if (_shopQtySelling) ConfirmSell(); else ConfirmBuy(); }));
+        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("qtyNoX", 162), _shopLay.Get("qtyNoY", 105), 83, 26),
+            "ui/wm_pop_no", CloseQuantityPopup));
 
         var root = new GameObject { Modal = true };
-        root.AddChild(PanelButton(ShopRect(), "shopbuyblock", () => { }, ButtonKind.Silent));
+        root.AddChild(PanelButton(ShopRect(), "shopquantityblock", () => { }, ButtonKind.Silent));
         root.AddChild(popup);
         return root;
+    }
+
+    private void SetQuantityMax()
+    {
+        int max = ShopQuantityMax();
+        _shopQtyField.SetText(max.ToString());
+        _shopQtyField.ReplaceOnType = true;
+        _shopQtyField.Focus(Keyboard.GetState());
     }
 
     private static GameObject PictureAt(string key, int x, int y, int w, int h)
@@ -348,12 +409,20 @@ public partial class MushTownGame
         return o;
     }
 
-    private static GameObject ShopPopupText(Func<string> value, int x, int y, int w, int h,
-        Color ink, TextAlign align = TextAlign.Left)
+    private static GameObject ShopPopupText(Func<string> value, int x, int y, int w, int h)
     {
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(x, y, w, h)));
-        o.Add(new Text { Value = value, X = 0, W = w, Ink = ink, Line = TextLine.Middle, Align = align });
+        o.Add(new Text
+        {
+            Value = value,
+            X = 0,
+            W = w,
+            Ink = Color.White,
+            Line = TextLine.Middle,
+            Align = TextAlign.Center,
+            Font = LabelFont.Mid,
+        });
         return o;
     }
 
@@ -395,7 +464,7 @@ public partial class MushTownGame
         body.Add(new LiveLabel(() => title, _shopLay.Get("titleX", 139),
             _shopLay.Get("titleY", 55), ShopTitleInk, LabelFont.Mid));
         body.Add(new QuestNpcPortrait(new LifeStand { Game = this, Kind = 0, Id = ShopNpc() },
-            _shopLay.Get("npcPortraitX", 70), _shopLay.Get("npcPortraitY", 88)));
+            _shopLay.Get("npcPortraitX", 70), _shopLay.Get("npcPortraitY", 88), faceRight: true));
 
         for (int i = 0; i < 2; i++) body.AddChild(ShopTab(i, i == 0 ? "Sell" : "Buy Back"));
         for (int i = 0; i < 4; i++) body.AddChild(ShopInvTab(i, i == 0 ? "Equip" : i == 1 ? "Use" : i == 2 ? "Etc" : "Set-up"));
@@ -404,7 +473,7 @@ public partial class MushTownGame
         var avatar = new GameObject();
         avatar.Add(new Rect(new Rectangle(ShopLeftW + _shopLay.Get("invAvatarX", 58),
             _shopLay.Get("invAvatarY", 88), 1, 1)));
-        avatar.Add(new AvatarPreview(this, "stand1", () => 0, true));
+        avatar.Add(new AvatarPreview(this, "stand1", () => 0, faceRight: false));
         body.AddChild(avatar);
         body.Add(new Picture("ui/shop_inv_meso.png", ShopLeftW + _shopLay.Get("invMesoBgX", 106),
             _shopLay.Get("invMesoBgY", 66)));
@@ -427,7 +496,7 @@ public partial class MushTownGame
                     break;
                 }
                 var def = _items[id];
-                body.AddChild(ShopRow(ShopRowRect(row), false, id, def.Name, 1, $"{def.Price:#,##0}", "shopbuy" + row, () => OpenBuyPopup(id)));
+                body.AddChild(ShopRow(ShopRowRect(row), false, id, def.Name, 1, $"{def.Price:#,##0}", "shopbuy" + row, () => OpenQuantityPopup(false, id)));
                 row++;
             }
         }
@@ -461,7 +530,7 @@ public partial class MushTownGame
             var (id, count) = bag[i];
             var def = _items[id];
             body.AddChild(ShopRow(ShopInvRowRect(i), true, id, def.Name, count, $"{Shop.SellPrice(def.Price):#,##0}",
-                "shopinvsell" + i, () => SellToShop(id)));
+                "shopinvsell" + i, () => OpenQuantityPopup(true, id)));
         }
 
         // Drag strips: both headers. The X is the right inventory's official one.
@@ -469,10 +538,10 @@ public partial class MushTownGame
             () => _dragShop = _uiScene.LastClick - _shopPos));
         body.AddChild(ArtButton(new Rectangle(ShopLeftW + _shopLay.Get("invCloseX", 295),
                 _shopLay.Get("invCloseY", 2), _shopLay.Get("invCloseW", 27), _shopLay.Get("invCloseH", 27)),
-            "ui/shop_x", () => { _showShop = false; _shopBuyId = 0; }));
+            "ui/shop_x", () => { _showShop = false; _shopQtyId = 0; _shopQtyField.Unfocus(); }));
 
         if (_shopNotice != "") body.AddChild(ShopNoticeBox());
-        if (_shopBuyId != 0) body.AddChild(ShopBuyPopup());
+        if (_shopQtyId != 0) body.AddChild(ShopQuantityPopup());
         _shopHost.AddChild(body);
     }
 }

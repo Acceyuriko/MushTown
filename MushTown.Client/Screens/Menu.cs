@@ -752,9 +752,9 @@ public partial class MushTownGame
         _shopPlaced = false; // the next character starts at the layout spot
         _shopPos = new Point(0, 0);
         _shopBuybacks.Clear(); // the next character must not see this one's sold items
-        _shopBuyId = 0;
+        _shopQtyId = 0;
         _shopNotice = "";
-        _shopBuyField.Unfocus();
+        _shopQtyField.Unfocus();
         _shopBuilt = false;
         // In-game windows never survive the exit: a map list left open would
         // keep its wheel baseline across the character screen.

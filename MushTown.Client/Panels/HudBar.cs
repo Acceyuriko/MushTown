@@ -236,7 +236,7 @@ public partial class MushTownGame
             case 2: CloseSkillWindow(); break;
             case 3: _showQuest = false; _dragQuest = null; break;
             case 4: CloseSettings(); break; // the one close path for the options window
-            case 5: _showShop = false; _dragShop = null; _shopBuyId = 0; _shopNotice = ""; _shopBuyField.Unfocus(); break;
+            case 5: _showShop = false; _dragShop = null; _shopQtyId = 0; _shopNotice = ""; _shopQtyField.Unfocus(); break;
         }
     }
 

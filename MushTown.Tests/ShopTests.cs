@@ -105,6 +105,46 @@ public class ShopTests
     }
 
     [TestMethod]
+    public void Sell_Count_SellsTheWholeStack()
+    {
+        var hero = Hero(0);
+        hero.Use = new Dictionary<int, int> { [ItemData.BluePotion] = 5 };
+        Assert.IsTrue(Shop.Sell(hero, ItemData.BluePotion, Def(ItemData.BluePotion, 10), 5));
+        Assert.AreEqual(25, hero.Mesos);
+        Assert.IsFalse(hero.Use.ContainsKey(ItemData.BluePotion));
+    }
+
+    [TestMethod]
+    public void Sell_PartialStack_KeepsRemainder()
+    {
+        var hero = Hero(0);
+        hero.Use = new Dictionary<int, int> { [ItemData.BluePotion] = 5 };
+        Assert.IsTrue(Shop.Sell(hero, ItemData.BluePotion, Def(ItemData.BluePotion, 10), 2));
+        Assert.AreEqual(10, hero.Mesos);
+        Assert.AreEqual(3, hero.Use[ItemData.BluePotion]);
+    }
+
+    [TestMethod]
+    public void Sell_TooMany_FailsAndKeepsTheStack()
+    {
+        var hero = Hero(0);
+        hero.Use = new Dictionary<int, int> { [ItemData.BluePotion] = 2 };
+        Assert.IsFalse(Shop.Sell(hero, ItemData.BluePotion, Def(ItemData.BluePotion, 10), 3));
+        Assert.AreEqual(2, hero.Use[ItemData.BluePotion]);
+        Assert.AreEqual(0, hero.Mesos);
+    }
+
+    [TestMethod]
+    public void Sell_Count_Overflow_FailsAndKeepsTheStack()
+    {
+        var hero = Hero(0);
+        hero.Use = new Dictionary<int, int> { [ItemData.BluePotion] = 3 };
+        Assert.IsFalse(Shop.Sell(hero, ItemData.BluePotion, Def(ItemData.BluePotion, int.MaxValue), 3));
+        Assert.AreEqual(3, hero.Use[ItemData.BluePotion]);
+        Assert.AreEqual(0, hero.Mesos);
+    }
+
+    [TestMethod]
     public void Sell_Equip_PaysFromTheEquipBag()
     {
         var hero = Hero(0);
