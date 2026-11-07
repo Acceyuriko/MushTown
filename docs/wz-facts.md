@@ -34,6 +34,8 @@
 - 立绘 origin 每职业不同：110 = −79,0；130 = −246,0；12200 Saitama = 95,555；13100 = −374,−70。画布 713×679~1443×992。**单个全局偏移只在所有职业共用同一 origin 时才成立。**
 - CustomizeChar = `UI/Login.img/CustomizeChar/<jobid>`（按职业分变体；12200 只填名字，没有 Gender 行）：`board/avatarTop` 366×202、`board/boardBottom` 366×91、BtYes/BtNo 166/167×43 三态；官方相对坐标 输入框 (37,104)、按钮 (12,231)/(186,231)。**卡片是半透明白（alpha 128..204），压在树丛上会透底，必须放干净天空上。**
 - 发型：男性 = `Hair\0003xxxx`；000300 组 52 个 = 10 款式 × 颜色（0000 短毛 / 0010 尖刺 / 0020 刘海 / 0030 光头 / 0040 长白发 / 0050 短碎 / 0060 长发 / 0070 金色尖刺 / 0080 齐刘海 / 0090 橙尖刺），000301+ 是别的款式组。
+- 女身体 = `00002001.img`（49 个动作），女头 = `00012001.img`（55 个动作）。默认女发型 cosmetic `33390`（券 `5157258`），默认女脸 `20002`（券 `5158152`）。
+- WZ 里发型/脸有男女款标记，但本游戏不做限制：男女角色都能买、都能穿。位置偏了修导出 origin。
 - Spine：`back/1/<id>/` 下 `atlas`、`login_*.png` 图集页（2048×~2000，pma:true scale:0.8）、`skeleton.skel` = Spine **4.1.24** 二进制；23 个职业的 skeleton.json 是 **2.1.27 文本格式**。Hero(110) 一职业 17 页 ≈ 18.9MB PNG ≈ 211MB 显存；56 职业全导出 ≈ 1GB。
 
 ### 3.2 MENU 窗
@@ -62,11 +64,12 @@
 
 ### 3.5 面板
 
-- 背包 = `UIInventory.img/Inventory`：`backgrnd` 242×593 小窗、`FullBackgrnd` 800×546 宽窗；**官方格子 36px、间距 46、首格 (31,101)**；小窗 4 列、宽窗 16 列；6 页签。
-- 属性 = `UICharacterInfo.img`（STAT/EQUIP 两页），正文 472 宽；Combat Power 官方位留着但没公式，恒 0。小 X 官方出处 = `common/main/button:close/normal/0` 11×11（技能窗借它；任务窗用自己的 `UI/Quest.img/Main/questList|questInfo/button:close`）；`Basic.img/BtClose` 12×12 蓝、`UIWindow.img/BtUIClose` 32×15。
+- 背包 = `UIInventory.img/Inventory`：`backgrnd` 242×593 小窗、`FullBackgrnd` 800×546 宽窗；**官方格子 36px、间距 46、首格 (31,101)**；小窗 4 列、宽窗 16 列；6 页签。小窗滚动条 = `AutoBuild/scroll:slot`：轨道 5×368 在 (214,99)、滑块 5×28，`length=368`、`wheelRange=242`。宽窗滚动条 = `FullAutoBuild/scroll:avatarTab`：轨道 5×368 在 (769,99)、滑块 5×28，`length=368`、`wheelRange=800`。两套滑块都有 normal / hover / pressed 三态。
+- 背包整理按钮 = `UIInventory.img/Inventory/AutoBuild/button:sort` 22×23（宽窗 `FullAutoBuild/button:sort` 同尺寸）；`sortMenu` 的 gather/sortCategory 各 78×16。
+- 属性 = `UICharacterInfo.img`：上块 `common/main/backgrnd` 472×230（标题、白卡、角色位），下块 `local/detail/backgrnd` 472×479（正文），合起来 472×709。`local/detail/layer:stat` 450×20 是 STAT 条。Combat Power 官方位留着但没公式，恒 0。小 X 官方出处 = `common/main/button:close/normal/0` 11×11（技能窗借它；任务窗用自己的 `UI/Quest.img/Main/questList|questInfo/button:close`）；`Basic.img/BtClose` 12×12 蓝、`UIWindow.img/BtUIClose` 32×15。
 - 技能 = `UIWindow2.img/Skill/main`（**不是**旧的 `UIWindow.img/Skill`）：没有详情框 → 说明框用 `UIToolTip.img/Skill/Frame`（九块 14~15px 边框的深色面板）画九宫。没有关闭钮 → 借小 X。蓝条 304×45；行图 140×35，**行距用 32**（裁到 32 高，8 行才放得进官方正文 y355）。
 - 任务 = `UI/Quest.img/Main`：左 `questList/backgrnd` 420×550 + 右 `questInfo/backgrnd` 322×550，并排 742×550。左列表三组 `questList/bottom/state/0..2`（0 Available / 1 In Progress / 2 Completed，377×27，opened/closed 带正常/悬停/按下），行选中 `bottom/selected` 367×24（origin 5,1）；WZ 没有单行鼠标悬停图，悬停也用这张。右详情空状态 `questInfo/layer:empty` 306×485 在 (8,30)，选中底 `layer:selected`；宽按钮 start/end 292×36 在 (15,471)，giveUp 86×24 在 (225,519)；奖励 EXP 33×26、meso 32×32，box 290×51，reward 标签 32×10。
-- 商店 = `UI/UINpcShop.img` 左右两窗：左 `Shop/backgrnd` 380×681（NPC 名/立绘、Sell/Buy Back 两页签；`pos/vector:title`=(139,55) 左对齐，页签 70×22 在 x=11+72*i,y=103；行底 336×45，行距 50，`itemList/pos/itemIcon`=(7,7)、`itemName`=(56,6)、`itemPrice`=(72,24)、`pointIcon`=(55,27)）；右 `Inventory/Normal/backgrnd` 324×681（角色预览 (58,88)、金币图标 (115,71)、金币数字 (293,79)、四个页签 74×22 在 x=11+76*i,y=103；行底 280×45，行距 50）。两窗整张画；右窗的屏幕 x 必须是**左窗宽 380**，不是自身宽 324。行底都有 normal/selected 两态；selected 图的图标格仍是白底，客户端要把这 48px 也填成选中蓝。`layer:meso` 200×21 origin (-106,-66) → 画在 (106,66)。右侧关闭钮借 `Inventory/Normal/button:close` 27×27。官方字体：标题 GyeokdongRg 14 淡蓝 (ffbecbd9)、页签 Arial 11 白、名字 Arial 12 黑、价格 Arial 12 粗黑。空列表不显示文字。
+- 商店 = `UI/UINpcShop.img` 左右两窗：左 `Shop/backgrnd` 380×681（NPC 名/立绘、Sell/Buy Back 两页签；`pos/vector:title`=(139,55) 左对齐，页签 70×22 在 x=11+72*i,y=103；行底 336×45，行距 50，`itemList/pos/itemIcon`=(7,7)、`itemName`=(56,6)、`itemPrice`=(72,24)、`pointIcon`=(55,27)）；右 `Inventory/Normal/backgrnd` 324×681（角色预览 (58,88)、金币图标 (115,71)、金币数字 (293,79)、四个页签 74×22 在 x=11+76*i,y=103；行底 280×45，行距 50）。两窗整张画；右窗的屏幕 x 必须是**左窗宽 380**，不是自身宽 324。行底都有 normal/selected 两态；selected 图的图标格仍是白底，客户端要把这 48px 也填成选中蓝。`layer:meso` 200×21 origin (-106,-66) → 画在 (106,66)。右侧关闭钮借 `Inventory/Normal/button:close` 27×27。官方字体：标题 GyeokdongRg 14 淡蓝 (ffbecbd9)、页签 Arial 11 白、名字 Arial 12 黑、价格 Arial 12 粗黑。空列表不显示文字。左列表滚动条 = `Shop/scroll:shop`：轨道 5×495 在 (360,141)、滑块 5×28，`length=495`、`wheelRange=350`。右背包滚动条 = `Inventory/Normal/scroll:inventory`：轨道 5×495 在 (304,141)、滑块 3×26，`length=495`、`wheelRange=294`。
 - 数量输入通用框（买入/卖出共用）= `Basic.img/sysPop` 的 `INPUT` 模式：`back/top` 318×30、`back/mid` 318×17、`back/textBox` 318×44（白输入框 `posInfo/input`：`textBoxTextPos`=(48,19)、`textBoxWidth`=200、白区 y=15..34）、`back/bottom` 318×59；按钮位置 `posInfo/button/INPUT` 的 OK/Cancel = (73,14)/(162,14)。商店的 41×23 MAX 图在 `UINpcShop.img/popup/Buy/mid_buyForCoin1/button:Max`（实际 outlink 自 `SkillSequence.img/buyPopup/mid_buyForCoin1`）。
 
 ### 3.6 地图类窗口
