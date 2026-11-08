@@ -288,10 +288,10 @@ public sealed class ItemData
     public const int LolicoArmor = 1040015; // Brown Lolico Armor (Ma, PDD 15): the shop of Pan (21000)
 
     // The four free default hair/face coupons (Cash/0515.img).
-    public const int HairCouponMale = 5157257; // Messy Hair Coupon (M), hair 30020
-    public const int HairCouponFemale = 5157258; // female default hair coupon, hair 33390
-    public const int FaceCouponMale = 5158151; // Defiant Face Coupon (M), face 20000
-    public const int FaceCouponFemale = 5158152; // female default face coupon, face 20002
+    public const int HairCouponMale = 5157257; // Messy Hair Coupon (M), cosmetic 30020
+    public const int HairCouponFemale = 5157258; // cosmetic 33390 (the WZ name still says "(M)")
+    public const int FaceCouponMale = 5158151; // Defiant Face Coupon (M), cosmetic 20000
+    public const int FaceCouponFemale = 5158152; // cosmetic 20002 (the WZ name still says "(M)")
     public const int DefaultHairMale = 30020;
     public const int DefaultHairFemale = 33390;
     public const int DefaultFaceMale = 20000;
@@ -336,7 +336,7 @@ public sealed class ItemData
 
     public int ItemId { get; set; }
     public string Name { get; set; } = ""; // String.wz name (Consume/Eqp): the exporter fails loud when missing
-    public string Desc { get; set; } = ""; // the flavour text of String.wz: consumables have one, gear has none
+    public string Desc { get; set; } = ""; // the flavour text of String.wz: potions, cash coupons and cash rings have one
     public string Image { get; set; } = "";
     public int Hp { get; set; }
     public int Mp { get; set; }

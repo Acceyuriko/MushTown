@@ -200,6 +200,21 @@ public class InputTests
     }
 
     [TestMethod]
+    public void ClearTarget_RemovesTheWholeBinding()
+    {
+        var table = new Dictionary<string, string>
+        {
+            ["LeftControl+RightControl"] = "Attack",
+            ["D1"] = "Item:2000000",
+        };
+        KeyBindings.ClearTarget(table, BindTarget.Ui(HotkeyAction.Attack));
+        Assert.IsFalse(table.ContainsKey("LeftControl+RightControl"));
+        Assert.AreEqual("Item:2000000", table["D1"]);
+        KeyBindings.ClearTarget(table, new BindTarget(BindKind.Item, 2000000));
+        Assert.IsFalse(table.ContainsKey("D1"));
+    }
+
+    [TestMethod]
     public void Apply_AComboTakesItsParts()
     {
         var table = new Dictionary<string, string> { ["U"] = "Guide", ["K"] = "Skill" };

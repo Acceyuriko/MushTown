@@ -70,8 +70,29 @@ public partial class MushTownGame
     private void PickSlot(int cell)
     {
         if (!_hand.Empty || SlotTarget(cell) is not { } target) return;
-        Hold(target);
+        Hold(target, true); // remember the cell: a world click clears its binding
         PlaySfx("click"); // the cell's button is silent: only a cell that gave something up clicks
+    }
+
+    // A quick slot target is in hand and the click hit no UI at all: the
+    // binding is gone (the quick slot's own "drop on the floor"). An NPC click
+    // still talks: the piece goes back instead.
+    private bool CancelSlotHoldOnWorldClick(int gx, int gy, GameObject? top)
+    {
+        if (!_heldFromSlot || _uiScene.ModalOpen || top != null || NpcAt(gx, gy) != null) return false;
+        var target = Held!.Value;
+        if (DraftWindow is { } win) win.ApplyDrop("", target); // the pool clears the whole target, combo or not
+        else if (Hero is { } chara)
+        {
+            KeyBindings.Ensure(chara);
+            KeyBindings.ClearTarget(chara.KeyPresets![chara.ActivePreset], target);
+            _keysDirty = true;
+            SaveChara();
+        }
+        else return false; // no character: nothing to save, the click goes on
+        ClearHeld();
+        PlaySfx("click");
+        return true;
     }
 
     // The cell holds something a click can pick up.

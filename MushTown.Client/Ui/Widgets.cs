@@ -532,35 +532,50 @@ public sealed class RightLabel : Component, IDrawable
 // without a scene rebuild, so the row reads them every frame).
 public readonly record struct SkillLive(int Lv, int Sp, int Level, float CdMs, float BuffMs, int Orbs);
 
-// One inventory cell: icon centered, count bottom-left in white with a black
-// shadow. Equipment has no count (each copy has its own cell). Empty cells
-// draw nothing (count and image read live).
-public sealed class InvSlot : Component, IDrawable
+// One inventory item object: its icon is centered in its own box. The cell
+// object owns the click; this child only draws the item (empty reads live).
+public sealed class InvItem : Component, IDrawable
 {
     private readonly Func<string> _image;
-    private readonly Func<int> _count;
-    private readonly int _dy;
-    private readonly bool _showCount;
-    public InvSlot(Func<string> image, Func<int> count, int dy, bool showCount)
-    {
-        _image = image; _count = count; _dy = dy; _showCount = showCount;
-    }
+    public InvItem(Func<string> image) => _image = image;
     public void Draw(UiGfx gfx)
     {
-        int n = _count();
-        if (n <= 0) return;
         string image = _image();
         if (image == "") return;
         var r = Owner.Get<Rect>()!.Screen;
         var icon = gfx.Tex(image);
         gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2,
-            r.Y + (r.Height - icon.Height) / 2 + _dy), Color.White);
-        if (!_showCount) return;
-        var t = gfx.Ui.GetSmall(n.ToString());
-        var box = new Rectangle(r.X + 1, r.Y, r.Width - 2, r.Height - 1);
-        Text.Draw(gfx.Sb, gfx.Ui, t, new Rectangle(box.X + 1, box.Y + 1, box.Width, box.Height), Color.Black,
-            TextLine.Bottom, TextAlign.Left);
-        Text.Draw(gfx.Sb, gfx.Ui, t, box, Color.White, TextLine.Bottom, TextAlign.Left);
+            r.Y + (r.Height - icon.Height) / 2), Color.White);
+    }
+}
+
+// One official inventory number: the 6x8 slot digits (white used / dark
+// total) or the 8x11 item-count digits (black outline). No font shadow.
+public sealed class InvNumber : Component, IDrawable
+{
+    private readonly Func<int> _value;
+    private readonly bool _rightAlign;
+    private readonly string _prefix;
+    private readonly bool _zero;
+    public InvNumber(Func<int> value, bool rightAlign, string prefix = "ui/inv_num", bool zero = false)
+    {
+        _value = value; _rightAlign = rightAlign; _prefix = prefix; _zero = zero;
+    }
+    public void Draw(UiGfx gfx)
+    {
+        int n = _value();
+        if (n <= 0 && !_zero) return;
+        var r = Owner.Get<Rect>()!.Screen;
+        string text = n.ToString();
+        int w = 0;
+        foreach (char ch in text) w += gfx.Tex($"{_prefix}{ch}.png").Width;
+        int x = _rightAlign ? r.Right - w : r.X;
+        foreach (char ch in text)
+        {
+            var digit = gfx.Tex($"{_prefix}{ch}.png");
+            gfx.Sb.Draw(digit, new Vector2(x, r.Y), Color.White);
+            x += digit.Width;
+        }
     }
 }
 

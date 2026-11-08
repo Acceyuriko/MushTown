@@ -2,6 +2,8 @@
 
 整体内容已经定完。周切块见 [周计划](cashshop-weeks-2026-12-03.md)。
 
+2026-11-08 用户定：旧存档不兼容，开发阶段直接删档重开；下面所有“旧存档迁移/补齐”都不做。
+
 ## 为什么做这个
 
 - 现在的背包 Equip 页把穿在身上的装备画在最前几格。这是错的。
@@ -96,7 +98,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 
 - `Use` / `EquipBag` / `CashBag` / `DecBag` 继续存 `itemId -> count`。格子位置另存 `UseOrder` / `EquipOrder` / `CashOrder` / `DecOrder`。
 - 每个 order list 一格一个元素。元素是 item id，`0` 表示空格。
-- 旧存档没有 order list：载入后按字典里现有道具补进前几格。
+- 新角色创建时 order list 为空：`Inventory.Ensure` 按字典里现有道具补进前几格。
 - 新道具：先进同样 id 的格子叠数量；没有就放第 1 个空格。
 - 拖放：点一下拿起，再点同一个页签的其他格子放下，不用按住鼠标拖。空位移动；同 id 合并；不同 id 交换两个格子。
 - 整理：只整理当前页签。按类型排序，再按 item id 从小到大，从第 1 格开始排满。
@@ -115,13 +117,8 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
   - `Female = true`、`Hair = 33390`、`Face = 20002`
   - `CashWorn` = `[5157258, 5158152]`
   - `DecBag` = `{5157257:1, 5158151:1}`
-- 旧存档（`DecBag == null` 或 `CashWorn == null`）：
-  - `Female` 缺省为 `false`。
-  - `Hair == 0` 就写 30020；`Face == 0` 就写 20000。
-  - 先按 `DecBag` + `CashWorn` 的总数补齐四个默认条目（穿在 `CashWorn` 的算已有）。
-  - 再把当前性别的默认发型券和默认脸券从 `DecBag` 移到 `CashWorn`。
-  - 已经是新存档的，不因为玩家把默认券卖掉又重新补回来。
-- 这样所有角色都有两套默认头发和默认脸；背包里是没穿的另外两件，装饰栏里是当前穿着的两件。
+- 旧存档不兼容：开发阶段直接删档重建，不做默认条目补齐。
+- 这样每个新角色都有两套默认头发和默认脸；背包里是没穿的另外两件，装饰栏里是当前穿着的两件。
 
 ### 女角色身体和头
 
@@ -211,7 +208,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 ### 代码点
 
 - 新建 `MushTown.Shared/Data/Inventory.cs`，统一管理格子位置：
-  - `Ensure(chara)`：补齐四个 order list；把字典里有、order 里没有的 id 放进第 1 个空格；把 order 里字典已经没了的 id 清成 0。
+  - `Ensure(chara)`：初始化四个 order list；把字典里有、order 里没有的 id 放进第 1 个空格；把 order 里字典已经没了的 id 清成 0。
   - `Move`：同页签空位移动、同 id 合并、不同 id 交换。
   - `Sort`：只排当前页签，按类型和 item id，从第 1 格开始排满。
   - `Remove(chara, tab, id, count)`：从 `Use` / `EquipBag` / `CashBag` / `DecBag` 扣数量，扣到 0 时把 order 里对应格子清成 0。卖和丢都走这里。
@@ -362,7 +359,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 
 - 背包：
   - 6 个页签都能点；Etc / Set-up 显示空格子，Cash / Dec 有对应现金道具时显示道具。
-  - 旧存档没有 `EquipOrder` → 载入后 3 件装备补到第 1、2、3 格。
+  - 空 `EquipOrder` → `Inventory.Ensure` 后 3 件装备补到第 1、2、3 格。
   - 把第 1 格的装备拖到第 5 格 → 第 1 格空，第 5 格有它，数量不变。
   - 同 id 拖到同 id 格 → 两格数量合并，来源格空。
   - 不同 id 拖到有道具的格 → 两格交换。
@@ -388,9 +385,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
   - 空 `CashWorn` → 其余格子空。
   - 双击已穿 Cash Fashion → `CashWorn` 少一件，`DecBag` 多一件。
 - 存档：
-  - 旧存档没有 `Female` → 当男角色。
-  - 旧存档没有 `Hair` / `Face` → 载入后补 30020 / 20000。
-  - 旧存档没有 `DecBag` → 载入后补四个默认条目，当前性别两件进 `CashWorn`，另外两件留 `DecBag`。
+  - 旧存档不迁移：缺少四个 order list（或长度不是 128）的旧档直接删档重建。
   - 新角色一开始 `CashWorn` 有两件当前性别默认券，`DecBag` 有两件另一性别默认券。
   - 变性后身体、头、头发、脸都换；`DecBag` 已买道具不丢。
 - 窗口：
@@ -417,7 +412,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - 点 `Decorations` 进入装饰栏。Outfits 页能看到默认头发、默认脸。
 - 双击装饰栏里的 Cash Fashion 能脱下。
 - 点 `EquipUI` 能回装备栏。
-- 旧存档打开后自动有默认头发和默认脸。
+- 新角色创建后有默认头发和默认脸。
 - 截图 `equipui`、`decorations`、`inv`、`invscroll`、`stat` 都能出图。
 - 门禁：format 净 + build 0 错 + 测试全过。
 

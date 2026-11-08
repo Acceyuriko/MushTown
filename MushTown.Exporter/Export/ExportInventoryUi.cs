@@ -19,6 +19,17 @@ public static partial class Export
             ("UIInventory.img/Inventory/backgrnd", "inv_backgrnd.png"),
             ("UIInventory.img/Inventory/FullBackgrnd", "invw_backgrnd.png"),
         };
+        // The official 6x8 digits of the SLOT line: slotNum0 is white
+        // (used), slotNum1 is dark gray (total).
+        for (int d = 0; d < 10; d++)
+        {
+            files.Add(($"UIInventory.img/Inventory/slotNum0/{d}", $"inv_num{d}.png"));
+            files.Add(($"UIInventory.img/Inventory/slotNum1/{d}", $"inv_num_total{d}.png"));
+        }
+        // The official 8x11 item-count digits: white-blue fill with a black
+        // outline (Basic.img/ItemNo). item_count_pos is (0,28).
+        for (int d = 0; d < 10; d++)
+            files.Add(($"Basic.img/ItemNo/{d}", $"item_num{d}.png"));
         // (file prefix, AutoBuild folder, expand button, expand stem):
         // the small window and the wide one.
         foreach ((string prefix, string build, string expandButton, string expandStem) in new[]

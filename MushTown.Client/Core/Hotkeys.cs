@@ -182,6 +182,13 @@ public static class KeyBindings
     public static bool HasPart(string keys, string key) =>
         keys.Split('+', StringSplitOptions.RemoveEmptyEntries).Contains(key);
 
+    // A quick slot's target is gone: the whole binding goes, combo or not.
+    public static void ClearTarget(Dictionary<string, string> table, BindTarget target)
+    {
+        foreach (var (key, text) in table.ToList())
+            if (BindTarget.TryParse(text, out var bound) && bound == target) table.Remove(key);
+    }
+
     private static void Write(Dictionary<string, string> table, IEnumerable<KeyValuePair<string, string>> targets)
     {
         foreach (var (target, key) in targets)
@@ -260,14 +267,20 @@ public partial class MushTownGame
     // click picked up.
     public BindTarget? Held { get; private set; }
     public bool Holding => Held != null;
+    private bool _heldFromSlot; // the quick slot a click picked the target from
 
-    public void Hold(BindTarget target)
+    public void Hold(BindTarget target, bool fromSlot = false)
     {
         if (!_hand.Empty) return;
         Held = target;
+        _heldFromSlot = fromSlot;
     }
 
-    public void ClearHeld() => Held = null;
+    public void ClearHeld()
+    {
+        Held = null;
+        _heldFromSlot = false;
+    }
 
     // The icon art of a skill id, or "" when it is not a skill of this
     // character (the key window draws the skill the draft put on a key).

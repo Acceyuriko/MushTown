@@ -222,7 +222,10 @@ public partial class MushTownGame
     {
         var store = new SaveStore();
         store.Saves[0]!.Slots[0] = DemoChara();
-        store.Saves[0]!.Slots[2] = new CharaSlot { Name = "mage", Level = 2, Map = 20000, Hp = Progression.MaxHp(2), Mp = Progression.MaxMp(2) };
+        var mage = new CharaSlot { Name = "mage", Level = 2, Map = 20000, Hp = Progression.MaxHp(2), Mp = Progression.MaxMp(2) };
+        Inventory.GiveCashDefaults(mage);
+        Inventory.Ensure(mage);
+        store.Saves[0]!.Slots[2] = mage;
         return store;
     }
 
@@ -253,6 +256,7 @@ public partial class MushTownGame
             EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },
             KeyPresets = DemoPresets(),
         };
+        Inventory.GiveCashDefaults(chara);
         Inventory.Ensure(chara);
         return chara;
     }

@@ -22,20 +22,33 @@ public partial class MushTownGame
     private Rectangle InvRect() => new(0, 0, InvW, InvH);
     private Rectangle InvTitleRect() => new(0, 0, InvW, _invLay.Get("titleH", 28));
 
-    // The official slot grid (measured on the art): 36px cells, pitch 46,
-    // the first cell at (31,101). The small window shows 4 columns, the
+    // The official slot grid (UIInventory.img pos): 42px cells, pitch 46,
+    // the first cell at (28,101). The small window shows 4 columns, the
     // wide one 16.
     private int InvCols => _invWide ? _invLay.Get("colsWide", 16) : _invLay.Get("cols", 4);
+    private int InvPageCols => _invLay.Get("pageCols", 4);
+    private int InvPageGapX => _invLay.Get("pageGapX", 2);
+    private int InvRows => _invLay.Get("rows", 8);
+    private Rectangle InvGridRect()
+    {
+        int pitch = _invLay.Get("cellPitch", 46);
+        int size = _invLay.Get("cellSize", 42);
+        var last = InvCell(InvCols - 1);
+        return new Rectangle(_invLay.Get("gridX", 28), _invLay.Get("gridY", 101),
+            last.Right, (InvRows - 1) * pitch + size);
+    }
     private Rectangle InvCell(int cell)
     {
         int pitch = _invLay.Get("cellPitch", 46);
-        int size = _invLay.Get("cellSize", 36);
-        return new Rectangle(_invLay.Get("gridX", 31) + (cell % InvCols) * pitch,
-            _invLay.Get("gridY", 101) + (cell / InvCols) * pitch, size, size);
+        int size = _invLay.Get("cellSize", 42);
+        int col = cell % InvCols;
+        int page = col / InvPageCols;
+        int x = page * (InvPageCols * pitch + InvPageGapX) + (col % InvPageCols) * pitch;
+        return new Rectangle(x, (cell / InvCols) * pitch, size, size);
     }
 
     // The visible cells: small 4x8, wide 16x8.
-    private int InvVisible => _invWide ? Inventory.Capacity : InvCols * 8;
+    private int InvVisible => InvCols * InvRows;
 
     private static string TabKind(int tab) => tab switch
     {
@@ -50,19 +63,28 @@ public partial class MushTownGame
     {
         var o = new GameObject();
         o.Add(new Rect(r));
-        var s = new Slot { OnClick = () => ClickSlot(itemKind, index) };
-        o.Add(s);
+        o.Add(new Slot { OnClick = () => ClickSlot(itemKind, index) });
         o.Add(new ItemTip(() => count() == 0 ? 0 : ItemId(itemKind, index))); // the empty cell shows no tip
-        o.Add(new InvSlot(() => ItemImage(ItemId(itemKind, index)),
-            count, _invLay.Get("itemDy", 2), itemKind != "equip"));
+        o.Add(new InvItem(() => count() == 0 ? "" : ItemImage(ItemId(itemKind, index))));
+        if (itemKind != "equip")
+        {
+            var number = new GameObject { NoHit = true };
+            number.Add(new Rect(new Rectangle(
+                _invLay.Get("countItemX", 0), _invLay.Get("countItemY", 28),
+                _invLay.Get("countItemW", 42), _invLay.Get("countItemH", 11))));
+            number.Add(new InvNumber(count, false, "ui/item_num"));
+            o.AddChild(number);
+        }
         return o;
     }
 
     // The icon of an item id; "" for an id this build has no data for
-    // (an old save may carry an item that was removed from the export).
+    // (a save may carry an item that was removed from the export).
     private string ItemImage(int id) => _items.TryGetValue(id, out var data) ? data.Image : "";
 
-    // The official gray pill in the small/wide header: used cells / 128.
+    // The official gray pill in the small/wide header: used cells / 128. The
+    // used number is the white slotNum0 set; the total is the dark slotNum1
+    // set, right-aligned to its vector on the right of the baked slash.
     private GameObject InvCount()
     {
         var r = _invWide
@@ -70,29 +92,25 @@ public partial class MushTownGame
                 _invLay.Get("countWideW", 70), _invLay.Get("countWideH", 15))
             : new Rectangle(_invLay.Get("countX", 152), _invLay.Get("countY", 70),
                 _invLay.Get("countW", 70), _invLay.Get("countH", 15));
+        int usedRight = (_invWide ? _invLay.Get("countUsedWideX", 741) : _invLay.Get("countUsedX", 184)) - r.X;
+        int totalRight = (_invWide ? _invLay.Get("countTotalWideX", 768) : _invLay.Get("countTotalX", 210)) - r.X;
+        int numH = _invLay.Get("countNumH", 8);
+        int gap = _invLay.Get("countGap", 2);
+        int top = _invLay.Get("countNumY", 81) - r.Y - numH;
         string kind = TabKind(_invTab);
         var root = new GameObject();
         root.Add(new Rect(r));
-        var used = new GameObject();
-        used.Add(new Rect(new Rectangle(0, 0, r.Width / 2 - 4, r.Height)));
-        used.Add(new Text
+        var used = new GameObject { NoHit = true };
+        used.Add(new Rect(new Rectangle(0, top, usedRight, numH)));
+        used.Add(new InvNumber(() =>
         {
-            Value = () =>
-            {
-                var chara = _save?.Slots[_slot];
-                return chara == null || kind == "" ? "0" : Inventory.Used(chara, kind).ToString();
-            },
-            Ink = new Color(96, 104, 113),
-            Align = TextAlign.Right,
-        });
+            var chara = _save?.Slots[_slot];
+            return chara == null || kind == "" ? 0 : Inventory.Used(chara, kind);
+        }, true, zero: true));
         root.AddChild(used);
-        var total = new GameObject();
-        total.Add(new Rect(new Rectangle(r.Width / 2 + 2, 0, r.Width / 2 - 2, r.Height)));
-        total.Add(new Text
-        {
-            Value = () => Inventory.Capacity.ToString(),
-            Ink = new Color(96, 104, 113),
-        });
+        var total = new GameObject { NoHit = true };
+        total.Add(new Rect(new Rectangle(usedRight + gap, top, totalRight - usedRight - gap, numH)));
+        total.Add(new InvNumber(() => Inventory.Capacity, true, "ui/inv_num_total"));
         root.AddChild(total);
         return root;
     }
@@ -117,10 +135,13 @@ public partial class MushTownGame
         body.Add(new Rect(InvRect())); // no Button: the body swallows, like the legacy fallthrough
         body.Add(new Picture(_invWide ? "ui/invw_backgrnd.png" : "ui/inv_backgrnd.png"));
         string kind = TabKind(_invTab);
+        var grid = new GameObject(); // the official slot grid: cell rects are local to it
+        grid.Add(new Rect(InvGridRect()));
+        body.AddChild(grid);
         for (int s = 0; s < InvVisible; s++)
         {
             int i = s; // for-loop variables capture shared: copy per slot
-            body.AddChild(PanelSlot(InvCell(i), kind, i, () =>
+            grid.AddChild(PanelSlot(InvCell(i), kind, i, () =>
             {
                 var chara = _save?.Slots[_slot];
                 return kind == "" || chara == null || (_hand.Kind == kind && _hand.Cell == i)
@@ -185,6 +206,12 @@ public partial class MushTownGame
                 LoadTexture($"ui/{p}_tab_s{t}.png");
                 LoadTexture($"ui/{p}_tab_n{t}.png");
             }
+        }
+        for (int d = 0; d < 10; d++)
+        {
+            LoadTexture($"ui/inv_num{d}.png"); // SLOT used: white slotNum0
+            LoadTexture($"ui/inv_num_total{d}.png"); // SLOT total: dark slotNum1
+            LoadTexture($"ui/item_num{d}.png"); // item count: black-outlined ItemNo
         }
         foreach (string side in new[] { "nw", "ne", "sw", "se", "n", "s", "w", "e", "c" })
             LoadTexture($"ui/tip_{side}.png"); // the tooltip frame: the stat window loads it too, this one must not depend on that

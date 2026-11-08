@@ -21,28 +21,7 @@ public sealed class InventoryTests
     };
 
     [TestMethod]
-    public void Load_OldSave_FillsOrdersAndDefaultCoupons()
-    {
-        string path = Path.Combine(Path.GetTempPath(), $"inventory-{Guid.NewGuid():N}.json");
-        try
-        {
-            File.WriteAllText(path, """{"Saves":[{"Slots":[{"Name":"old","Use":{"2000000":2},"EquipBag":{"1302007":1}}]}]}""");
-            var c = SaveStore.Load(path).Saves[0]!.Slots[0]!;
-
-            Assert.AreEqual(Red, c.UseOrder![0]);
-            Assert.AreEqual(ItemData.LongSword, c.EquipOrder![0]);
-            Assert.AreEqual(ItemData.HairCouponMale, c.CashWorn![0]);
-            Assert.AreEqual(1, c.DecBag![ItemData.HairCouponFemale]);
-            Assert.AreEqual(ItemData.DefaultHairMale, c.Hair);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [TestMethod]
-    public void Ensure_OldSave_FillsOrders()
+    public void Ensure_FillsOrders()
     {
         var c = Chara();
         Inventory.Ensure(c);
@@ -56,10 +35,10 @@ public sealed class InventoryTests
     }
 
     [TestMethod]
-    public void Ensure_OldSave_AddsDefaultCoupons()
+    public void GiveCashDefaults_Male()
     {
         var c = new CharaSlot();
-        Inventory.Ensure(c);
+        Inventory.GiveCashDefaults(c);
 
         Assert.IsFalse(c.Female);
         Assert.AreEqual(ItemData.DefaultHairMale, c.Hair);
@@ -68,28 +47,13 @@ public sealed class InventoryTests
             new[] { ItemData.HairCouponMale, ItemData.FaceCouponMale }, c.CashWorn);
         Assert.AreEqual(1, c.DecBag![ItemData.HairCouponFemale]);
         Assert.AreEqual(1, c.DecBag[ItemData.FaceCouponFemale]);
-        Assert.AreEqual(ItemData.HairCouponFemale, c.DecOrder![0]);
     }
 
     [TestMethod]
-    public void Ensure_GivenDefaults_DoesNotReaddSoldCoupons()
-    {
-        var c = new CharaSlot
-        {
-            DecBag = new Dictionary<int, int>(),
-            CashWorn = new List<int>(),
-        };
-        Inventory.Ensure(c);
-
-        Assert.AreEqual(0, c.DecBag!.Count);
-        Assert.AreEqual(0, c.CashWorn!.Count);
-    }
-
-    [TestMethod]
-    public void Ensure_Female_UsesFemaleDefaults()
+    public void GiveCashDefaults_Female()
     {
         var c = new CharaSlot { Female = true };
-        Inventory.Ensure(c);
+        Inventory.GiveCashDefaults(c);
 
         Assert.AreEqual(ItemData.DefaultHairFemale, c.Hair);
         Assert.AreEqual(ItemData.DefaultFaceFemale, c.Face);
@@ -97,6 +61,16 @@ public sealed class InventoryTests
             new[] { ItemData.HairCouponFemale, ItemData.FaceCouponFemale }, c.CashWorn);
         Assert.AreEqual(1, c.DecBag![ItemData.HairCouponMale]);
         Assert.AreEqual(1, c.DecBag[ItemData.FaceCouponMale]);
+    }
+
+    [TestMethod]
+    public void Ensure_DoesNotGiveCoupons()
+    {
+        var c = new CharaSlot();
+        Inventory.Ensure(c);
+
+        Assert.IsNull(c.CashWorn);
+        Assert.AreEqual(0, c.DecBag!.Count);
     }
 
     [TestMethod]
@@ -166,7 +140,7 @@ public sealed class InventoryTests
     }
 
     [TestMethod]
-    public void Ensure_OldOrder_ClearsGhostsAndTrimsToCapacity()
+    public void Ensure_InvalidOrder_ClearsGhostsAndTrimsToCapacity()
     {
         var order = new List<int>(new int[130]);
         order[0] = Blue;

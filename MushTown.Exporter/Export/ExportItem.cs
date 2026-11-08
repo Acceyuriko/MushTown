@@ -55,6 +55,21 @@ public static partial class Export
                 Console.WriteLine($"cash coupon {id} has no String name");
                 return false;
             }
+            // The four defaults are picked by the cosmetic they give, not by
+            // the String name: this WZ labels the female coupons "(M)" too.
+            int expected = id switch
+            {
+                ItemData.HairCouponMale => ItemData.DefaultHairMale,
+                ItemData.HairCouponFemale => ItemData.DefaultHairFemale,
+                ItemData.FaceCouponMale => ItemData.DefaultFaceMale,
+                _ => 0, // a new coupon needs its own expected cosmetic
+            };
+            int cosmetic = Int(item.Find($"Cash/0515.img/{id:D8}/spec"), "cosmetic");
+            if (cosmetic != expected)
+            {
+                Console.WriteLine($"cash coupon {id} gives cosmetic {cosmetic}, expected {expected}");
+                return false;
+            }
             var data = new ItemData
             {
                 ItemId = id,
@@ -212,6 +227,7 @@ public static partial class Export
                 ItemId = id,
                 Name = name,
                 Image = $"item/{id}.png",
+                Desc = CleanDesc(str.Find($@"Eqp.img\Eqp\{cat}\{id}\desc")?.GetValueEx<string>("") ?? "", ""),
                 Slot = slot,
                 Atk = Int(info, "incPAD"),
                 Def = Int(info, "incPDD"),

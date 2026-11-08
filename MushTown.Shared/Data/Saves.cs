@@ -49,8 +49,16 @@ public sealed class SaveStore
             if (save.Slots == null || save.Slots.Count > MaxHeroes)
                 throw new InvalidDataException($"corrupt save file: {path}");
             Pad(save.Slots, MaxHeroes);
+            // Old saves have no full order lists: the current build does not migrate them.
+            // Full lists also mark a save written after the cash tabs landed.
             foreach (var hero in save.Slots)
-                if (hero != null) Inventory.Ensure(hero);
+            {
+                if (hero == null) continue;
+                if (hero.UseOrder == null || hero.EquipOrder == null || hero.CashOrder == null || hero.DecOrder == null ||
+                    hero.UseOrder.Count != Inventory.Capacity || hero.EquipOrder.Count != Inventory.Capacity ||
+                    hero.CashOrder.Count != Inventory.Capacity || hero.DecOrder.Count != Inventory.Capacity)
+                    throw new InvalidDataException($"save file {path} is from an older version; delete it to start fresh");
+            }
         }
         return store;
     }
@@ -99,6 +107,7 @@ public sealed class SaveStore
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
         };
+        Inventory.GiveCashDefaults(chara);
         Inventory.Ensure(chara);
         heroes[slot] = chara;
         return chara;
@@ -149,12 +158,12 @@ public sealed class SaveData
 
 // One character. X/Y null means never played: spawn at the map portal.
 // Equips null means the beginner set (nothing worn); EquipBag null means
-// an empty equip bag (pre-W17 saves never had one).
-// Use null means an empty bag (pre-W10 saves never got the starter kit).
-// The four *Order lists hold cell positions; null/0 means empty.
-// CashWorn/DecBag null marks a pre-cash save; Inventory.Ensure fills defaults.
+// an empty equip bag.
+// Use null means an empty bag. The four *Order lists hold cell positions;
+// null/0 means empty and CreateHero creates them through Inventory.Ensure.
+// CashWorn/DecBag hold the free default coupons and are set on creation.
 // SkillLv maps skill -> level (lv 0 = unlearned, no entry); Sp is unspent
-// skill points (pre-W12 saves start at 0 and earn fresh).
+// skill points.
 public sealed class CharaSlot
 {
     public string Name { get; set; } = "";
@@ -174,14 +183,14 @@ public sealed class CharaSlot
     public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
     public Dictionary<int, int>? EquipBag { get; set; } // itemId -> count (EQUIP tab bag; each copy takes one cell)
     public Dictionary<int, int>? CashBag { get; set; } // itemId -> count (CASH tab, non-decorative)
-    public Dictionary<int, int>? DecBag { get; set; } // itemId -> count (DEC tab, decorative)
+    public Dictionary<int, int>? DecBag { get; set; } // itemId -> count (DEC tab: bought decorations, including coupons not worn)
     public List<int>? UseOrder { get; set; } // one item id per cell, 0 = empty
     public List<int>? EquipOrder { get; set; }
     public List<int>? CashOrder { get; set; }
     public List<int>? DecOrder { get; set; }
-    public bool Female { get; set; } // body/head set; defaults to male for old saves
-    public int Hair { get; set; } // current hair cosmetic id (0 = default)
-    public int Face { get; set; } // current face cosmetic id (0 = default)
+    public bool Female { get; set; } // body/head set; CreateHero sets it, old saves are rejected
+    public int Hair { get; set; } // current hair cosmetic id; CreateHero sets the default
+    public int Face { get; set; } // current face cosmetic id; CreateHero sets the default
     public List<int>? CashWorn { get; set; } // worn decorative cash item ids (Fashion, current hair/face coupons)
     public List<Dictionary<string, string>>? KeyPresets { get; set; } // three key -> target maps (null = defaults)
     public int ActivePreset { get; set; } // which of the three is live (0..2)

@@ -40,7 +40,7 @@ public sealed class Tips : Component, IDrawable
         var name = gfx.Ui.GetSmall(item.Name);
         var lines = new List<Texture2D>();
         foreach (string text in ItemLines.Detail(item)) lines.Add(gfx.Ui.GetSmall(text));
-        // The description String.wz carries (potions have one, gear has none).
+        // The description String.wz carries (potions, cash coupons and the cash rings have one).
         var desc = new List<Texture2D>();
         if (item.Desc.Length != 0)
             foreach (string text in gfx.Ui.Wrap(item.Desc, _invLay.Get("tipTextW", 180))) desc.Add(gfx.Ui.GetSmall(text));

@@ -42,6 +42,23 @@ public class SaveTests
     }
 
     [TestMethod]
+    public void CreateHero_GivesDefaultCoupons()
+    {
+        var store = new SaveStore();
+        var chara = store.CreateHero(0, 0, "hero");
+
+        Assert.IsFalse(chara.Female);
+        Assert.AreEqual(ItemData.DefaultHairMale, chara.Hair);
+        Assert.AreEqual(ItemData.DefaultFaceMale, chara.Face);
+        CollectionAssert.AreEquivalent(
+            new[] { ItemData.HairCouponMale, ItemData.FaceCouponMale }, chara.CashWorn);
+        Assert.AreEqual(1, chara.DecBag![ItemData.HairCouponFemale]);
+        Assert.AreEqual(1, chara.DecBag[ItemData.FaceCouponFemale]);
+        CollectionAssert.AreEquivalent(
+            new[] { ItemData.HairCouponFemale, ItemData.FaceCouponFemale }, chara.DecOrder!.Take(2).ToArray());
+    }
+
+    [TestMethod]
     public void Load_OldSlot_MissingVitalsDefault()
     {
         var slot = System.Text.Json.JsonSerializer.Deserialize<CharaSlot>("""{"Name":"hero"}""")!;
@@ -50,6 +67,47 @@ public class SaveTests
         Assert.AreEqual(50, slot.Hp);
         Assert.AreEqual(5, slot.Mp);
         Assert.IsNull(slot.Use); // pre-W10 saves never got the starter kit
+    }
+
+    [TestMethod]
+    public void Load_OldSaveWithoutOrderLists_FailsLoud()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.Saves[0]!.Slots[0] = new CharaSlot { Name = "old" };
+            store.Save(path);
+            Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Load_ShortOrderLists_FailsLoud()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.Saves[0]!.Slots[0] = new CharaSlot
+            {
+                Name = "short",
+                UseOrder = new List<int>(),
+                EquipOrder = new List<int>(),
+                CashOrder = new List<int>(),
+                DecOrder = new List<int>(),
+            };
+            store.Save(path);
+            Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [TestMethod]
@@ -241,16 +299,24 @@ public class SaveTests
         string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
         try
         {
-            // a file written when the caps were lower: short lists grow with fresh saves, nulls heal
-            File.WriteAllText(path, """{"Saves":[null,{"Slots":[{"Name":"hero"}]}]}""");
+            // a short outer array: Load pads saves and slots back to the caps
+            var source = new SaveStore();
+            var hero = source.CreateHero(0, 0, "hero");
+            File.WriteAllText(path, "{\"Saves\":[null,{\"Slots\":[" + JsonSerializer.Serialize(hero) + "]}]}");
             var store = SaveStore.Load(path);
             Assert.AreEqual(SaveStore.MaxSaves, store.Saves.Count);
             Assert.IsNotNull(store.Saves[0]);
             Assert.IsNotNull(store.Saves[2]);
             Assert.IsTrue(store.Saves[0]!.Slots.All(h => h == null));
             Assert.AreEqual(SaveStore.MaxHeroes, store.Saves[1]!.Slots.Count);
-            Assert.AreEqual("hero", store.Saves[1]!.Slots[0]!.Name);
+            var loaded = store.Saves[1]!.Slots[0]!;
+            Assert.AreEqual("hero", loaded.Name);
+            Assert.IsNotNull(loaded.CashWorn);
             Assert.IsNull(store.Saves[1]!.Slots[1]);
+            Assert.AreEqual(Inventory.Capacity, loaded.UseOrder!.Count);
+            Assert.AreEqual(Inventory.Capacity, loaded.EquipOrder!.Count);
+            Assert.AreEqual(Inventory.Capacity, loaded.CashOrder!.Count);
+            Assert.AreEqual(Inventory.Capacity, loaded.DecOrder!.Count);
         }
         finally
         {

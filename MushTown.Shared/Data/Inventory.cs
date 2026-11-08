@@ -8,12 +8,24 @@ public static class Inventory
 
     private static readonly string[] Tabs = { "use", "equip", "cash", "dec" };
 
-    // Heals old saves: missing bags and order lists, default coupons, and
-    // cells for items that predate the order lists.
+    // Starts a new character's bags and order lists.
     public static void Ensure(CharaSlot chara)
     {
-        EnsureCashDefaults(chara);
         foreach (string tab in Tabs) EnsureTab(chara, tab);
+    }
+
+    // A new character gets all four free coupons once: the current gender's
+    // pair goes on the doll, the other pair goes to the decoration bag.
+    public static void GiveCashDefaults(CharaSlot chara)
+    {
+        int hairCoupon = chara.Female ? ItemData.HairCouponFemale : ItemData.HairCouponMale;
+        int faceCoupon = chara.Female ? ItemData.FaceCouponFemale : ItemData.FaceCouponMale;
+        int otherHair = chara.Female ? ItemData.HairCouponMale : ItemData.HairCouponFemale;
+        int otherFace = chara.Female ? ItemData.FaceCouponMale : ItemData.FaceCouponFemale;
+        chara.CashWorn = new List<int> { hairCoupon, faceCoupon };
+        chara.DecBag = new Dictionary<int, int> { [otherHair] = 1, [otherFace] = 1 };
+        chara.Hair = chara.Female ? ItemData.DefaultHairFemale : ItemData.DefaultHairMale;
+        chara.Face = chara.Female ? ItemData.DefaultFaceFemale : ItemData.DefaultFaceMale;
     }
 
     private static Dictionary<int, int> Bag(CharaSlot chara, string tab) => tab switch
@@ -164,8 +176,8 @@ public static class Inventory
         };
     }
 
-    // Old saves have no order lists: pad to 128 cells and give every bag item
-    // its cell. A tab that already has the cells keeps them.
+    // Pad the order to 128 cells and give every bag item its cell. A tab
+    // that already has the cells keeps them.
     private static void EnsureTab(CharaSlot chara, string tab)
     {
         var order = Order(chara, tab);
@@ -191,38 +203,4 @@ public static class Inventory
         }
     }
 
-    // A pre-cash save gets all four free coupons once: the current gender's
-    // pair goes on the doll, the other pair goes to the decoration bag.
-    private static void EnsureCashDefaults(CharaSlot chara)
-    {
-        if (chara.DecBag != null && chara.CashWorn != null)
-        {
-            if (chara.Hair == 0) chara.Hair = chara.Female ? ItemData.DefaultHairFemale : ItemData.DefaultHairMale;
-            if (chara.Face == 0) chara.Face = chara.Female ? ItemData.DefaultFaceFemale : ItemData.DefaultFaceMale;
-            return;
-        }
-        chara.DecBag ??= new Dictionary<int, int>();
-        chara.CashWorn ??= new List<int>();
-        int hairCoupon = chara.Female ? ItemData.HairCouponFemale : ItemData.HairCouponMale;
-        int faceCoupon = chara.Female ? ItemData.FaceCouponFemale : ItemData.FaceCouponMale;
-        int otherHair = chara.Female ? ItemData.HairCouponMale : ItemData.HairCouponFemale;
-        int otherFace = chara.Female ? ItemData.FaceCouponMale : ItemData.FaceCouponFemale;
-        WearDefault(chara, hairCoupon);
-        WearDefault(chara, faceCoupon);
-        if (!chara.CashWorn.Contains(otherHair)) chara.DecBag.TryAdd(otherHair, 1);
-        if (!chara.CashWorn.Contains(otherFace)) chara.DecBag.TryAdd(otherFace, 1);
-        if (chara.Hair == 0) chara.Hair = chara.Female ? ItemData.DefaultHairFemale : ItemData.DefaultHairMale;
-        if (chara.Face == 0) chara.Face = chara.Female ? ItemData.DefaultFaceFemale : ItemData.DefaultFaceMale;
-    }
-
-    private static void WearDefault(CharaSlot chara, int id)
-    {
-        if (chara.CashWorn!.Contains(id)) return;
-        if (chara.DecBag!.TryGetValue(id, out int n))
-        {
-            if (n <= 1) chara.DecBag.Remove(id);
-            else chara.DecBag[id] = n - 1;
-        }
-        chara.CashWorn.Add(id);
-    }
 }
