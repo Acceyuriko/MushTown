@@ -146,7 +146,7 @@ public partial class MushTownGame
         bool created = false;
         try
         {
-            _store.CreateHero(_saveSlot, _slot, _name);
+            _store.CreateHero(_saveSlot, _slot, _name, _jobs[_jobPick].Id);
             created = true; // from here a failed Save must roll the new slot back out
             _store.Save(_savesPath);
             GameLog($"created {_name}");

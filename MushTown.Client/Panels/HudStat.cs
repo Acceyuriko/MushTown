@@ -1,51 +1,43 @@
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The character info window: the official MapleStory art (UICharacterInfo).
-// One window with two tabs: STAT (the stats page) and EQUIP (the equip
-// page). The official label art carries the stat names, the numbers are
-// live, the equip slots show the worn items and open the item detail box.
-// Every number of the window lives in layouts/panel-stat.json.
+// The character info window (UICharacterInfo.img): the official Character
+// Info block with the portrait on top and the STAT block with the live
+// numbers under it. Every number of the window lives in
+// layouts/panel-stat.json.
 public partial class MushTownGame
 {
     private static readonly PanelLayout _statLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-stat.json"));
 
-    private int _statTab; // 0 = STAT, 1 = EQUIP
     private bool _statPlaced; // the window took the spot from the layout file
-    private int _statDetail; // the worn item the user clicked (0 = none)
 
-    // The window: the official detail window (472x479), the tab bar on top.
     private int StatW => _statLay.Get("w", 472);
-    private int StatH => _statLay.Get("h", 479);
+    private int StatH => _statLay.Get("h", 709);
     private int StatBodyX => _statLay.Get("bodyX", 12);
-    private int StatBodyY => _statLay.Get("bodyY", 38);
+    private int StatBodyY => _statLay.Get("bodyY", 268);
     private Rectangle StatRect() => new(0, 0, StatW, StatH);
-    private Rectangle StatTabRect(int tab) => new(
-        _statLay.Get("tabX", 11) + tab * _statLay.Get("tabGap", 113),
-        _statLay.Get("tabY", 12), 111, 20);
-    private Rectangle StatXRect() => new(StatW - 23, _statLay.Get("tabY", 12), 11, 11);
-    private Rectangle StatDragRect() => new(StatTabRect(1).Right + 4, 0, StatXRect().X - StatTabRect(1).Right - 8, 32); // y 0 = the window top edge
+    private Rectangle StatXRect() => new(_statLay.Get("closeX", 449), _statLay.Get("closeY", 12), 11, 11);
+    private Rectangle StatDragRect() => new(0, 0, StatXRect().X, _statLay.Get("titleH", 32));
 
     // The window takes the spot from the layout file the first time it opens.
     private void StatPlaceFirst()
     {
         if (_statPlaced) return;
         _statPlaced = true;
-        _statPos = new Point(_statLay.Get("x", 656), _statLay.Get("y", 130));
+        _statPos = new Point(_statLay.Get("x", 447), _statLay.Get("y", 29));
     }
 
     private void LoadStatArt()
     {
         foreach (string f in new[]
         {
-            "stat_win.png", "stat_tab_stat_s.png", "stat_tab_stat_n.png", "stat_tab_equip_s.png",
-            "stat_tab_equip_n.png", "stat_x.png", "stat_page.png", "stat_label_main.png",
-            "stat_label_mp.png", "stat_label_attack.png", "stat_label_utility.png", "stat_hl_long.png",
-            "stat_hl_short.png", "stat_equip.png", "tip_nw.png", "tip_ne.png", "tip_sw.png", "tip_se.png",
-            "tip_n.png", "tip_s.png", "tip_w.png", "tip_e.png", "tip_c.png",
+            "charinfo_main.png", "stat_win.png", "stat_statbar.png", "stat_name.png", "stat_x.png", "stat_page.png",
+            "stat_label_main.png", "stat_label_mp.png", "stat_label_attack.png", "stat_label_utility.png",
+            "stat_hl_long.png", "stat_hl_short.png",
+            "tip_nw.png", "tip_ne.png", "tip_sw.png", "tip_se.png", "tip_n.png", "tip_s.png",
+            "tip_w.png", "tip_e.png", "tip_c.png",
         })
             LoadTexture("ui/" + f);
     }
@@ -54,35 +46,46 @@ public partial class MushTownGame
     {
         LoadStatArt();
         StatPlaceFirst();
-        _statPos = ClampPanel(_statPos, StatW); // the window is wider than the old one: keep it on screen
+        _statPos = ClampPanel(_statPos, StatW, StatH); // the window is taller than the old one: keep it on screen
         _statHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(StatRect())); // the body swallows the clicks, like the legacy fallthrough
-        body.Add(new Picture("ui/stat_win.png")); // the official detail window
-        if (_statTab == 0) BuildStatPage(body);
-        else BuildEquipPage(body);
-        // the tab bar: the official STAT and EQUIP buttons
-        int tabX = _statLay.Get("tabX", 11), tabY = _statLay.Get("tabY", 12);
-        body.Add(new Picture(_statTab == 0 ? "ui/stat_tab_stat_s.png" : "ui/stat_tab_stat_n.png", tabX, tabY));
-        body.Add(new Picture(_statTab == 1 ? "ui/stat_tab_equip_s.png" : "ui/stat_tab_equip_n.png", tabX + _statLay.Get("tabGap", 113), tabY));
+        body.Add(new Picture("ui/charinfo_main.png", _statLay.Get("topX", 0), _statLay.Get("topY", 0)));
+        body.Add(new Picture("ui/stat_win.png", _statLay.Get("blockX", 0), _statLay.Get("blockY", 230)));
+        body.Add(new Picture("ui/stat_statbar.png", _statLay.Get("stripX", 11), _statLay.Get("stripY", 241)));
+        BuildStatPage(body);
+        // the portrait stands on the white block: real gear, plain body until the cash look arrives
+        var feet = new GameObject { NoHit = true };
+        feet.Add(new Rect(new Rectangle(_statLay.Get("feetX", 236), _statLay.Get("feetY", 159), 1, 1)));
+        feet.Add(new AvatarPreview(this, "stand1", StandFrame, false, () => Hero?.Equips));
+        body.AddChild(feet);
+        var job = new GameObject();
+        job.Add(new Rect(new Rectangle(
+            _statLay.Get("jobX", 76) - _statLay.Get("jobW", 108) / 2,
+            _statLay.Get("jobY", 42), _statLay.Get("jobW", 108), 10)));
+        job.Add(new Text { Value = JobLabel, Ink = Color.White, Align = TextAlign.Center, Line = TextLine.Top });
+        body.AddChild(job);
+        var lv = new GameObject();
+        lv.Add(new Rect(new Rectangle(
+            _statLay.Get("lvX", 244) - _statLay.Get("lvW", 80) / 2,
+            _statLay.Get("lvY", 33), _statLay.Get("lvW", 80), 10)));
+        lv.Add(new Text { Value = () => $"Lv. {Hero?.Level ?? 1}", Ink = new Color(90, 95, 105), Align = TextAlign.Center, Line = TextLine.Top });
+        body.AddChild(lv);
+        body.Add(new NamePlate(() => Hero?.Name ?? "",
+            _statLay.Get("nameX", 236), _statLay.Get("nameY", 162)));
         body.Add(new Picture("ui/stat_x.png", StatXRect().X, StatXRect().Y));
-        // the name and level sit on the free strip right of the tabs
-        body.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => $"{_save?.Slots[_slot]?.Name ?? ""}  Lv.{_save?.Slots[_slot]?.Level ?? 1}",
-            _statLay.Get("nameX", 440), _statLay.Get("nameY", 8), new Color(200, 220, 0)));
-        body.AddChild(PanelButton(StatTabRect(0), "", () => SetStatTab(0), ButtonKind.Click));
-        body.AddChild(PanelButton(StatTabRect(1), "", () => SetStatTab(1), ButtonKind.Click));
-        body.AddChild(PanelButton(StatXRect(), "x1", () => _showStat = false, ButtonKind.Click));
         body.AddChild(PanelButton(StatDragRect(), "", () => _dragStat = _uiScene.LastClick - _statPos));
+        body.AddChild(PanelButton(StatXRect(), "x1", () => _showStat = false, ButtonKind.Click));
         _statHost.AddChild(body);
     }
 
-    // The tab changed: the page changed with it, so the scene is rebuilt.
-    private void SetStatTab(int tab)
-    {
-        _statTab = tab;
-        _statDetail = 0;
-        BuildStatScene();
-    }
+    // The job name in the top-left pill, as plain text: the class the create
+    // page picked (Hero stays Hero, not the Warrior branch).
+    private string JobLabel() => JobNames.Of(Hero?.Job ?? 110);
+
+    // The idle frame of the portrait: the same clock every other idle in the
+    // game reads, so the doll breathes instead of holding one frame.
+    private int StandFrame() => Idle.At(_delays["stand1"], (float)_timeMs);
 
     // The stats page: the official panel art with the live numbers.
     private void BuildStatPage(GameObject body)
@@ -107,66 +110,6 @@ public partial class MushTownGame
             body.AddChild(o);
         }
     }
-
-    // The equip page: the official slot frames, the worn items in them.
-    private void BuildEquipPage(GameObject body)
-    {
-        int bx = StatBodyX, by = StatBodyY;
-        body.Add(new Picture("ui/stat_equip.png", bx, by));
-        foreach (int id in _save?.Slots[_slot]?.Equips ?? new List<int>())
-        {
-            if (!_items.TryGetValue(id, out var data)) continue;
-            var box = EquipSlotBox(data.Slot);
-            if (box.X < 0) continue; // a kind the official page has no slot for
-            var slot = new GameObject();
-            slot.Add(new Rect(new Rectangle(bx + box.X, by + box.Y, 42, 42)));
-            slot.Add(new Button { Kind = ButtonKind.Click, OnClick = () => ShowStatDetail(id) });
-            slot.Add(new EquipIcon(data.Image));
-            body.AddChild(slot);
-        }
-        if (_statDetail != 0) BuildStatDetail(body, _statDetail);
-    }
-
-    // Clicking a slot opens the item detail; clicking it again closes it.
-    private void ShowStatDetail(int id)
-    {
-        _statDetail = _statDetail == id ? 0 : id;
-        BuildStatScene();
-    }
-
-    // The item detail box: the official tooltip frame around the item.
-    private void BuildStatDetail(GameObject body, int id)
-    {
-        var data = _items[id];
-        int x = _statLay.Get("detailX", 252), y = _statLay.Get("detailY", 68);
-        int w = _statLay.Get("detailW", 200), h = _statLay.Get("detailH", 160);
-        int iconSize = _statLay.Get("detailIconSize", 32);
-        var box = new GameObject();
-        box.Add(new Rect(new Rectangle(x, y, w, h)));
-        box.Add(new Box("tip"));
-        box.Add(new LiveLabel(() => data.Name, _statLay.Get("detailNameX", 48), _statLay.Get("detailNameY", 6), new Color(255, 220, 0)));
-        int ly = _statLay.Get("detailLineY", 28);
-        foreach (string line in ItemLines.Detail(data))
-        {
-            box.Add(new LiveLabel(() => line, _statLay.Get("detailLineX", 48), ly, Color.White));
-            ly += _statLay.Get("detailLineGap", 16);
-        }
-        body.AddChild(box);
-        var icon = new GameObject();
-        icon.Add(new Rect(new Rectangle(x + _statLay.Get("detailIconX", 8), y + _statLay.Get("detailIconY", 8), iconSize, iconSize)));
-        icon.Add(new EquipIcon(data.Image));
-        body.AddChild(icon);
-    }
-
-    // The equip slots the game has data for: the WZ slot kind gives the slot
-    // box on the official equip page (a kind with no slot stays empty).
-    private (int X, int Y) EquipSlotBox(string? kind) => kind switch
-    {
-        "Wp" => (_statLay.Get("weaponX", 105), _statLay.Get("weaponY", 83)),
-        "Ma" => (_statLay.Get("topX", 150), _statLay.Get("topY", 83)),
-        "Ri" => (_statLay.Get("ringX", 15), _statLay.Get("ringY", 38)),
-        _ => (-1, -1),
-    };
 
     // One stat column: the hover box (x, w), the number spot (vx) and the
     // bar art the official page uses for that column.
@@ -262,6 +205,30 @@ public partial class MushTownGame
     }
 }
 
+// The character name on the official blue plate: the plate grows with the
+// name. Only the middle column stretches, so the rounded ends keep their
+// shape and the 1px edge stays 1px instead of turning into a white band.
+public sealed class NamePlate : Component, IDrawable
+{
+    private const int Cap = 7; // the rounded end of the 89x19 plate
+    private readonly Func<string> _text;
+    private readonly int _cx, _y;
+    public NamePlate(Func<string> text, int cx, int y) { _text = text; _cx = cx; _y = y; }
+    public void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Screen;
+        var t = gfx.Ui.GetSmall(_text());
+        var plate = gfx.Tex("ui/stat_name.png");
+        int w = Math.Max(plate.Width, t.Width + 14); // the official plate width; a longer name stretches it
+        int x = r.X + _cx - w / 2, y = r.Y + _y;
+        int h = plate.Height;
+        gfx.Sb.Draw(plate, new Rectangle(x, y, Cap, h), new Rectangle(0, 0, Cap, h), Color.White);
+        gfx.Sb.Draw(plate, new Rectangle(x + Cap, y, w - Cap * 2, h), new Rectangle(plate.Width / 2, 0, 1, h), Color.White);
+        gfx.Sb.Draw(plate, new Rectangle(x + w - Cap, y, Cap, h), new Rectangle(plate.Width - Cap, 0, Cap, h), Color.White);
+        Text.Draw(gfx.Sb, gfx.Ui, t, new Rectangle(x, y, w, h), Color.White, TextLine.Middle, TextAlign.Center);
+    }
+}
+
 // The official row highlight: the bar under the hovered stat row. It covers
 // the row box, so the bar is always as wide as the column it belongs to.
 public sealed class StatHighlight : Component, IDrawable
@@ -273,18 +240,5 @@ public sealed class StatHighlight : Component, IDrawable
         if (gfx.Hovered != Owner) return;
         var r = Owner.Get<Rect>()!.Screen;
         gfx.Sb.Draw(gfx.Tex(_art), new Rectangle(r.X, r.Y, r.Width, r.Height), Color.White);
-    }
-}
-
-// The item icon in the middle of an equip slot.
-public sealed class EquipIcon : Component, IDrawable
-{
-    private readonly string _image;
-    public EquipIcon(string image) => _image = image;
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Screen;
-        var icon = gfx.Tex(_image);
-        gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
     }
 }

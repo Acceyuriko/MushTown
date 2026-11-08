@@ -297,10 +297,10 @@ public sealed class ItemData
     public const int DefaultFaceMale = 20000;
     public const int DefaultFaceFemale = 20002;
 
-    // Beginner img per worn slot: the doll merge draws these when the slot
-    // sits empty (only slots with v1 equips need entries). The beginner's
-    // "Ma" is the longcoat 01050287; the pants 01060026 are a separate baked
-    // part and no v1 gear swaps them.
+    // Beginner img per worn slot: the export and item validation use this row
+    // to know which beginner art a gear slot replaces (only slots with v1
+    // equips need entries). The pants 01060026 are a separate baked part and
+    // no v1 gear swaps them.
     public static readonly Dictionary<string, string> BeginnerImgs = new()
     {
         ["Wp"] = "01302000",
@@ -351,6 +351,7 @@ public sealed class ItemData
     public int ChatBalloon { get; set; } // WZ info/chatBalloon: the style of the speech balloon (0 = the plain one)
     public bool HasArt { get; set; } // the exporter wrote doll frames for this equip (rings carry none)
     public bool Cash { get; set; } // WZ info/cash: cash-shop cosmetic or utility, not normal gear or a consumable
+    public int Cosmetic { get; set; } // WZ spec/cosmetic: the hair/face look a coupon gives (0 = not a coupon)
 }
 
 // Basic damage skin digits: assets/effect/dmg.json (BasicEff.img NoRed0,
@@ -446,8 +447,8 @@ public sealed class JobData
     public string Stat { get; set; } = ""; // WZ stat, e.g. "STR"
 }
 
-// Exported character action: assets/chara/body/{action}.json (beginner full
-// merge) or assets/chara/gear/{imgId}/{action}.json (one gear's parts).
+// Exported character action: assets/chara/body/{action}.json (plain body,
+// only boxers) or assets/chara/gear/{imgId}/{action}.json (one gear's parts).
 public sealed class CharaData
 {
     public List<CharaFrame> Frames { get; set; } = new();
@@ -463,8 +464,8 @@ public sealed class CharaPart
 {
     public string Image { get; set; } = "";
 
-    // Source img id (00002000, 01050287, ...): the doll merge keeps base
-    // parts and swaps each worn slot's beginner img for the worn gear.
+    // Source img id (00002000, 01050287, ...): the doll merge appends the
+    // worn gear parts to the plain body parts.
     public string Img { get; set; } = "";
 
     // Image top-left corner in character space. Anchor (0,0) is between the feet.

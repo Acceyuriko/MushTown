@@ -262,9 +262,8 @@ public partial class MushTownGame
     }
 
     // The menu rows open the panels the game has.
-    internal void OpenStatWindow(int tab)
+    internal void OpenStatWindow()
     {
-        SetStatTab(tab);
         _showStat = true;
         _dragStat = null;
         RaisePanel(PanelId(Feature.Stat));

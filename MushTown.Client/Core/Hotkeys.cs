@@ -11,7 +11,7 @@ namespace MushTown.Client;
 public enum HotkeyAction
 {
     Inventory,   // I
-    Stat,        // S: the stat page of the stat window
+    Stat,        // S: Character Info
     Skill,       // K
     Quest,       // Q
     Minimap,     // no key: always on screen

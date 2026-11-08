@@ -478,7 +478,7 @@ public partial class MushTownGame
         var avatar = new GameObject();
         avatar.Add(new Rect(new Rectangle(ShopLeftW + _shopLay.Get("invAvatarX", 58),
             _shopLay.Get("invAvatarY", 88), 1, 1)));
-        avatar.Add(new AvatarPreview(this, "stand1", () => 0, faceRight: false));
+        avatar.Add(new AvatarPreview(this, "stand1", () => 0, faceRight: false, () => _save?.Slots[_slot]?.Equips));
         body.AddChild(avatar);
         body.Add(new Picture("ui/shop_inv_meso.png", ShopLeftW + _shopLay.Get("invMesoBgX", 106),
             _shopLay.Get("invMesoBgY", 66)));

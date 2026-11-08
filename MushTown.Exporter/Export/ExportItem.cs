@@ -62,6 +62,7 @@ public static partial class Export
                 ItemData.HairCouponMale => ItemData.DefaultHairMale,
                 ItemData.HairCouponFemale => ItemData.DefaultHairFemale,
                 ItemData.FaceCouponMale => ItemData.DefaultFaceMale,
+                ItemData.FaceCouponFemale => ItemData.DefaultFaceFemale,
                 _ => 0, // a new coupon needs its own expected cosmetic
             };
             int cosmetic = Int(item.Find($"Cash/0515.img/{id:D8}/spec"), "cosmetic");
@@ -78,6 +79,7 @@ public static partial class Export
                 Desc = CleanDesc(str.Find($@"Cash.img\{id}\desc")?.GetValueEx<string>("") ?? "",
                     id is ItemData.HairCouponMale or ItemData.HairCouponFemale ? "hair" : "face"),
                 Cash = true,
+                Cosmetic = cosmetic,
             };
             if (!UiPng.Save(item, "Item", $"Cash/0515.img/{iconId.ToString("D8")}/info/icon", Path.Combine(outDir, "cashitem", $"{id}.png")))
                 return false;

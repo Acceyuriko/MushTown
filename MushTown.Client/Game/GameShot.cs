@@ -21,7 +21,7 @@ public partial class MushTownGame
             // The demo bag holds one item per slot: the doll wears them all.
             foreach (int id in chara.EquipBag!.Keys.ToList())
                 Progression.WearEquip(chara, id, _items);
-            BuildStatScene(); // the equip page shows the worn items: bake them in
+            BuildStatScene(); // the Character Info portrait shows the worn items: bake them in
         }
         if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))
             throw new InvalidDataException($"unknown skill: {_shotSkill}");

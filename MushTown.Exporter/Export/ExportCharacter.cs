@@ -18,14 +18,15 @@ public static partial class Export
     private const string BeginnerLongcoat = @"Longcoat\01050287.img";
     private const string BeginnerSword = @"Weapon\01302000.img";
 
-    // Beginner gear on top of the naked body: the modern beginner default
-    // (Purple Muffler Outfit + Yellow Adventure Shoes) plus the one-handed
-    // Sword the stand1/walk1/swingO1 art is baked from. The striped boxers
-    // stay under the outfit so a worn coat (any Ma gear) still has legs to
-    // show.
+    // Beginner gear on top of the naked body, in the order the bones flow: the
+    // striped boxers (the underwear every character shows), then the beginner
+    // outfit and the sword the stand1/walk1/swingO1 art is baked from. A gear
+    // bake stops at the piece it replaces; the plain body keeps the boxers
+    // only, so a character with nothing equipped stands in underwear.
+    private const string BeginnerBoxers = @"Pants\01060026.img";
     private static readonly string[] CharaEquips = new[]
     {
-        @"Pants\01060026.img",
+        BeginnerBoxers,
         BeginnerLongcoat,
         @"Shoes\01072833.img",
         BeginnerSword,
@@ -139,6 +140,7 @@ public static partial class Export
             missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(hairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
             foreach (string img in CharaEquips)
             {
+                if (gear == null && img != BeginnerBoxers) continue; // the plain body is underwear only
                 bool isTarget = img == gearBeginner;
                 string path = isTarget ? gear! : img;
                 var equipFrame = FindImgFrame(looseRoot, path, action, frameIdx);

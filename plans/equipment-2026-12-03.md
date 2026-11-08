@@ -142,8 +142,8 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 
 - `CashWorn` 里的 `Wp` → Outfits 页 Weapon 格。
 - `CashWorn` 里的 `Ma` → Outfits 页 Top 和 Bottom 两个格子。
-- `Hair` → Outfits 页 Hair 格，图标用默认/已买发型 coupon 的 `ItemData.Image`。
-- `Face` → Outfits 页 Face 格，图标用默认/已买脸 coupon 的 `ItemData.Image`。
+- `Hair` → Outfits 页 Hair 格；有纸娃娃时画上半身预览（`LookBust`），没有时退回券的 `ItemData.Image`。
+- `Face` → Outfits 页 Face 格；有纸娃娃时画上半身预览（`LookBust`），没有时退回券的 `ItemData.Image`。
 - 没有 Cash 外观时，Outfits 页对应格子留空。
 
 ## 背包修改
@@ -293,7 +293,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
   - 上：`UICharacterInfo.img/common/main/backgrnd`，472×230。
   - 下：`UICharacterInfo.img/local/detail/backgrnd`，472×479，接在上图下面。
 - 整个窗口 472×709，默认居中：x=(1366-472)/2=447，y=(768-709)/2=29。
-- 上半画角色立绘：脚底初值 x=236，y=190。具体数字进 `panel-stat.json`，可热重载调整。
+- 上半画角色立绘：脚底初值 x=236，y=159（实现时按不压名字牌调整）。具体数字进 `panel-stat.json`，可热重载调整。
 - 立绘用真实外观：装备 + 默认头发 / 默认脸；现金外观接入后自动带 Cash 外观。
 - 立绘下面写名字和 `Lv.N`。等级用现有 `CharaSlot.Level`。
 - 下半只放 STAT 属性页。删除 EQUIP 页签和装备格页面，不再从属性窗进装备。
@@ -312,7 +312,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - 两组页签的位置和间距。
 - Equipment / Outfits 内容底图位置。
 - 需要填充的格子位置、格子大小（第 3 周做内容时加）。
-- 图标缩放上限（第 3 周加）。
+- 图标缩放上限（第 3 周定：现有装备图标最大 33，42 格里原尺寸居中，不做缩放）。
 - Decorations / EquipUI / close 按钮位置。
 - tooltip 沿用现有 `Tips`，不新增位置。
 
@@ -351,7 +351,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 `--screen` 新增：
 
 - `equipui`：打开装备栏 Equipment 页，身上有武器和长袍。
-- `decorations`：打开装饰栏 Outfits 页，显示默认头发、默认脸和一件 Cash 长袍预览。
+- `decorations`：打开装饰栏 Outfits 页，显示默认头发、默认脸。
 - `inv` 仍然要能出图，用来确认 Equip 页不再把穿着的装备放在最前面。
 - `invscroll`：小窗 Use 页塞 40 格道具（消耗品图标不足 40，循环使用），滚动条出现，滚到第 2 行。
 - `stat`：Character Info 页，上面有角色立绘，下面是属性。

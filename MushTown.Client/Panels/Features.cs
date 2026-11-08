@@ -26,7 +26,7 @@ public partial class MushTownGame
         _menuWindow.Close();
         switch (feature)
         {
-            case Feature.Stat: OpenStatWindow(0); break;
+            case Feature.Stat: OpenStatWindow(); break;
             case Feature.Equip: ShowWindow(HotkeyAction.Equip); break;
             case Feature.Inventory: OpenInventoryWindow(); break;
             case Feature.Skill: OpenSkillWindow(); break;

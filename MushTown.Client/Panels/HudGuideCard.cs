@@ -63,7 +63,7 @@ public sealed class GuideCardWindow : UiWindow
     private void OpenCard()
     {
         if (_card == 0) _game.OpenQuestWindow();
-        else _game.OpenStatWindow(0);
+        else _game.OpenStatWindow();
     }
 
     // The arrow that switches to the card on its side. The box is the size

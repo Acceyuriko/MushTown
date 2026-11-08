@@ -51,11 +51,6 @@ public partial class MushTownGame
     private void QuickFeature(Feature feature)
     {
         int id = PanelId(feature);
-        if (id == 1 && _showStat && _statTab != 0)
-        {
-            OpenFeature(feature); // the Character Info icon switches back to its first page; it does not close
-            return;
-        }
         if (id >= 0) { TogglePanel(feature); return; } // open on top / raise when behind / close in front
         HotkeyAction? action = feature switch
         {

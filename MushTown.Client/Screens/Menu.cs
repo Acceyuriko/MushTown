@@ -163,15 +163,21 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "invscroll" or "stat" or "equip" or "equipui" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
+                "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
                 _ => Screen.Saves,
             };
+            _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
+            if (shotScreen == "chars2") _slot = PageSlots; // empty slot: no start/delete on the empty-page shot
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
             if (shotScreen == "invscroll") { _showInv = true; _invTab = 1; FillInvScrollShot(); }
+            if (shotScreen is "stat" or "equipui" or "decorations" or "hud") DressDemoForShot();
             if (shotScreen is "stat" or "hud") _showStat = true;
-            if (shotScreen == "equip") { _showStat = true; _statTab = 1; _statDetail = ItemData.LongSword; }
-            if (shotScreen == "equipui") ShowWindow(HotkeyAction.Equip);
+            if (shotScreen is "equipui" or "decorations")
+            {
+                if (shotScreen == "decorations") (WindowFor(HotkeyAction.Equip) as EquipWindow)!.ShowOutfits();
+                ShowWindow(HotkeyAction.Equip);
+            }
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
             if (shotScreen is "quest" or "questask" or "questforfeit" or "questpick") _showQuest = true;
             if (shotScreen == "settings") _showSettings = true;
@@ -212,8 +218,6 @@ public partial class MushTownGame
             if (shotScreen == "job2") { _jobPage = 1; _jobPick = 14; } // second card page: proves paging draws other classes
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
             if (shotScreen == "server") _hosts = new List<FoundHost> { new("192.168.1.4", Net.Port, "ACCEYURIKO") };
-            _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
-            if (shotScreen == "chars2") _slot = PageSlots; // empty slot: no start/delete on the empty-page shot
             if (_screen == Screen.Setup) { _name = "newhero"; _focus = "name"; }
             GameLog("MushTown saves menu shot");
         }
@@ -237,6 +241,17 @@ public partial class MushTownGame
             chara.Use[id] = 1;
         }
         _invScroll[1] = 2;
+    }
+
+    // The character info and the equipment window show the demo's real gear:
+    // the sword and the longcoat move from the bag to the worn list.
+    private void DressDemoForShot()
+    {
+        var chara = _save!.Slots[_slot]!;
+        chara.Equips = new List<int>();
+        foreach (int id in new[] { ItemData.LongSword, ItemData.LolicoArmor })
+            if (Inventory.Remove(chara, "equip", id, 1))
+                chara.Equips.Add(id);
     }
 
     // The shot dummy: Astra holds the Lv.7 hero plus a mage, Blackveil is empty.

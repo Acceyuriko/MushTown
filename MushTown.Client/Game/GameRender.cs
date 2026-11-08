@@ -29,7 +29,7 @@ public partial class MushTownGame
                 DrawName(feetX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
         }
         ));
-        foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers show beginner art (only the name plate crosses, via Name)
+        foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers draw the plain body until appearance sync (week 13)
         {
             int rx = (int)Math.Floor(r.X), ry = (int)Math.Floor(r.Y);
             var plate = r.Owner.Get<PlateArt>()!; // spawn always hangs one
@@ -124,7 +124,7 @@ public partial class MushTownGame
         foreach (var item in _map.Backs) { if (item.Front) DrawBack(item); }
     }
 
-    // Worn-or-beginner parts and the doll drawing live in Ui/AvatarArt.cs:
+    // The plain-body parts and the doll drawing live in Ui/AvatarArt.cs:
     // the world and the menus share them.
 
     // One background: parallax on the axes that do not scroll, then tile it over the

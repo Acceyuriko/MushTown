@@ -92,7 +92,7 @@ public partial class MushTownGame
         switch (action)
         {
             case HotkeyAction.Inventory: TogglePanel(Feature.Inventory); break;
-            case HotkeyAction.Stat: QuickFeature(Feature.Stat); break; // the other page of the stat window switches; the same page closes
+            case HotkeyAction.Stat: QuickFeature(Feature.Stat); break; // Character Info is one page; the same key toggles it
             case HotkeyAction.Equip: QuickFeature(Feature.Equip); break;
             case HotkeyAction.Skill: TogglePanel(Feature.Skill); break;
             case HotkeyAction.Quest: TogglePanel(Feature.Quest); break;
@@ -140,7 +140,7 @@ public partial class MushTownGame
         if (_dragStat.HasValue)
         {
             if (!held) _dragStat = null;
-            else _statPos = ClampPanel(new Point(gx - _dragStat.Value.X, gy - _dragStat.Value.Y), StatW);
+            else _statPos = ClampPanel(new Point(gx - _dragStat.Value.X, gy - _dragStat.Value.Y), StatW, StatH);
         }
         if (_dragSkill.HasValue)
         {
@@ -396,7 +396,7 @@ public partial class MushTownGame
         _uiScene.Add(held);
         var tips = new GameObject { NoHit = true, Z = TipZ }; // the last thing drawn: no layer can cover a tip
         tips.Add(new TipAnchor());
-        tips.Add(new Tips(() => _hand.Empty && !Holding, _items, _invLay, _statLay));
+        tips.Add(new Tips(this, () => _hand.Empty && !Holding, _items, _invLay, _statLay));
         _uiScene.Add(tips);
         SyncLayers(); // shots skip Update: without this the panels and windows draw empty there (first Update no-ops)
     }

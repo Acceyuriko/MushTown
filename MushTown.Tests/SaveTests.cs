@@ -18,17 +18,17 @@ public class SaveTests
     public void CreateHero_SixtySlots_NameUniquePerFile()
     {
         var store = new SaveStore();
-        store.CreateHero(0, 0, "hero");
-        store.CreateHero(0, 1, "hero2");
-        store.CreateHero(0, 59, "hero60");
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, 0, "other"));
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, 60, "other"));
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, -1, "neg"));
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(3, 0, "nosave"));
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "hero"));
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "bad name"));
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, ""));
-        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "toolongheroname"));
+        store.CreateHero(0, 0, "hero", 110);
+        store.CreateHero(0, 1, "hero2", 110);
+        store.CreateHero(0, 59, "hero60", 110);
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, 0, "other", 110));
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, 60, "other", 110));
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(0, -1, "neg", 110));
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(3, 0, "nosave", 110));
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "hero", 110));
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "bad name", 110));
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "", 110));
+        Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "toolongheroname", 110));
         var chara = store.Saves[0]!.Slots[0]!;
         Assert.AreEqual("hero", chara.Name);
         Assert.AreEqual(1, chara.Level);
@@ -45,7 +45,7 @@ public class SaveTests
     public void CreateHero_GivesDefaultCoupons()
     {
         var store = new SaveStore();
-        var chara = store.CreateHero(0, 0, "hero");
+        var chara = store.CreateHero(0, 0, "hero", 110);
 
         Assert.IsFalse(chara.Female);
         Assert.AreEqual(ItemData.DefaultHairMale, chara.Hair);
@@ -59,9 +59,27 @@ public class SaveTests
     }
 
     [TestMethod]
+    public void Save_Load_RoundtripsJob()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.CreateHero(0, 0, "hero", 120);
+            store.Save(path);
+            Assert.AreEqual(120, SaveStore.Load(path).Saves[0]!.Slots[0]!.Job);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void Load_OldSlot_MissingVitalsDefault()
     {
         var slot = System.Text.Json.JsonSerializer.Deserialize<CharaSlot>("""{"Name":"hero"}""")!;
+        Assert.AreEqual(110, slot.Job);
         Assert.AreEqual(1, slot.Level);
         Assert.AreEqual(0, slot.Exp);
         Assert.AreEqual(50, slot.Hp);
@@ -114,13 +132,13 @@ public class SaveTests
     public void DeleteHero_ClearsSlot()
     {
         var store = new SaveStore();
-        store.CreateHero(0, 0, "hero");
+        store.CreateHero(0, 0, "hero", 110);
         store.DeleteHero(0, 0);
         Assert.IsNull(store.Saves[0]!.Slots[0]);
         store.DeleteHero(0, 0); // deleting an empty slot is a no-op
         Assert.ThrowsException<InvalidDataException>(() => store.DeleteHero(0, 60));
         Assert.ThrowsException<InvalidDataException>(() => store.DeleteHero(0, -1));
-        store.CreateHero(0, 0, "hero"); // the freed name is reusable
+        store.CreateHero(0, 0, "hero", 110); // the freed name is reusable
         Assert.AreEqual("hero", store.Saves[0]!.Slots[0]!.Name);
     }
 
@@ -128,9 +146,9 @@ public class SaveTests
     public void DeleteHero_CompactsSlotsInOrder()
     {
         var store = new SaveStore();
-        store.CreateHero(0, 0, "a");
-        store.CreateHero(0, 1, "b");
-        store.CreateHero(0, 2, "c");
+        store.CreateHero(0, 0, "a", 110);
+        store.CreateHero(0, 1, "b", 110);
+        store.CreateHero(0, 2, "c", 110);
         store.DeleteHero(0, 1); // b goes: c slides left, no gap
         Assert.AreEqual("a", store.Saves[0]!.Slots[0]!.Name);
         Assert.AreEqual("c", store.Saves[0]!.Slots[1]!.Name);
@@ -147,7 +165,7 @@ public class SaveTests
         try
         {
             var store = new SaveStore();
-            var chara = store.CreateHero(1, 0, "hero");
+            var chara = store.CreateHero(1, 0, "hero", 110);
             chara.Map = 20000;
             chara.X = 300;
             chara.Y = 400;
@@ -178,7 +196,7 @@ public class SaveTests
         try
         {
             var store = new SaveStore();
-            store.CreateHero(0, 1, "hero");
+            store.CreateHero(0, 1, "hero", 110);
             store.Save(path);
             // slot 1 kept, slots 2-59 trimmed; load pads back to 60
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
@@ -213,7 +231,7 @@ public class SaveTests
         try
         {
             var store = new SaveStore();
-            var chara = store.CreateHero(0, 0, "hero");
+            var chara = store.CreateHero(0, 0, "hero", 110);
             chara.Quests.Add(90001);
             chara.QuestsDone.Add(90002);
             chara.QuestKills["90001:0"] = 2;
@@ -238,7 +256,7 @@ public class SaveTests
         try
         {
             var store = new SaveStore();
-            var chara = store.CreateHero(0, 0, "hero");
+            var chara = store.CreateHero(0, 0, "hero", 110);
             chara.KeyPresets = new List<Dictionary<string, string>>
             {
                 new() { ["I"] = "Inventory", ["D1"] = "Skill:1001005", ["D2"] = "Item:2000000" },
@@ -301,7 +319,7 @@ public class SaveTests
         {
             // a short outer array: Load pads saves and slots back to the caps
             var source = new SaveStore();
-            var hero = source.CreateHero(0, 0, "hero");
+            var hero = source.CreateHero(0, 0, "hero", 110);
             File.WriteAllText(path, "{\"Saves\":[null,{\"Slots\":[" + JsonSerializer.Serialize(hero) + "]}]}");
             var store = SaveStore.Load(path);
             Assert.AreEqual(SaveStore.MaxSaves, store.Saves.Count);

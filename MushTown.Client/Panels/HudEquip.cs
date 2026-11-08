@@ -5,14 +5,32 @@ namespace MushTown.Client;
 
 // The equipment window (UIEquip.img): the Equipment/Pet pages share one
 // 366x444 frame, the Outfits/Android/Damage Skin pages share the other.
-// Week 2 draws the frame, the tabs and the empty page canvases; the worn
-// items arrive in week 3.
+// The Equipment page shows the worn gear, the Outfits page the worn cash
+// items; the other three pages only show their empty canvases.
 public sealed class EquipWindow : UiWindow
 {
     private readonly MushTownGame _game;
     public EquipWindow(MushTownGame game) : base(HotkeyAction.Equip) { _game = game; }
 
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-equip.json"));
+
+    // The layout keys of every box on each page. A new box adds one row here
+    // and its numbers in panel-equip.json.
+    private static readonly Dictionary<string, (string X, string Y)> EquipBoxes = new()
+    {
+        ["weapon"] = ("weaponX", "weaponY"),
+        ["top"] = ("topX", "topY"),
+        ["bottom"] = ("bottomX", "bottomY"),
+    };
+
+    private static readonly Dictionary<string, (string X, string Y)> DecoBoxes = new()
+    {
+        ["weapon"] = ("decoWeaponX", "decoWeaponY"),
+        ["top"] = ("topX", "topY"),
+        ["bottom"] = ("bottomX", "bottomY"),
+        ["hair"] = ("hairX", "hairY"),
+        ["face"] = ("faceX", "faceY"),
+    };
 
     private enum EquipPage { Equipment, Pet, Outfits, Android, DamageSkins }
 
@@ -21,8 +39,11 @@ public sealed class EquipWindow : UiWindow
     private bool IsDeco => _page is EquipPage.Outfits or EquipPage.Android or EquipPage.DamageSkins;
 
     public override Rectangle Rect() => new(0, 0, _lay.Get("w", 366), _lay.Get("h", 444));
-    public override Rectangle TitleRect() => Rectangle.Empty;
+    public override Rectangle TitleRect() => new(0, 0, Rect().Width, _lay.Get("titleH", 31));
     public override Point LayoutPos() => new(_lay.Get("x", 500), _lay.Get("y", 162));
+
+    // The screenshot opens the decoration page directly.
+    public void ShowOutfits() => SetPage(EquipPage.Outfits);
 
     public override void Build()
     {
@@ -33,6 +54,7 @@ public sealed class EquipWindow : UiWindow
         root.Add(new Picture(IsDeco ? "ui/deco_bg.png" : "ui/equip_bg.png",
             _lay.Get("bgX", 0), _lay.Get("bgY", 0)));
         root.Add(new Picture(PageArt(), _lay.Get("contentX", 12), _lay.Get("contentY", 61)));
+        AddWorn(root);
         if (IsDeco)
         {
             AddTab(root, _lay.Get("decoTab0X", 12), _lay.Get("decoTabW0", 113), "deco_tab", 0, EquipPage.Outfits);
@@ -44,6 +66,7 @@ public sealed class EquipWindow : UiWindow
             AddTab(root, _lay.Get("equipTab0X", 11), _lay.Get("equipTabW", 171), "equip_tab", 0, EquipPage.Equipment);
             AddTab(root, _lay.Get("equipTab1X", 184), _lay.Get("equipTabW", 171), "equip_tab", 1, EquipPage.Pet);
         }
+        root.AddChild(MapWindowParts.TitleDrag(this, TitleRect()));
         if (_page == EquipPage.Equipment)
             root.AddChild(PictureButton(
                 new Rectangle(_lay.Get("switchX", 251), _lay.Get("switchYEquip", 72),
@@ -82,6 +105,46 @@ public sealed class EquipWindow : UiWindow
         root.AddChild(o);
     }
 
+    // The worn items: the Equipment page shows the gear, the Outfits page the
+    // cash items. Pet / Android / Damage Skins stay empty.
+    private void AddWorn(GameObject root)
+    {
+        if (_page is not (EquipPage.Equipment or EquipPage.Outfits)) return;
+        if (_game.Hero is not { } chara) return;
+        var items = _game.Items;
+        var slots = IsDeco ? EquipSlots.Cash(chara, items) : EquipSlots.Worn(chara, items);
+        foreach (var (slot, id) in slots)
+        {
+            var box = SlotBox(slot);
+            var data = items[id];
+            var o = new GameObject();
+            o.Add(new Rect(box));
+            o.Add(new ItemTip(() => id));
+            if ((slot is "hair" or "face") && _game.HasLookBust(data.Cosmetic))
+            {
+                int cosmetic = data.Cosmetic;
+                o.Add(new LookBust((gfx, rect) => _game.DrawLookBust(gfx, rect, cosmetic)));
+            }
+            else
+            {
+                _game.LoadTexture(data.Image);
+                o.Add(new InvItem(() => data.Image));
+            }
+            root.AddChild(o);
+        }
+    }
+
+    // The box of one window slot: the page's table names its layout keys.
+    private Rectangle SlotBox(string slot)
+    {
+        var (x, y) = (IsDeco ? DecoBoxes : EquipBoxes)[slot];
+        int size = _lay.Get("slotSize", 42);
+        int px = _lay.Get(x, -1), py = _lay.Get(y, -1);
+        if (px < 0 || py < 0) // a missing key would draw the item at the screen corner
+            throw new InvalidDataException($"panel-equip.json is missing {x}/{y} for slot {slot}");
+        return new Rectangle(px, py, size, size);
+    }
+
     private GameObject PictureButton(Rectangle r, string art, Action onClick)
     {
         var o = new GameObject();
@@ -114,4 +177,13 @@ public sealed class EquipWindow : UiWindow
             foreach (string s in new[] { "n", "s" })
                 _game.LoadTexture($"ui/deco_tab_{s}{t}.png");
     }
+}
+
+// A hair or face coupon in its slot: the doll's upper body, cropped by the
+// slot box (the game draws it, so the item tip shows the same bust).
+public sealed class LookBust : Component, IDrawable
+{
+    private readonly Action<UiGfx, Rectangle> _draw;
+    public LookBust(Action<UiGfx, Rectangle> draw) => _draw = draw;
+    public void Draw(UiGfx gfx) => _draw(gfx, Owner.Get<Rect>()!.Screen);
 }

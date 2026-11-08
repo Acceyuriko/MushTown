@@ -84,7 +84,7 @@ public sealed class SaveStore
         return kept;
     }
 
-    public CharaSlot CreateHero(int save, int slot, string name)
+    public CharaSlot CreateHero(int save, int slot, string name, int job)
     {
         CheckId(name, "character name");
         if ((uint)save >= MaxSaves)
@@ -103,6 +103,7 @@ public sealed class SaveStore
         var chara = new CharaSlot
         {
             Name = name,
+            Job = job,
             Sp = Progression.SpPerLevel, // creation banks the first level's points
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
@@ -157,7 +158,7 @@ public sealed class SaveData
 }
 
 // One character. X/Y null means never played: spawn at the map portal.
-// Equips null means the beginner set (nothing worn); EquipBag null means
+// Equips null means nothing worn; EquipBag null means
 // an empty equip bag.
 // Use null means an empty bag. The four *Order lists hold cell positions;
 // null/0 means empty and CreateHero creates them through Inventory.Ensure.
@@ -167,6 +168,7 @@ public sealed class SaveData
 public sealed class CharaSlot
 {
     public string Name { get; set; } = "";
+    public int Job { get; set; } = 110; // picked class id (110 = Hero: the only line the game plays; old saves have none)
     public int Level { get; set; } = 1;
     public int Exp { get; set; }
     public int Map { get; set; } = 10000;
@@ -194,7 +196,7 @@ public sealed class CharaSlot
     public List<int>? CashWorn { get; set; } // worn decorative cash item ids (Fashion, current hair/face coupons)
     public List<Dictionary<string, string>>? KeyPresets { get; set; } // three key -> target maps (null = defaults)
     public int ActivePreset { get; set; } // which of the three is live (0..2)
-    public List<int>? Equips { get; set; } // worn equip ids (null = beginner set)
+    public List<int>? Equips { get; set; } // worn equip ids (null = nothing worn)
     public Dictionary<int, int> SkillLv { get; set; } = new();
     public List<int> Quests { get; set; } = new(); // accepted quest ids
     public List<int> QuestsDone { get; set; } = new(); // turned-in quest ids

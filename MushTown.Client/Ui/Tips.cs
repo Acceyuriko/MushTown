@@ -10,13 +10,15 @@ namespace MushTown.Client;
 // cursor covers it, so the item tooltip waits.
 public sealed class Tips : Component, IDrawable
 {
+    private readonly MushTownGame _game;
     private readonly Func<bool> _cursorFree;
     private readonly Dictionary<int, ItemData> _items;
     private readonly PanelLayout _invLay;  // panel-inventory.json: the item tooltip's wrap width
-    private readonly PanelLayout _statLay; // panel-stat.json: the only source of the detail offsets (the stat window's box reads the same keys)
+    private readonly PanelLayout _statLay; // panel-stat.json: the item tooltip's detail offsets and bust size
 
-    public Tips(Func<bool> cursorFree, Dictionary<int, ItemData> items, PanelLayout invLay, PanelLayout statLay)
+    public Tips(MushTownGame game, Func<bool> cursorFree, Dictionary<int, ItemData> items, PanelLayout invLay, PanelLayout statLay)
     {
+        _game = game;
         _cursorFree = cursorFree;
         _items = items;
         _invLay = invLay;
@@ -46,9 +48,12 @@ public sealed class Tips : Component, IDrawable
             foreach (string text in gfx.Ui.Wrap(item.Desc, _invLay.Get("tipTextW", 180))) desc.Add(gfx.Ui.GetSmall(text));
 
         int iconX = _statLay.Get("detailIconX", 8), iconY = _statLay.Get("detailIconY", 8);
-        int iconSize = _statLay.Get("detailIconSize", 32);
-        int nameX = _statLay.Get("detailNameX", 48), nameY = _statLay.Get("detailNameY", 6);
-        int lineX = _statLay.Get("detailLineX", 48), lineY = _statLay.Get("detailLineY", 28);
+        // a hair or face coupon shows the doll's bust instead of the coupon art
+        int iconSize = _game.HasLookBust(item.Cosmetic) ? _statLay.Get("detailBustSize", 48) : _statLay.Get("detailIconSize", 32);
+        // the text starts after the icon whatever its size (the bust is wider than a plain icon)
+        int textX = iconX + iconSize + _statLay.Get("detailIconGap", 8);
+        int nameX = Math.Max(_statLay.Get("detailNameX", 48), textX), nameY = _statLay.Get("detailNameY", 6);
+        int lineX = Math.Max(_statLay.Get("detailLineX", 48), textX), lineY = _statLay.Get("detailLineY", 28);
         int lineGap = _statLay.Get("detailLineGap", 16);
         int textW = name.Width;
         foreach (var line in lines) textW = Math.Max(textW, line.Width);
@@ -60,8 +65,12 @@ public sealed class Tips : Component, IDrawable
         var box = anchor.At(gfx, w, h);
 
         NineSlice.Draw(gfx, "tip", box);
-        var icon = gfx.Tex(item.Image); // native size, like every other item icon
-        gfx.Sb.Draw(icon, new Vector2(box.X + iconX + (iconSize - icon.Width) / 2, box.Y + iconY + (iconSize - icon.Height) / 2), Color.White);
+        var icon = new Rectangle(box.X + iconX, box.Y + iconY, iconSize, iconSize);
+        if (!_game.DrawLookBust(gfx, icon, item.Cosmetic))
+        {
+            var art = gfx.Tex(item.Image); // native size, like every other item icon
+            gfx.Sb.Draw(art, new Vector2(icon.X + (iconSize - art.Width) / 2, icon.Y + (iconSize - art.Height) / 2), Color.White);
+        }
         gfx.Sb.Draw(name, new Vector2(box.X + nameX, box.Y + nameY), new Color(255, 220, 0));
         int y = box.Y + lineY;
         foreach (var line in lines)
