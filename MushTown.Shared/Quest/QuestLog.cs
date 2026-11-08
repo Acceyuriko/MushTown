@@ -128,12 +128,21 @@ public sealed class QuestLog : Component
         return true;
     }
 
+    // Can the USE bag take every reward? Checked before the turn-in intent is
+    // sent and before the quest leaves the log, so a full bag loses nothing.
+    public bool CanTurnIn(CharaSlot chara, int quest)
+    {
+        var q = Defs[quest];
+        return q.RewardItems.Count == 0
+            || Inventory.CanAddAll(chara, "use", q.RewardItems.Select(r => (r.Item, r.Count)).ToList());
+    }
+
     // Turn-in (moves the state only; the caller pays out after this passes).
     // Counters go with the hunt: nothing reads them once the quest leaves
     // the log.
     public bool Complete(CharaSlot chara, int quest)
     {
-        if (!IsComplete(chara, quest)) return false;
+        if (!IsComplete(chara, quest) || !CanTurnIn(chara, quest)) return false;
         chara.Quests.Remove(quest);
         chara.QuestsDone.Add(quest);
         for (int i = 0; i < Defs[quest].Kills.Count; i++)
@@ -142,23 +151,14 @@ public sealed class QuestLog : Component
         return true;
     }
 
-    // Turn-in payout: mesos drop in the purse, potions in the USE bag
-    // (pre-W10 saves have no bag yet: build it). Returns the EXP grant: the
-    // caller routes it through GainExp like kills, so level-ups log and push
-    // the build on the same path.
+    // Turn-in payout: mesos drop in the purse, potions in the USE bag.
+    // Returns the EXP grant: the caller routes it through GainExp like kills,
+    // so level-ups log and push the build on the same path.
     public int TurnIn(CharaSlot chara, int quest)
     {
         var q = Defs[quest];
         chara.Mesos += q.RewardMeso;
-        if (q.RewardItems.Count > 0)
-        {
-            chara.Use ??= new Dictionary<int, int>();
-            foreach (var r in q.RewardItems)
-            {
-                chara.Use.TryGetValue(r.Item, out int n);
-                chara.Use[r.Item] = n + r.Count;
-            }
-        }
+        foreach (var r in q.RewardItems) Inventory.Add(chara, "use", r.Item, r.Count);
         return q.RewardExp;
     }
 }

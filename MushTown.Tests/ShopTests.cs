@@ -66,13 +66,28 @@ public class ShopTests
     }
 
     [TestMethod]
-    public void Buy_Equip_Count_ChargesOnceForTheWholeStack()
+    public void Buy_Equip_Count_EachCopyGetsItsOwnCell()
     {
         var hero = Hero(1000);
         Assert.IsTrue(Shop.Buy(hero, ItemData.Mop, 50, Def(ItemData.Mop, 50, "Wp"), 4));
         Assert.AreEqual(800, hero.Mesos);
         Assert.AreEqual(4, hero.EquipBag![ItemData.Mop]);
+        Assert.AreEqual(4, Inventory.Used(hero, "equip"));
         Assert.IsNull(hero.Use);
+    }
+
+    [TestMethod]
+    public void Buy_FullBag_DoesNotCharge()
+    {
+        var hero = Hero(100);
+        hero.Use = new Dictionary<int, int>();
+        for (int id = 1; id <= Inventory.Capacity; id++) hero.Use[id] = 1;
+        Inventory.Ensure(hero);
+        var def = Def(999999, 10);
+
+        Assert.IsFalse(Shop.Buy(hero, 999999, 10, def));
+        Assert.AreEqual(100, hero.Mesos);
+        Assert.IsFalse(hero.Use.ContainsKey(999999));
     }
 
     [TestMethod]

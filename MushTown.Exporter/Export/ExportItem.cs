@@ -1,9 +1,10 @@
+using System.Text.RegularExpressions;
 using MushTown.Shared;
 using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
 
-// Item exports: potion defs and wearable defs + icons.
+// Item exports: potion defs, cash coupons, and wearable defs + icons.
 public static partial class Export
 {
     private static readonly int[] PotionIds = ExportList.Load("potions");
@@ -32,8 +33,52 @@ public static partial class Export
         (@"Coat\01040022.img", BeginnerLongcoat),
     };
 
+    // The free default hair/face coupons: the icon node they link to.
+    private static readonly (int Id, int IconId)[] CashCoupons =
+    {
+        (ItemData.HairCouponMale, 5157053),
+        (ItemData.HairCouponFemale, 5157053),
+        (ItemData.FaceCouponMale, 5158018),
+        (ItemData.FaceCouponFemale, 5158018),
+    };
+
     // The wearable ids: the export log and the manifest both print them.
     private static IEnumerable<int> GearIds => Gears.Select(g => int.Parse(ImgId(g.gear)));
+
+    private static bool ExportCashCoupons(WzRoot item, WzRoot str, string outDir)
+    {
+        foreach ((int id, int iconId) in CashCoupons)
+        {
+            string name = str.Find($@"Cash.img\{id}\name")?.GetValueEx<string>("") ?? "";
+            if (name == "")
+            {
+                Console.WriteLine($"cash coupon {id} has no String name");
+                return false;
+            }
+            var data = new ItemData
+            {
+                ItemId = id,
+                Name = name,
+                Image = $"cashitem/{id}.png",
+                Desc = CleanDesc(str.Find($@"Cash.img\{id}\desc")?.GetValueEx<string>("") ?? "",
+                    id is ItemData.HairCouponMale or ItemData.HairCouponFemale ? "hair" : "face"),
+                Cash = true,
+            };
+            if (!UiPng.Save(item, "Item", $"Cash/0515.img/{iconId.ToString("D8")}/info/icon", Path.Combine(outDir, "cashitem", $"{id}.png")))
+                return false;
+            WriteJson(Path.Combine(outDir, "cashitem", $"{id}.json"), data);
+        }
+        Console.WriteLine($"cash coupons: {string.Join(" ", CashCoupons.Select(c => c.Id))}");
+        return true;
+    }
+
+    private static string CleanDesc(string raw, string cosmetic)
+    {
+        string s = raw.Replace("\\n", "\n");
+        s = Regex.Replace(s, "#cosmetic_[^#]+#", cosmetic);
+        s = s.Replace("#c", "").Replace("#b", "").Replace("#e", "").Replace("#r", "").Replace("#n", "").Replace("#k", "");
+        return s.Replace("#", "");
+    }
 
     // The potions of lists/potions.json. Heals come from the WZ spec node;
     // icons are the info/icon canvases (_outlink to _Canvas).
@@ -177,8 +222,9 @@ public static partial class Export
                 NameTag = tag,
                 ChatBalloon = Int(info, "chatBalloon"),
                 HasArt = beginner != null,
+                Cash = Int(info, "cash") != 0,
             };
-            if (data.Price <= 0 && Int(info, "cash") == 0) // cash gear carries no meso price
+            if (data.Price <= 0 && !data.Cash) // cash gear carries no meso price
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
                 return null;

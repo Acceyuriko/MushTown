@@ -36,8 +36,7 @@ public sealed class Tips : Component, IDrawable
     // detail pane of the stat window, sized to the text.
     private void DrawItem(UiGfx gfx, TipAnchor anchor, int itemId)
     {
-        if (itemId == 0) return; // an empty cell has nothing to show
-        var item = _items[itemId];
+        if (itemId == 0 || !_items.TryGetValue(itemId, out var item)) return; // an empty or unknown cell has nothing to show
         var name = gfx.Ui.GetSmall(item.Name);
         var lines = new List<Texture2D>();
         foreach (string text in ItemLines.Detail(item)) lines.Add(gfx.Ui.GetSmall(text));

@@ -287,6 +287,16 @@ public sealed class ItemData
     public const int LongSword = 1302007; // Long Sword (Wp, PAD 27): the shop of Sid (11000)
     public const int LolicoArmor = 1040015; // Brown Lolico Armor (Ma, PDD 15): the shop of Pan (21000)
 
+    // The four free default hair/face coupons (Cash/0515.img).
+    public const int HairCouponMale = 5157257; // Messy Hair Coupon (M), hair 30020
+    public const int HairCouponFemale = 5157258; // female default hair coupon, hair 33390
+    public const int FaceCouponMale = 5158151; // Defiant Face Coupon (M), face 20000
+    public const int FaceCouponFemale = 5158152; // female default face coupon, face 20002
+    public const int DefaultHairMale = 30020;
+    public const int DefaultHairFemale = 33390;
+    public const int DefaultFaceMale = 20000;
+    public const int DefaultFaceFemale = 20002;
+
     // Beginner img per worn slot: the doll merge draws these when the slot
     // sits empty (only slots with v1 equips need entries). The beginner's
     // "Ma" is the longcoat 01050287; the pants 01060026 are a separate baked
@@ -340,6 +350,7 @@ public sealed class ItemData
     public int NameTag { get; set; } // WZ info/nameTag: UI NameTag.img node (0 = plain black box)
     public int ChatBalloon { get; set; } // WZ info/chatBalloon: the style of the speech balloon (0 = the plain one)
     public bool HasArt { get; set; } // the exporter wrote doll frames for this equip (rings carry none)
+    public bool Cash { get; set; } // WZ info/cash: cash-shop cosmetic or utility, not normal gear or a consumable
 }
 
 // Basic damage skin digits: assets/effect/dmg.json (BasicEff.img NoRed0,

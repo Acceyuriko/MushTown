@@ -57,57 +57,70 @@ public partial class MushTownGame
 
     // What a cell shows and picks: the key window's draft while it is open (a
     // drop on a cell is the same as on its key), the live table otherwise.
+    // The draft is the only truth while open: clearing an item there must
+    // clear the cell too, before Save.
     private BindTarget? SlotTarget(int cell)
     {
         var keyWin = DraftWindow;
-        if (keyWin == null) return _input.TargetOf(SlotKeys[cell]);
-        if (keyWin.DraftOn(SlotNames[cell]) is { } draft) return draft;
-        // The draft holds only the actions the window lists, so a key it leaves
-        // out holds an item (the draft has none), another preset's action, one
-        // of the four the window hides (Settings and the party ones), or nothing:
-        // all four draw blank while the window is open.
-        return _input.TargetOf(SlotKeys[cell]) is { Kind: BindKind.Item } item ? item : null;
+        return keyWin == null ? _input.TargetOf(SlotKeys[cell]) : keyWin.DraftOn(SlotNames[cell]);
     }
 
-    // A click on a cell with something to pick up: the action or the skill on it
-    // comes up and rides the mouse.
+    // A click on a cell with something to pick up: the action, skill or item
+    // on it comes up and rides the mouse.
     private void PickSlot(int cell)
     {
-        if (!_hand.Empty || SlotTarget(cell) is not { Kind: BindKind.Ui or BindKind.Skill } target) return;
+        if (!_hand.Empty || SlotTarget(cell) is not { } target) return;
         Hold(target);
         PlaySfx("click"); // the cell's button is silent: only a cell that gave something up clicks
     }
 
-    // The cell holds something a click can pick up. Items are not draggable
-    // yet: the table can bind them, but an item itself cannot be picked up.
-    private bool Pickable(int cell) => SlotTarget(cell) is { Kind: BindKind.Ui or BindKind.Skill };
+    // The cell holds something a click can pick up.
+    private bool Pickable(int cell) => SlotTarget(cell) != null;
 
-    // A click while something is in hand: the point is a drop area (a key of
-    // the key window, a quick slot cell, the pool). False when it is not, so
-    // the caller puts the piece back and the click runs as usual.
+    // A click while a key target is in hand: use the shared drop check.
     private bool DropHeld(int gx, int gy)
     {
+        if (!Holding || !DropTarget(gx, gy, Held!.Value)) return false;
+        ClearHeld();
+        return true;
+    }
+
+    // A click while an inventory item is in hand: a potion lands on a key or
+    // a quick slot exactly like a key target does.
+    private bool DropBagHeld(int gx, int gy)
+    {
+        if (_hand.Empty || _hand.Kind != "use") return false;
+        if (!DropTarget(gx, gy, new BindTarget(BindKind.Item, _hand.Id))) return false;
+        _hand.Return();
+        return true;
+    }
+
+    // The point is a drop area (a key of the key window, a quick slot cell,
+    // the pool). False when it is not, so the caller puts the piece back and
+    // the click runs as usual.
+    private bool DropTarget(int gx, int gy, BindTarget target)
+    {
         var keyWin = DraftWindow;
-        if (keyWin != null && keyWin.TryDropAt(gx, gy)) return true; // the keyboard or the pool
+        if (keyWin != null && keyWin.TryDropAt(gx, gy, target)) return true; // the keyboard or the pool
         if (!QslotRect().Contains(gx, gy)) return false; // not near the strip: no need to hit test
         if (_uiScene.TopAt(gx, gy) is not { } top) return false;
         int cell = Array.IndexOf(_cells, top); // -1: not a strip cell
         if (cell < 0) return false; // a window covers the strip: the click is its
         if (keyWin != null)
         {
-            keyWin.ApplyDrop(SlotNames[cell]); // a cell is the same key as its cap on the keyboard
+            keyWin.ApplyDrop(SlotNames[cell], target); // a cell is the same key as its cap on the keyboard
             return true;
         }
-        return BindSlotLive(SlotKeys[cell]); // no draft open: the cell binds the live preset
+        return BindSlotLive(SlotKeys[cell], target); // no draft open: the cell binds the live preset
     }
 
     // The drop landed on a cell with the key window closed: the key binds now.
     // False with no character: the table is read only, so the caller puts the
     // piece back and the click picks that cell instead.
-    private bool BindSlotLive(Keys key)
+    private bool BindSlotLive(Keys key, BindTarget target)
     {
         if (Hero == null) return false;
-        BindLive(key, TakeHeld());
+        BindLive(key, target);
         return true;
     }
 
@@ -128,15 +141,15 @@ public partial class MushTownGame
     // official icon of the action.
     internal string TargetArt(BindTarget target) => target.Kind switch
     {
-        BindKind.Item => _items[target.Id].Image,
+        BindKind.Item => _items.TryGetValue(target.Id, out var item) ? item.Image : "",
         BindKind.Skill => SkillIconTex(target.Id),
         _ => KeyConfigWindow.IconTex((HotkeyAction)target.Id),
     };
 
-    // The item on a cell, 0 when the cell holds no item: the tooltip follows the
-    // icon, so a draft action on an item key shows no tooltip.
+    // The item on a cell, 0 when the cell holds no known item: the tooltip
+    // follows the icon, so a draft action on an item key shows no tooltip.
     private int ItemOn(int cell) =>
-        SlotTarget(cell) is { Kind: BindKind.Item } target ? target.Id : 0;
+        SlotTarget(cell) is { Kind: BindKind.Item } target && _items.ContainsKey(target.Id) ? target.Id : 0;
 
     // An Item target drinks its potion on a fresh key. The edges stay fresh
     // every frame; the drink waits for a screen that can take it.
@@ -150,8 +163,8 @@ public partial class MushTownGame
     private void DrinkItem(int id)
     {
         var chara = _save?.Slots[_slot];
-        if (chara == null) return;
-        var item = _items[id];
+        if (chara == null || !_hand.Empty) return; // the bag hand owns the next click
+        if (!_items.TryGetValue(id, out var item)) return;
         Progression.UsePotion(chara, id, item.Hp, item.Mp, OwnHpPct());
     }
 }

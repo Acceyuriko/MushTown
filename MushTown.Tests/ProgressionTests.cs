@@ -253,4 +253,20 @@ public class ProgressionTests
         Assert.IsFalse(Progression.TakeOffEquip(chara, ItemData.Mop)); // already off
         Assert.IsFalse(Progression.WearEquip(new CharaSlot { Name = "nobody" }, ItemData.Mop, EquipDefs())); // no bag
     }
+
+    [TestMethod]
+    public void TakeOffEquip_FullBag_StaysWorn()
+    {
+        var chara = new CharaSlot
+        {
+            Name = "hero",
+            Equips = new List<int> { ItemData.Mop },
+            EquipBag = Enumerable.Range(0, Inventory.Capacity).ToDictionary(n => 1300000 + n, _ => 1),
+        };
+        Inventory.Ensure(chara);
+
+        Assert.IsFalse(Progression.TakeOffEquip(chara, ItemData.Mop));
+        Assert.AreEqual(1, chara.Equips.Count);
+        Assert.AreEqual(0, chara.EquipBag!.GetValueOrDefault(ItemData.Mop));
+    }
 }

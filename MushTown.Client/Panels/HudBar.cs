@@ -48,7 +48,7 @@ public partial class MushTownGame
     private readonly CarryHand _hand = new(); // game-level: a panel rebuilds its content, the held piece survives
     private readonly GameObject _talkHost = new() { Modal = true, Z = TalkZ }; // the NPC dialog: one root carries the modal flag
     private bool _invBuilt, _statBuilt, _skillBuilt, _questBuilt, _settingsBuilt, _shopBuilt; // built at least once
-    private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow tab flips (bag counts are static)
+    private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow tab flips
     private string _questBuiltKey = "";
     private int _talkBuiltNpc, _talkBuiltQuest, _talkBuiltPage, _talkBuiltLines;
     private bool _talkBuiltChoices;
@@ -232,7 +232,10 @@ public partial class MushTownGame
     {
         switch (i)
         {
-            case 0: _showInv = false; _dragInv = null; break;
+            case 0:
+                if (!_hand.Empty) _hand.Return(); // the hidden panel cannot drop the preview back
+                _showInv = false; _dragInv = null;
+                break;
             case 1: _showStat = false; _dragStat = null; break;
             case 2: CloseSkillWindow(); break;
             case 3: _showQuest = false; _dragQuest = null; break;
@@ -264,9 +267,13 @@ public partial class MushTownGame
 
     private void UpdateHudClick(int gx, int gy)
     {
+        if (_save?.Slots[_slot] is { } heldChara && !_hand.Empty && !_hand.StillThere(heldChara))
+            _hand.Return(); // an external bag change invalidated the preview
         // A click while something is in hand is a drop: a key of the key
-        // window, a quick slot cell or the action pool. Anywhere else puts the
-        // piece back and the click runs as usual.
+        // window, a quick slot cell or the action pool. The inventory hand
+        // drops potions at the same three spots. Anywhere else puts the piece
+        // back and the click runs as usual.
+        if (DropBagHeld(gx, gy)) { PlaySfx("click"); return; } // a bag item dropped on a key or slot
         if (Holding && DropHeld(gx, gy)) { PlaySfx("click"); return; } // a drop is a click too
         ClearHeld(); // nothing there: the piece goes back where it came from
         // What the click is about to hit, read before any button runs: a
@@ -460,9 +467,9 @@ public partial class MushTownGame
     }
 
     // Panel trees are pure functions of (tab, contents): a drag only moves the
-    // host, so only a tab flip or new rows rebuilds. Bag counts are static
-    // catalogs, so slots never reshape. Also the dialog root: its visibility
-    // follows the talk state.
+    // host, so only a tab flip or new rows rebuilds. Inventory cells read
+    // their item and count live. Also the dialog root: its visibility follows
+    // the talk state.
     private void SyncPanels()
     {
         _invHost.Enabled = _showInv; _statHost.Enabled = _showStat; _skillHost.Enabled = _showSkill; // a hidden panel stays in the tree, it just stops drawing and hitting
@@ -570,8 +577,16 @@ public partial class MushTownGame
 
     // The art on the cursor: the piece in the inventory hand, or the action or
     // skill a click picked up (one thing at a time, so only one is set).
-    private string HeldArt() => !_hand.Empty ? _items[_hand.Id].Image
-        : Held is { } target ? TargetArt(target) : "";
+    private string HeldArt()
+    {
+        if (!_hand.Empty)
+        {
+            var chara = _save?.Slots[_slot];
+            if (chara == null || !_hand.StillThere(chara)) return "";
+            return _items.TryGetValue(_hand.Id, out var item) ? item.Image : "";
+        }
+        return Held is { } target ? TargetArt(target) : "";
+    }
 
     // The EXP tip has the numbers: the official writes them as
     // "EXP : 116 / 19,112 [0.61%]".

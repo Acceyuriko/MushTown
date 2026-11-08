@@ -34,24 +34,78 @@ public partial class MushTownGame
             _invLay.Get("gridY", 101) + (cell / InvCols) * pitch, size, size);
     }
 
-    // The worn gear takes the first row(s); the bag rows start below it.
-    private int InvWornRows => (_equips.Count + InvCols - 1) / InvCols;
+    // The visible cells: small 4x8, wide 16x8.
+    private int InvVisible => _invWide ? Inventory.Capacity : InvCols * 8;
+
+    private static string TabKind(int tab) => tab switch
+    {
+        0 => "equip",
+        1 => "use",
+        4 => "cash",
+        5 => "dec",
+        _ => "", // Etc / Set-up are empty for now
+    };
 
     private GameObject PanelSlot(Rectangle r, string itemKind, int index, Func<int> count)
     {
         var o = new GameObject();
         o.Add(new Rect(r));
-        var s = new Slot { ItemKind = itemKind, Index = index };
-        s.OnClick = () => ClickSlot(itemKind, index);
+        var s = new Slot { OnClick = () => ClickSlot(itemKind, index) };
         o.Add(s);
-        int id = ItemId(itemKind, index);
-        o.Add(new ItemTip(() => count() == 0 ? 0 : id)); // the empty cell shows no tip
-        o.Add(new InvSlot(_items[id].Image, count, false));
+        o.Add(new ItemTip(() => count() == 0 ? 0 : ItemId(itemKind, index))); // the empty cell shows no tip
+        o.Add(new InvSlot(() => ItemImage(ItemId(itemKind, index)),
+            count, _invLay.Get("itemDy", 2), itemKind != "equip"));
         return o;
     }
 
-    // The item a cell stands for: the USE tab lists potions, the EQUIP tab gear.
-    private int ItemId(string kind, int index) => kind == "use" ? _potions[index] : _equips[index];
+    // The icon of an item id; "" for an id this build has no data for
+    // (an old save may carry an item that was removed from the export).
+    private string ItemImage(int id) => _items.TryGetValue(id, out var data) ? data.Image : "";
+
+    // The official gray pill in the small/wide header: used cells / 128.
+    private GameObject InvCount()
+    {
+        var r = _invWide
+            ? new Rectangle(_invLay.Get("countWideX", 710), _invLay.Get("countWideY", 70),
+                _invLay.Get("countWideW", 70), _invLay.Get("countWideH", 15))
+            : new Rectangle(_invLay.Get("countX", 152), _invLay.Get("countY", 70),
+                _invLay.Get("countW", 70), _invLay.Get("countH", 15));
+        string kind = TabKind(_invTab);
+        var root = new GameObject();
+        root.Add(new Rect(r));
+        var used = new GameObject();
+        used.Add(new Rect(new Rectangle(0, 0, r.Width / 2 - 4, r.Height)));
+        used.Add(new Text
+        {
+            Value = () =>
+            {
+                var chara = _save?.Slots[_slot];
+                return chara == null || kind == "" ? "0" : Inventory.Used(chara, kind).ToString();
+            },
+            Ink = new Color(96, 104, 113),
+            Align = TextAlign.Right,
+        });
+        root.AddChild(used);
+        var total = new GameObject();
+        total.Add(new Rect(new Rectangle(r.Width / 2 + 2, 0, r.Width / 2 - 2, r.Height)));
+        total.Add(new Text
+        {
+            Value = () => Inventory.Capacity.ToString(),
+            Ink = new Color(96, 104, 113),
+        });
+        root.AddChild(total);
+        return root;
+    }
+
+    // The item a cell stands for: the positional order list of its tab.
+    // 0 when the build has no data for that id.
+    private int ItemId(string kind, int index)
+    {
+        var chara = _save?.Slots[_slot];
+        if (kind == "" || chara == null) return 0;
+        int id = Inventory.SlotId(chara, kind, index);
+        return _items.ContainsKey(id) ? id : 0;
+    }
 
     private void BuildInvScene()
     {
@@ -62,38 +116,40 @@ public partial class MushTownGame
         var body = new GameObject();
         body.Add(new Rect(InvRect())); // no Button: the body swallows, like the legacy fallthrough
         body.Add(new Picture(_invWide ? "ui/invw_backgrnd.png" : "ui/inv_backgrnd.png"));
-        if (_invTab == 1)
-            for (int s = 0; s < _potions.Count; s++)
+        string kind = TabKind(_invTab);
+        for (int s = 0; s < InvVisible; s++)
+        {
+            int i = s; // for-loop variables capture shared: copy per slot
+            body.AddChild(PanelSlot(InvCell(i), kind, i, () =>
             {
-                int i = s; // for-loop variables capture shared: copy per slot
-                int id = _potions[i];
-                body.AddChild(PanelSlot(InvCell(i), "use", i, () => _save?.Slots[_slot]?.Use?.GetValueOrDefault(id) ?? 0));
-            }
-        if (_invTab == 0)
-            for (int s = 0; s < _equips.Count; s++)
-            {
-                int i = s; // for-loop variables capture shared: copy per slot
-                int id = _equips[i];
-                // The worn gear sits on the first row(s). The small window has
-                // 4 columns, so 5 equip types wrap onto a second row: that is
-                // the official layout, not a bug.
-                body.AddChild(PanelSlot(InvCell(i), "worn", i, () => _save?.Slots[_slot]?.Equips?.Count(w => w == id) ?? 0));
-                body.AddChild(PanelSlot(InvCell(InvWornRows * InvCols + i), "bag", i, () => _save?.Slots[_slot]?.EquipBag?.GetValueOrDefault(id) ?? 0));
-            }
+                var chara = _save?.Slots[_slot];
+                return kind == "" || chara == null || (_hand.Kind == kind && _hand.Cell == i)
+                    ? 0
+                    : Inventory.Count(chara, kind, ItemId(kind, i));
+            }));
+        }
         for (int t = 0; t < TabCount; t++)
         {
             int i = t; // for-loop variables capture shared: copy per tab
             var tab = new GameObject();
             tab.Add(new Rect(TabRect(i)));
-            // Only Equip and Use have content in v1. The other four keep the
-            // official art, but they do not react to a click.
-            if (i < 2)
-                tab.Add(new Button { LegacyId = "invtab" + i, Kind = ButtonKind.Click, OnClick = () => _invTab = i });
+            tab.Add(new Button
+            {
+                LegacyId = "invtab" + i,
+                Kind = ButtonKind.Click,
+                OnClick = () =>
+                {
+                    if (!_hand.Empty) _hand.Return(); // the held preview points at the old tab's cells
+                    _invTab = i;
+                },
+            });
             tab.Add(new Picture($"ui/{InvArtPrefix()}_tab_{(i == _invTab ? "s" : "n")}{i}.png", 0, 0));
             body.AddChild(tab);
         }
+        body.AddChild(InvCount());
         body.AddChild(PanelButton(InvTitleRect(), "", () => _dragInv = _uiScene.LastClick - _invPos)); // silent, like legacy
         body.AddChild(InvExpandButton()); // the "+" (small) or the "-" (wide)
+        body.AddChild(InvSortButton());
         body.AddChild(InvCloseButton());
         var coin = new GameObject { NoHit = true }; // purse draws last (bag rows can reach it when the roster grows)
         coin.Add(new Rect(InvRect()));
@@ -122,6 +178,8 @@ public partial class MushTownGame
             foreach (string b in new[] { "close", p == "inv" ? "plus" : "minus" })
                 foreach (string s in new[] { "n", "h", "p" })
                     LoadTexture($"ui/{p}_{b}_{s}.png");
+            foreach (string s in new[] { "n", "h", "p" })
+                LoadTexture($"ui/{p}_sort_{s}.png");
             for (int t = 0; t < TabCount; t++)
             {
                 LoadTexture($"ui/{p}_tab_s{t}.png");
@@ -151,9 +209,35 @@ public partial class MushTownGame
         int dx = _invWide ? _invLay.Get("closeWideX", 769) : _invLay.Get("closeX", 211);
         var o = ArtButton(new Rectangle(dx, _invLay.Get("closeY", 4),
                 _invLay.Get("closeW", 27), _invLay.Get("closeH", 27)),
-            $"ui/{InvArtPrefix()}_close", () => _showInv = false);
+            $"ui/{InvArtPrefix()}_close", () =>
+            {
+                if (!_hand.Empty) _hand.Return();
+                _showInv = false;
+            });
         o.Get<Button>()!.LegacyId = "x0"; // the hover tick
         return o;
+    }
+
+    // The official sort button: sorts only the open tab, from the first cell.
+    private GameObject InvSortButton()
+    {
+        var r = new Rectangle(
+            _invWide ? _invLay.Get("sortWideX", 21) : _invLay.Get("sortX", 19),
+            _invWide ? _invLay.Get("sortWideY", 67) : _invLay.Get("sortY", 66),
+            _invWide ? _invLay.Get("sortWideW", 68) : _invLay.Get("sortW", 22),
+            _invWide ? _invLay.Get("sortWideH", 22) : _invLay.Get("sortH", 23));
+        var o = ArtButton(r, $"ui/{InvArtPrefix()}_sort", SortInv);
+        o.Get<Button>()!.LegacyId = "invsort";
+        return o;
+    }
+
+    private void SortInv()
+    {
+        var chara = _save?.Slots[_slot];
+        string kind = TabKind(_invTab);
+        if (chara == null || kind == "") return;
+        if (!_hand.Empty) _hand.Return(); // sorting moves the cells: the held preview must not keep an old index
+        Inventory.Sort(chara, kind, _items);
     }
 
     // The window opens at the spot in the layout file; the drag moves it.
@@ -172,8 +256,10 @@ public partial class MushTownGame
     // The window keeps the spot the player dragged it to.
     private void ToggleInvWide()
     {
+        if (!_hand.Empty) _hand.Return(); // the small form hides cells above 31
         _invWide = !_invWide;
         BuildInvScene();
+        _invBuilt = true;
         _invBuiltTab = _invTab;
     }
 
@@ -191,10 +277,18 @@ public partial class MushTownGame
     private void ClickSlot(string kind, int index)
     {
         var chara = _save?.Slots[_slot];
-        if (chara == null) return; // CLI sessions carry no bag
+        if (chara == null || kind == "") return; // CLI sessions carry no bag
         int id = ItemId(kind, index);
-        var act = _hand.Click(chara, kind, id, _items, OwnHpPct(), _timeMs);
-        if (act == HandAct.Wore) { PushBuild(); PushName(); PlaySfx("click"); }
-        else if (act == HandAct.Moved) PlaySfx("click");
+        var act = _hand.Click(chara, kind, id, _items, OwnHpPct(), _timeMs, index);
+        if (act == HandAct.Wore)
+        {
+            PushBuild();
+            PushName();
+            PlaySfx("click");
+        }
+        else if (act == HandAct.Moved)
+        {
+            PlaySfx("click");
+        }
     }
 }

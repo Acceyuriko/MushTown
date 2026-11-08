@@ -530,7 +530,7 @@ public partial class MushTownGame : Game
             if (_worldMapWindow.EscLayer()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the world map closes its dialog and search board first
             if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
             var escChara = _save?.Slots[_slot];
-            if (escChara != null && !_hand.Empty) { _hand.Return(escChara); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc drops the held piece back, panels stay
+            if (escChara != null && !_hand.Empty) { _hand.Return(); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc clears the held cell preview, panels stay
             if (_showQuest && _questConfirm != QuestConfirmKind.None) { CloseQuestConfirm(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the quest question first
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
             if (_showShop && _shopNotice != "") { _shopNotice = ""; _shopQtyField.Unfocus(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the notice closes before its shop
@@ -584,7 +584,7 @@ public partial class MushTownGame : Game
             _uiScene.ClearHover();
         }
 
-        if (RightEdge(ms) && Holding) { ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
+        if (RightEdge(ms) && (!_hand.Empty || Holding)) { _hand.Return(); ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
         UpdateHud(kb, click, held, mx, my);
         // The MENU window and a confirmation box are modal for the character:
         // while either is open the character ignores the keys. The key window
@@ -652,12 +652,14 @@ public partial class MushTownGame : Game
         // pre-filters the judge box, so a nearer-but-out drop never blocks one.
         if (freshZ && HasJudge())
         {
+            var chara = _save?.Slots[_slot];
             int best = 0;
             float bestD2 = float.MaxValue;
             foreach (var kv in _drops)
             {
                 float dx = kv.Value.X - _mover.X, dy = kv.Value.Y - _mover.Y;
                 if (Math.Abs(dx) > MobWorld.PickDx || Math.Abs(dy) > MobWorld.PickDy) continue;
+                if (chara != null && !CanTakeDrop(kv.Value, chara)) continue; // full bag: leave it on the ground
                 float d2 = dx * dx + dy * dy;
                 if (d2 < bestD2) { bestD2 = d2; best = kv.Key; }
             }

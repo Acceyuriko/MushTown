@@ -232,25 +232,30 @@ public partial class MushTownGame
     // screen, no account) borrow it too. The bag holds one item per slot
     // (the shop weapon, the shop coat, one ring), so the --wear shot shows
     // the new art whatever order the bag walks in.
-    private static CharaSlot DemoChara() => new()
+    private static CharaSlot DemoChara()
     {
-        Name = "hero",
-        Level = 7,
-        Map = 10000,
-        X = 100,
-        Y = 200,
-        Mesos = 12345,
-        Exp = 77,
-        Hp = Progression.MaxHp(7),
-        Mp = Progression.MaxMp(7),
-        Str = 28,
-        Dex = 10,
-        Sp = 18, // earned 21 (creation 3 + 6 level-ups), spent 3 on Slash Blast
-        SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
-        Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
-        EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },
-        KeyPresets = DemoPresets(),
-    };
+        var chara = new CharaSlot
+        {
+            Name = "hero",
+            Level = 7,
+            Map = 10000,
+            X = 100,
+            Y = 200,
+            Mesos = 12345,
+            Exp = 77,
+            Hp = Progression.MaxHp(7),
+            Mp = Progression.MaxMp(7),
+            Str = 28,
+            Dex = 10,
+            Sp = 18, // earned 21 (creation 3 + 6 level-ups), spent 3 on Slash Blast
+            SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
+            Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
+            EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },
+            KeyPresets = DemoPresets(),
+        };
+        Inventory.Ensure(chara);
+        return chara;
+    }
 
     // The demo bindings: the KMS defaults, plus the two potions on the item
     // cells of the first preset (the bottom strip shows two bound cells).
@@ -263,9 +268,10 @@ public partial class MushTownGame
     }
 
     // Item defs (Initialize phase: the doll art loop needs the roster before
-    // LoadContent runs). The scan is the roster: every item/*.json loads,
-    // consumables (Slot null) slot the USE tab, the rest the EQUIP tab, both
-    // in id order. Boot checks fail loud on stale jsons.
+    // LoadContent runs). The scan is the roster: every item/*.json and
+    // cashitem/*.json loads, normal consumables slot the USE tab, cash items
+    // slot CASH/DEC later, the rest the EQUIP tab, both in id order. Boot
+    // checks fail loud on stale jsons.
     private static void RequireExportDir(string dir)
     {
         if (!Directory.Exists(dir))
@@ -288,9 +294,16 @@ public partial class MushTownGame
             var item = LoadJson<ItemData>(f);
             _items[item.ItemId] = item;
         }
-        _potions = _items.Values.Where(d => d.Slot == null).Select(d => d.ItemId).OrderBy(id => id).ToList();
-        _equips = _items.Values.Where(d => d.Slot != null).Select(d => d.ItemId).OrderBy(id => id).ToList();
-        foreach (int id in _manifest.Potions.Concat(_manifest.Equips)) // the ship list proves complete: listed but unscanned fails here
+        string cashDir = Path.Combine(_assetsDir, "cashitem");
+        RequireExportDir(cashDir);
+        foreach (string f in Directory.GetFiles(cashDir, "*.json"))
+        {
+            var item = LoadJson<ItemData>(f);
+            _items[item.ItemId] = item;
+        }
+        _potions = _items.Values.Where(d => d.Slot == null && !d.Cash).Select(d => d.ItemId).OrderBy(id => id).ToList();
+        _equips = _items.Values.Where(d => d.Slot != null && !d.Cash).Select(d => d.ItemId).OrderBy(id => id).ToList();
+        foreach (int id in _manifest.Potions.Concat(_manifest.Equips).Concat(_manifest.CashItems)) // the ship list proves complete: listed but unscanned fails here
             if (!_items.ContainsKey(id))
                 throw new InvalidDataException($"manifest lists item {id} with no exported def");
         foreach (var (id, item) in _items)
@@ -304,7 +317,7 @@ public partial class MushTownGame
                 if (ItemData.BeginnerImgs.ContainsKey(item.Slot) && !item.HasArt)
                     throw new InvalidDataException($"equip {id} has no art");
             }
-            if (item.Price <= 0 && item.NameTag == 0 && item.ChatBalloon == 0) // stale jsons price 0, except rings (cash gear carries no meso price)
+            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0) // stale jsons price 0, except cash items and rings
                 throw new InvalidDataException($"item {id} has a bad price");
             if (item.Name == "") // pre-name jsons would print blank labels
                 throw new InvalidDataException($"item {id} has no name");
@@ -805,7 +818,7 @@ public partial class MushTownGame
         // would wipe the player's real saves file.
         if (_shotPath != null || _save == null || _screen != Screen.Game) return;
         var chara = _save.Slots[_slot]!;
-        _hand.Return(chara); // a held piece rejoins the bags before the write (the hand itself is never saved)
+        _hand.Return(); // the held cell preview clears; bag counts never moved (the hand is never saved)
         chara.Map = _mapId;
         chara.X = (int)Math.Floor(_mover.X);
         chara.Y = (int)Math.Floor(_mover.Y);

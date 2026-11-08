@@ -166,18 +166,16 @@ public static class KeyBindings
     public static void Apply(Dictionary<string, string> table, Dictionary<HotkeyAction, string> map) =>
         Write(table, map.Select(kv => new KeyValuePair<string, string>(kv.Key.ToString(), kv.Value)));
 
-    // The same for the skills the key window binds ("Skill:<id>"). Skills
-    // and actions share one table, so a key moves between them.
+    // The same for the skills and items the key window binds ("Skill:<id>" /
+    // "Item:<id>"). They share the action table, so a key moves between them.
     public static void ApplySkills(Dictionary<string, string> table, Dictionary<int, string> skills) =>
-        Write(table, skills.Select(kv => new KeyValuePair<string, string>($"Skill:{kv.Key}", kv.Value)));
+        ApplyTargets(table, "Skill", skills);
 
-    // Drop every target of one kind (Default clears the item keys: the
-    // official table has none, and the draft cannot say "no items").
-    public static void RemoveKind(Dictionary<string, string> table, BindKind kind)
-    {
-        foreach (var (key, text) in table.ToList())
-            if (BindTarget.TryParse(text, out var target) && target.Kind == kind) table.Remove(key);
-    }
+    public static void ApplyItems(Dictionary<string, string> table, Dictionary<int, string> items) =>
+        ApplyTargets(table, "Item", items);
+
+    private static void ApplyTargets(Dictionary<string, string> table, string kind, Dictionary<int, string> targets) =>
+        Write(table, targets.Select(kv => new KeyValuePair<string, string>($"{kind}:{kv.Key}", kv.Value)));
 
     // Does a binding already carry this key? Writing it again would drop the
     // other half of a combo, so a drop on the key it came from changes nothing.
@@ -254,7 +252,7 @@ public partial class MushTownGame
 
     public string HotkeyKey(HotkeyAction action) => KeyBindings.FindKey(LiveKeys, action);
 
-    // What a click picked up: one target, an action or a skill. It rides the
+    // What a click picked up: one action, skill or item target. It rides the
     // mouse until a click drops it on a key, a quick slot cell or the action
     // pool; Esc or a right click throws it away and changes nothing. Nothing
     // comes up while the inventory hand holds a piece: one thing at a time.
@@ -263,7 +261,6 @@ public partial class MushTownGame
     public BindTarget? Held { get; private set; }
     public bool Holding => Held != null;
 
-    // Only a Ui or a Skill target: nothing else can be picked up yet.
     public void Hold(BindTarget target)
     {
         if (!_hand.Empty) return;
@@ -271,15 +268,6 @@ public partial class MushTownGame
     }
 
     public void ClearHeld() => Held = null;
-
-    // What a drop takes out of the hand, in one step: the value and the clear
-    // belong together, and both callers drop what they took.
-    public BindTarget TakeHeld()
-    {
-        var taken = Held!.Value; // a drop only runs while something is in hand
-        Held = null;
-        return taken;
-    }
 
     // The icon art of a skill id, or "" when it is not a skill of this
     // character (the key window draws the skill the draft put on a key).
@@ -295,32 +283,33 @@ public partial class MushTownGame
         return KeyBindings.UiMap(chara.KeyPresets![slot]);
     }
 
-    // The skills a preset binds, read back as skill id -> key (the key
-    // window's draft). Items and anything else stay out: the pool has no
-    // cell for them.
-    public Dictionary<int, string> HotkeySkills(int slot)
+    // The skills or items a preset binds, read back as id -> key (the key
+    // window's draft).
+    public Dictionary<int, string> HotkeySkills(int slot) => HotkeyTargets(slot, BindKind.Skill);
+    public Dictionary<int, string> HotkeyItems(int slot) => HotkeyTargets(slot, BindKind.Item);
+
+    private Dictionary<int, string> HotkeyTargets(int slot, BindKind kind)
     {
         var map = new Dictionary<int, string>();
         var chara = Hero;
         if (chara == null) return map;
         KeyBindings.Ensure(chara);
         foreach (var (key, text) in chara.KeyPresets![slot])
-            if (BindTarget.TryParse(text, out var target) && target.Kind == BindKind.Skill)
+            if (BindTarget.TryParse(text, out var target) && target.Kind == kind)
                 map[target.Id] = key;
         return map;
     }
 
-    // Write the given actions and skills into one preset. Item targets stay,
-    // unless the draft came from Default (dropItems): the official table has
-    // no item keys. The live table follows when this preset is active.
-    public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map, Dictionary<int, string> skills, bool dropItems)
+    // Write the given actions, skills and items into one preset.
+    public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map,
+        Dictionary<int, string> skills, Dictionary<int, string> items)
     {
         var chara = Hero!; // the key window hides Save/Copy without a character
         KeyBindings.Ensure(chara);
         var table = chara.KeyPresets![slot];
-        if (dropItems) KeyBindings.RemoveKind(table, BindKind.Item);
         KeyBindings.Apply(table, map);
         KeyBindings.ApplySkills(table, skills);
+        KeyBindings.ApplyItems(table, items);
         if (slot == chara.ActivePreset) _keysDirty = true;
         SaveChara();
     }
@@ -334,8 +323,12 @@ public partial class MushTownGame
         var chara = Hero!;
         if (_input.TargetOf(key) == target) return; // already on that key: a combo keeps both parts
         string name = key.ToString();
-        if (target.Kind == BindKind.Skill) SaveHotkeyPreset(chara.ActivePreset, new(), new() { [target.Id] = name }, false);
-        else SaveHotkeyPreset(chara.ActivePreset, new() { [(HotkeyAction)target.Id] = name }, new(), false);
+        if (target.Kind == BindKind.Skill)
+            SaveHotkeyPreset(chara.ActivePreset, new(), new() { [target.Id] = name }, new());
+        else if (target.Kind == BindKind.Item)
+            SaveHotkeyPreset(chara.ActivePreset, new(), new(), new() { [target.Id] = name });
+        else
+            SaveHotkeyPreset(chara.ActivePreset, new() { [(HotkeyAction)target.Id] = name }, new(), new());
     }
 
     // Copy: the source preset covers the picked one whole (skills and items

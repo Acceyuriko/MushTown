@@ -114,8 +114,7 @@ public static class Progression
         bool need = (healHp > 0 && chara.Hp < BuffedMaxHp(chara.Level, hpPct))
             || (healMp > 0 && chara.Mp < MaxMp(chara.Level));
         if (!need) return false;
-        if (count == 1) use.Remove(itemId);
-        else use[itemId] = count - 1;
+        Inventory.Remove(chara, "use", itemId, 1);
         chara.Hp = Math.Min(chara.Hp + healHp, BuffedMaxHp(chara.Level, hpPct));
         chara.Mp = Math.Min(chara.Mp + healMp, MaxMp(chara.Level));
         return true;
@@ -126,29 +125,28 @@ public static class Progression
     public static bool WearEquip(CharaSlot chara, int id, IReadOnlyDictionary<int, ItemData> defs)
     {
         var def = defs[id]; // callers only pass loaded equips (client boot proves their slots)
-        if (chara.EquipBag == null || !chara.EquipBag.TryGetValue(id, out int have) || have <= 0) return false;
-        chara.EquipBag[id] = have - 1;
-        if (chara.EquipBag[id] == 0) chara.EquipBag.Remove(id);
+        if (!Inventory.Remove(chara, "equip", id, 1)) return false;
         chara.Equips ??= new List<int>();
         int swap = chara.Equips.FindIndex(w => defs.TryGetValue(w, out var wd) && wd.Slot == def.Slot);
         if (swap >= 0)
         {
             int old = chara.Equips[swap];
             chara.Equips.RemoveAt(swap);
-            chara.EquipBag[old] = chara.EquipBag.GetValueOrDefault(old) + 1;
+            Inventory.Add(chara, "equip", old, 1); // the freed cell always has room
         }
         chara.Equips.Add(id);
         return true;
     }
 
     // Takes one off, back to the bag. Unworn slots do nothing. A hand-made
-    // save may wear unknown ids (they draw and grant nothing); the tab shows
+    // save may wear unknown ids (they draw and grant nothing); the tab draws
     // no cell for them, so they sit stuck but harmless.
     public static bool TakeOffEquip(CharaSlot chara, int id)
     {
-        if (chara.Equips == null || !chara.Equips.Remove(id)) return false;
-        chara.EquipBag ??= new Dictionary<int, int>();
-        chara.EquipBag[id] = chara.EquipBag.GetValueOrDefault(id) + 1;
+        if (chara.Equips == null || !chara.Equips.Contains(id)) return false;
+        if (!Inventory.CanAdd(chara, "equip", id, 1)) return false; // bag full: stay worn
+        chara.Equips.Remove(id);
+        Inventory.Add(chara, "equip", id, 1);
         return true;
     }
 

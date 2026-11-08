@@ -53,12 +53,18 @@ public partial class MushTownGame
         }
         else // the server only drops known ids
         {
-            var bag = _items[id].Slot != null
-                ? chara.EquipBag ??= new Dictionary<int, int>()
-                : chara.Use ??= new Dictionary<int, int>();
-            bag.TryGetValue(id, out int have);
-            bag[id] = have + count;
+            string tab = _items[id].Slot != null ? "equip" : "use";
+            Inventory.Add(chara, tab, id, count);
             LogEvent($"picked up {_items[id].Name} x{count}");
         }
+    }
+
+    // A pickup only goes out when the bag can take it: the ground drop stays
+    // put on a full tab.
+    private bool CanTakeDrop(DropArt d, CharaSlot chara)
+    {
+        if (d.Kind == DropKind.Mesos) return true;
+        string tab = _items[d.Id].Slot != null ? "equip" : "use";
+        return Inventory.CanAdd(chara, tab, d.Id, d.Count);
     }
 }

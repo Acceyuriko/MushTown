@@ -2,8 +2,8 @@ using MushTown.Shared;
 
 namespace MushTown.Tests;
 
-// Take-1 carry: one piece leaves the bags into the hand and always has
-// a lossless home (drop, wear, drink, or Esc-return).
+// Positional carry: one click picks a whole cell into the hand; a second
+// click places/swaps it. Double-clicking the source drinks or wears it.
 [TestClass]
 public sealed class CarryTests
 {
@@ -20,27 +20,35 @@ public sealed class CarryTests
         [Axe] = new ItemData { ItemId = Axe, Slot = "Wp" },
     };
 
-    private static CharaSlot Chara() => new()
+    private static CharaSlot Chara()
     {
-        Level = 10,
-        Hp = 10,
-        Mp = 5,
-        Use = new Dictionary<int, int> { [Red] = 3 },
-        EquipBag = new Dictionary<int, int> { [Sword] = 2 },
-        Equips = new List<int>(),
-    };
+        var chara = new CharaSlot
+        {
+            Level = 10,
+            Hp = 10,
+            Mp = 5,
+            Use = new Dictionary<int, int> { [Red] = 3 },
+            EquipBag = new Dictionary<int, int> { [Sword] = 1 },
+            Equips = new List<int>(),
+        };
+        Inventory.Ensure(chara);
+        return chara;
+    }
 
     [TestMethod]
-    public void Potion_PickAndDrop_RoundTrips()
+    public void Potion_PickAndPlace_RoundTrips()
     {
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1000));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1000, 0));
         Assert.AreEqual(("use", Red), (hand.Kind, hand.Id));
-        Assert.AreEqual(2, c.Use![Red]); // one left the bag
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Blue, defs, 0, 2000)); // any USE cell merges
+        Assert.AreEqual(3, c.Use![Red]); // moving a cell keeps the count
+
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 2000, 2));
         Assert.IsTrue(hand.Empty);
+        Assert.AreEqual(0, c.UseOrder![0]);
+        Assert.AreEqual(Red, c.UseOrder[2]);
         Assert.AreEqual(3, c.Use[Red]);
     }
 
@@ -50,10 +58,10 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000);
-        Assert.AreEqual(HandAct.Drank, hand.Click(c, "use", Red, defs, 0, 1200));
+        hand.Click(c, "use", Red, defs, 0, 1000, 0);
+        Assert.AreEqual(HandAct.Drank, hand.Click(c, "use", Red, defs, 0, 1200, 0));
         Assert.IsTrue(hand.Empty);
-        Assert.AreEqual(2, c.Use![Red]); // pooled back, then drank one
+        Assert.AreEqual(2, c.Use![Red]);
         Assert.AreEqual(60, c.Hp);
     }
 
@@ -63,8 +71,9 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000);
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1000 + CarryHand.DoubleMs + 1));
+        hand.Click(c, "use", Red, defs, 0, 1000, 0);
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1000 + CarryHand.DoubleMs + 1, 0));
+        Assert.IsTrue(hand.Empty);
         Assert.AreEqual(3, c.Use![Red]);
         Assert.AreEqual(10, c.Hp); // nothing drank
     }
@@ -76,9 +85,9 @@ public sealed class CarryTests
         var c = Chara();
         c.Hp = Progression.MaxHp(c.Level);
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000);
-        Assert.AreEqual(HandAct.Drank, hand.Click(c, "use", Red, defs, 0, 1200));
-        Assert.AreEqual(3, c.Use![Red]); // the guard refused: pooled back, none lost
+        hand.Click(c, "use", Red, defs, 0, 1000, 0);
+        Assert.AreEqual(HandAct.Drank, hand.Click(c, "use", Red, defs, 0, 1200, 0));
+        Assert.AreEqual(3, c.Use![Red]); // the guard refused: none lost
     }
 
     [TestMethod]
@@ -87,8 +96,8 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000);
-        Assert.AreEqual(HandAct.None, hand.Click(c, "bag", Sword, defs, 0, 1100));
+        hand.Click(c, "use", Red, defs, 0, 1000, 0);
+        Assert.AreEqual(HandAct.None, hand.Click(c, "equip", Sword, defs, 0, 1100, 0));
         Assert.AreEqual(("use", Red), (hand.Kind, hand.Id)); // still held
     }
 
@@ -98,123 +107,70 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "bag", Sword, defs, 0, 1000));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Sword, defs, 0, 1000, 0));
         Assert.AreEqual(1, c.EquipBag![Sword]);
-        Assert.AreEqual(HandAct.Wore, hand.Click(c, "worn", Sword, defs, 0, 1100));
+        Assert.AreEqual(HandAct.Wore, hand.Click(c, "equip", Sword, defs, 0, 1200, 0));
         Assert.IsTrue(hand.Empty);
         Assert.AreEqual(1, c.Equips!.Count(w => w == Sword));
-        Assert.AreEqual(1, c.EquipBag[Sword]);
-    }
-
-    [TestMethod]
-    public void Equip_WornSwap_OldLandsInHand()
-    {
-        var defs = Defs();
-        var c = Chara();
-        c.Equips!.Add(Axe);
-        var hand = new CarryHand();
-        hand.Click(c, "bag", Sword, defs, 0, 1000);
-        Assert.AreEqual(HandAct.Wore, hand.Click(c, "worn", Axe, defs, 0, 1100));
-        Assert.AreEqual(("worn", Axe), (hand.Kind, hand.Id));
-        Assert.IsFalse(c.Equips.Contains(Axe));
-        Assert.AreEqual(1, c.Equips.Count(w => w == Sword));
-        hand.Return(c); // Esc: the old piece lands in the bag, never back on the doll
-        Assert.AreEqual(1, c.EquipBag![Axe]);
-        Assert.AreEqual(1, c.Equips.Count(w => w == Sword));
-    }
-
-    [TestMethod]
-    public void Equip_WornPickAndDrop_RoundTrips()
-    {
-        var defs = Defs();
-        var c = Chara();
-        c.Equips!.Add(Sword);
-        c.EquipBag!.Remove(Sword);
-        var hand = new CarryHand();
-        Assert.AreEqual(HandAct.Wore, hand.Click(c, "worn", Sword, defs, 0, 1000)); // takeoff rebuilds the doll
-        Assert.IsFalse(c.Equips.Contains(Sword));
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "bag", Axe, defs, 0, 1100)); // any bag cell merges
-        Assert.AreEqual(1, c.EquipBag[Sword]);
-    }
-
-    [TestMethod]
-    public void Equip_OnUseCell_Rejected()
-    {
-        var defs = Defs();
-        var c = Chara();
-        var hand = new CarryHand();
-        hand.Click(c, "bag", Sword, defs, 0, 1000);
-        Assert.AreEqual(HandAct.None, hand.Click(c, "use", Red, defs, 0, 1100));
-        Assert.AreEqual(("bag", Sword), (hand.Kind, hand.Id));
-    }
-
-    [TestMethod]
-    public void EmptyCells_DoNothing()
-    {
-        var defs = Defs();
-        var c = Chara();
-        var hand = new CarryHand();
-        Assert.AreEqual(HandAct.None, hand.Click(c, "use", Blue, defs, 0, 1000)); // owned: none
-        Assert.AreEqual(HandAct.None, hand.Click(c, "bag", Axe, defs, 0, 1100));
-        Assert.AreEqual(HandAct.None, hand.Click(c, "worn", Sword, defs, 0, 1200));
-        Assert.IsTrue(hand.Empty);
-    }
-
-    [TestMethod]
-    public void WornReclick_Rewears()
-    {
-        var defs = Defs();
-        var c = Chara();
-        c.Equips!.Add(Sword);
-        c.EquipBag!.Remove(Sword);
-        var hand = new CarryHand();
-        hand.Click(c, "worn", Sword, defs, 0, 1000); // pick it off
-        Assert.AreEqual(HandAct.Wore, hand.Click(c, "worn", Sword, defs, 0, 1100)); // empty slot: wears back, nothing swaps
-        Assert.IsTrue(hand.Empty);
-        Assert.AreEqual(1, c.Equips.Count(w => w == Sword));
         Assert.IsFalse(c.EquipBag.ContainsKey(Sword));
+        Assert.AreEqual(0, c.EquipOrder![0]);
     }
 
     [TestMethod]
-    public void Swap_SameId_Conserves()
+    public void Equip_DifferentId_SwapsCells()
     {
         var defs = Defs();
         var c = Chara();
-        c.Equips!.Add(Sword); // one worn, two in the bag
+        c.EquipBag = new Dictionary<int, int> { [Sword] = 1, [Axe] = 1 };
+        Inventory.Ensure(c);
         var hand = new CarryHand();
-        hand.Click(c, "bag", Sword, defs, 0, 1000);
-        Assert.AreEqual(HandAct.Wore, hand.Click(c, "worn", Sword, defs, 0, 1100));
-        Assert.AreEqual(("worn", Sword), (hand.Kind, hand.Id)); // the old copy lands back in hand
-        Assert.AreEqual(1, c.Equips.Count(w => w == Sword));
-        Assert.AreEqual(1, c.EquipBag![Sword]); // 2 - 1 held + 0 net from the swap
-    }
 
-    [TestMethod]
-    public void DoubleClick_BrokenByOtherCell()
-    {
-        var defs = Defs();
-        var c = Chara();
-        var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000);
-        Assert.AreEqual(HandAct.None, hand.Click(c, "bag", Sword, defs, 0, 1100)); // reject breaks the double
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1200)); // drops back, drinks nothing
-        Assert.AreEqual(3, c.Use![Red]);
-        Assert.AreEqual(10, c.Hp);
-    }
-
-    [TestMethod]
-    public void Esc_ReturnsToPools()
-    {
-        var defs = Defs();
-        var c = Chara();
-        var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000);
-        hand.Return(c);
-        Assert.AreEqual(3, c.Use![Red]);
-        hand.Click(c, "bag", Sword, defs, 0, 1100);
-        hand.Return(c);
-        Assert.AreEqual(2, c.EquipBag![Sword]);
-        hand.Return(c); // empty hands: no-op
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Sword, defs, 0, 1000, 0));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Axe, defs, 0, 1100, 1));
         Assert.IsTrue(hand.Empty);
+        Assert.AreEqual(Axe, c.EquipOrder![0]);
+        Assert.AreEqual(Sword, c.EquipOrder[1]);
+        Assert.AreEqual(1, c.EquipBag[Axe]);
+        Assert.AreEqual(1, c.EquipBag[Sword]);
+    }
+
+    [TestMethod]
+    public void StaleCell_RemovedElsewhere_DropsThePreviewAndPicksFresh()
+    {
+        var defs = Defs();
+        var c = Chara();
+        Assert.IsTrue(Inventory.Add(c, "use", Blue, 1));
+        var hand = new CarryHand();
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1000, 0));
+        Assert.IsTrue(Inventory.Remove(c, "use", Red, 3)); // sold or drunk elsewhere
+
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Blue, defs, 0, 1100, 1));
+        Assert.AreEqual(("use", Blue), (hand.Kind, hand.Id));
+    }
+
+    [TestMethod]
+    public void StaleCell_EmptyClick_ReturnsTheHand()
+    {
+        var defs = Defs();
+        var c = Chara();
+        var hand = new CarryHand();
+        hand.Click(c, "use", Red, defs, 0, 1000, 0);
+        Inventory.Remove(c, "use", Red, 3);
+
+        Assert.AreEqual(HandAct.None, hand.Click(c, "use", 0, defs, 0, 1100, 0));
+        Assert.IsTrue(hand.Empty);
+    }
+
+    [TestMethod]
+    public void Esc_ReturnsTheCell()
+    {
+        var defs = Defs();
+        var c = Chara();
+        var hand = new CarryHand();
+        hand.Click(c, "use", Red, defs, 0, 1000, 0);
+        hand.Return();
+        Assert.IsTrue(hand.Empty);
+        Assert.AreEqual(Red, c.UseOrder![0]);
+        Assert.AreEqual(3, c.Use![Red]);
     }
 }

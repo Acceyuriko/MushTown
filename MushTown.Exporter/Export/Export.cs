@@ -141,6 +141,11 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
+        if (!ExportCashCoupons(item, str, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         // Quests run after items: reward validation reads the exported defs.
         if (!ExportQuests(baseRoot, outDir))
         {
@@ -206,6 +211,7 @@ public static partial class Export
         {
             Potions = PotionIds.OrderBy(x => x).ToList(),
             Equips = GearIds.OrderBy(x => x).ToList(),
+            CashItems = CashCoupons.Select(c => c.Id).OrderBy(x => x).ToList(),
             Skills = Skills.Keys.OrderBy(x => x).ToList(),
         });
         // Tracked art/fonts (official free Nexon fonts, see art/fonts/README.md)

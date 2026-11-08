@@ -49,6 +49,8 @@ public sealed class SaveStore
             if (save.Slots == null || save.Slots.Count > MaxHeroes)
                 throw new InvalidDataException($"corrupt save file: {path}");
             Pad(save.Slots, MaxHeroes);
+            foreach (var hero in save.Slots)
+                if (hero != null) Inventory.Ensure(hero);
         }
         return store;
     }
@@ -97,6 +99,7 @@ public sealed class SaveStore
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
         };
+        Inventory.Ensure(chara);
         heroes[slot] = chara;
         return chara;
     }
@@ -148,6 +151,8 @@ public sealed class SaveData
 // Equips null means the beginner set (nothing worn); EquipBag null means
 // an empty equip bag (pre-W17 saves never had one).
 // Use null means an empty bag (pre-W10 saves never got the starter kit).
+// The four *Order lists hold cell positions; null/0 means empty.
+// CashWorn/DecBag null marks a pre-cash save; Inventory.Ensure fills defaults.
 // SkillLv maps skill -> level (lv 0 = unlearned, no entry); Sp is unspent
 // skill points (pre-W12 saves start at 0 and earn fresh).
 public sealed class CharaSlot
@@ -167,7 +172,17 @@ public sealed class CharaSlot
     public int Int { get; set; } = 4;
     public int Luk { get; set; } = 4;
     public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
-    public Dictionary<int, int>? EquipBag { get; set; } // itemId -> count (EQUIP tab bag)
+    public Dictionary<int, int>? EquipBag { get; set; } // itemId -> count (EQUIP tab bag; each copy takes one cell)
+    public Dictionary<int, int>? CashBag { get; set; } // itemId -> count (CASH tab, non-decorative)
+    public Dictionary<int, int>? DecBag { get; set; } // itemId -> count (DEC tab, decorative)
+    public List<int>? UseOrder { get; set; } // one item id per cell, 0 = empty
+    public List<int>? EquipOrder { get; set; }
+    public List<int>? CashOrder { get; set; }
+    public List<int>? DecOrder { get; set; }
+    public bool Female { get; set; } // body/head set; defaults to male for old saves
+    public int Hair { get; set; } // current hair cosmetic id (0 = default)
+    public int Face { get; set; } // current face cosmetic id (0 = default)
+    public List<int>? CashWorn { get; set; } // worn decorative cash item ids (Fashion, current hair/face coupons)
     public List<Dictionary<string, string>>? KeyPresets { get; set; } // three key -> target maps (null = defaults)
     public int ActivePreset { get; set; } // which of the three is live (0..2)
     public List<int>? Equips { get; set; } // worn equip ids (null = beginner set)

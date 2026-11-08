@@ -152,6 +152,24 @@ public class QuestTests
         Assert.IsFalse(chara.QuestKills.ContainsKey("90001:1"));
     }
 
+    [TestMethod]
+    public void Complete_FullUseBag_KeepsQuest()
+    {
+        var chara = Chara();
+        chara.Use = new Dictionary<int, int>();
+        for (int id = 1; id <= Inventory.Capacity; id++) chara.Use[id] = 1;
+        Inventory.Ensure(chara);
+        var q = KillQuest();
+        q.RewardItems.Add(new QuestReward { Item = ItemData.RedPotion, Count = 1 });
+        var log = Log(q);
+        log.Accept(chara, q.QuestId);
+        chara.QuestKills[$"{q.QuestId}:0"] = 5;
+
+        Assert.IsFalse(log.Complete(chara, q.QuestId));
+        Assert.IsTrue(chara.Quests.Contains(q.QuestId));
+        Assert.IsFalse(chara.QuestsDone.Contains(q.QuestId));
+    }
+
     // Turn-in payout: mesos drop in the purse, potions in the USE bag (a
     // pre-W10 save has no bag yet: the first payout builds it). Returns the
     // EXP grant for the caller to route through GainExp.

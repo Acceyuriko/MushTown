@@ -35,6 +35,10 @@ public static partial class Export
                 files.Add(($"UIInventory.img/Inventory/{build}/{button}/pressed/0", $"{prefix}_{stem}_p.png"));
             }
             files.Add(($"UIInventory.img/Inventory/{build}/button:meso/normal/0", $"{prefix}_coin.png"));
+            // The sort button: sorts the open tab.
+            files.Add(($"UIInventory.img/Inventory/{build}/button:sort/normal/0", $"{prefix}_sort_n.png"));
+            files.Add(($"UIInventory.img/Inventory/{build}/button:sort/mouseOver/0", $"{prefix}_sort_h.png"));
+            files.Add(($"UIInventory.img/Inventory/{build}/button:sort/pressed/0", $"{prefix}_sort_p.png"));
             // The six category tabs (Equip, Use, Etc, Set-up, Cash, Dec).
             for (int t = 0; t < 6; t++)
             {

@@ -11,30 +11,19 @@ public static class Shop
     {
         long total = (long)price * count;
         if (chara.Mesos < total) return false;
-        chara.Mesos -= (int)total;
         // the item goes to the bag it belongs to: equips to the equip bag,
         // everything else to the use bag (the sell list looks there).
-        if (def.Slot != null)
-        {
-            chara.EquipBag ??= new Dictionary<int, int>();
-            chara.EquipBag[id] = chara.EquipBag.GetValueOrDefault(id) + count;
-        }
-        else
-        {
-            chara.Use ??= new Dictionary<int, int>();
-            chara.Use[id] = chara.Use.GetValueOrDefault(id) + count;
-        }
+        string tab = def.Slot != null ? "equip" : "use";
+        if (!Inventory.Add(chara, tab, id, count)) return false; // full bag: no charge
+        chara.Mesos -= (int)total;
         return true;
     }
 
     public static bool Sell(CharaSlot chara, int id, ItemData def, int count = 1)
     {
-        var bag = def.Slot != null ? chara.EquipBag : chara.Use;
-        if (bag == null || count <= 0 || !bag.TryGetValue(id, out int owned) || owned < count) return false;
         long gain = (long)SellPrice(def.Price) * count;
-        if (chara.Mesos + gain > int.MaxValue) return false;
-        if (owned == count) bag.Remove(id);
-        else bag[id] = owned - count;
+        if (count <= 0 || chara.Mesos + gain > int.MaxValue) return false;
+        if (!Inventory.Remove(chara, def.Slot != null ? "equip" : "use", id, count)) return false;
         chara.Mesos += (int)gain;
         return true;
     }

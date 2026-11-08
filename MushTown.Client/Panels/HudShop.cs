@@ -114,6 +114,11 @@ public partial class MushTownGame
         if (chara == null) return;
         var def = _items[id];
         long total = (long)def.Price * count;
+        if (!Inventory.CanAdd(chara, def.Slot != null ? "equip" : "use", id, count))
+        {
+            _shopNotice = "Your bag is full.";
+            return;
+        }
         if (Shop.Buy(chara, id, def.Price, def, count))
         {
             _shopNotice = "";

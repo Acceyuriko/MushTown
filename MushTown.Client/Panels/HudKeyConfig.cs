@@ -135,17 +135,14 @@ public sealed class KeyConfigWindow : UiWindow
     // lives in the game: the quick slot cells drop onto it too.
     private readonly Dictionary<HotkeyAction, string> _draft = new();
     private readonly Dictionary<int, string> _draftSkills = new(); // the skills the draft bound (from the skill window)
+    private readonly Dictionary<int, string> _draftItems = new(); // the items the draft bound (from the inventory)
     private int _slot;
 
     // Key -> what sits on it, built once per Build: the 73 key caps read it
     // every frame, and walking the draft 73 times would split a string 73
     // times a frame for every action.
     private readonly Dictionary<string, HotkeyAction> _keyAction = new();
-    private readonly Dictionary<string, int> _keySkill = new();
-
-    // Default was pressed: the official table has no item keys either, so Save
-    // drops them (the draft only carries actions and skills).
-    private bool _dropItems;
+    private readonly Dictionary<string, BindTarget> _keyTyped = new(); // skills and items
 
     // The filter dropdown: the picked filter and the open list. Open() puts
     // the filter back to Not Added, so the window shows what is still free.
@@ -199,7 +196,8 @@ public sealed class KeyConfigWindow : UiWindow
         foreach (var (action, _) in Actions) _draft[action] = preset.GetValueOrDefault(action, "");
         _draftSkills.Clear();
         foreach (var (id, key) in _game.HotkeySkills(_slot)) _draftSkills[id] = key;
-        _dropItems = false; // the draft is the preset again: nothing left over from a Default
+        _draftItems.Clear();
+        foreach (var (id, key) in _game.HotkeyItems(_slot)) _draftItems[id] = key;
     }
 
     // Close the window: the unsaved changes go away, a piece in hand stays.
@@ -214,6 +212,7 @@ public sealed class KeyConfigWindow : UiWindow
     {
         _draft.Clear();
         _draftSkills.Clear();
+        _draftItems.Clear();
         // The piece a click picked up stays in hand: the quick slot strip is a drop area too.
         _filterOpen = false;
         _comboMode = false;
@@ -570,8 +569,8 @@ public sealed class KeyConfigWindow : UiWindow
     // A click on a pool cell or a bound key picks that up instead.
     private void Pick(HotkeyAction action) => _game.Hold(BindTarget.Ui(action));
 
-    // A click on a key: the action on it comes up, or the skill (a key never
-    // holds both). The draft keeps the binding until the drop lands, so Esc
+    // A click on a key: the action, skill or item on it comes up (a key never
+    // holds two). The draft keeps the binding until the drop lands, so Esc
     // changes nothing.
     private void PickKey(int code)
     {
@@ -581,7 +580,7 @@ public sealed class KeyConfigWindow : UiWindow
     // The click landed here: the point is one of this window's drop areas (a
     // key of the keyboard, or the pool = unbind). False when it is not, so the
     // caller can put the piece back.
-    internal bool TryDropAt(int gx, int gy)
+    internal bool TryDropAt(int gx, int gy, BindTarget target)
     {
         if (_copyOpen) return false; // the dialog covers the window: nothing behind it takes a drop
         foreach (var s in Spots.Keys)
@@ -590,27 +589,26 @@ public sealed class KeyConfigWindow : UiWindow
             string key = KeyName(s.Code);
             if (!InputController.TryParseKeys(key, out _)) return false; // no letter, or Esc/Enter/Tab/arrows: the cell takes nothing
             if (!OnKeyWindow(gx, gy)) return false; // another window covers that key
-            ApplyDrop(key);
+            ApplyDrop(key, target);
             return true;
         }
         if (!OnScreen(PoolRect()).Contains(gx, gy) || _filterOpen) return false; // the open filter list covers the pool
         if (!OnKeyWindow(gx, gy)) return false; // another window covers the pool: it takes the click
-        ApplyDrop(""); // on the pool: the action loses its key, combo mode or not
+        ApplyDrop("", target); // on the pool: the target loses its key, combo mode or not
         return true;
     }
 
-    // The drop landed on a key of this window ("" = the pool). Callers pass a
-    // key the game binds, or "".
-    internal void ApplyDrop(string key)
+    // The drop landed on a key of this window ("" = the pool). The caller
+    // passes the key the game binds, or "", and the target that was in hand.
+    internal void ApplyDrop(string key, BindTarget target)
     {
-        var target = _game.TakeHeld();
-        if (target.Kind == BindKind.Skill)
+        if (target.Kind is BindKind.Item or BindKind.Skill)
         {
-            // Back where it came from: nothing to write (a combo keeps both parts).
-            string had = _draftSkills.GetValueOrDefault(target.Id, "");
+            var draft = target.Kind == BindKind.Item ? _draftItems : _draftSkills;
+            string had = draft.GetValueOrDefault(target.Id, "");
             if (key == "" ? had == "" : KeyBindings.HasPart(had, key)) return;
             if (key != "") TakeAway(key, null);
-            _draftSkills[target.Id] = key; // "" on the pool: the skill loses its key
+            draft[target.Id] = key; // "" on the pool: the target loses its key
             Build();
             return;
         }
@@ -663,8 +661,8 @@ public sealed class KeyConfigWindow : UiWindow
         return true;
     }
 
-    // The key goes away from the other actions and the bound skills (part by
-    // part). A null keep means the new owner is a skill.
+    // The key goes away from the other actions, skills and items (part by
+    // part). A null keep means the new owner is a skill or an item.
     private void TakeAway(string key, HotkeyAction? keep)
     {
         foreach (var other in _draft.Keys.ToList())
@@ -680,6 +678,12 @@ public sealed class KeyConfigWindow : UiWindow
             if (!parts.Contains(key)) continue;
             _draftSkills[id] = string.Join("+", parts.Where(p => p != key));
         }
+        foreach (var id in _draftItems.Keys.ToList())
+        {
+            var parts = Parts(_draftItems[id]);
+            if (!parts.Contains(key)) continue;
+            _draftItems[id] = string.Join("+", parts.Where(p => p != key));
+        }
     }
 
     // The keys of a binding: one key, or the two of a combo.
@@ -690,7 +694,7 @@ public sealed class KeyConfigWindow : UiWindow
     // Save: the draft goes into the picked preset.
     private void Save()
     {
-        _game.SaveHotkeyPreset(_slot, _draft, _draftSkills, _dropItems);
+        _game.SaveHotkeyPreset(_slot, _draft, _draftSkills, _draftItems);
         ReloadDraft();
         Build();
     }
@@ -699,12 +703,11 @@ public sealed class KeyConfigWindow : UiWindow
     private void Default()
     {
         _draft.Clear();
-        // The defaults have no skill keys. Blank every skill the draft knows
-        // instead of dropping them: Save writes the blank out, so a saved
-        // preset really loses its skill keys. Items are not in the draft at
-        // all, so Save drops them by kind.
+        // The defaults have no skill or item keys. Blank every skill and item
+        // the draft knows instead of dropping them: Save writes the blank out,
+        // so a saved preset really loses them.
         foreach (var id in _draftSkills.Keys.ToList()) _draftSkills[id] = "";
-        _dropItems = true;
+        foreach (var id in _draftItems.Keys.ToList()) _draftItems[id] = "";
         var defaults = KeyBindings.Defaults();
         foreach (var (action, _) in Actions) _draft[action] = defaults.GetValueOrDefault(action, ""); // the pool only: the sub-windows keep whatever they have
         Build();
@@ -780,23 +783,27 @@ public sealed class KeyConfigWindow : UiWindow
     // What the draft puts on a key, null when it has nothing there. The quick
     // slot strip draws and picks this while the window is open, so a drop on a
     // cell shows right away.
-    internal BindTarget? DraftOn(string key) =>
-        _keyAction.TryGetValue(key, out var action) ? BindTarget.Ui(action)
-        : _keySkill.TryGetValue(key, out int skill) ? new BindTarget(BindKind.Skill, skill)
-        : null;
+    internal BindTarget? DraftOn(string key)
+    {
+        if (_keyAction.TryGetValue(key, out var action)) return BindTarget.Ui(action);
+        return _keyTyped.TryGetValue(key, out var target) ? target : null;
+    }
 
-    // Key -> action and key -> skill, rebuilt whenever the tree is: the key
-    // caps read it every frame.
+    // Key -> action, skill or item, rebuilt whenever the tree is: the key caps
+    // read it every frame.
     private void RebuildLookup()
     {
         _keyAction.Clear();
         foreach (var (action, keys) in _draft)
             foreach (var key in keys.Split('+', StringSplitOptions.RemoveEmptyEntries))
                 _keyAction.TryAdd(key, action);
-        _keySkill.Clear();
+        _keyTyped.Clear();
         foreach (var (id, keys) in _draftSkills)
             foreach (var key in keys.Split('+', StringSplitOptions.RemoveEmptyEntries))
-                _keySkill.TryAdd(key, id);
+                _keyTyped.TryAdd(key, new BindTarget(BindKind.Skill, id));
+        foreach (var (id, keys) in _draftItems)
+            foreach (var key in keys.Split('+', StringSplitOptions.RemoveEmptyEntries))
+                _keyTyped.TryAdd(key, new BindTarget(BindKind.Item, id));
     }
 
     // The icon art of an action, "" when the action has no official icon.

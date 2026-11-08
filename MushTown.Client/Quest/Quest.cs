@@ -368,7 +368,7 @@ public partial class MushTownGame
     private void CompleteQuest(int quest)
     {
         var chara = _save?.Slots[_slot];
-        if (chara == null || !_questLog.IsComplete(chara, quest)) return;
+        if (chara == null || !_questLog.IsComplete(chara, quest) || !_questLog.CanTurnIn(chara, quest)) return;
         if (QuestServer()) _net!.SendQuestComplete(quest);
         else if (_questLog.Complete(chara, quest)) ApplyQuestCompleted(chara, quest);
     }

@@ -267,13 +267,10 @@ public sealed class BossBar : Component, IDrawable
     }
 }
 
-// An item cell: a Button that reports kind + index to ClickSlot
-// instead of acting directly. Silent: the grab cursor alone
-// answers hovers (LegacyId stays "").
+// An item cell: a Button marker (the click closure does the work).
+// Silent: the grab cursor alone answers hovers (LegacyId stays "").
 public sealed class Slot : Button
 {
-    public string ItemKind = ""; // carry-match kind (use/worn/bag); sfx Kind stays Silent
-    public int Index;
 }
 
 // Baked small text at a rect offset (matches the HUD label rows).
@@ -535,25 +532,35 @@ public sealed class RightLabel : Component, IDrawable
 // without a scene rebuild, so the row reads them every frame).
 public readonly record struct SkillLive(int Lv, int Sp, int Level, float CdMs, float BuffMs, int Orbs);
 
-// One inventory cell: gold tint when worn, icon centered, count
-// bottom-right (matches DrawWornSlot/DrawInvSlot). Empty cells draw
-// nothing (counts read live: drops and drinks skip scene rebuilds).
+// One inventory cell: icon centered, count bottom-left in white with a black
+// shadow. Equipment has no count (each copy has its own cell). Empty cells
+// draw nothing (count and image read live).
 public sealed class InvSlot : Component, IDrawable
 {
-    private readonly string _image;
+    private readonly Func<string> _image;
     private readonly Func<int> _count;
-    private readonly bool _worn;
-    public InvSlot(string image, Func<int> count, bool worn) { _image = image; _count = count; _worn = worn; }
+    private readonly int _dy;
+    private readonly bool _showCount;
+    public InvSlot(Func<string> image, Func<int> count, int dy, bool showCount)
+    {
+        _image = image; _count = count; _dy = dy; _showCount = showCount;
+    }
     public void Draw(UiGfx gfx)
     {
         int n = _count();
         if (n <= 0) return;
+        string image = _image();
+        if (image == "") return;
         var r = Owner.Get<Rect>()!.Screen;
-        if (_worn) gfx.Sb.Draw(gfx.Pixel, r, new Color(255, 220, 0, 60));
-        var icon = gfx.Tex(_image);
-        gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
+        var icon = gfx.Tex(image);
+        gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2,
+            r.Y + (r.Height - icon.Height) / 2 + _dy), Color.White);
+        if (!_showCount) return;
         var t = gfx.Ui.GetSmall(n.ToString());
-        gfx.Sb.Draw(t, new Vector2(r.X + r.Width - t.Width - 2, r.Y + r.Height - t.Height - 2), Color.Black);
+        var box = new Rectangle(r.X + 1, r.Y, r.Width - 2, r.Height - 1);
+        Text.Draw(gfx.Sb, gfx.Ui, t, new Rectangle(box.X + 1, box.Y + 1, box.Width, box.Height), Color.Black,
+            TextLine.Bottom, TextAlign.Left);
+        Text.Draw(gfx.Sb, gfx.Ui, t, box, Color.White, TextLine.Bottom, TextAlign.Left);
     }
 }
 

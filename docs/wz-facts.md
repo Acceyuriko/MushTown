@@ -103,7 +103,7 @@
 - 快捷菜单图标 = `UITotalMenu.img/quickMenu/menu/*` 30×30；**WZ 节点名不是 0..54**（0..45,101,102,1001,1002,1004-1008，共 55 个）→ 导出时按官方顺序改名。官方间距 33。汉堡钮 = `quickMenu/button:menu` 30×30，放进第 10 格会和血条重叠，所以删掉了原来的电源键（Exit Game 仍在 MENU 底排）。
 - 键帽 art（`KeyConfig/key/<scancode>`）宽高随字变化（字母 10×9、Space 34×11、Shift 28×9）→ 要居中；宽键帽**往左长**。没有键帽 art 的键画键名并缩进格子（RightShift 67px）。真图在 `_Canvas/battlesimulationreplay.img/player/virtualKeyboard/key/<scancode>`；`StatusBar3.img/KeyConfig/key/<code>` 只是 `_outlink`（1×1 链接节点），所以在 `StatusBar3.img` 下看不到图。
 - 快捷栏格子里的名字是我们自己写的（官方格子里没有名字），文字要缩到格宽，最右格会被切掉；官方叫 SETTINGS。K1 起 4 个提示格改画官方图标（52 ATTACK、53 JUMP、1 ITEMS、2 CHAR.INFO）+ 固定键帽，不写名字。
-- **HUD 16 格 = 16 个固定键查表**：键是 Ctrl、Alt、I、C、1-9、0、-、=，常量在 `HudQuickSlots.SlotKeys`（私有，**不要再手写 scancode 表**）。键帽图名唯一来源是 `assets/ui/keys.json` 的 `Cap` + `KeyNames`，结果缓存，每帧不拼字符串。`InputController.TargetOf(Keys)` 给这个键上的目标（组合键任一段都算，所以 Ctrl 格能查到 `LeftControl+RightControl` 的 Attack）。画法：有目标就画它的图（动作图标 / 物品图 / 技能图），键帽永远画，图标居中、键帽在左上吃 `qslotcap`，没有阴影。`keys_cap_<scancode>.png` 和旧的 `hud_key_*.png` 是同一批字节，所以 HUD 直接用 `keys_cap_*`。格子只显示，点格子不绑定物品。
+- **HUD 16 格 = 16 个固定键查表**：键是 Ctrl、Alt、I、C、1-9、0、-、=，常量在 `HudQuickSlots.SlotKeys`（私有，**不要再手写 scancode 表**）。键帽图名唯一来源是 `assets/ui/keys.json` 的 `Cap` + `KeyNames`，结果缓存，每帧不拼字符串。`InputController.TargetOf(Keys)` 给这个键上的目标（组合键任一段都算，所以 Ctrl 格能查到 `LeftControl+RightControl` 的 Attack）。画法：有目标就画它的图（动作图标 / 物品图 / 技能图），键帽永远画，图标居中、键帽在左上吃 `qslotcap`，没有阴影。`keys_cap_<scancode>.png` 和旧的 `hud_key_*.png` 是同一批字节，所以 HUD 直接用 `keys_cap_*`。格子能点起目标，也能接住从背包 / 键窗拖来的目标。
 - **药水绑定 = 表里的 `Item:<id>` 目标**：`CharaSlot.QuickSlots` 已删。喝药是 `ItemEdges`（`_input.Actions` 里 `Kind==Item` 且 `Fresh`）。demo 角色的两瓶药改成 preset 1 的 `D1`/`D3`。
 - **键窗是组件化的**：键格/动作格/过滤框/列表行/跟手图标各自成组件，窗口里没有一个 `new Invoke`。松手边沿从 Draw 轮询改成 `UpdateHud` 传进来（`UiGfx.Mouse` 和 `gx,gy` 同一坐标，截图逐字节不变）。
 - 键窗 Copy 弹窗：官方 `presetCopy` 背图 332×256（origin 0,−1，标题和说明文字烤在图里，"Preset" 后的空在 x=213..229、y=83..92），按钮 copy(81,207)/cancel(169,207) 各 83×26，preset 页 18×18 在 (207/240/273,152)，选中态用 `_c.png`。**默认来源 = 当前 preset**（自拷贝不写盘）。靠一个盖满**整个屏幕**（1366×768，不只是键窗）的 `Silent` 按钮吞掉外部点击。
@@ -113,7 +113,7 @@
 - 键窗完全不挡其他操作（2026-10-30 用户定，参考原版"应该没限制"）：走路/攻击/跳跃/拾取/对话/喝药/面板键全照常，用的是**已保存**的 preset（草稿在窗口里，Save/Apply 才写存档，下一帧重建输入表）。MENU 仍然挡角色。
 - 取消区只有黑色动作池：松手在标题栏、按钮、PRESETS 行、键缝上**什么都不改**（Tab/Enter/方向键不在 `keys.json` 的 73 个键里，按"不是键格就解绑"会把动作静默丢掉）。过滤列表展开时也不接受取消。
 - 老存档没有 `Z -> Pickup`：**不写迁移**（删档重建）；自动补种会让"解绑拾取"重开游戏后失效。验收单写明"老档按一次 Default"。
-- 键窗技能拖放：技能窗行按下时 `HoldSkill(id, point)`（只在键窗开着时），键窗松手写 draft；`Save` 传 draft，`Default` 把每个技能写成 `""`（不是 `Clear()`），这样 Save 才会真的删掉。**物品不在 draft 里**，所以 `Default` 另置标记，`Save` 时统一 `RemoveKind(table, BindKind.Item)`。键上的技能拿不起来。
+- 键窗技能 / 物品拖放：技能窗行按下时 `HoldSkill(id, point)`（只在键窗开着时），键窗松手写 draft；背包 USE 里的药水也能拖到键格或快捷栏。`_draftSkills` / `_draftItems` 都进 draft；`Save` 传 draft，`Default` 把每个技能和物品写成 `""`（不是 `Clear()`），这样 Save 才会真的删掉。键上的技能和物品能再拿起来。
 
 ## 4. 已导入的数据与内容
 

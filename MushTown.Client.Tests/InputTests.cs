@@ -281,16 +281,20 @@ public class InputTests
     }
 
     [TestMethod]
-    public void RemoveKind_OnlyDropsThatKind()
+    public void ApplyItems_AnItemSplitsAComboPart()
     {
-        var table = new Dictionary<string, string>
-        {
-            ["D1"] = "Item:2000000",
-            ["D2"] = "Skill:1001005",
-            ["I"] = "Inventory",
-        };
-        KeyBindings.RemoveKind(table, BindKind.Item);
-        CollectionAssert.AreEquivalent(new[] { "D2", "I" }, table.Keys.ToList());
+        var table = new Dictionary<string, string> { ["I+K"] = "Inventory" };
+        KeyBindings.ApplyItems(table, new() { [2000000] = "K" });
+        Assert.AreEqual("Inventory", table["I"]); // the combo keeps its other key
+        Assert.AreEqual("Item:2000000", table["K"]);
+    }
+
+    [TestMethod]
+    public void ApplyItems_AnEmptyKeyClearsTheItem()
+    {
+        var table = new Dictionary<string, string> { ["D1"] = "Item:2000000" };
+        KeyBindings.ApplyItems(table, new() { [2000000] = "" });
+        Assert.IsFalse(table.ContainsKey("D1"));
     }
 
     [TestMethod]
