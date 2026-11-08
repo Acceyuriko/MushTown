@@ -117,7 +117,7 @@ switch (cmd)
     case "panel":
         if (args.Length < 2)
         {
-            Console.WriteLine("usage: panel <inventory|stat|skill|quest|map|keys|menu|quickmenu|chat|shop|buff|guide|party> [OutDir]");
+            Console.WriteLine("usage: panel <inventory|equip|stat|skill|quest|map|keys|menu|quickmenu|chat|shop|buff|guide|party> [OutDir]");
             Environment.ExitCode = 1;
             return;
         }

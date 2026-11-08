@@ -26,7 +26,7 @@ public enum HotkeyAction
     Chat,        // no key: Enter focuses the chat input (and unfolds the chat)
     Guide,       // U: the big guide (the small guide's green plus also opens it)
     GuideCard,   // no key: the MENU window opens the small guide
-    Equip,       // E: the equipment page of the stat window
+    Equip,       // E: the equipment window
     Attack,      // Ctrl: the basic swing
     Jump,        // Alt: the jump
     Talk,        // Space: talk to the nearest NPC

@@ -50,6 +50,75 @@ public partial class MushTownGame
     // The visible cells: small 4x8, wide 16x8.
     private int InvVisible => InvCols * InvRows;
 
+    // How many rows the tab actually uses: the last filled cell decides, so
+    // the small window never scrolls past its last item into empty rows.
+    private int InvUsedRows(string kind)
+    {
+        var chara = _save?.Slots[_slot];
+        if (kind == "" || chara == null) return 0;
+        return InventoryScroll.UsedRows(InvCols, i => Inventory.SlotId(chara, kind, i));
+    }
+
+    // The last row the small window may show first. The wide form shows all
+    // 128 cells, so it never scrolls.
+    private int InvScrollMax(string kind) =>
+        _invWide ? 0 : InventoryScroll.MaxRow(InvUsedRows(kind), InvRows);
+
+    // Keep the remembered row legal after the contents or the tab changed.
+    private void InvClampScroll()
+    {
+        if (!_showInv || _invWide) return;
+        int max = InvScrollMax(TabKind(_invTab));
+        _invScroll[_invTab] = Math.Clamp(_invScroll[_invTab], 0, max);
+    }
+
+    // The official scrollbar: the small window's track at (214,99), the wide
+    // one at (769,99). A disabled track draws no thumb.
+    private GameObject InvScrollBar()
+    {
+        int tab = _invTab;
+        string kind = TabKind(tab);
+        string prefix = InvArtPrefix();
+        int thumbH = _invLay.Get("scrollThumbH", 28);
+        var bar = new ScrollBar(
+            () => (float)_invScroll[tab] / InvScrollMax(kind),
+            value => _invScroll[tab] = (int)MathF.Round(value * InvScrollMax(kind)),
+            () => InvScrollMax(kind) > 0,
+            $"ui/{prefix}_scroll_base.png", $"ui/{prefix}_scroll_thumb", thumbH);
+        _invBar = bar;
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(
+            _invWide ? _invLay.Get("scrollWideX", 769) : _invLay.Get("scrollX", 214),
+            _invLay.Get("scrollY", 99),
+            _invLay.Get("scrollW", 5),
+            _invLay.Get("scrollH", 368))));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => bar.Grab(_uiScene.LastClick.Y) });
+        o.Add(bar);
+        return o;
+    }
+
+    // The wheel scrolls the open inventory while the mouse is over its grid:
+    // one notch is three rows.
+    private void UpdateInvWheel(int gx, int gy)
+    {
+        int wheel = _input.Wheel;
+        bool over = _showInv && RootOf(_uiScene.Hovered) == _invHost
+            && InvGridScreenRect().Contains(gx, gy);
+        if (!over) { _invWheel = wheel; return; }
+        int notches = (wheel - _invWheel) / 120;
+        _invWheel = wheel;
+        if (notches == 0) return;
+        int max = InvScrollMax(TabKind(_invTab));
+        if (max == 0) return; // the wide form and short tabs keep their saved row
+        _invScroll[_invTab] = InventoryScroll.WheelRow(_invScroll[_invTab], notches, max);
+    }
+
+    private Rectangle InvGridScreenRect()
+    {
+        var r = InvGridRect();
+        return new Rectangle(_invPos.X + r.X, _invPos.Y + r.Y, r.Width, r.Height);
+    }
+
     private static string TabKind(int tab) => tab switch
     {
         0 => "equip",
@@ -59,13 +128,13 @@ public partial class MushTownGame
         _ => "", // Etc / Set-up are empty for now
     };
 
-    private GameObject PanelSlot(Rectangle r, string itemKind, int index, Func<int> count)
+    private GameObject PanelSlot(Rectangle r, string itemKind, Func<int> index, Func<int> count)
     {
         var o = new GameObject();
         o.Add(new Rect(r));
-        o.Add(new Slot { OnClick = () => ClickSlot(itemKind, index) });
-        o.Add(new ItemTip(() => count() == 0 ? 0 : ItemId(itemKind, index))); // the empty cell shows no tip
-        o.Add(new InvItem(() => count() == 0 ? "" : ItemImage(ItemId(itemKind, index))));
+        o.Add(new Slot { OnClick = () => ClickSlot(itemKind, index()) });
+        o.Add(new ItemTip(() => count() == 0 ? 0 : ItemId(itemKind, index()))); // the empty cell shows no tip
+        o.Add(new InvItem(() => count() == 0 ? "" : ItemImage(ItemId(itemKind, index()))));
         if (itemKind != "equip")
         {
             var number = new GameObject { NoHit = true };
@@ -129,6 +198,7 @@ public partial class MushTownGame
     {
         LoadInvArt();
         InvPlaceFirst();
+        InvClampScroll();
         _invPos = ClampPanel(_invPos, InvW); // keep the window on screen (the wide form is wider)
         _invHost.Clear();
         var body = new GameObject();
@@ -140,15 +210,19 @@ public partial class MushTownGame
         body.AddChild(grid);
         for (int s = 0; s < InvVisible; s++)
         {
-            int i = s; // for-loop variables capture shared: copy per slot
-            grid.AddChild(PanelSlot(InvCell(i), kind, i, () =>
+            int cell = s; // the screen row; the bag index is read live from the scroll row
+            Func<int> index = () => InventoryScroll.CellIndex(
+                _invWide ? 0 : _invScroll[_invTab], InvCols, cell);
+            grid.AddChild(PanelSlot(InvCell(s), kind, index, () =>
             {
+                int i = index();
                 var chara = _save?.Slots[_slot];
                 return kind == "" || chara == null || (_hand.Kind == kind && _hand.Cell == i)
                     ? 0
                     : Inventory.Count(chara, kind, ItemId(kind, i));
             }));
         }
+        body.AddChild(InvScrollBar());
         for (int t = 0; t < TabCount; t++)
         {
             int i = t; // for-loop variables capture shared: copy per tab
@@ -182,6 +256,7 @@ public partial class MushTownGame
             new Color(96, 104, 113)));
         body.AddChild(coin);
         _invHost.AddChild(body);
+        _invBuiltTab = _invTab;
     }
 
     // The art file prefix: the small window or the wide one.
@@ -201,6 +276,9 @@ public partial class MushTownGame
                     LoadTexture($"ui/{p}_{b}_{s}.png");
             foreach (string s in new[] { "n", "h", "p" })
                 LoadTexture($"ui/{p}_sort_{s}.png");
+            LoadTexture($"ui/{p}_scroll_base.png");
+            for (int d = 0; d < 3; d++)
+                LoadTexture($"ui/{p}_scroll_thumb{d}.png");
             for (int t = 0; t < TabCount; t++)
             {
                 LoadTexture($"ui/{p}_tab_s{t}.png");
@@ -265,6 +343,7 @@ public partial class MushTownGame
         if (chara == null || kind == "") return;
         if (!_hand.Empty) _hand.Return(); // sorting moves the cells: the held preview must not keep an old index
         Inventory.Sort(chara, kind, _items);
+        _invScroll[_invTab] = 0; // the new order starts at the top
     }
 
     // The window opens at the spot in the layout file; the drag moves it.
@@ -287,7 +366,6 @@ public partial class MushTownGame
         _invWide = !_invWide;
         BuildInvScene();
         _invBuilt = true;
-        _invBuiltTab = _invTab;
     }
 
     // Official tabs: 35x22 art at pitch 37 (small), 128x22 at pitch 130 (wide).

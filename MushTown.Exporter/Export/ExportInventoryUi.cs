@@ -56,6 +56,11 @@ public static partial class Export
                 files.Add(($"UIInventory.img/Inventory/{build}/tab:category/selected/{t}", $"{prefix}_tab_s{t}.png"));
                 files.Add(($"UIInventory.img/Inventory/{build}/tab:category/normal/{t}", $"{prefix}_tab_n{t}.png"));
             }
+            // The scrollbar: one stretchable track and the three thumb states.
+            string scroll = build == "AutoBuild" ? "scroll:slot" : "scroll:avatarTab";
+            files.Add(($"UIInventory.img/Inventory/{build}/{scroll}/enabled/base", $"{prefix}_scroll_base.png"));
+            for (int d = 0; d < 3; d++)
+                files.Add(($"UIInventory.img/Inventory/{build}/{scroll}/enabled/thumb{d}", $"{prefix}_scroll_thumb{d}.png"));
         }
         foreach ((string node, string file) in files)
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))

@@ -1,6 +1,6 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|equip|hud|skill|quest|questask|questforfeit|questpick|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>] [--hover <x,y>]]
+// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|invscroll|stat|equip|equipui|hud|skill|quest|questask|questforfeit|questpick|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>] [--hover <x,y>]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means menus.
 // --hit plants the player mid-swing next to the first mob (game shots only).
@@ -19,6 +19,8 @@ using MushTown.Client;
 // questpick selects 90001 and shows its detail panel.
 // --screen talk needs --talk <npc> and opens that NPC's menu. Talk shots are
 // game shots only.
+// --screen invscroll fills the demo USE tab with 40 cells and scrolls the
+// small window to its bottom. --screen equipui opens the equipment window.
 // Anything else is a mistake, not something to ignore.
 string? shotPath = null;
 int shotMap = 10000;
@@ -63,7 +65,7 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         else if (rest[i] == "--facing" && rest[i + 1] == "left") { shotFacingRight = false; i += 2; }
         else if (rest[i] == "--facing" && rest[i + 1] == "right") { shotFacingRight = true; i += 2; }
         else if (rest[i] == "--hover" && rest[i + 1].Split(',') is [var hx, var hy] && int.TryParse(hx, out int px) && int.TryParse(hy, out int py)) { shotHover = (px, py); i += 2; }
-        else if (rest[i] == "--screen" && (rest[i + 1] is "saves" or "server" or "chars" or "chars2" or "job" or "job2" or "setup" or "delete" or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask")) { shotScreen = rest[i + 1]; i += 2; }
+        else if (rest[i] == "--screen" && (rest[i + 1] is "saves" or "server" or "chars" or "chars2" or "job" or "job2" or "setup" or "delete" or "inv" or "use" or "invscroll" or "stat" or "equip" or "equipui" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask")) { shotScreen = rest[i + 1]; i += 2; }
         else if (rest[i] == "--skilltab") { ok = int.TryParse(rest[i + 1], out shotSkillTab) && shotSkillTab is >= 0 and <= 2; i += 2; }
         else ok = false;
     }
@@ -80,7 +82,7 @@ if (shotScreen == "shop" && shotTalk == 0) ok = false; // the shop screen needs 
 if (shotTravel != 0 && shotScreen is not (null or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter")) ok = false; // --travel needs the game, the world map or the minimap
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|stat|equip|hud|skill|quest|questask|questforfeit|questpick|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>] [--hover <x,y>]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|invscroll|stat|equip|equipui|hud|skill|quest|questask|questforfeit|questpick|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>] [--hover <x,y>]]");
     Environment.ExitCode = 1;
     return;
 }

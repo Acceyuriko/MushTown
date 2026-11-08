@@ -49,6 +49,9 @@ public partial class MushTownGame
     private readonly GameObject _talkHost = new() { Modal = true, Z = TalkZ }; // the NPC dialog: one root carries the modal flag
     private bool _invBuilt, _statBuilt, _skillBuilt, _questBuilt, _settingsBuilt, _shopBuilt; // built at least once
     private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow tab flips
+    private readonly int[] _invScroll = new int[TabCount]; // one scroll row per tab
+    private ScrollBar? _invBar;
+    private int _invWheel; // the last wheel value the inventory saw
     private string _questBuiltKey = "";
     private int _talkBuiltNpc, _talkBuiltQuest, _talkBuiltPage, _talkBuiltLines;
     private bool _talkBuiltChoices;
@@ -157,6 +160,8 @@ public partial class MushTownGame
         // The sliders follow the mouse while it is held. Closing the window lets go
         // through CloseSettings, without moving the knob to where the mouse is.
         foreach (var slider in _sliders) slider.Drag(held, gx);
+        UpdateInvWheel(gx, gy); // the wheel scrolls the open inventory under the mouse
+        if (_showInv) _invBar?.Drag(held, gy); else _invBar?.Release();
         if (_dragShop.HasValue)
         {
             if (!held) _dragShop = null;
@@ -186,7 +191,7 @@ public partial class MushTownGame
     private static int PanelId(Feature feature) => feature switch
     {
         Feature.Inventory => 0,
-        Feature.Stat or Feature.Equip => 1, // the two icons share the stat window
+        Feature.Stat => 1,
         Feature.Skill => 2,
         Feature.Quest => 3,
         Feature.Settings => 4,
@@ -467,17 +472,22 @@ public partial class MushTownGame
         RaiseHost(_panelHosts[id]);
     }
 
-    // Panel trees are pure functions of (tab, contents): a drag only moves the
-    // host, so only a tab flip or new rows rebuilds. Inventory cells read
-    // their item and count live. Also the dialog root: its visibility follows
-    // the talk state.
+    // Panel trees are pure functions of (tab, layout): a drag only moves the
+    // host, so only a tab flip or the window form rebuilds. Inventory cells
+    // read their item, count and scroll row live. Also the dialog root: its
+    // visibility follows the talk state.
     private void SyncPanels()
     {
         _invHost.Enabled = _showInv; _statHost.Enabled = _showStat; _skillHost.Enabled = _showSkill; // a hidden panel stays in the tree, it just stops drawing and hitting
         _questHost.Enabled = _showQuest; _settingsHost.Enabled = _showSettings; _shopHost.Enabled = _showShop;
         if (!_showQuest && _questConfirm != QuestConfirmKind.None) CloseQuestConfirm(); // a hidden window never keeps its question
         _talkHost.Enabled = _talkNpc != 0; // the dialog root is in the tree: showing it is all it takes
-        if (!_invBuilt || _invTab != _invBuiltTab) { BuildInvScene(); _invBuilt = true; _invBuiltTab = _invTab; }
+        InvClampScroll(); // a count change can make the remembered row too far
+        if (!_invBuilt || _invTab != _invBuiltTab)
+        {
+            BuildInvScene();
+            _invBuilt = true;
+        }
         if (!_statBuilt) { BuildStatScene(); _statBuilt = true; }
         if (!_skillBuilt || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuilt = true; _skillBuiltTab = _skillTab; }
         if (_showQuest) // the rows cost a list each call, and a hidden panel is not drawn: skip it

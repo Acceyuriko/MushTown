@@ -165,6 +165,7 @@ public partial class MushTownGame : Game
         _partyHpWindow = new PartyHpWindow(this);
         _guideWindow = new GuideWindow(this);
         _guideCardWindow = new GuideCardWindow(this);
+        new EquipWindow(this);
         _menuWindow = new MenuWindow(this);
         _partyAskWindow = new PartyAskWindow(this); // the invite popup raises itself when it opens
         // One raise row for everything that can come to the front: pinned
@@ -472,7 +473,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "invscroll" or "stat" or "equip" or "equipui" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't

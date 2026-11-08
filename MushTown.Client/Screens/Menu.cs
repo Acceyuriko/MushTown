@@ -163,13 +163,15 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "stat" or "equip" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
+                "inv" or "use" or "invscroll" or "stat" or "equip" or "equipui" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
                 _ => Screen.Saves,
             };
             if (shotScreen is "inv" or "use" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
+            if (shotScreen == "invscroll") { _showInv = true; _invTab = 1; FillInvScrollShot(); }
             if (shotScreen is "stat" or "hud") _showStat = true;
             if (shotScreen == "equip") { _showStat = true; _statTab = 1; _statDetail = ItemData.LongSword; }
+            if (shotScreen == "equipui") ShowWindow(HotkeyAction.Equip);
             if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
             if (shotScreen is "quest" or "questask" or "questforfeit" or "questpick") _showQuest = true;
             if (shotScreen == "settings") _showSettings = true;
@@ -215,6 +217,26 @@ public partial class MushTownGame
             if (_screen == Screen.Setup) { _name = "newhero"; _focus = "name"; }
             GameLog("MushTown saves menu shot");
         }
+    }
+
+    // The invscroll shot: 40 filled cells make ten rows, so the small 4x8
+    // window scrolls to its bottom at row 2 (the shot shows items 9..40).
+    // The roster has fewer than 40 potion arts, so the cells cycle through it;
+    // this demo bag only proves the grid moves, not the bag rules.
+    private void FillInvScrollShot()
+    {
+        var chara = _save!.Slots[0]!;
+        var ids = _potions.Where(id => !string.IsNullOrEmpty(_items[id].Image)).ToList();
+        if (ids.Count == 0) throw new InvalidDataException("invscroll needs potion art");
+        chara.Use = new Dictionary<int, int>();
+        chara.UseOrder = new List<int>(new int[Inventory.Capacity]);
+        for (int i = 0; i < 40; i++)
+        {
+            int id = ids[i % ids.Count];
+            chara.UseOrder[i] = id;
+            chara.Use[id] = 1;
+        }
+        _invScroll[1] = 2;
     }
 
     // The shot dummy: Astra holds the Lv.7 hero plus a mage, Blackveil is empty.

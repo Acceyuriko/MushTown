@@ -42,7 +42,7 @@
 ### 内容底图
 
 - Equipment 页：`Equip/EquipTab/canvas:equip` = 342×349，origin = (-12,-61)，画在 (12,61)。
-- Pet 页：`Equip/PetTab/canvas:pet` = 342×349，origin = (-12,-61)，画在 (12,61)。
+- Pet 页：`Equip/PetTab/canvas:pet` = 342×371，origin = (-12,-61)，画在 (12,61)。
 - Outfits 页：`Deco/CoordiTab/canvas:coordi` = 342×349，origin = (-12,-61)，画在 (12,61)。
 - Android 页：`Deco/AndroidTab/canvas:and` = 342×349，origin = (-12,-61)，画在 (12,61)。
 - Damage Skins 页：`Deco/DamageSkinTab/canvas:and` = 342×349，origin = (-12,-61)，画在 (12,61)。
@@ -232,11 +232,11 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 
 ## 客户端窗口
 
-### `HudEquipWindow`
+### `EquipWindow`
 
 - 新建 `MushTown.Client/Panels/HudEquip.cs`，类 `EquipWindow : UiWindow`。
 - `Action = HotkeyAction.Equip`。
-- `Rect() = (500,162,366,444)`，`HitSize()` 同尺寸，`TitleRect() = Rectangle.Empty`。
+- `LayoutPos() = (500,162)`，`Rect() = (0,0,366,444)`，`TitleRect() = Rectangle.Empty`。
 - 一个窗口，五个页面：
   ```csharp
   enum EquipPage { Equipment, Pet, Outfits, Android, DamageSkins }
@@ -244,6 +244,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - 默认 `Equipment`。
 - 页面切换只换底图、页签和内容，不重建新窗口。
 - 关闭：右上 X、Esc。
+- 拖动（第 3 周）：`TitleRect()` 改成 `(0,0,366,31)`，加 `MapWindowParts.TitleDrag`；`titleH` 进 `panel-equip.json`。第 2 周只做空实现。
 
 ### Equipment / Pet 页
 
@@ -275,7 +276,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - 图标都挂 `ItemTip`。
 - 双击已穿 Cash Fashion → 从 `CashWorn` 移除，加回 `DecBag`。长袍双击任意一格都脱整件。
 - 头发 / 脸格双击不做事；改发型和脸去 Beauty 页或背包 Cash 页。
-- 右上 `EquipUI` 按钮：切回 `Equipment`。
+- Outfits 页右上 `EquipUI` 按钮：切回 `Equipment`。按钮在 `CoordiTab` 下，Android / Damage Skins 页没有。
 - 关闭按钮：关窗口。
 - 底部 3 个纸娃娃 preset、Default Weapon Motion、Effects、Beauty Salon 不注册点击。
 
@@ -310,8 +311,8 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - 两个底图的位置。
 - 两组页签的位置和间距。
 - Equipment / Outfits 内容底图位置。
-- 需要填充的格子位置、格子大小。
-- 图标缩放上限。
+- 需要填充的格子位置、格子大小（第 3 周做内容时加）。
+- 图标缩放上限（第 3 周加）。
 - Decorations / EquipUI / close 按钮位置。
 - tooltip 沿用现有 `Tips`，不新增位置。
 
@@ -333,7 +334,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
   - `button:close` normal → `equip_close.png`
 - 背包新增整理按钮：`UIInventory.img/Inventory/AutoBuild/button:sort` 的 normal / mouseOver / pressed → `inv_sort_n/h/p.png`；宽窗 `FullAutoBuild` 同样导出为 `invw_sort_n/h/p.png`。
 - 背包滚动条新增：
-  - `AutoBuild/scroll:slot` 的 enabled/disabled base → `inv_scroll_base.png`，thumb0/1/2 → `inv_scroll_thumb0/1/2.png`。
+  - `AutoBuild/scroll:slot` 的 enabled/disabled base（实测同一张图，只导 enabled）→ `inv_scroll_base.png`，thumb0/1/2 → `inv_scroll_thumb0/1/2.png`。
   - `FullAutoBuild/scroll:avatarTab` 的同样节点 → `invw_scroll_base.png`、`invw_scroll_thumb0/1/2.png`。
 - NPC 商店滚动条新增：
   - `UINpcShop.img/Shop/scroll:shop` → `shop_scroll_base.png`、`shop_scroll_thumb0/1/2.png`。
@@ -352,7 +353,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - `equipui`：打开装备栏 Equipment 页，身上有武器和长袍。
 - `decorations`：打开装饰栏 Outfits 页，显示默认头发、默认脸和一件 Cash 长袍预览。
 - `inv` 仍然要能出图，用来确认 Equip 页不再把穿着的装备放在最前面。
-- `invscroll`：小窗 Use 页塞 40 件不同道具，滚动条出现，滚到第 2 行。
+- `invscroll`：小窗 Use 页塞 40 格道具（消耗品图标不足 40，循环使用），滚动条出现，滚到第 2 行。
 - `stat`：Character Info 页，上面有角色立绘，下面是属性。
 
 ## 测试
@@ -364,7 +365,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
   - 同 id 拖到同 id 格 → 两格数量合并，来源格空。
   - 不同 id 拖到有道具的格 → 两格交换。
   - 整理 → 当前页签按类型排好，从第 1 格开始排满；滚动位置回到顶部。
-  - 小窗 Use 页 40 件不同道具，滚轮一格 3 行 → 滚到最底，第一行是第 9 件，最后一行是第 40 件。
+  - 小窗 Use 页 40 格道具（图标可循环），滚轮一格 3 行 → 滚到最底，第一行是第 9 格，最后一行是第 40 格。
   - 小窗 Use 页切到别的页签再回来 → 滚动位置还在。
   - 小窗塞满 128 件 → 最多滚到第 25 行（第 97 件到第 128 件），不会出现全空。
   - 滚动后点第 1 个可见格 → 拿起的是真实格子号对应的道具，不是第 1 格。

@@ -51,14 +51,15 @@ public partial class MushTownGame
     private void QuickFeature(Feature feature)
     {
         int id = PanelId(feature);
-        if (id == 1 && _showStat && _statTab != (feature == Feature.Equip ? 1 : 0))
+        if (id == 1 && _showStat && _statTab != 0)
         {
-            OpenFeature(feature); // the two icons are the two tabs of one window: switch, do not close
+            OpenFeature(feature); // the Character Info icon switches back to its first page; it does not close
             return;
         }
         if (id >= 0) { TogglePanel(feature); return; } // open on top / raise when behind / close in front
         HotkeyAction? action = feature switch
         {
+            Feature.Equip => HotkeyAction.Equip,
             Feature.WorldMap => HotkeyAction.WorldMap,
             Feature.Keys => HotkeyAction.KeyConfig,
             _ => null,
