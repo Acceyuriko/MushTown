@@ -1,6 +1,7 @@
 # 装备栏 / 装饰栏 + 现金商店 周计划
 
-状态：第 1、2、3 周已提交；接下来先做 3.5 / 3.6，再做第 4 周。下面按 10 小时左右切周，一共 13 周，外加 2026-11-09 用户插队的 3.5 / 3.6（排在第四周之前）。
+状态：第 1、2、3 周已提交；3.5 / 3.6 已完成实现，待用户验收；下一步第 4 周。下面按 10 小时左右切周，一共 13 周，外加 2026-11-09 用户插队的 3.5 / 3.6（排在第四周之前）。
+2026-11-09 用户定：伤害公式、战斗力公式、属性面板数值以后单独做一版，不在当前周范围。
 2026-11-08 用户定：旧存档不兼容，开发阶段直接删档重开；下面所有“旧存档迁移/补齐”都不做。
 顺序：先装备栏 / 装饰栏，再现金商店。每周一个 commit，做完停下等验收，不顺手做下一周。
 
@@ -17,7 +18,7 @@
 | 2 | 通用 ScrollBar + 装备窗壳 | 1. 新建 `MushTown.Client/Ui/ScrollBar.cs`，做通用滚动块：轨道、滑块、`Grab` / `Drag`、normal / hover / pressed。<br>2. 导出背包小窗 / 宽窗滚动条美术。<br>3. 背包各页签按自己的道具行数上下滚（Etc / Set-up 没有存包，滚动条不出现）；小窗 4×8 可见、总 128 格；宽窗 16×8；每页各记滚动位置；滚轮一格 3 行。<br>4. 导出 `UIEquip.img` 的窗口、5 个页签和底图。<br>5. 新建 `EquipWindow` 壳，5 个页签都能切，`E` 开、X / Esc 关。 | `--screen invscroll` 能出图：小窗 40 件道具滚到底。`--screen equipui` 能打开装备窗，5 个页签都能点。滚动条能拖，滚轮能滚。build / test / format 全过。 |
 | 3 | 装备 / 装饰内容 + Character Info | 1. Equipment 页显示 `Equips` 的武器和长袍。<br>2. Decoration 页 3 个小页签：Outfits / Android / Damage Skins；Outfits 页显示 `CashWorn`、`Hair`、`Face`。<br>3. Pet / Android / Damage Skins 页显示空白格。<br>4. Character Info 改成 `common/main` 上块 + `local/detail` 下块，删掉 EQUIP 页，`S` 打开。<br>5. 导出 Character Info 的底图和 STAT 条。<br>6. 装备窗能拖：按住标题条拖动，不越出屏幕。 | `--screen equipui` 能看到武器和长袍；`--screen decorations` 能看到默认头发和默认脸；`--screen stat` 上面有角色立绘，下面是属性；Pet / Android / Damage Skins 能点开空白格；装备窗能拖。build / test / format 全过。 |
 | 3.5 | 插队（2026-11-09 用户定，排在第四周之前） | 1. 手里没有武器不能攻击：`Equips` 里没有 `Wp` 时按 Ctrl 不出攻击、不判伤害（客户端和服务端都拦）。<br>2. 创建角色送一套新手装备（剑 + 上衣 + 裤子 + 鞋），新建号进游戏身上就穿着；先补 Pants / Shoes 的导出、`BeginnerImgs`、`EquipSlots.Boxes`、`HudEquip` 的 `EquipBoxes` / `DecoBoxes` 和 `panel-equip.json` 的布局键。<br>3. 修 `Loopback_Attack_KillsMob`：测试地图加地板，别让怪掉出攻击高度。 | 空手按 Ctrl 不攻击；新建角色身上有新手一套；`dotnet test MushTown.sln` 全过。build / test / format 全过。 |
-| 3.6 | 插队（2026-11-09 用户定，排在第四周之前） | 装备格子里每个格子显示自己的部位名字（参考图里有），素材从 WZ 的 `UIEquip.img` 找。 | 打开装备栏 / 装饰栏，每个空格子上有部位名字。build / test / format 全过。 |
+| 3.6 | 插队（2026-11-09 用户定，排在第四周之前） | 装备格子里每个格子显示自己的部位名字（参考图里有），素材从 WZ 的 `UIEquip.img` 找。本轮先做 Equipment / Outfits 两页；Pet / Android 页等有对应内容时再补。 | 打开装备栏 / 装饰栏，Equipment / Outfits 每个空格子上有部位名字。build / test / format 全过。 |
 | 4 | 纸娃娃外观基础 | 1. 导出女身体 `00002001.img`、女头 `00012001.img`，`ExportCharacter` 加性别参数。<br>2. 导出全部 22 套头发 / 脸纸娃娃（11 个发型 + 11 个脸，含 4 个默认）。<br>3. `AvatarArt.MergeParts` 加 `female` / `cashWorn` / `hair` / `face` 参数；`DrawAvatar` 和 `BodyCenterX` 都走完整外观；`HasLookBust` / `DrawLookBust` 按当前身体 / 头部件查，不写死 `00002000` / `00012000`。<br>4. 男女默认头发和脸替换出生图里的烤死部件。<br>5. 男 / 女动作表都接上。 | 男角色和女角色都能用默认身体、默认头发、默认脸正常站立、走、跳。`--screen equipui` / `stat` 的小人位置不歪。部件合并有单元测试。build / test / format 全过。 |
 | 5 | 外观穿脱 + 装备 / 装饰联动 | 1. DEC 页双击 Fashion：从 `DecBag` 扣 1 件，进 `CashWorn`；再双击回 `DecBag`。<br>2. 同槽位新 Fashion 顶掉旧件，旧件回 `DecBag`。<br>3. 双击头发 / 脸券：新券出 `DecBag`，旧券回 `DecBag`，改 `Hair` / `Face`。<br>4. 双击装备栏里的装备：回 `EquipBag`；背包 Equip 页不再显示穿着的装备。<br>5. 显示优先 Cash，没 Cash 才显示装备。<br>6. 性别切换的默认券规则接上（旧存档不迁移）。 | `--screen equipui`、`decorations`、`stat` 三张图里，穿脱和头发 / 脸都正确。穿着的东西不在背包；脱下来回背包。默认男 / 女券都能看到。build / test / format 全过。 |
 | 6 | 现金商店框架 | 1. 写 `cashshop.json`：3 件 Utility + 8 件 Fashion。<br>2. 导出 `UICashShop.img` 的顶栏、列表、预览底图、底部导航、CHECK OUT 和 Beauty 底图，外加 3 件 Utility + 8 件 Fashion 的 `ItemData` 和图标。<br>3. 新建 `CashShopWindow`：全屏、X / Esc 关、MENU 能开。<br>4. 顶栏搜索 + meso；底部分组 Utility / Fashion / Beauty；子页签都注册点击。<br>5. 列表格子、卡片、图标、名字、价格、tooltip、`noResult`。<br>6. Utility 3 件和 Fashion 8 件都能出现在列表。 | `--screen cashshop` 能看到 Utility / Convenience 的 3 件道具；`--screen cashshopfashion` 能看到 8 件 Fashion；搜索 `reset` 只剩 SP Reset Scroll，搜 `zzz` 出 `noResult`；底部所有子页签能点。build / test / format 全过。 |
@@ -55,3 +56,7 @@
 - 不把整个一周的任务都挪走。
 - 每周必须留下能跑、能看的结果。
 - 13 周是估算，不是死线。提前做完就提前进下一周，不抢跑后面的功能。
+
+## 后续待办
+
+- 2026-11-09 服务端 `OnAttack` 没收到 `Build` 时回退 `Progression.Beginner`（攻击力 32），空手客户端在 `Build` 到达前仍能攻击。后面改：无 `Build` 按空手拒绝，或要求进房先发 `Build`；会动 CLI / 测试，单独做。

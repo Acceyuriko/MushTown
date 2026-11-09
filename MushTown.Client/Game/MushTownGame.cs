@@ -635,7 +635,7 @@ public partial class MushTownGame : Game
         // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (!blocked && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge())
+        if (!blocked && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
             _fighter.AttackLock = _delays["swingO1"].Sum();
             PlaySfx(SwingKey());

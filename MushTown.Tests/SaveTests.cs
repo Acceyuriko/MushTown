@@ -38,7 +38,7 @@ public class SaveTests
         Assert.AreEqual(20, chara.Use![ItemData.RedPotion]); // starter kit
         Assert.AreEqual(10, chara.Use[ItemData.BluePotion]);
         Assert.IsNull(chara.X);
-        Assert.IsNull(chara.Equips);
+        CollectionAssert.AreEquivalent(ItemData.StarterEquips, chara.Equips);
     }
 
     [TestMethod]

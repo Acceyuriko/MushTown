@@ -241,6 +241,81 @@ public class ProgressionTests
         Assert.AreEqual(1, chara.EquipBag[ItemData.BambooRing]); // swapped out
     }
 
+    // A top, pants and overall share the body area: an overall takes both
+    // boxes and sends the top and pants back to the bag.
+    [TestMethod]
+    public void WearEquip_OverallTakesTopAndPants()
+    {
+        var defs = new Dictionary<int, ItemData>
+        {
+            [1] = new() { ItemId = 1, Slot = "Ma" },
+            [2] = new() { ItemId = 2, Slot = "Pn" },
+            [3] = new() { ItemId = 3, Slot = "MaPn" },
+        };
+        var chara = new CharaSlot
+        {
+            Name = "hero",
+            EquipBag = new Dictionary<int, int> { { 3, 1 } },
+            Equips = new List<int> { 1, 2 },
+        };
+
+        Assert.IsTrue(Progression.WearEquip(chara, 3, defs));
+        CollectionAssert.AreEqual(new[] { 3 }, chara.Equips);
+        Assert.AreEqual(1, chara.EquipBag![1]);
+        Assert.AreEqual(1, chara.EquipBag[2]);
+    }
+
+    // A full bag must not eat the second old piece when an overall takes
+    // both a top and pants.
+    [TestMethod]
+    public void WearEquip_OverallFullBagKeepsOldPieces()
+    {
+        var defs = new Dictionary<int, ItemData>
+        {
+            [1] = new() { ItemId = 1, Slot = "Ma" },
+            [2] = new() { ItemId = 2, Slot = "Pn" },
+            [3] = new() { ItemId = 3, Slot = "MaPn" },
+        };
+        var chara = new CharaSlot
+        {
+            Name = "hero",
+            Equips = new List<int> { 1, 2 },
+        };
+        Inventory.Ensure(chara);
+        for (int i = 0; i < Inventory.Capacity - 1; i++)
+            Assert.IsTrue(Inventory.Add(chara, "equip", 1000 + i, 1));
+        Assert.IsTrue(Inventory.Add(chara, "equip", 3, 1));
+
+        Assert.IsFalse(Progression.WearEquip(chara, 3, defs));
+        CollectionAssert.AreEqual(new[] { 1, 2 }, chara.Equips);
+        Assert.AreEqual(1, Inventory.Count(chara, "equip", 3));
+    }
+
+    // Wearing a top or pants under an overall swaps the overall back out.
+    [TestMethod]
+    public void WearEquip_TopAndPantsSwapOutOverall()
+    {
+        var defs = new Dictionary<int, ItemData>
+        {
+            [1] = new() { ItemId = 1, Slot = "Ma" },
+            [2] = new() { ItemId = 2, Slot = "Pn" },
+            [3] = new() { ItemId = 3, Slot = "MaPn" },
+        };
+        var chara = new CharaSlot
+        {
+            Name = "hero",
+            EquipBag = new Dictionary<int, int> { { 1, 1 }, { 2, 1 } },
+            Equips = new List<int> { 3 },
+        };
+
+        Assert.IsTrue(Progression.WearEquip(chara, 1, defs));
+        CollectionAssert.AreEqual(new[] { 1 }, chara.Equips);
+        Assert.AreEqual(1, chara.EquipBag![3]);
+        Assert.IsTrue(Progression.WearEquip(chara, 2, defs));
+        CollectionAssert.AreEqual(new[] { 1, 2 }, chara.Equips);
+        Assert.AreEqual(1, chara.EquipBag[3]);
+    }
+
     // Takeoff returns the piece to the bag; unworn slots do nothing.
     [TestMethod]
     public void TakeOffEquip_ReturnsToBag()

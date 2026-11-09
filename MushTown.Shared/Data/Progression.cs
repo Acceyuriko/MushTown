@@ -5,9 +5,9 @@ namespace MushTown.Shared;
 // W10 plays a fixed warrior line: auto stat points on level-up (M4).
 public static class Progression
 {
-    // Starting weapon attack. v1 placeholder: 32 keeps the damage range the
-    // tests and the early mobs are tuned for (5..29). The one-handed Sword
-    // 01302000 has WZ incPAD 15; the real attack number lands with W17.
+    // Local no-save / CLI dummy weapon attack. v1 placeholder: 32 keeps the
+    // damage range the tests and the early mobs are tuned for (5..29). Real
+    // characters use their worn weapon; the starter Sword 01302000 has incPAD 15.
     public const int WeaponAtk = 32;
 
     // EXP to climb from this level to the next. Linear v1 curve: levels 1-10
@@ -120,23 +120,33 @@ public static class Progression
         return true;
     }
 
-    // Wears one from the EQUIP bag (the same-slot piece swaps out, so a
-    // slot never holds two). Empty slots do nothing. True when worn.
+    // Wears one from the EQUIP bag. A top, pants or overall all fight over
+    // the same body area: an overall takes both boxes, so it swaps out a top
+    // and pants; a top or pants swaps out an overall. True when worn.
     public static bool WearEquip(CharaSlot chara, int id, IReadOnlyDictionary<int, ItemData> defs)
     {
         var def = defs[id]; // callers only pass loaded equips (client boot proves their slots)
-        if (!Inventory.Remove(chara, "equip", id, 1)) return false;
         chara.Equips ??= new List<int>();
-        int swap = chara.Equips.FindIndex(w => defs.TryGetValue(w, out var wd) && wd.Slot == def.Slot);
-        if (swap >= 0)
+        var old = new List<int>();
+        foreach (int worn in chara.Equips)
+            if (defs.TryGetValue(worn, out var wd) && SameBodyArea(wd.Slot, def.Slot))
+                old.Add(worn);
+        // Removing the new item frees one cell; the old pieces need one each.
+        if (Inventory.Used(chara, "equip") - 1 + old.Count > Inventory.Capacity) return false;
+        if (!Inventory.Remove(chara, "equip", id, 1)) return false;
+        foreach (int oldId in old)
         {
-            int old = chara.Equips[swap];
-            chara.Equips.RemoveAt(swap);
-            Inventory.Add(chara, "equip", old, 1); // the freed cell always has room
+            chara.Equips.Remove(oldId);
+            Inventory.Add(chara, "equip", oldId, 1); // the precheck above guarantees room
         }
         chara.Equips.Add(id);
         return true;
     }
+
+    private static bool SameBodyArea(string? a, string? b) =>
+        a == b
+        || (b == "MaPn" && a is "Ma" or "Pn")
+        || (a == "MaPn" && b is "Ma" or "Pn");
 
     // Takes one off, back to the bag. Unworn slots do nothing. A hand-made
     // save may wear unknown ids (they draw and grant nothing); the tab draws

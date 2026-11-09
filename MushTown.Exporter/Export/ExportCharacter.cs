@@ -13,22 +13,23 @@ public static partial class Export
     private const string HairImg = @"Hair\00030020.img";
     private const string FaceImg = @"Face\00020000.img";
 
-    // The doll part a piece of gear replaces: a coat takes the longcoat's
-    // place, a weapon the sword's.
+    // The doll part a gear slot replaces: Ma/MaPn use the longcoat art, Pn
+    // the boxers, So the beginner shoes, Wp the sword.
     private const string BeginnerLongcoat = @"Longcoat\01050287.img";
     private const string BeginnerSword = @"Weapon\01302000.img";
+    private const string BeginnerShoes = @"Shoes\01072833.img";
 
     // Beginner gear on top of the naked body, in the order the bones flow: the
-    // striped boxers (the underwear every character shows), then the beginner
-    // outfit and the sword the stand1/walk1/swingO1 art is baked from. A gear
-    // bake stops at the piece it replaces; the plain body keeps the boxers
-    // only, so a character with nothing equipped stands in underwear.
+    // striped boxers (the underwear every character shows), then the longcoat
+    // (the art a top or overall replaces), shoes and sword. A gear bake stops
+    // at the piece it replaces; the plain body keeps the boxers only, so a
+    // character with nothing equipped stands in underwear.
     private const string BeginnerBoxers = @"Pants\01060026.img";
     private static readonly string[] CharaEquips = new[]
     {
         BeginnerBoxers,
         BeginnerLongcoat,
-        @"Shoes\01072833.img",
+        BeginnerShoes,
         BeginnerSword,
     };
 

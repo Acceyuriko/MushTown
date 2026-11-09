@@ -50,7 +50,7 @@
 ### 格子
 
 - `EquipTab/SlotSize = 42`。
-- 格子位置从 `Slots/<id>` 的 origin 取反，不手填。
+- 格子位置统一按 7×6 网格：`slotX=27`、`slotY=100`、`slotPitchX/Y=45`、`SlotSize=42`；当前所有槽都在这张网格上，具体槽表见 `HudEquip`。
 - Equipment 页用到的格子：
   - `Slots/5` Top，origin = (-252,-145)，画在 (252,145)。
   - `Slots/6` Bottom，origin = (-252,-190)，画在 (252,190)。
@@ -133,15 +133,16 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 ### 装备槽映射
 
 - `ItemData.Slot == "Wp"` → Equipment 页的 Weapon 格。
-- `ItemData.Slot == "Ma"` → Equipment 页的 Top 和 Bottom 两个格子。
-- 长袍是 `Ma` 的特例：同一件同时画在 Top 和 Bottom。以后支持 `Tn` / `Pn` 时再把上下装拆开。
-- 其他槽先留空。但槽位映射要通用，不能写死只支持 `Wp` / `Ma`。
+- `ItemData.Slot == "Ma"` → Equipment 页的 Top 格。
+- `ItemData.Slot == "MaPn"`（连体装）→ Top 格；Bottom 格变红锁住，不能再穿下装。
+- `ItemData.Slot == "Pn"` → Bottom 格；`ItemData.Slot == "So"` → Shoes 格。
+- 其他槽先留空。槽位映射要通用，不能写死只支持 `Wp` / `Ma`。
 - 后期要加：帽子、上衣、下装、鞋子、手套、披风、盾牌、饰品等所有装备槽。加槽时只补 `Slot → Slots/<id>` 映射和美术，不动窗口结构。
 
 ### Cash 外观槽映射
 
 - `CashWorn` 里的 `Wp` → Outfits 页 Weapon 格。
-- `CashWorn` 里的 `Ma` → Outfits 页 Top 和 Bottom 两个格子。
+- `CashWorn` 里的 `Ma` → Outfits 页 Top 格；`MaPn` → Top 格、Bottom 格变红锁住；`Pn` → Bottom 格；`So` → Shoes 格。
 - `Hair` → Outfits 页 Hair 格；有纸娃娃时画上半身预览（`LookBust`），没有时退回券的 `ItemData.Image`。
 - `Face` → Outfits 页 Face 格；有纸娃娃时画上半身预览（`LookBust`），没有时退回券的 `ItemData.Image`。
 - 没有 Cash 外观时，Outfits 页对应格子留空。
@@ -253,11 +254,13 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - Pet 页：画 Pet 页签 selected 图、Equipment 页签 normal 图；画 `PetTab/canvas:pet`。
 - Equipment 页遍历 `Hero.Equips`：
   - 有 `Wp`：在 Weapon 格画图标。
-  - 有 `Ma`：在 Top 和 Bottom 两格画同一个图标。
+  - 有 `Ma`：在 Top 格画图标。
+  - 有 `MaPn`：在 Top 格画图标，Bottom 格画红色锁。
+  - 有 `Pn`：在 Bottom 格画图标；`So`：在 Shoes 格画图标。
   - 其他槽忽略。
 - Pet 页只画空白格，不显示道具。
 - 每个图标挂 `ItemTip`，tooltip 和普通游戏一样。
-- 双击已穿装备 → 从 `Equips` 移除，回到 `EquipBag`。长袍双击任意一格都脱整件。
+- 双击已穿装备 → 从 `Equips` 移除，回到 `EquipBag`。长袍双击 Top 格脱整件。
 - Equipment 右上 `Decorations` 按钮：切到 `Outfits`。
 - 关闭按钮：关窗口。
 - 底部 PRESETS、3 个 preset、Apply 不注册点击。底图已经画出来，不额外补图。
@@ -268,13 +271,13 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - Outfits / Android / Damage Skins 三个页签都注册点击，按当前页画 selected / normal 图。
 - Outfits 页：画 `CoordiTab/canvas:coordi`。遍历 `Hero.CashWorn`：
   - `ItemData.Slot == "Wp"` → Weapon 格。
-  - `ItemData.Slot == "Ma"` → Top 和 Bottom 两格。
+  - `ItemData.Slot == "Ma"` → Top 格；`MaPn` → Top 格、Bottom 格红色锁；`Pn` → Bottom 格；`So` → Shoes 格。
   - `Hairs` 里 `Cosmetic == Hero.Hair` 的 ItemId → Hair 格。
   - `Faces` 里 `Cosmetic == Hero.Face` 的 ItemId → Face 格。
 - Android 页：画 `AndroidTab/canvas:and`，只画空白格。
 - Damage Skins 页：画 `DamageSkinTab/canvas:and`，只画空白格。
 - 图标都挂 `ItemTip`。
-- 双击已穿 Cash Fashion → 从 `CashWorn` 移除，加回 `DecBag`。长袍双击任意一格都脱整件。
+- 双击已穿 Cash Fashion → 从 `CashWorn` 移除，加回 `DecBag`。长袍双击 Top 格脱整件。
 - 头发 / 脸格双击不做事；改发型和脸去 Beauty 页或背包 Cash 页。
 - Outfits 页右上 `EquipUI` 按钮：切回 `Equipment`。按钮在 `CoordiTab` 下，Android / Damage Skins 页没有。
 - 关闭按钮：关窗口。
@@ -350,7 +353,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 
 `--screen` 新增：
 
-- `equipui`：打开装备栏 Equipment 页，身上有武器和长袍。
+- `equipui`：打开装备栏 Equipment 页，身上有新手一套。
 - `decorations`：打开装饰栏 Outfits 页，显示默认头发、默认脸。
 - `inv` 仍然要能出图，用来确认 Equip 页不再把穿着的装备放在最前面。
 - `invscroll`：小窗 Use 页塞 40 格道具（消耗品图标不足 40，循环使用），滚动条出现，滚到第 2 行。
@@ -376,11 +379,12 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
   - 卖 / 丢到数量 0 → `UseOrder` / `EquipOrder` / `CashOrder` / `DecOrder` 对应格清空。
 - 装备栏：
   - `Equips` 有 `Wp` → Weapon 格出现图标。
-  - `Equips` 有 `Ma` → Top 和 Bottom 两个格子都出现同一个图标。
+  - `Equips` 有 `Ma` → Top 格出现图标；`Equips` 有 `Pn` → Bottom 格出现图标。
+  - `Equips` 有 `MaPn` → Top 格出现图标，Bottom 格变红锁住。
   - 双击已穿装备 → `Equips` 少一件，`EquipBag` 多一件。
 - 装饰栏：
   - `CashWorn` 有 `Wp` → Weapon 格出现图标。
-  - `CashWorn` 有 `Ma` → Top 和 Bottom 两个格子都出现同一个图标。
+  - `CashWorn` 有 `Ma` → Top 格出现图标；`MaPn` → Top 格出现图标、Bottom 格变红锁住。
   - `Hair=30020`、`Face=20000` → Hair / Face 格有图标。
   - `Female=true`、`Hair=33390`、`Face=20002` → 用女身体和女头画，Hair / Face 格有图标。
   - 空 `CashWorn` → 其余格子空。
@@ -407,7 +411,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - 手里拿起道具点 UI 外世界区域能丢到脚下；单件直接丢，多件弹数量框，地上能捡回。
 - `E` 能打开新装备栏，X / Esc 能关。
 - `S` 打开的 Character Info 上面有角色立绘，下面是属性。
-- Equipment 页能看到身上的武器和长袍。长袍在 Top 和 Bottom 两格都显示。
+- Equipment 页能看到身上的武器和新手一套。长袍显示在 Top 格，Bottom 格变红锁住。
 - 双击装备栏里的装备能脱下，回到装备包。
 - Pet、Android、Damage Skins 页能点开，显示各自的空白格。
 - 点 `Decorations` 进入装饰栏。Outfits 页能看到默认头发、默认脸。

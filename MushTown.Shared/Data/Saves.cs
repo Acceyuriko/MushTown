@@ -107,6 +107,7 @@ public sealed class SaveStore
             Sp = Progression.SpPerLevel, // creation banks the first level's points
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
+            Equips = new List<int>(ItemData.StarterEquips),
         };
         Inventory.GiveCashDefaults(chara);
         Inventory.Ensure(chara);

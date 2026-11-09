@@ -267,8 +267,8 @@ public sealed class MobFrame
 
 // Item def: assets/item/{id}.json. Potions heal (Hp/Mp from the WZ spec
 // node); equips wear (Slot + bonuses from the WZ info node). v1 gear rules:
-// a worn weapon's Atk replaces WeaponAtk 32, Def is defense points 1:1,
-// Str/Dex add; level/job reqs ignored (official Lv10+ fits no v1 char).
+// a worn weapon's Atk is the attack (no weapon = 0), Def is defense points
+// 1:1, Str/Dex add; level/job reqs ignored (official Lv10+ fits no v1 char).
 // Icons are the WZ info/icon canvas.
 public sealed class ItemData
 {
@@ -287,6 +287,13 @@ public sealed class ItemData
     public const int LongSword = 1302007; // Long Sword (Wp, PAD 27): the shop of Sid (11000)
     public const int LolicoArmor = 1040015; // Brown Lolico Armor (Ma, PDD 15): the shop of Pan (21000)
 
+    // The classic beginner kit: every new character wears these four.
+    public const int StarterSword = 1302000; // Sword (Wp, PAD 15)
+    public const int StarterTop = 1040002; // White Undershirt (Ma, PDD 2)
+    public const int StarterPants = 1060026; // Blue-Striped Boxers (Pn, PDD 1)
+    public const int StarterShoes = 1072833; // Yellow Adventure Shoes (So, PDD 2)
+    public static readonly int[] StarterEquips = { StarterSword, StarterTop, StarterPants, StarterShoes };
+
     // The four free default hair/face coupons (Cash/0515.img).
     public const int HairCouponMale = 5157257; // Messy Hair Coupon (M), cosmetic 30020
     public const int HairCouponFemale = 5157258; // cosmetic 33390 (the WZ name still says "(M)")
@@ -298,13 +305,17 @@ public sealed class ItemData
     public const int DefaultFaceFemale = 20002;
 
     // Beginner img per worn slot: the export and item validation use this row
-    // to know which beginner art a gear slot replaces (only slots with v1
-    // equips need entries). The pants 01060026 are a separate baked part and
-    // no v1 gear swaps them.
+    // to know which beginner art a gear slot replaces. The starter kit's
+    // top, pants, shoes and sword are the pieces a later item of the same
+    // slot replaces. An overall replaces the beginner longcoat and locks the
+    // Bottom box, so no pants are worn under it.
     public static readonly Dictionary<string, string> BeginnerImgs = new()
     {
         ["Wp"] = "01302000",
         ["Ma"] = "01050287",
+        ["MaPn"] = "01050287",
+        ["Pn"] = "01060026",
+        ["So"] = "01072833",
     };
 
     // The balloon style of the worn rings: the first chat ring wins, 0 is the

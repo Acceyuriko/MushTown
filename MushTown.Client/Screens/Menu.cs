@@ -243,15 +243,15 @@ public partial class MushTownGame
         _invScroll[1] = 2;
     }
 
-    // The character info and the equipment window show the demo's real gear:
-    // the sword and the longcoat move from the bag to the worn list.
+    // The character info and the equipment window show the starter kit every
+    // new hero gets: sword, shirt, boxers and shoes. The demo bag's old shop
+    // gear goes too, so the inventory page keeps only the demo ring.
     private void DressDemoForShot()
     {
         var chara = _save!.Slots[_slot]!;
-        chara.Equips = new List<int>();
+        chara.Equips = new List<int>(ItemData.StarterEquips);
         foreach (int id in new[] { ItemData.LongSword, ItemData.LolicoArmor })
-            if (Inventory.Remove(chara, "equip", id, 1))
-                chara.Equips.Add(id);
+            Inventory.Remove(chara, "equip", id, 1);
     }
 
     // The shot dummy: Astra holds the Lv.7 hero plus a mage, Blackveil is empty.
@@ -358,7 +358,7 @@ public partial class MushTownGame
                 if (ItemData.BeginnerImgs.ContainsKey(item.Slot) && !item.HasArt)
                     throw new InvalidDataException($"equip {id} has no art");
             }
-            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0) // stale jsons price 0, except cash items and rings
+            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0 && !ItemData.StarterEquips.Contains(id)) // stale jsons price 0, except cash items, rings and the free starter kit
                 throw new InvalidDataException($"item {id} has a bad price");
             if (item.Name == "") // pre-name jsons would print blank labels
                 throw new InvalidDataException($"item {id} has no name");

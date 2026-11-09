@@ -488,6 +488,7 @@ public sealed partial class GameServer : IDisposable
         {
             if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to judge from
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
+            if (build.WeaponAtk <= 0) return; // empty hand: the swing was a client bug or a foreign client
             foreach (var h in _mobs.Strike(p.map, p.x, p.y, p.facing, Random.Shared, build, id))
                 BroadcastHit(h, id);
             BroadcastFreshDrops();

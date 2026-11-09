@@ -158,7 +158,7 @@ public class CombatTests
     public void Loopback_Attack_KillsMob()
     {
         using var assets = new TempAssets();
-        assets.AddMap(9, """[{"MobId":100000,"X":0,"Cy":100}]""");
+        assets.AddMap(9, """[{"MobId":100000,"X":0,"Cy":100}]""", """[{"X1":-300,"Y1":100,"X2":300,"Y2":100,"Layer":0}]""");
         assets.AddMob(100000, 40);
         using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 3);
         server.Start();
@@ -213,6 +213,29 @@ public class CombatTests
         Assert.AreEqual(0, hit.HpLeft);
         Assert.AreEqual(a.PlayerId, hit.Attacker);
         Assert.AreEqual(35, hit.Exp);
+    }
+
+    // An empty hand cannot swing: the server drops the Attack. Sending a real
+    // weapon back makes the same client hit on the next swing.
+    [TestMethod]
+    public void Loopback_EmptyHand_DoesNotHit()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(9, """[{"MobId":100000,"X":0,"Cy":100}]""", """[{"X1":-300,"Y1":100,"X2":300,"Y2":100,"Layer":0}]""");
+        assets.AddMob(100000, 40);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 56);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 56);
+
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+
+        a.SendBuild(new Build(99, 99, 0, 0, 0, 0));
+        a.SendAttack();
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0));
+        a.SendAttack();
+        Assert.AreEqual(0, WaitTakeMob(a).HpLeft); // the empty swing queued no hit; the first event is the one-shot
     }
 
     // A client entering later sees the live HP, not MaxHp.

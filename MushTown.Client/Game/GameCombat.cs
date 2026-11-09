@@ -338,8 +338,9 @@ public partial class MushTownGame
             + _skills[SkillData.AgileArms].Str * SkillLv(SkillData.AgileArms);
         int dex = chara.Dex + worn.dex
             + _skills[SkillData.PhysicalTraining].Dex * SkillLv(SkillData.PhysicalTraining);
-        int atk = (worn.weapon > 0 ? worn.weapon : Progression.WeaponAtk)
-            + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor);
+        int atk = worn.weapon > 0
+            ? worn.weapon + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor)
+            : 0; // an empty hand has no weapon attack, even with Guardian Armor
         if (_fighter.Buffs.ContainsKey(SkillData.SpiritBlade))
             atk = atk * (100 + _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade)) / 100;
         int dmg = _skills[SkillData.WeaponMastery].DmgPct * SkillLv(SkillData.WeaponMastery);
@@ -348,6 +349,9 @@ public partial class MushTownGame
         int final = _skills[SkillData.FinalAttack].ProcPct * SkillLv(SkillData.FinalAttack);
         return new Build(str, dex, atk, dmg, crit, final);
     }
+
+    // Ctrl is a weapon swing: no weapon in hand means no swing at all.
+    private bool HasWeapon() => OwnBuild().WeaponAtk > 0;
 
     // +MaxHP% from every source: Iron Body while live, Warrior Mastery and
     // Endure always. Pools, potions, and refills all cap at the buffed max.

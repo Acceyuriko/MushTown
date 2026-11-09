@@ -14,22 +14,56 @@ public sealed class EquipWindow : UiWindow
 
     private static readonly PanelLayout _lay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-equip.json"));
 
-    // The layout keys of every box on each page. A new box adds one row here
-    // and its numbers in panel-equip.json.
-    private static readonly Dictionary<string, (string X, string Y)> EquipBoxes = new()
+    // The 7x6 slot grid on both pages: column and row in slots/, plus the
+    // slot-name art (one file per part name; rings share one).
+    private readonly record struct SlotCell(int Col, int Row, string Art);
+
+    // The boxes both pages share. Equipment and Outfits only add their own
+    // extra boxes, so a common slot is changed in one place.
+    private static readonly Dictionary<string, SlotCell> SharedBoxes = new()
     {
-        ["weapon"] = ("weaponX", "weaponY"),
-        ["top"] = ("topX", "topY"),
-        ["bottom"] = ("bottomX", "bottomY"),
+        ["ring1"] = new(0, 0, "ring"),
+        ["face_acc"] = new(1, 0, "face_acc"),
+        ["hat"] = new(5, 0, "hat"),
+        ["cape"] = new(6, 0, "cape"),
+        ["ring2"] = new(0, 1, "ring"),
+        ["eye_acc"] = new(1, 1, "eye_acc"),
+        ["top"] = new(5, 1, "top"),
+        ["gloves"] = new(6, 1, "gloves"),
+        ["ring3"] = new(0, 2, "ring"),
+        ["earrings"] = new(1, 2, "earrings"),
+        ["bottom"] = new(5, 2, "bottom"),
+        ["shoes"] = new(6, 2, "shoes"),
+        ["ring4"] = new(0, 3, "ring"),
     };
 
-    private static readonly Dictionary<string, (string X, string Y)> DecoBoxes = new()
+    // Every visible box on the Equipment page, labels included. A new slot
+    // adds one row here and its label art in UIEquip.img.
+    private static readonly Dictionary<string, SlotCell> EquipBoxes = new(SharedBoxes)
     {
-        ["weapon"] = ("decoWeaponX", "decoWeaponY"),
-        ["top"] = ("topX", "topY"),
-        ["bottom"] = ("bottomX", "bottomY"),
-        ["hair"] = ("hairX", "hairY"),
-        ["face"] = ("faceX", "faceY"),
+        ["pendant1"] = new(1, 3, "pendant"),
+        ["shoulder"] = new(5, 3, "shoulder"),
+        ["medal"] = new(6, 3, "medal"),
+        ["belt"] = new(0, 4, "belt"),
+        ["pendant2"] = new(1, 4, "pendant"),
+        ["weapon"] = new(2, 4, "weapon"),
+        ["secondary"] = new(3, 4, "secondary"),
+        ["emblem"] = new(4, 4, "emblem"),
+        ["android"] = new(5, 4, "android"),
+        ["heart"] = new(6, 4, "heart"),
+        ["pocket"] = new(0, 5, "pocket"),
+        ["badge"] = new(6, 5, "badge"),
+    };
+
+    // The Outfits page reuses the same grid, but Weapon and Secondary sit in
+    // the fourth row and Hair / Face / Skin fill the middle row.
+    private static readonly Dictionary<string, SlotCell> DecoBoxes = new(SharedBoxes)
+    {
+        ["weapon"] = new(5, 3, "weapon"),
+        ["secondary"] = new(6, 3, "secondary"),
+        ["hair"] = new(2, 4, "hair"),
+        ["face"] = new(3, 4, "face"),
+        ["skin"] = new(4, 4, "skin"),
     };
 
     private enum EquipPage { Equipment, Pet, Outfits, Android, DamageSkins }
@@ -54,7 +88,13 @@ public sealed class EquipWindow : UiWindow
         root.Add(new Picture(IsDeco ? "ui/deco_bg.png" : "ui/equip_bg.png",
             _lay.Get("bgX", 0), _lay.Get("bgY", 0)));
         root.Add(new Picture(PageArt(), _lay.Get("contentX", 12), _lay.Get("contentY", 61)));
-        AddWorn(root);
+        var slots = SlotsForPage();
+        var occupied = slots.Select(s => s.Slot).ToHashSet();
+        bool bottomLocked = BottomLocked();
+        if (bottomLocked) occupied.Add("bottom");
+        AddSlotNames(root, occupied);
+        AddWorn(root, slots);
+        if (bottomLocked) AddLockedBottom(root);
         if (IsDeco)
         {
             AddTab(root, _lay.Get("decoTab0X", 12), _lay.Get("decoTabW0", 113), "deco_tab", 0, EquipPage.Outfits);
@@ -105,14 +145,51 @@ public sealed class EquipWindow : UiWindow
         root.AddChild(o);
     }
 
-    // The worn items: the Equipment page shows the gear, the Outfits page the
-    // cash items. Pet / Android / Damage Skins stay empty.
-    private void AddWorn(GameObject root)
+    // Every empty box carries its part name; worn items draw over them.
+    private void AddSlotNames(GameObject root, HashSet<string> occupied)
     {
         if (_page is not (EquipPage.Equipment or EquipPage.Outfits)) return;
-        if (_game.Hero is not { } chara) return;
+        foreach (var (slot, cell) in (IsDeco ? DecoBoxes : EquipBoxes))
+        {
+            if (occupied.Contains(slot)) continue;
+            _game.LoadTexture($"ui/equip_slot_{cell.Art}.png");
+            var o = new GameObject { NoHit = true };
+            o.Add(new Rect(SlotBox(cell)));
+            o.Add(new Picture($"ui/equip_slot_{cell.Art}.png", 0, 0));
+            root.AddChild(o);
+        }
+    }
+
+    // The items of the open page. Pet / Android / Damage Skins show no items.
+    private List<(string Slot, int Id)> SlotsForPage()
+    {
+        if (_page is not (EquipPage.Equipment or EquipPage.Outfits)) return new();
+        if (_game.Hero is not { } chara) return new();
+        return IsDeco ? EquipSlots.Cash(chara, _game.Items) : EquipSlots.Worn(chara, _game.Items);
+    }
+
+    private bool BottomLocked()
+    {
+        if (_page is not (EquipPage.Equipment or EquipPage.Outfits)) return false;
+        if (_game.Hero is not { } chara) return false;
+        return EquipSlots.BottomLocked(IsDeco ? chara.CashWorn : chara.Equips, _game.Items);
+    }
+
+    // An overall shows Top and paints Bottom red with a lock: no pants can go
+    // under it.
+    private void AddLockedBottom(GameObject root)
+    {
+        var o = new GameObject { NoHit = true };
+        o.Add(new Rect(SlotBox("bottom")));
+        o.Add(new Picture("ui/equip_disabled.png", 0, 0) { Tint = new Color(255, 120, 120) });
+        root.AddChild(o);
+    }
+
+    // The worn items: the Equipment page shows the gear, the Outfits page the
+    // cash items. Pet / Android / Damage Skins stay empty.
+    private void AddWorn(GameObject root, List<(string Slot, int Id)> slots)
+    {
         var items = _game.Items;
-        var slots = IsDeco ? EquipSlots.Cash(chara, items) : EquipSlots.Worn(chara, items);
         foreach (var (slot, id) in slots)
         {
             var box = SlotBox(slot);
@@ -134,15 +211,14 @@ public sealed class EquipWindow : UiWindow
         }
     }
 
-    // The box of one window slot: the page's table names its layout keys.
-    private Rectangle SlotBox(string slot)
+    // The box of one window slot: the page's table names its grid cell.
+    private Rectangle SlotBox(string slot) => SlotBox((IsDeco ? DecoBoxes : EquipBoxes)[slot]);
+
+    private Rectangle SlotBox(SlotCell cell)
     {
-        var (x, y) = (IsDeco ? DecoBoxes : EquipBoxes)[slot];
         int size = _lay.Get("slotSize", 42);
-        int px = _lay.Get(x, -1), py = _lay.Get(y, -1);
-        if (px < 0 || py < 0) // a missing key would draw the item at the screen corner
-            throw new InvalidDataException($"panel-equip.json is missing {x}/{y} for slot {slot}");
-        return new Rectangle(px, py, size, size);
+        return new Rectangle(_lay.Get("slotX", 27) + cell.Col * _lay.Get("slotPitchX", 45),
+            _lay.Get("slotY", 100) + cell.Row * _lay.Get("slotPitchY", 45), size, size);
     }
 
     private GameObject PictureButton(Rectangle r, string art, Action onClick)
@@ -167,7 +243,7 @@ public sealed class EquipWindow : UiWindow
         {
             "equip_bg.png", "deco_bg.png", "equip_panel.png", "equip_pet.png",
             "deco_panel.png", "deco_android.png", "deco_damage.png",
-            "equip_deco.png", "deco_equip.png", "equip_close.png",
+            "equip_deco.png", "deco_equip.png", "equip_close.png", "equip_disabled.png",
         })
             _game.LoadTexture("ui/" + f);
         for (int t = 0; t < 2; t++)

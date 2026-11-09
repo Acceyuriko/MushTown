@@ -14,6 +14,11 @@ public static partial class Export
     // the item def and the doll bake both come from here.
     private static readonly (string gear, string? beginner)[] Gears = new[]
     {
+        // The classic beginner kit every new character wears.
+        (@"Weapon\01302000.img", BeginnerSword),
+        (@"Coat\01040002.img", BeginnerLongcoat),
+        (@"Pants\01060026.img", BeginnerBoxers),
+        (@"Shoes\01072833.img", BeginnerShoes),
         (@"Coat\01040039.img", BeginnerLongcoat),
         (@"Weapon\01442004.img", BeginnerSword),
         (@"Ring\01112134.img", null),
@@ -242,7 +247,7 @@ public static partial class Export
                 HasArt = beginner != null,
                 Cash = Int(info, "cash") != 0,
             };
-            if (data.Price <= 0 && !data.Cash) // cash gear carries no meso price
+            if (data.Price <= 0 && !data.Cash && !ItemData.StarterEquips.Contains(id)) // cash gear carries no meso price; starter gear is free
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
                 return null;
