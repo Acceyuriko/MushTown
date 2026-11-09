@@ -50,11 +50,21 @@ public static class Net
     public const byte ActRope = 4;
     public const byte ActProne = 5;
     public const byte ActSwing = 6;
+    public const byte ActSwingT = 7;
+    public const byte ActSwingP = 8;
+    public const byte ActStabO = 9;
+    public const byte ActStabT = 10;
+    public const byte ActShoot = 11;
 
     // Every character action, in load order. Exporter and client init reuse
     // this so a new action needs one list edit (plus its code switch arms).
-    // The names follow the one-handed sword: stand1/walk1/swingO1.
-    public static readonly string[] Actions = { "stand1", "walk1", "jump", "ladder", "rope", "prone", "swingO1" };
+    // The names follow the weapon attack actions: stand1/walk1/swingO1,
+    // then the other five attack motions.
+    public static readonly string[] Actions =
+    {
+        "stand1", "walk1", "jump", "ladder", "rope", "prone",
+        "swingO1", "swingT1", "swingP1", "stabO1", "stabT1", "shoot1",
+    };
 
     // Action name <-> code. Both throw on bad input (fail loud, never guess).
     public static byte ActionCode(string action) => action switch
@@ -66,6 +76,11 @@ public static class Net
         "rope" => ActRope,
         "prone" => ActProne,
         "swingO1" => ActSwing,
+        "swingT1" => ActSwingT,
+        "swingP1" => ActSwingP,
+        "stabO1" => ActStabO,
+        "stabT1" => ActStabT,
+        "shoot1" => ActShoot,
         _ => throw new InvalidDataException($"bad action name {action}"),
     };
 
@@ -78,6 +93,11 @@ public static class Net
         ActRope => "rope",
         ActProne => "prone",
         ActSwing => "swingO1",
+        ActSwingT => "swingT1",
+        ActSwingP => "swingP1",
+        ActStabO => "stabO1",
+        ActStabT => "stabT1",
+        ActShoot => "shoot1",
         _ => throw new InvalidDataException($"bad action code {action}"),
     };
 

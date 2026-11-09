@@ -355,6 +355,7 @@ public sealed class ItemData
     public int ReqLevel { get; set; } // WZ info/reqLevel: the level it asks for (0 = none, and v1 does not enforce it)
     public string? Slot { get; set; } // equip slot (WZ islot); null = consumable
     public int Atk { get; set; } // WZ incPAD
+    public int Attack { get; set; } = 1; // WZ info/attack: the swing action (missing = 1, the one-handed sword)
     public int Def { get; set; } // WZ incPDD
     public int Str { get; set; } // WZ incSTR
     public int Dex { get; set; } // WZ incDEX

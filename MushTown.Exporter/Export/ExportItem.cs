@@ -237,6 +237,7 @@ public static partial class Export
                 Desc = CleanDesc(str.Find($@"Eqp.img\Eqp\{cat}\{id}\desc")?.GetValueEx<string>("") ?? "", ""),
                 Slot = slot,
                 Atk = Int(info, "incPAD"),
+                Attack = Int(info, "attack", 1),
                 Def = Int(info, "incPDD"),
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),

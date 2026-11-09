@@ -96,18 +96,24 @@ public static partial class Export
         }
         foreach (string action in Net.Actions)
         {
-            if (!ExportCharacter(baseRoot, chara, outDir, action))
+            if (!ExportCharacter(baseRoot, chara, outDir, action) ||
+                !ExportCharacter(baseRoot, chara, outDir, action, female: true))
             {
                 Environment.ExitCode = 1;
                 return;
             }
+        }
+        if (!ExportAvatarParts(baseRoot, chara, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
         }
         foreach ((string gear, string? beginner) in Gears)
         {
             if (beginner == null) continue; // the rings carry no doll art
             foreach (string action in Net.Actions)
             {
-                if (!ExportCharacter(baseRoot, chara, outDir, action, gear, beginner))
+                if (!ExportCharacter(baseRoot, chara, outDir, action, false, gear, beginner))
                 {
                     Environment.ExitCode = 1;
                     return;

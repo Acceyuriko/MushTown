@@ -24,7 +24,7 @@ public partial class MushTownGame
         var hero = _save?.Slots[_slot];
         draws.Add((feetY, () =>
         {
-            DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero?.Equips);
+            DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero);
             if (hero != null)
                 DrawName(feetX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
         }

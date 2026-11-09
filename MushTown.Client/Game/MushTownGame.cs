@@ -28,6 +28,7 @@ public partial class MushTownGame : Game
     private readonly string _shotAction;
     private readonly int _shotFrame;
     private readonly bool _shotFacingRight;
+    private readonly bool _shotFemale; // --female: the shot demo is a woman (acceptance only)
     private readonly bool _host;
     private readonly string? _joinHost;
     private readonly string? _shotScreen;
@@ -48,9 +49,13 @@ public partial class MushTownGame : Game
 
     private MapData _map = null!;
     private int _mapId;
-    private readonly Dictionary<string, CharaData> _charas = new();
+    private readonly Dictionary<string, CharaData> _charasMale = new();
+    private readonly Dictionary<string, CharaData> _charasFemale = new();
     private readonly Dictionary<(string img, string action), CharaData> _gear = new();
-    private readonly Dictionary<string, List<int>> _delays = new();
+    private readonly Dictionary<(string img, string action), CharaData> _hairs = new();
+    private readonly Dictionary<(string img, string action), CharaData> _faces = new();
+    private readonly Dictionary<string, List<int>> _delaysMale = new();
+    private readonly Dictionary<string, List<int>> _delaysFemale = new();
     private List<int> _layers = null!;
     private readonly Dictionary<string, Texture2D> _textures = new();
     private readonly CameraComp _camera = new();
@@ -110,7 +115,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, bool shotFemale = false)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -119,6 +124,7 @@ public partial class MushTownGame : Game
         _shotAction = shotAction;
         _shotFrame = shotFrame;
         _shotFacingRight = shotFacingRight;
+        _shotFemale = shotFemale;
         _host = host;
         _joinHost = joinHost;
         _shotScreen = shotScreen;
@@ -258,29 +264,9 @@ public partial class MushTownGame : Game
         LoadSkillDefs();
         _mapId = _shotPath != null ? _shotMap : SpawnMapId;
         LoadMapData(_mapId);
-        var artGears = _equips.Where(id => _items[id].HasArt).ToList();
-        foreach (string action in Net.Actions)
-        {
-            var chara = LoadJson<CharaData>(Path.Combine(_assetsDir, "chara", "body", $"{action}.json"));
-            if (chara.Frames.Count == 0)
-                throw new InvalidDataException($"character {action} has no frames");
-            if (chara.Frames.Any(f => f.Delay <= 0))
-                throw new InvalidDataException($"character {action} has a bad delay");
-            if (chara.Frames.Any(f => f.Parts.Count == 0))
-                throw new InvalidDataException($"character {action} has an empty frame");
-            _charas[action] = chara;
-            _delays[action] = chara.Frames.Select(f => f.Delay).ToList();
-            foreach (int id in artGears) // wearable art: same frames as beginner (delays ride the beginner file)
-            {
-                string imgId = id.ToString("D8");
-                var gear = LoadJson<CharaData>(Path.Combine(_assetsDir, "chara", "gear", imgId, $"{action}.json"));
-                if (gear.Frames.Count != chara.Frames.Count)
-                    throw new InvalidDataException($"gear {imgId} {action} has {gear.Frames.Count} frames, want {chara.Frames.Count}");
-                if (gear.Frames.Any(f => f.Parts.Count == 0))
-                    throw new InvalidDataException($"gear {imgId} {action} has an empty frame");
-                _gear[(imgId, action)] = gear;
-            }
-        }
+        var artGears = _items.Values.Where(d => d.HasArt && d.Slot != null)
+            .Select(d => d.ItemId).OrderBy(id => id).ToList();
+        LoadDollAssets(artGears);
 
         // player starts on the ground under the spawn point
         Spawn();
@@ -292,12 +278,13 @@ public partial class MushTownGame : Game
 
         if (_shotPath != null)
         {
-            if (!_charas.ContainsKey(_shotAction))
+            var shotBodies = _shotFemale ? _charasFemale : _charasMale;
+            if (!shotBodies.ContainsKey(_shotAction))
                 throw new InvalidDataException($"unknown action: {_shotAction}");
             // Job screens pose the spine clip, not the char: --frame is the clip frame there.
             // The setup page always draws the stand1 doll, whatever --action says.
             string shotChar = _shotScreen == "setup" ? "stand1" : _shotAction;
-            if (_shotScreen is not ("job" or "job2") && _shotFrame >= _charas[shotChar].Frames.Count)
+            if (_shotScreen is not ("job" or "job2") && _shotFrame >= shotBodies[shotChar].Frames.Count)
                 throw new InvalidDataException($"action {shotChar} has no frame {_shotFrame}");
             _mover.Action = _shotAction;
             _frame = _shotFrame;
@@ -465,10 +452,10 @@ public partial class MushTownGame : Game
         _blur = new RenderTarget2D(GraphicsDevice, GameWidth / BlurBackdrop.Scale, GameHeight / BlurBackdrop.Scale);
 
         LoadMapTextures();
-        foreach (var chara in _charas.Values)
+        foreach (var chara in _charasMale.Values.Concat(_charasFemale.Values))
             foreach (var frame in chara.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
-        foreach (var gear in _gear.Values)
+        foreach (var gear in _gear.Values.Concat(_hairs.Values).Concat(_faces.Values))
             foreach (var frame in gear.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
@@ -637,7 +624,7 @@ public partial class MushTownGame : Game
         // No swing without a judge (the disconnect frame has neither yet).
         if (!blocked && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
-            _fighter.AttackLock = _delays["swingO1"].Sum();
+            _fighter.AttackLock = Delays("swingO1", _save?.Slots[_slot]?.Female ?? false).Sum();
             PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
@@ -735,7 +722,7 @@ public partial class MushTownGame : Game
             _timerMs = 0;
         }
         if (_mover.Climb == null || _mover.ClimbMoving) // still on a ladder: hold the pose
-            (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, _delays[_shownAction]);
+            (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, Delays(_shownAction, Hero?.Female ?? false));
 
         var (targetX, targetY) = CameraTarget();
         _camera.Follow(dt, targetX, targetY);
@@ -751,7 +738,7 @@ public partial class MushTownGame : Game
                     RemovePeer(e.Id); // the name stays: ids never repeat, and a map-switch Gone is not a goodbye
                 else if (e.Map != _mapId)
                     RemovePeer(e.Id); // peer on another map: not shown here
-                else if (e.Frame < _charas[Net.ActionName(e.Action)].Frames.Count)
+                else if (e.Frame < _charasMale[Net.ActionName(e.Action)].Frames.Count)
                     ApplyRemote(e); // bad frame: not ours, drop it
             while (_net.TryTakeName(out var n))
             {

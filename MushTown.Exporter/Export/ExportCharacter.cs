@@ -8,10 +8,19 @@ public static partial class Export
 {
     // ---------- character ----------
 
-    private const string BodyImg = @"00002000.img";
-    private const string HeadImg = @"00012000.img";
-    private const string HairImg = @"Hair\00030020.img";
-    private const string FaceImg = @"Face\00020000.img";
+    private const string BodyImgMale = @"00002000.img";
+    private const string BodyImgFemale = @"00002001.img";
+    private const string HeadImgMale = @"00012000.img";
+    private const string HeadImgFemale = @"00012001.img";
+    private const string HairImgMale = @"Hair\00030020.img";
+    private const string HairImgFemale = @"Hair\00033390.img";
+    private const string FaceImgMale = @"Face\00020000.img";
+    private const string FaceImgFemale = @"Face\00020002.img";
+
+    private static string BodyImg(bool female) => female ? BodyImgFemale : BodyImgMale;
+    private static string HeadImg(bool female) => female ? HeadImgFemale : HeadImgMale;
+    private static string HairImg(bool female) => female ? HairImgFemale : HairImgMale;
+    private static string FaceImg(bool female) => female ? FaceImgFemale : FaceImgMale;
 
     // The doll part a gear slot replaces: Ma/MaPn use the longcoat art, Pn
     // the boxers, So the beginner shoes, Wp the sword.
@@ -60,15 +69,18 @@ public static partial class Export
     }
 
     private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir, string action,
-        string? gear = null, string? gearBeginner = null, string? hair = null)
+        bool female = false, string? gear = null, string? gearBeginner = null, string? hair = null)
     {
-        string hairImg = hair ?? HairImg;
+        string bodyImg = BodyImg(female);
+        string headImg = HeadImg(female);
+        string faceImg = FaceImg(female);
+        string hairImg = hair ?? HairImg(female);
         // One gear's parts across one action: same frames, same bones, only
         // the target img's parts kept (prefix beginners feed the trash frame
         // for bones; identical bytes may rewrite beginner pngs, harmless).
         // Isolated parts equal the merged bake: bones only flow forward, so
         // the target sees exactly base + preceding beginners + its own parts.
-        string tag = gear == null ? $"character {action}" : $"gear {ImgId(gear)} {action}";
+        string tag = gear == null ? $"character {(female ? "f" : "m")} {action}" : $"gear {ImgId(gear)} {action}";
         // loose tree (Character.wz) holds origin/map/z; png bytes live in Base _Canvas
         List<string> zNames = new();
         var zmap = baseRoot.Find("zmap.img");
@@ -84,34 +96,37 @@ public static partial class Export
         int missing = 0;
 
         // the face emotion is one node shared by all frames, not per-frame data
-        var faceNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{FaceImg}\default"));
+        var faceNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{faceImg}\default"));
         if (faceNode == null)
         {
-            Console.WriteLine($"{tag}: {FaceImg} node not found");
+            Console.WriteLine($"{tag}: {faceImg} node not found");
             return false;
         }
+
+        // body/head/face/hair frames of both genders share one png folder
+        string baseDir = "chara/body";
 
         // frames run 0,1,2... and stop at the first gap (AvatarCanvas.cs:511-522)
         for (int frameIdx = 0; ; frameIdx++)
         {
-            var bodyFrame = FindImgFrame(looseRoot, BodyImg, action, frameIdx);
+            var bodyFrame = FindImgFrame(looseRoot, bodyImg, action, frameIdx);
             if (bodyFrame == null)
             {
                 // a real gap ends the action; a dangling frame uol is loud
-                var bodyAction = WzNodeUtil.ResolveUol(looseRoot.Find($@"{BodyImg}\{action}"));
+                var bodyAction = WzNodeUtil.ResolveUol(looseRoot.Find($@"{bodyImg}\{action}"));
                 if (bodyAction?.Nodes[frameIdx.ToString()] != null)
                 {
-                    Console.WriteLine($"{tag} frame {frameIdx}: {BodyImg} frame uol is broken");
+                    Console.WriteLine($"{tag} frame {frameIdx}: {bodyImg} frame uol is broken");
                     return false;
                 }
                 break;
             }
-            if (!BodyFrameStatic(action, frameIdx, bodyFrame)) return false;
+            if (!BodyFrameStatic(bodyImg, action, frameIdx, bodyFrame)) return false;
 
-            var headFrame = FindImgFrame(looseRoot, HeadImg, action, frameIdx);
+            var headFrame = FindImgFrame(looseRoot, headImg, action, frameIdx);
             if (headFrame == null)
             {
-                Console.WriteLine($"{tag} frame {frameIdx}: {HeadImg} node not found");
+                Console.WriteLine($"{tag} frame {frameIdx}: {headImg} node not found");
                 return false;
             }
             var hairFrame = FindImgFrame(looseRoot, hairImg, action, frameIdx);
@@ -124,7 +139,7 @@ public static partial class Export
             var outFrame = new CharaFrame { Delay = Int(bodyFrame, "delay", 120) };
             if (outFrame.Delay <= 0)
             {
-                Console.WriteLine($"{tag} frame {frameIdx}: {BodyImg} bad delay {outFrame.Delay}");
+                Console.WriteLine($"{tag} frame {frameIdx}: {bodyImg} bad delay {outFrame.Delay}");
                 return false;
             }
             var bones = new BoneSet(); // y down, feet at (0,0)
@@ -133,12 +148,12 @@ public static partial class Export
             // body first (it defines the neck/navel bones), then head, face, hair, gear
             var trash = gear == null ? null : new CharaFrame();
             var baseSink = gear == null ? outFrame : trash!;
-            string gearDir = gear == null ? "chara/body" : $"chara/gear/{ImgId(gear)}";
-            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(BodyImg), bodyFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
-            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(HeadImg), headFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+            string gearDir = gear == null ? baseDir : $"chara/gear/{ImgId(gear)}";
+            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(bodyImg), bodyFrame, outDir, frameIdx, saved, zNames, face, action, baseDir);
+            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(headImg), headFrame, outDir, frameIdx, saved, zNames, face, action, baseDir);
             if (face) // back-facing frames drop the whole face img (AvatarCanvas.cs:1111-1117)
-                missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(FaceImg), faceNode, outDir, frameIdx, saved, zNames, face, action, "chara/body");
-            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(hairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+                missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(faceImg), faceNode, outDir, frameIdx, saved, zNames, face, action, baseDir);
+            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(hairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action, baseDir);
             foreach (string img in CharaEquips)
             {
                 if (gear == null && img != BeginnerBoxers) continue; // the plain body is underwear only
@@ -160,7 +175,7 @@ public static partial class Export
                 }
                 var sink = gear == null || isTarget ? outFrame : trash!;
                 missing += AddFrameParts(baseRoot, sink, bones, ImgId(path), equipFrame, outDir, frameIdx, saved, zNames, face, action,
-                    isTarget ? gearDir : "chara/body");
+                    isTarget ? gearDir : baseDir);
                 if (isTarget) break; // later beginners add no bones the target could use
             }
 
@@ -191,7 +206,8 @@ public static partial class Export
             return false;
         }
         string jsonDir = gear == null ? Path.Combine("chara", "body") : Path.Combine("chara", "gear", ImgId(gear));
-        WriteJson(Path.Combine(outDir, jsonDir, $"{action}.json"), data);
+        string file = gear == null && female ? $"{action}_f.json" : $"{action}.json";
+        WriteJson(Path.Combine(outDir, jsonDir, file), data);
         return true;
     }
 
@@ -332,13 +348,13 @@ public static partial class Export
     // Poses are baked static; a body frame carrying flip/move/rotate fails the
     // export (no W4 action uses them). Only the body frame is checked: the
     // reference plays these from the body action alone (AvatarCanvas.cs:617), ignoring other imgs' values.
-    private static bool BodyFrameStatic(string action, int frameIdx, Wz_Node frame)
+    private static bool BodyFrameStatic(string bodyImg, string action, int frameIdx, Wz_Node frame)
     {
         var move = frame.Nodes["move"]?.GetValueEx<Wz_Vector>(new Wz_Vector(0, 0));
         int mx = move?.X ?? 0, my = move?.Y ?? 0;
         if (Int(frame, "flip") == 0 && Int(frame, "rotate") == 0 && mx == 0 && my == 0)
             return true;
-        Console.WriteLine($"character {action} frame {frameIdx}: {BodyImg} has flip/move/rotate");
+        Console.WriteLine($"character {action} frame {frameIdx}: {bodyImg} has flip/move/rotate");
         return false;
     }
 }

@@ -54,10 +54,10 @@ public partial class MushTownGame
         body.Add(new Picture("ui/stat_win.png", _statLay.Get("blockX", 0), _statLay.Get("blockY", 230)));
         body.Add(new Picture("ui/stat_statbar.png", _statLay.Get("stripX", 11), _statLay.Get("stripY", 241)));
         BuildStatPage(body);
-        // the portrait stands on the white block: real gear, plain body until the cash look arrives
+        // the portrait stands on the white block: real gear and the current look
         var feet = new GameObject { NoHit = true };
         feet.Add(new Rect(new Rectangle(_statLay.Get("feetX", 236), _statLay.Get("feetY", 159), 1, 1)));
-        feet.Add(new AvatarPreview(this, "stand1", StandFrame, false, () => Hero?.Equips));
+        feet.Add(new AvatarPreview(this, "stand1", StandFrame, false, () => Hero));
         body.AddChild(feet);
         var job = new GameObject();
         job.Add(new Rect(new Rectangle(
@@ -85,7 +85,7 @@ public partial class MushTownGame
 
     // The idle frame of the portrait: the same clock every other idle in the
     // game reads, so the doll breathes instead of holding one frame.
-    private int StandFrame() => Idle.At(_delays["stand1"], (float)_timeMs);
+    private int StandFrame() => Idle.At(Delays("stand1", Hero?.Female ?? false), (float)_timeMs);
 
     // The stats page: the official panel art with the live numbers.
     private void BuildStatPage(GameObject body)

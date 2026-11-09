@@ -1,8 +1,9 @@
 using MushTown.Client;
 
-// [--host | --join <ip>] [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|invscroll|stat|equipui|decorations|hud|skill|quest|questask|questforfeit|questpick|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>] [--hover <x,y>]]
+// [--host | --join <ip>] [--shot <file.png> [--female] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|invscroll|stat|equipui|decorations|hud|skill|quest|questask|questforfeit|questpick|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>] [--hover <x,y>]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means menus.
+// --female poses the shot demo as a woman (acceptance only; no user choice).
 // --hit plants the player mid-swing next to the first mob (game shots only).
 // --skill <id> poses that skill: a buff casts for real (loop + timer), a
 // damage skill freezes mid-effect with judged hit sparks, a utility only
@@ -29,6 +30,7 @@ int shotTravel = 0;
 string shotAction = "stand1";
 int shotFrame = 0;
 bool shotFacingRight = false;
+bool shotFemale = false;
 bool host = false;
 string? join = null;
 string? shotScreen = null;
@@ -54,6 +56,7 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         if (rest[i] == "--hit") { shotHit = true; i++; }
         else if (rest[i] == "--drop") { shotDrop = true; i++; }
         else if (rest[i] == "--wear") { shotWear = true; i++; }
+        else if (rest[i] == "--female") { shotFemale = true; i++; }
         else if (i + 1 >= rest.Count) ok = false;
         else if (rest[i] == "--skill") { ok = int.TryParse(rest[i + 1], out shotSkill) && shotSkill > 0; i += 2; }
         else if (rest[i] == "--talk") { ok = int.TryParse(rest[i + 1], out shotTalk) && shotTalk > 0; i += 2; }
@@ -83,14 +86,14 @@ if (shotScreen == "shop" && shotTalk == 0) ok = false; // the shop screen needs 
 if (shotTravel != 0 && shotScreen is not (null or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter")) ok = false; // --travel needs the game, the world map or the minimap
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|invscroll|stat|equipui|decorations|hud|skill|quest|questask|questforfeit|questpick|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>] [--hover <x,y>]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--female] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|invscroll|stat|equipui|decorations|hud|skill|quest|questask|questforfeit|questpick|talk|settings|shop|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|keys|menu|guide|guidecard|party|partysearch|partyask] [--skilltab <0|1|2>] [--talk <npc>] [--job <id>] [--hit | --skill <id> | --drop] [--wear] [--aiticks <n>] [--hover <x,y>]]");
     Environment.ExitCode = 1;
     return;
 }
 
 try
 {
-    using var game = new MushTownGame(shotPath, shotMap, shotTravel, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks, shotWear, shotJob, shotHover);
+    using var game = new MushTownGame(shotPath, shotMap, shotTravel, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks, shotWear, shotJob, shotHover, shotFemale);
     game.Run();
 }
 catch (Exception ex) when (ex is InvalidDataException or IOException)
