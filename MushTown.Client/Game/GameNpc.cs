@@ -33,7 +33,7 @@ public partial class MushTownGame
     private (Point Top, string Image) NpcFrame(NpcArt a)
     {
         var stand = a.Owner.Get<LifeStand>()!;
-        int frame = stand.IndexAt((float)_timeMs);
+        int frame = stand.IndexAt();
         var image = stand.Art.Images[frame];
         var origin = stand.Art.Origins[frame];
         var n = a.Spawn;

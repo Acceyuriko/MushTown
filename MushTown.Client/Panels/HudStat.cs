@@ -57,7 +57,7 @@ public partial class MushTownGame
         // the portrait stands on the white block: real gear and the current look
         var feet = new GameObject { NoHit = true };
         feet.Add(new Rect(new Rectangle(_statLay.Get("feetX", 236), _statLay.Get("feetY", 159), 1, 1)));
-        feet.Add(new AvatarPreview(this, "stand1", StandFrame, false, () => Hero));
+        feet.Add(new AvatarPreview(this, "stand1", false, chara: () => Hero));
         body.AddChild(feet);
         var job = new GameObject();
         job.Add(new Rect(new Rectangle(
@@ -82,8 +82,6 @@ public partial class MushTownGame
     // The job name in the top-left pill, as plain text: the class the create
     // page picked (Hero stays Hero, not the Warrior branch).
     private string JobLabel() => JobNames.Of(Hero?.Job ?? 110);
-
-    private int StandFrame() => IdleFrame(Hero?.Skin ?? 0);
 
     // The stats page: the official panel art with the live numbers.
     private void BuildStatPage(GameObject body)

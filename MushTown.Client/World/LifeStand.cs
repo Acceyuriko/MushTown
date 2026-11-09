@@ -17,8 +17,7 @@ public sealed class LifeStand : Component
 
     public string Name => Kind == 0 ? Game.NpcName(Id) : Game.MobName(Id);
 
-    // The frame playing at this time: the delays add up and the idle starts
-    // over. The clock is passed in (the game's ms, the HUD's frame time), so a
-    // still shot shows the first frame like every other animation.
-    public int IndexAt(float timeMs) => Idle.At(Art.Delays, timeMs);
+    // The frame playing now: the delays add up and the idle starts over. The
+    // game's clock is read here, so every stand portrait uses one time source.
+    public int IndexAt() => Idle.At(Art.Delays, Game.TimeMs);
 }

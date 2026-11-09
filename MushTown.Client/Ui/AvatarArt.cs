@@ -14,9 +14,9 @@ public partial class MushTownGame
 
     internal List<int> Delays(string action, int skin) => _delays[(skin, action)];
 
-    // The live stand1 frame for a skin: the stat and equipment windows use this
-    // so their doll breathes like the world doll.
-    internal int IdleFrame(int skin) => Idle.At(Delays("stand1", skin), (float)_timeMs);
+    // The live frame for an action and skin: AvatarPreview uses this so a
+    // panel doll breathes like the world doll.
+    internal int IdleFrame(string action, int skin) => Idle.At(Delays(action, skin), TimeMs);
 
     private static string BodyImgId(int skin) => CharaSlot.BodyId(skin).ToString("D8");
     private static string HeadImgId(int skin) => CharaSlot.HeadId(skin).ToString("D8");
@@ -166,11 +166,11 @@ public sealed class AvatarPreview : Component, IDrawable
 {
     private readonly MushTownGame _game;
     private readonly string _action;
-    private readonly Func<int> _frame;
+    private readonly Func<int>? _frame;
     private readonly bool _faceRight;
     private readonly Func<CharaSlot?>? _chara;
 
-    public AvatarPreview(MushTownGame game, string action, Func<int> frame, bool faceRight, Func<CharaSlot?>? chara = null)
+    public AvatarPreview(MushTownGame game, string action, bool faceRight, Func<int>? frame = null, Func<CharaSlot?>? chara = null)
     {
         _game = game; _action = action; _frame = frame; _faceRight = faceRight; _chara = chara;
     }
@@ -178,6 +178,8 @@ public sealed class AvatarPreview : Component, IDrawable
     public void Draw(UiGfx gfx)
     {
         var r = Owner.Get<Rect>()!.Screen;
-        _game.DrawAvatarOnScreen(r.X, r.Y, _action, _frame(), _faceRight, _chara?.Invoke());
+        var chara = _chara?.Invoke();
+        int frame = _frame?.Invoke() ?? _game.IdleFrame(_action, chara?.Skin ?? 0);
+        _game.DrawAvatarOnScreen(r.X, r.Y, _action, frame, _faceRight, chara);
     }
 }

@@ -92,7 +92,7 @@ public sealed class EquipWindow : UiWindow
         {
             var doll = new GameObject { NoHit = true };
             doll.Add(new Rect(new Rectangle(_lay.Get("dollX", 183), _lay.Get("dollY", 218), 1, 1)));
-            doll.Add(new AvatarPreview(_game, "stand1", () => _game.IdleFrame(_game.Hero?.Skin ?? 0), false, () => _game.Hero));
+            doll.Add(new AvatarPreview(_game, "stand1", false, chara: () => _game.Hero));
             root.AddChild(doll);
         }
         var slots = SlotsForPage();

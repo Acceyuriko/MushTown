@@ -58,7 +58,7 @@ public sealed class QuestNpcPortrait : Component, IDrawable
     {
         var r = Owner.Get<Rect>()!.Screen;
         var idle = _stand.Art;
-        int frame = _stand.IndexAt(gfx.Time);
+        int frame = _stand.IndexAt();
         var origin = idle.Origins[frame];
         var tex = gfx.Tex(idle.Images[frame]);
         int x = _faceRight ? SceneMath.FlipDrawX(r.X + _x, -origin.X, tex.Width) : r.X + _x - origin.X;

@@ -21,7 +21,7 @@ public sealed class LifeTip : Component
     {
         string name = Stand.Name;
         var idle = Stand.Art;
-        int frame = Stand.IndexAt(gfx.Time);
+        int frame = Stand.IndexAt();
         var art = gfx.Tex(idle.Images[frame]);
         var maps = WorldMapUi.Holds(Stand.Kind, Stand.Id);
 

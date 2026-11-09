@@ -52,7 +52,7 @@ public partial class MushTownGame
         _menuScene.Add(bg);
         var preview = new GameObject { NoHit = true };
         preview.Add(new Rect(new Rectangle(SetupLayout.Avatar.X, SetupLayout.Avatar.Y, 1, 1))); // the rect's top left is the doll's feet (NoHit keeps the 1x1 box out of hit-testing)
-        preview.Add(new AvatarPreview(this, "stand1", () => _setupFrame, true));
+        preview.Add(new AvatarPreview(this, "stand1", true, () => _setupFrame));
         _menuScene.Add(preview);
         var panel = new GameObject { NoHit = true };
         panel.Add(new Rect(PanelRect()));

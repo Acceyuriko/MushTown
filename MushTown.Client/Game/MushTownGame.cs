@@ -57,7 +57,8 @@ public partial class MushTownGame : Game
     private List<int> _layers = null!;
     private readonly Dictionary<string, Texture2D> _textures = new();
     private readonly CameraComp _camera = new();
-    private double _timeMs; // scrolling backs drift with this (0 in shot mode: still image)
+    private double _timeMs; // shared clock for scrolling backs and idle animations (0 in shot mode: still image)
+    internal float TimeMs => (float)_timeMs;
     private int _loadBeat;
     private List<PortalComp> _portals = new(); // the draw list, aligned with _map.Portals: the anim state lives in the comps
     private List<NpcArt> _npcArts = new(); // live NPC views, one per spawn
