@@ -70,6 +70,24 @@ public sealed class EquipWindow : UiWindow
 
     private EquipPage _page = EquipPage.Equipment;
 
+    private int _lastWornId;
+    private double _lastWornMs = -CarryHand.DoubleMs;
+
+    public override void OnShown() => ResetWornClick();
+    public override void OnClosed() => ResetWornClick();
+
+    private void ResetWornClick()
+    {
+        _lastWornId = 0;
+        _lastWornMs = -CarryHand.DoubleMs;
+    }
+
+    private void CloseEquipWindow()
+    {
+        OnClosed();
+        Show = false;
+    }
+
     private bool IsDeco => _page is EquipPage.Outfits or EquipPage.Android or EquipPage.DamageSkins;
 
     public override Rectangle Rect() => new(0, 0, _lay.Get("w", 366), _lay.Get("h", 444));
@@ -127,7 +145,7 @@ public sealed class EquipWindow : UiWindow
         root.AddChild(PictureButton(
             new Rectangle(_lay.Get("closeX", 343), _lay.Get("closeY", 12),
                 _lay.Get("closeW", 11), _lay.Get("closeH", 11)),
-            "ui/equip_close.png", () => Show = false));
+            "ui/equip_close.png", CloseEquipWindow));
         Host.AddChild(root);
     }
 
@@ -203,6 +221,7 @@ public sealed class EquipWindow : UiWindow
             var data = items[id];
             var o = new GameObject();
             o.Add(new Rect(box));
+            o.Add(new Button { OnClick = () => ClickWorn(slot, id) });
             o.Add(new ItemTip(() => id));
             if ((slot is "hair" or "face") && _game.HasLookBust(data.Cosmetic))
             {
@@ -216,6 +235,26 @@ public sealed class EquipWindow : UiWindow
             }
             root.AddChild(o);
         }
+    }
+
+    // A double-click on a worn item takes it off. Hair and face coupons stay
+    // here: the DEC bag is where a new coupon replaces them.
+    private void ClickWorn(string slot, int id)
+    {
+        double now = _game.TimeMs;
+        bool doubleClick = _lastWornId == id && now - _lastWornMs <= CarryHand.DoubleMs;
+        _lastWornId = id;
+        _lastWornMs = now;
+        if (!doubleClick) return;
+        _lastWornId = 0;
+        _lastWornMs = -CarryHand.DoubleMs;
+        if (IsDeco)
+        {
+            if (slot is "hair" or "face") return;
+            if (!_game.TakeOffWorn(id, cash: true)) return;
+        }
+        else if (!_game.TakeOffWorn(id, cash: false)) return;
+        Dirty = true; // the slot and the doll changed
     }
 
     // The box of one window slot: the page's table names its grid cell.
@@ -241,6 +280,7 @@ public sealed class EquipWindow : UiWindow
     {
         if (_page == page) return;
         _page = page;
+        ResetWornClick();
         Dirty = true; // the frame, tabs and canvas change together
     }
 
@@ -259,6 +299,24 @@ public sealed class EquipWindow : UiWindow
         for (int t = 0; t < 3; t++)
             foreach (string s in new[] { "n", "s" })
                 _game.LoadTexture($"ui/deco_tab_{s}{t}.png");
+    }
+}
+
+public partial class MushTownGame
+{
+    internal bool TakeOffWorn(int id, bool cash)
+    {
+        if (Hero is not { } chara) return false;
+        bool changed = cash ? Progression.TakeOffCashFashion(chara, id, _items) : Progression.TakeOffEquip(chara, id);
+        if (!changed) return false;
+        SaveChara();
+        PlaySfx("click");
+        if (!cash)
+        {
+            PushBuild(); // gear stats changed
+            PushName(); // the name plate reads the worn gear too
+        }
+        return true;
     }
 }
 

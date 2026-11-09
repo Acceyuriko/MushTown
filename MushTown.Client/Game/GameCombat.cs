@@ -353,6 +353,9 @@ public partial class MushTownGame
     // Ctrl is a weapon swing: no weapon in hand means no swing at all.
     private bool HasWeapon() => OwnBuild().WeaponAtk > 0;
 
+    // The attack art follows the appearance: cash weapon first, then gear.
+    private string AttackAction() => Progression.AttackAction(Hero, _items);
+
     // +MaxHP% from every source: Iron Body while live, Warrior Mastery and
     // Endure always. Pools, potions, and refills all cap at the buffed max.
     private int OwnHpPct() =>

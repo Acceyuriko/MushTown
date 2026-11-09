@@ -80,6 +80,7 @@ public sealed class CarryHand
         {
             "use" => DrinkHeld(chara, defs, hpPct),
             "equip" => WearHeld(chara, defs),
+            "dec" => Progression.WearCash(chara, Id, defs) ? HandAct.Wore : HandAct.None,
             _ => HandAct.None,
         };
         if (act == HandAct.None) return act;

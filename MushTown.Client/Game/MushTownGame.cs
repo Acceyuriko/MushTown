@@ -622,7 +622,8 @@ public partial class MushTownGame : Game
         // No swing without a judge (the disconnect frame has neither yet).
         if (!blocked && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
-            _fighter.AttackLock = Delays("swingO1", Hero?.Skin ?? 0).Sum();
+            string attackAction = AttackAction();
+            _fighter.AttackLock = Delays(attackAction, Hero?.Skin ?? 0).Sum();
             PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
@@ -679,6 +680,7 @@ public partial class MushTownGame : Game
         // The feet step in Shared: snapshot in, outputs drained after. Skills
         // above already poked the state (leaps, dashes); travel and respawn
         // land after the step, same frame.
+        _mover.AttackAction = AttackAction();
         _mover.Input = new PlayerInput
         {
             Dir = dirNow,

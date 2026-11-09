@@ -160,6 +160,103 @@ public static class Progression
         return true;
     }
 
+    // Wears one decoration from DEC. A fashion swaps out the same body area;
+    // a hair or face coupon swaps out the coupon matching the current look.
+    // Returns false when the bag has no copy or there is no room for the old
+    // piece that has to come back.
+    public static bool WearCash(CharaSlot chara, int id, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        if (!defs.TryGetValue(id, out var data) || Inventory.Count(chara, "dec", id) <= 0) return false;
+        Inventory.Ensure(chara);
+        chara.CashWorn ??= new List<int>();
+        if (data.Slot != null) return WearCashFashion(chara, chara.CashWorn, id, data, defs);
+        if (data.Cosmetic == 0) return false;
+        bool hair = IsHairCoupon(id);
+        bool face = IsFaceCoupon(id);
+        if (!hair && !face) return false;
+
+        int old = 0;
+        foreach (int worn in chara.CashWorn)
+        {
+            if (!defs.TryGetValue(worn, out var wornData) || wornData.Cosmetic == 0) continue;
+            if ((hair && wornData.Cosmetic == chara.Hair) || (face && wornData.Cosmetic == chara.Face))
+            {
+                old = worn;
+                break;
+            }
+        }
+        int freed = Inventory.Count(chara, "dec", id) == 1 ? 1 : 0;
+        int addCells = old != 0 && Inventory.Count(chara, "dec", old) == 0 ? 1 : 0;
+        if (Inventory.Used(chara, "dec") - freed + addCells > Inventory.Capacity) return false;
+        if (!Inventory.Remove(chara, "dec", id, 1)) return false;
+        if (old != 0)
+        {
+            chara.CashWorn.Remove(old);
+            Inventory.Add(chara, "dec", old, 1); // the precheck above guarantees room
+        }
+        chara.CashWorn.Add(id);
+        if (hair) chara.Hair = data.Cosmetic;
+        else chara.Face = data.Cosmetic;
+        return true;
+    }
+
+    private static bool WearCashFashion(CharaSlot chara, List<int> cashWorn, int id, ItemData data, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        var old = new List<int>();
+        foreach (int worn in cashWorn)
+            if (defs.TryGetValue(worn, out var wornData) && wornData.Slot != null && SameBodyArea(wornData.Slot, data.Slot))
+                old.Add(worn);
+        int freed = Inventory.Count(chara, "dec", id) == 1 ? 1 : 0;
+        int addCells = old.Count(worn => Inventory.Count(chara, "dec", worn) == 0);
+        if (Inventory.Used(chara, "dec") - freed + addCells > Inventory.Capacity) return false;
+        if (!Inventory.Remove(chara, "dec", id, 1)) return false;
+        foreach (int worn in old)
+        {
+            cashWorn.Remove(worn);
+            Inventory.Add(chara, "dec", worn, 1); // the precheck above guarantees room
+        }
+        cashWorn.Add(id);
+        return true;
+    }
+
+    // Coupon ids split by kind: 5157xxx is hair, 5158xxx is face.
+    private static bool IsHairCoupon(int id) => id / 1000 == 5157;
+    private static bool IsFaceCoupon(int id) => id / 1000 == 5158;
+
+    // Takes one fashion off, back to DEC. Coupons stay on through this path:
+    // a new coupon is worn by double-clicking the one in the bag.
+    public static bool TakeOffCashFashion(CharaSlot chara, int id, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        if (chara.CashWorn == null || !chara.CashWorn.Contains(id)) return false;
+        if (!defs.TryGetValue(id, out var data) || data.Slot == null) return false;
+        if (!Inventory.CanAdd(chara, "dec", id, 1)) return false; // bag full: stay worn
+        chara.CashWorn.Remove(id);
+        Inventory.Add(chara, "dec", id, 1);
+        return true;
+    }
+
+    // The attack action name for the current appearance: a cash weapon wins,
+    // then the worn gear weapon, then the beginner one-handed sword.
+    public static string AttackAction(CharaSlot? chara, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        int? weapon = null;
+        if (chara?.CashWorn != null)
+            foreach (int id in chara.CashWorn)
+                if (defs.TryGetValue(id, out var data) && data.Slot == "Wp") { weapon = data.Attack; break; }
+        if (weapon == null && chara?.Equips != null)
+            foreach (int id in chara.Equips)
+                if (defs.TryGetValue(id, out var data) && data.Slot == "Wp") { weapon = data.Attack; break; }
+        return (weapon ?? 1) switch
+        {
+            2 => "swingT1",
+            3 => "swingP1",
+            4 => "stabO1",
+            5 => "stabT1",
+            6 => "shoot1",
+            _ => "swingO1",
+        };
+    }
+
     // One cast's checks: learned, level, MP, cooldown. The client deducts MP
     // and sets the cooldown after this passes (single-threaded: no race).
     public static bool CanCast(CharaSlot chara, SkillData skill, int lv, float cdLeftMs) =>

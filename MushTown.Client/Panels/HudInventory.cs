@@ -387,6 +387,7 @@ public partial class MushTownGame
         var act = _hand.Click(chara, kind, id, _items, OwnHpPct(), _timeMs, index);
         if (act == HandAct.Wore)
         {
+            if (WindowFor(HotkeyAction.Equip) is { } equipWindow) equipWindow.Dirty = true;
             PushBuild();
             PushName();
             PlaySfx("click");

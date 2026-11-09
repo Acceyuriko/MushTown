@@ -246,13 +246,18 @@ public partial class MushTownGame
 
     // The character info and the equipment window show the starter kit every
     // new hero gets: sword, shirt, boxers and shoes. The demo bag's old shop
-    // gear goes too, so the inventory page keeps only the demo ring.
+    // gear goes too, so the inventory page keeps only the demo ring. The
+    // backup coupons and cash armor prove the W5 look in the static shots.
     private void DressDemoForShot()
     {
         var chara = _save!.Slots[_slot]!;
         chara.Equips = new List<int>(ItemData.StarterEquips);
         foreach (int id in new[] { ItemData.LongSword, ItemData.LolicoArmor })
             Inventory.Remove(chara, "equip", id, 1);
+        Inventory.Add(chara, "dec", ItemData.LolicoArmor, 1);
+        Progression.WearCash(chara, ItemData.LolicoArmor, _items);
+        Progression.WearCash(chara, ItemData.HairCouponAlt, _items);
+        Progression.WearCash(chara, ItemData.FaceCouponAlt, _items);
     }
 
     // The shot dummy: Astra holds the Lv.7 hero plus a mage, Blackveil is empty.
