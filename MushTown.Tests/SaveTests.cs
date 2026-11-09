@@ -47,15 +47,64 @@ public class SaveTests
         var store = new SaveStore();
         var chara = store.CreateHero(0, 0, "hero", 110);
 
-        Assert.IsFalse(chara.Female);
-        Assert.AreEqual(ItemData.DefaultHairMale, chara.Hair);
-        Assert.AreEqual(ItemData.DefaultFaceMale, chara.Face);
+        Assert.AreEqual(0, chara.Skin);
+        Assert.AreEqual(ItemData.DefaultHair, chara.Hair);
+        Assert.AreEqual(ItemData.DefaultFace, chara.Face);
         CollectionAssert.AreEquivalent(
-            new[] { ItemData.HairCouponMale, ItemData.FaceCouponMale }, chara.CashWorn);
-        Assert.AreEqual(1, chara.DecBag![ItemData.HairCouponFemale]);
-        Assert.AreEqual(1, chara.DecBag[ItemData.FaceCouponFemale]);
+            new[] { ItemData.HairCoupon, ItemData.FaceCoupon }, chara.CashWorn);
+        Assert.AreEqual(1, chara.DecBag![ItemData.HairCouponAlt]);
+        Assert.AreEqual(1, chara.DecBag[ItemData.FaceCouponAlt]);
         CollectionAssert.AreEquivalent(
-            new[] { ItemData.HairCouponFemale, ItemData.FaceCouponFemale }, chara.DecOrder!.Take(2).ToArray());
+            new[] { ItemData.HairCouponAlt, ItemData.FaceCouponAlt }, chara.DecOrder!.Take(2).ToArray());
+    }
+
+    [TestMethod]
+    public void Load_OldGenderField_Ignored()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-old-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.CreateHero(0, 0, "hero", 110);
+            string json = JsonSerializer.Serialize(store).Replace("\"Skin\":0,", "\"Female\":true,");
+            StringAssert.Contains(json, "\"Female\":true");
+            File.WriteAllText(path, json);
+
+            var loaded = SaveStore.Load(path);
+            Assert.AreEqual(0, loaded.Saves[0]!.Slots[0]!.Skin);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Save_Load_RoundtripsSkin()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-skin-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.CreateHero(0, 0, "hero", 110).Skin = 4;
+            store.Save(path);
+            Assert.AreEqual(4, SaveStore.Load(path).Saves[0]!.Slots[0]!.Skin);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void SkinTable_HasSixOfficialIds()
+    {
+        CollectionAssert.AreEqual(
+            new[] { 12000, 12001, 12002, 12003, 12011, 12012 },
+            Enumerable.Range(0, CharaSlot.SkinCount).Select(CharaSlot.HeadId).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { 2000, 2001, 2002, 2003, 2011, 2012 },
+            Enumerable.Range(0, CharaSlot.SkinCount).Select(CharaSlot.BodyId).ToArray());
     }
 
     [TestMethod]

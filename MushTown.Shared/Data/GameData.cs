@@ -294,15 +294,16 @@ public sealed class ItemData
     public const int StarterShoes = 1072833; // Yellow Adventure Shoes (So, PDD 2)
     public static readonly int[] StarterEquips = { StarterSword, StarterTop, StarterPants, StarterShoes };
 
-    // The four free default hair/face coupons (Cash/0515.img).
-    public const int HairCouponMale = 5157257; // Messy Hair Coupon (M), cosmetic 30020
-    public const int HairCouponFemale = 5157258; // cosmetic 33390 (the WZ name still says "(M)")
-    public const int FaceCouponMale = 5158151; // Defiant Face Coupon (M), cosmetic 20000
-    public const int FaceCouponFemale = 5158152; // cosmetic 20002 (the WZ name still says "(M)")
-    public const int DefaultHairMale = 30020;
-    public const int DefaultHairFemale = 33390;
-    public const int DefaultFaceMale = 20000;
-    public const int DefaultFaceFemale = 20002;
+    // The four free default hair/face coupons (Cash/0515.img). They are all
+    // ordinary items now: no gender decides which pair a new character gets.
+    public const int HairCoupon = 5157257; // Messy Hair Coupon, cosmetic 30020
+    public const int HairCouponAlt = 5157258; // cosmetic 33390
+    public const int FaceCoupon = 5158151; // Defiant Face Coupon, cosmetic 20000
+    public const int FaceCouponAlt = 5158152; // cosmetic 20002
+    public const int DefaultHair = 30020;
+    public const int AltHair = 33390;
+    public const int DefaultFace = 20000;
+    public const int AltFace = 20002;
 
     // Beginner img per worn slot: the export and item validation use this row
     // to know which beginner art a gear slot replaces. The starter kit's

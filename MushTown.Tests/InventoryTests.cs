@@ -35,32 +35,18 @@ public sealed class InventoryTests
     }
 
     [TestMethod]
-    public void GiveCashDefaults_Male()
+    public void GiveCashDefaults_UsesDefaultPair()
     {
         var c = new CharaSlot();
         Inventory.GiveCashDefaults(c);
 
-        Assert.IsFalse(c.Female);
-        Assert.AreEqual(ItemData.DefaultHairMale, c.Hair);
-        Assert.AreEqual(ItemData.DefaultFaceMale, c.Face);
+        Assert.AreEqual(0, c.Skin);
+        Assert.AreEqual(ItemData.DefaultHair, c.Hair);
+        Assert.AreEqual(ItemData.DefaultFace, c.Face);
         CollectionAssert.AreEquivalent(
-            new[] { ItemData.HairCouponMale, ItemData.FaceCouponMale }, c.CashWorn);
-        Assert.AreEqual(1, c.DecBag![ItemData.HairCouponFemale]);
-        Assert.AreEqual(1, c.DecBag[ItemData.FaceCouponFemale]);
-    }
-
-    [TestMethod]
-    public void GiveCashDefaults_Female()
-    {
-        var c = new CharaSlot { Female = true };
-        Inventory.GiveCashDefaults(c);
-
-        Assert.AreEqual(ItemData.DefaultHairFemale, c.Hair);
-        Assert.AreEqual(ItemData.DefaultFaceFemale, c.Face);
-        CollectionAssert.AreEquivalent(
-            new[] { ItemData.HairCouponFemale, ItemData.FaceCouponFemale }, c.CashWorn);
-        Assert.AreEqual(1, c.DecBag![ItemData.HairCouponMale]);
-        Assert.AreEqual(1, c.DecBag[ItemData.FaceCouponMale]);
+            new[] { ItemData.HairCoupon, ItemData.FaceCoupon }, c.CashWorn);
+        Assert.AreEqual(1, c.DecBag![ItemData.HairCouponAlt]);
+        Assert.AreEqual(1, c.DecBag[ItemData.FaceCouponAlt]);
     }
 
     [TestMethod]

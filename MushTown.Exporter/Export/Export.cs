@@ -5,7 +5,7 @@ namespace MushTown.Exporter;
 
 // Writes assets/ from the local MapleStory client data:
 //   assets/maps/{id}.json + tiles/back/obj png files
-//   assets/chara/body/{action}.json + part png files
+//   assets/chara/body/{action}.json + {action}_s1..s5.json + part png files
 //   assets/ui/*.png (login/server/chars/job/setup art, normal states only)
 // Usage: export [DataDir] [OutDir]
 public static partial class Export
@@ -96,11 +96,13 @@ public static partial class Export
         }
         foreach (string action in Net.Actions)
         {
-            if (!ExportCharacter(baseRoot, chara, outDir, action) ||
-                !ExportCharacter(baseRoot, chara, outDir, action, female: true))
+            for (int skin = 0; skin < CharaSlot.SkinCount; skin++)
             {
-                Environment.ExitCode = 1;
-                return;
+                if (!ExportCharacter(baseRoot, chara, outDir, action, skin))
+                {
+                    Environment.ExitCode = 1;
+                    return;
+                }
             }
         }
         if (!ExportAvatarParts(baseRoot, chara, outDir))
@@ -113,7 +115,7 @@ public static partial class Export
             if (beginner == null) continue; // the rings carry no doll art
             foreach (string action in Net.Actions)
             {
-                if (!ExportCharacter(baseRoot, chara, outDir, action, false, gear, beginner))
+                if (!ExportCharacter(baseRoot, chara, outDir, action, gear: gear, gearBeginner: beginner))
                 {
                     Environment.ExitCode = 1;
                     return;

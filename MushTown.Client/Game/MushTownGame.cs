@@ -28,7 +28,7 @@ public partial class MushTownGame : Game
     private readonly string _shotAction;
     private readonly int _shotFrame;
     private readonly bool _shotFacingRight;
-    private readonly bool _shotFemale; // --female: the shot demo is a woman (acceptance only)
+    private readonly int? _shotSkin; // --skin <0..5>: the shot demo's skin (null = not passed)
     private readonly bool _host;
     private readonly string? _joinHost;
     private readonly string? _shotScreen;
@@ -49,13 +49,11 @@ public partial class MushTownGame : Game
 
     private MapData _map = null!;
     private int _mapId;
-    private readonly Dictionary<string, CharaData> _charasMale = new();
-    private readonly Dictionary<string, CharaData> _charasFemale = new();
+    private readonly Dictionary<(int skin, string action), CharaData> _charas = new();
     private readonly Dictionary<(string img, string action), CharaData> _gear = new();
     private readonly Dictionary<(string img, string action), CharaData> _hairs = new();
     private readonly Dictionary<(string img, string action), CharaData> _faces = new();
-    private readonly Dictionary<string, List<int>> _delaysMale = new();
-    private readonly Dictionary<string, List<int>> _delaysFemale = new();
+    private readonly Dictionary<(int skin, string action), List<int>> _delays = new();
     private List<int> _layers = null!;
     private readonly Dictionary<string, Texture2D> _textures = new();
     private readonly CameraComp _camera = new();
@@ -115,7 +113,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, bool shotFemale = false)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -124,7 +122,7 @@ public partial class MushTownGame : Game
         _shotAction = shotAction;
         _shotFrame = shotFrame;
         _shotFacingRight = shotFacingRight;
-        _shotFemale = shotFemale;
+        _shotSkin = shotSkin;
         _host = host;
         _joinHost = joinHost;
         _shotScreen = shotScreen;
@@ -278,13 +276,12 @@ public partial class MushTownGame : Game
 
         if (_shotPath != null)
         {
-            var shotBodies = _shotFemale ? _charasFemale : _charasMale;
-            if (!shotBodies.ContainsKey(_shotAction))
+            if (!_charas.ContainsKey((_shotSkin ?? 0, _shotAction)))
                 throw new InvalidDataException($"unknown action: {_shotAction}");
             // Job screens pose the spine clip, not the char: --frame is the clip frame there.
             // The setup page always draws the stand1 doll, whatever --action says.
             string shotChar = _shotScreen == "setup" ? "stand1" : _shotAction;
-            if (_shotScreen is not ("job" or "job2") && _shotFrame >= shotBodies[shotChar].Frames.Count)
+            if (_shotScreen is not ("job" or "job2") && _shotFrame >= _charas[(_shotSkin ?? 0, shotChar)].Frames.Count)
                 throw new InvalidDataException($"action {shotChar} has no frame {_shotFrame}");
             _mover.Action = _shotAction;
             _frame = _shotFrame;
@@ -452,7 +449,7 @@ public partial class MushTownGame : Game
         _blur = new RenderTarget2D(GraphicsDevice, GameWidth / BlurBackdrop.Scale, GameHeight / BlurBackdrop.Scale);
 
         LoadMapTextures();
-        foreach (var chara in _charasMale.Values.Concat(_charasFemale.Values))
+        foreach (var chara in _charas.Values)
             foreach (var frame in chara.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         foreach (var gear in _gear.Values.Concat(_hairs.Values).Concat(_faces.Values))
@@ -624,7 +621,7 @@ public partial class MushTownGame : Game
         // No swing without a judge (the disconnect frame has neither yet).
         if (!blocked && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
-            _fighter.AttackLock = Delays("swingO1", _save?.Slots[_slot]?.Female ?? false).Sum();
+            _fighter.AttackLock = Delays("swingO1", Hero?.Skin ?? 0).Sum();
             PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
@@ -722,7 +719,7 @@ public partial class MushTownGame : Game
             _timerMs = 0;
         }
         if (_mover.Climb == null || _mover.ClimbMoving) // still on a ladder: hold the pose
-            (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, Delays(_shownAction, Hero?.Female ?? false));
+            (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, Delays(_shownAction, Hero?.Skin ?? 0));
 
         var (targetX, targetY) = CameraTarget();
         _camera.Follow(dt, targetX, targetY);
@@ -738,7 +735,7 @@ public partial class MushTownGame : Game
                     RemovePeer(e.Id); // the name stays: ids never repeat, and a map-switch Gone is not a goodbye
                 else if (e.Map != _mapId)
                     RemovePeer(e.Id); // peer on another map: not shown here
-                else if (e.Frame < _charasMale[Net.ActionName(e.Action)].Frames.Count)
+                else if (e.Frame < _charas[(0, Net.ActionName(e.Action))].Frames.Count)
                     ApplyRemote(e); // bad frame: not ours, drop it
             while (_net.TryTakeName(out var n))
             {

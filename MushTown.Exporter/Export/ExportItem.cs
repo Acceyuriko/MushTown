@@ -38,13 +38,13 @@ public static partial class Export
         (@"Coat\01040022.img", BeginnerLongcoat),
     };
 
-    // The free default hair/face coupons: the icon node they link to.
+    // The four free default hair/face coupons: the icon node they link to.
     private static readonly (int Id, int IconId)[] CashCoupons =
     {
-        (ItemData.HairCouponMale, 5157053),
-        (ItemData.HairCouponFemale, 5157053),
-        (ItemData.FaceCouponMale, 5158018),
-        (ItemData.FaceCouponFemale, 5158018),
+        (ItemData.HairCoupon, 5157053),
+        (ItemData.HairCouponAlt, 5157053),
+        (ItemData.FaceCoupon, 5158018),
+        (ItemData.FaceCouponAlt, 5158018),
     };
 
     // The wearable ids: the export log and the manifest both print them.
@@ -61,13 +61,13 @@ public static partial class Export
                 return false;
             }
             // The four defaults are picked by the cosmetic they give, not by
-            // the String name: this WZ labels the female coupons "(M)" too.
+            // the String name: the labels are not reliable.
             int expected = id switch
             {
-                ItemData.HairCouponMale => ItemData.DefaultHairMale,
-                ItemData.HairCouponFemale => ItemData.DefaultHairFemale,
-                ItemData.FaceCouponMale => ItemData.DefaultFaceMale,
-                ItemData.FaceCouponFemale => ItemData.DefaultFaceFemale,
+                ItemData.HairCoupon => ItemData.DefaultHair,
+                ItemData.HairCouponAlt => ItemData.AltHair,
+                ItemData.FaceCoupon => ItemData.DefaultFace,
+                ItemData.FaceCouponAlt => ItemData.AltFace,
                 _ => 0, // a new coupon needs its own expected cosmetic
             };
             int cosmetic = Int(item.Find($"Cash/0515.img/{id:D8}/spec"), "cosmetic");
@@ -82,7 +82,7 @@ public static partial class Export
                 Name = name,
                 Image = $"cashitem/{id}.png",
                 Desc = CleanDesc(str.Find($@"Cash.img\{id}\desc")?.GetValueEx<string>("") ?? "",
-                    id is ItemData.HairCouponMale or ItemData.HairCouponFemale ? "hair" : "face"),
+                    id is ItemData.HairCoupon or ItemData.HairCouponAlt ? "hair" : "face"),
                 Cash = true,
                 Cosmetic = cosmetic,
             };

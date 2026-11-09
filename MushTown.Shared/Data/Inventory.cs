@@ -14,18 +14,14 @@ public static class Inventory
         foreach (string tab in Tabs) EnsureTab(chara, tab);
     }
 
-    // A new character gets all four free coupons once: the current gender's
-    // pair goes on the doll, the other pair goes to the decoration bag.
+    // A new character gets all four free coupons once: the default pair goes
+    // on the doll, the other pair goes to the decoration bag.
     public static void GiveCashDefaults(CharaSlot chara)
     {
-        int hairCoupon = chara.Female ? ItemData.HairCouponFemale : ItemData.HairCouponMale;
-        int faceCoupon = chara.Female ? ItemData.FaceCouponFemale : ItemData.FaceCouponMale;
-        int otherHair = chara.Female ? ItemData.HairCouponMale : ItemData.HairCouponFemale;
-        int otherFace = chara.Female ? ItemData.FaceCouponMale : ItemData.FaceCouponFemale;
-        chara.CashWorn = new List<int> { hairCoupon, faceCoupon };
-        chara.DecBag = new Dictionary<int, int> { [otherHair] = 1, [otherFace] = 1 };
-        chara.Hair = chara.Female ? ItemData.DefaultHairFemale : ItemData.DefaultHairMale;
-        chara.Face = chara.Female ? ItemData.DefaultFaceFemale : ItemData.DefaultFaceMale;
+        chara.CashWorn = new List<int> { ItemData.HairCoupon, ItemData.FaceCoupon };
+        chara.DecBag = new Dictionary<int, int> { [ItemData.HairCouponAlt] = 1, [ItemData.FaceCouponAlt] = 1 };
+        chara.Hair = ItemData.DefaultHair;
+        chara.Face = ItemData.DefaultFace;
     }
 
     private static Dictionary<int, int> Bag(CharaSlot chara, string tab) => tab switch

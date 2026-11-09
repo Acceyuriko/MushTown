@@ -75,7 +75,7 @@
 ### `CharaSlot` 新增字段
 
 ```csharp
-public bool Female { get; set; } // false = 男，true = 女
+public int Skin { get; set; } // 0..5
 public int Hair { get; set; } // 当前发型 cosmetic id，默认 30020
 public int Face { get; set; } // 当前脸 cosmetic id，默认 20000
 public Dictionary<int, int>? CashBag { get; set; } // 非装饰现金道具 itemId -> count
@@ -89,7 +89,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 
 - `Equips` / `EquipBag` 保持原样。它们只放有属性的装备。
 - `CashBag` 放非装饰现金道具（Utility / Convenience）。
-- `DecBag` 放没穿的装饰现金道具（Fashion、头发、脸）。四个默认条目（男女各两件）都要有，当前性别的两件穿在装饰栏，另外两件放背包。
+- `DecBag` 放没穿的装饰现金道具（Fashion、头发、脸）。四张默认券都要有：`5157257` / `5158151` 穿在 `CashWorn`，`5157258` / `5158152` 放 `DecBag`。
 - `CashWorn` 放正在穿的装饰现金道具 item id：Fashion、当前发型券、当前脸券。穿上时从 `DecBag` 扣 1 件；脱下时加回 `DecBag`。穿在身上的东西不在背包里，不能卖、不能丢。
 - 穿同槽位的新 Fashion 时，旧的那件自动从 `CashWorn` 移回 `DecBag`。
 - 换头发 / 脸：新券从 `DecBag` 扣 1 件，`CashWorn` 加新券；旧券从 `CashWorn` 移回 `DecBag`。`Hair` / `Face` 写新外观 id。
@@ -106,29 +106,24 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 
 ### 默认头发和默认脸
 
-- 默认头发：男 `5157257` Messy Hair（外观 30020），女 `5157258` Messy Hair (F)（外观 33390），免费。
-- 默认脸：男 `5158151` Defiant Face（外观 20000），女 `5158152` Defiant Face (F)（外观 20002），免费。
+- 默认头发：`5157257` Messy Hair（外观 30020），备用 `5157258`（外观 33390），免费。
+- 默认脸：`5158151` Defiant Face（外观 20000），备用 `5158152`（外观 20002），免费。
 - 四个都是 `Item/Cash` 里的真道具，有图标。
-- 新角色（男）：
-  - `Female = false`、`Hair = 30020`、`Face = 20000`
-  - `CashWorn` = `[5157257, 5158151]`（当前穿着的默认男发券和男脸券）
-  - `DecBag` = `{5157258:1, 5158152:1}`（女默认两件，放在背包）
-- 新角色（女）：
-  - `Female = true`、`Hair = 33390`、`Face = 20002`
-  - `CashWorn` = `[5157258, 5158152]`
-  - `DecBag` = `{5157257:1, 5158151:1}`
+- 新角色：
+  - `Skin = 0`、`Hair = 30020`、`Face = 20000`
+  - `CashWorn` = `[5157257, 5158151]`（默认头发券和默认脸券）
+  - `DecBag` = `{5157258:1, 5158152:1}`（备用两张，放在背包）
 - 旧存档不兼容：开发阶段直接删档重建，不做默认条目补齐。
-- 这样每个新角色都有两套默认头发和默认脸；背包里是没穿的另外两件，装饰栏里是当前穿着的两件。
+- 这样每个新角色都有四张默认券；装饰栏两张，背包两张。
 
-### 女角色身体和头
+### 皮肤身体和头
 
-- 现在只导出男身体 `00002000.img`、男头 `00012000.img`。要再加女身体 `00002001.img`、女头 `00012001.img`。
-- `ExportCharacter` 加性别参数，把男女两套都导到 `assets/chara/body/`，文件名不能冲突，例如 `stand1.json` / `stand1_f.json`。
-- `MushTownGame` 载入两套 `_charas`：`_charasMale` / `_charasFemale`。
-- `DrawAvatar` / `BodyCenterX` 多一个 `female` 参数，由 `CharaSlot.Female` 决定用哪套身体和头。
-- 玩家自己、其他玩家、选角、菜单、创建角色都要传同一个 `Female`。
-- 联机同步要带整套外观（性别、头发、脸、CashWorn），见现金商店计划的「联机外观同步」。
-- 变性后重新画人物；已穿的 Fashion 不受影响。
+- 导出 6 套皮肤：身体 `2000` / `2001` / `2002` / `2003` / `2011` / `2012`，头 `12000` / `12001` / `12002` / `12003` / `12011` / `12012`。
+- `ExportCharacter` 加皮肤参数，6 套都导到 `assets/chara/body/`，文件名按皮肤区分，例如 `stand1.json` / `stand1_s1.json`。
+- `MushTownGame` 载入 6 套 `_charas`。
+- `DrawAvatar` / `BodyCenterX` 多一个 `skin` 参数，由 `CharaSlot.Skin` 决定用哪套身体和头。
+- 玩家自己、其他玩家、选角、菜单、创建角色都要传同一个 `Skin`。
+- 联机同步要带整套外观（皮肤、头发、脸、CashWorn），见现金商店计划的「联机外观同步」。
 
 ### 装备槽映射
 
@@ -347,7 +342,7 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
   - `UICharacterInfo.img/local/detail/backgrnd` → `stat_win.png`（从现在的 `remote/detail` 换成 `local/detail`）
   - `UICharacterInfo.img/local/detail/layer:stat` → `stat_statbar.png`
 - `Panel` 命令加 `equip`：`dotnet run --project MushTown.Exporter -- panel equip`。
-- 男女四个默认头发/脸 coupon 的 `ItemData` + 图标先导出到 `assets/cashitem/`，现金商店可直接复用。
+- 四张默认头发 / 脸券的 `ItemData` + 图标先导出到 `assets/cashitem/`，现金商店可直接复用。
 
 ## 截图
 
@@ -385,14 +380,13 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - 装饰栏：
   - `CashWorn` 有 `Wp` → Weapon 格出现图标。
   - `CashWorn` 有 `Ma` → Top 格出现图标；`MaPn` → Top 格出现图标、Bottom 格变红锁住。
-  - `Hair=30020`、`Face=20000` → Hair / Face 格有图标。
-  - `Female=true`、`Hair=33390`、`Face=20002` → 用女身体和女头画，Hair / Face 格有图标。
+  - `Skin=0`、`Hair=30020`、`Face=20000` → Hair / Face 格有图标。
+  - `Skin=2`、`Hair=33390`、`Face=20002` → 用皮肤 2 的身体和头画，Hair / Face 格有图标。
   - 空 `CashWorn` → 其余格子空。
   - 双击已穿 Cash Fashion → `CashWorn` 少一件，`DecBag` 多一件。
 - 存档：
   - 旧存档不迁移：缺少四个 order list（或长度不是 128）的旧档直接删档重建。
-  - 新角色一开始 `CashWorn` 有两件当前性别默认券，`DecBag` 有两件另一性别默认券。
-  - 变性后身体、头、头发、脸都换；`DecBag` 已买道具不丢。
+  - 新角色一开始 `CashWorn` 有两张默认券，`DecBag` 有两张备用券。
 - 窗口：
   - Equipment / Pet / Outfits / Android / Damage Skins 五个页签都能切换，底图和页签高亮正确。
   - Pet / Android / Damage Skins 页显示空白格，不显示道具。
@@ -430,4 +424,4 @@ public List<int>? DecOrder { get; set; } // DEC 页每格的 item id，0 = 空
 - 换发型和换脸的纸娃娃部件。现金商店的 Beauty 页做。
 - 从 Cash 包双击穿戴。现金商店接入时做。
 - 把 Cash 外观放进世界人物。这里只做数据字段和窗口显示；世界渲染在现金商店接入时做。
-- 女款发型和脸。
+- 更多皮肤 / 发型 / 脸的购买和切换。

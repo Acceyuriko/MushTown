@@ -85,7 +85,7 @@ public partial class MushTownGame
 
     // The idle frame of the portrait: the same clock every other idle in the
     // game reads, so the doll breathes instead of holding one frame.
-    private int StandFrame() => Idle.At(Delays("stand1", Hero?.Female ?? false), (float)_timeMs);
+    private int StandFrame() => Idle.At(Delays("stand1", Hero?.Skin ?? 0), (float)_timeMs);
 
     // The stats page: the official panel art with the live numbers.
     private void BuildStatPage(GameObject body)

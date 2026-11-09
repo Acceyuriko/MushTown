@@ -126,7 +126,7 @@ public partial class MushTownGame
     private void UpdateSetup(bool click, bool enter, bool esc, int gx, int gy, float dtMs)
     {
         // the doll on the card plays the stand1 frames, like the in-game character
-        (_setupFrame, _setupTimer) = SceneMath.AdvanceFrame(_setupFrame, _setupTimer, dtMs, Delays("stand1", false));
+        (_setupFrame, _setupTimer) = SceneMath.AdvanceFrame(_setupFrame, _setupTimer, dtMs, Delays("stand1", 0));
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (esc) { SetupToJob(); return; }
         GameObject? took = click ? ClickTree(_scenes.Current, gx, gy) : null;

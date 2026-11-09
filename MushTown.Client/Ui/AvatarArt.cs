@@ -10,21 +10,19 @@ namespace MushTown.Client;
 // call it, so a part fix lands here once.
 public partial class MushTownGame
 {
-    private CharaData Body(string action, bool female) => (female ? _charasFemale : _charasMale)[action];
+    private CharaData Body(string action, int skin) => _charas[(skin, action)];
 
-    internal List<int> Delays(string action, bool female) => (female ? _delaysFemale : _delaysMale)[action];
+    internal List<int> Delays(string action, int skin) => _delays[(skin, action)];
 
-    private static string BodyImgId(bool female) => female ? "00002001" : "00002000";
-    private static string HeadImgId(bool female) => female ? "00012001" : "00012000";
-    private static string DefaultHairImg(bool female) =>
-        (female ? ItemData.DefaultHairFemale : ItemData.DefaultHairMale).ToString("D8");
-    private static string DefaultFaceImg(bool female) =>
-        (female ? ItemData.DefaultFaceFemale : ItemData.DefaultFaceMale).ToString("D8");
+    private static string BodyImgId(int skin) => CharaSlot.BodyId(skin).ToString("D8");
+    private static string HeadImgId(int skin) => CharaSlot.HeadId(skin).ToString("D8");
+    private static string DefaultHairImg() => ItemData.DefaultHair.ToString("D8");
+    private static string DefaultFaceImg() => ItemData.DefaultFace.ToString("D8");
 
     // The parts of one frame: the plain body, the worn gear, then the cash
     // appearance of a body part instead of its gear, and finally the current
     // hair and face. An unknown id draws nothing.
-    private List<CharaPart> MergeParts(string action, int frame, bool female, List<int>? worn, List<int>? cashWorn,
+    private List<CharaPart> MergeParts(string action, int frame, int skin, List<int>? worn, List<int>? cashWorn,
         int hair, int face)
     {
         var gearParts = new List<CharaPart>();
@@ -54,9 +52,9 @@ public partial class MushTownGame
             }
         var hairData = _hairs.GetValueOrDefault((hair.ToString("D8"), action));
         var faceData = _faces.GetValueOrDefault((face.ToString("D8"), action));
-        return AvatarMerge.Parts(Body(action, female).Frames[frame].Parts, gearParts,
+        return AvatarMerge.Parts(Body(action, skin).Frames[frame].Parts, gearParts,
             hairData?.Frames[frame].Parts, faceData?.Frames[frame].Parts,
-            DefaultHairImg(female), DefaultFaceImg(female));
+            DefaultHairImg(), DefaultFaceImg());
     }
 
     private void AppendGear(List<CharaPart> parts, int id, string action, int frame)
@@ -67,8 +65,8 @@ public partial class MushTownGame
 
     private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null)
     {
-        var parts = MergeParts(action, frame, chara?.Female ?? false, chara?.Equips, chara?.CashWorn,
-            chara?.Hair ?? ItemData.DefaultHairMale, chara?.Face ?? ItemData.DefaultFaceMale);
+        var parts = MergeParts(action, frame, chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
+            chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace);
         foreach (var part in parts)
         {
             if (facingRight)
@@ -88,9 +86,9 @@ public partial class MushTownGame
     // turns. Hair may be wider than the body, so pick the body by its img id.
     private int BodyCenterX(int feetX, string action, int frame, bool facingRight, CharaSlot? chara)
     {
-        var parts = MergeParts(action, frame, chara?.Female ?? false, chara?.Equips, chara?.CashWorn,
-            chara?.Hair ?? ItemData.DefaultHairMale, chara?.Face ?? ItemData.DefaultFaceMale);
-        string bodyImg = BodyImgId(chara?.Female ?? false);
+        var parts = MergeParts(action, frame, chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
+            chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace);
+        string bodyImg = BodyImgId(chara?.Skin ?? 0);
         CharaPart? body = parts.FirstOrDefault(p => p.Img == bodyImg);
         if (body == null) return feetX;
         int w = _textures[body.Image].Width;
@@ -117,9 +115,9 @@ public partial class MushTownGame
         string id = cosmetic.ToString("D8");
         var look = _hairs.GetValueOrDefault((id, "stand1")) ?? _faces.GetValueOrDefault((id, "stand1"));
         if (look == null || look.Frames[0].Parts.Count == 0) return false;
-        bool female = Hero?.Female ?? false;
-        string bodyImg = BodyImgId(female), headImg = HeadImgId(female);
-        var stand = Body("stand1", female).Frames[0].Parts;
+        int skin = Hero?.Skin ?? 0;
+        string bodyImg = BodyImgId(skin), headImg = HeadImgId(skin);
+        var stand = Body("stand1", skin).Frames[0].Parts;
         var parts = stand.Where(p => p.Img == bodyImg || p.Img == headImg).ToList();
         parts.AddRange(look.Frames[0].Parts);
         parts = parts.OrderByDescending(p => p.Z).ToList(); // back to front, like the doll
@@ -159,7 +157,7 @@ public partial class MushTownGame
 
 // One doll in a UI tree: the owner rect's top-left is its feet. The frame is
 // read every draw, so a walk cycle shows without a rebuild. The character is
-// optional: without one the doll draws the default male beginner.
+// optional: without one the doll draws the default skin 0 beginner.
 public sealed class AvatarPreview : Component, IDrawable
 {
     private readonly MushTownGame _game;

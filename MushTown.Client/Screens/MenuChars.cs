@@ -154,7 +154,7 @@ public partial class MushTownGame
         AdvanceClip(_motes, dtMs);
         if (_walkSlot != _slot) { _walkSlot = _slot; _walkFrame = 0; _walkT = 0; } // fresh selection walks from frame 0
         _walkT += dtMs;
-        var delays = Delays("walk1", _save!.Slots[_slot]?.Female ?? false);
+        var delays = Delays("walk1", _save!.Slots[_slot]?.Skin ?? 0);
         if (_walkT >= delays[_walkFrame]) { _walkT -= delays[_walkFrame]; _walkFrame = (_walkFrame + 1) % delays.Count; }
         if (_csDeleteModal.Enabled)
         {

@@ -8,19 +8,13 @@ public static partial class Export
 {
     // ---------- character ----------
 
-    private const string BodyImgMale = @"00002000.img";
-    private const string BodyImgFemale = @"00002001.img";
-    private const string HeadImgMale = @"00012000.img";
-    private const string HeadImgFemale = @"00012001.img";
-    private const string HairImgMale = @"Hair\00030020.img";
-    private const string HairImgFemale = @"Hair\00033390.img";
-    private const string FaceImgMale = @"Face\00020000.img";
-    private const string FaceImgFemale = @"Face\00020002.img";
+    private const string BodyImgDefault = @"00002000.img";
+    private const string HeadImgDefault = @"00012000.img";
+    private const string HairImgDefault = @"Hair\00030020.img";
+    private const string FaceImgDefault = @"Face\00020000.img";
 
-    private static string BodyImg(bool female) => female ? BodyImgFemale : BodyImgMale;
-    private static string HeadImg(bool female) => female ? HeadImgFemale : HeadImgMale;
-    private static string HairImg(bool female) => female ? HairImgFemale : HairImgMale;
-    private static string FaceImg(bool female) => female ? FaceImgFemale : FaceImgMale;
+    private static string BodyImg(int skin) => $"{CharaSlot.BodyId(skin):D8}.img";
+    private static string HeadImg(int skin) => $"{CharaSlot.HeadId(skin):D8}.img";
 
     // The doll part a gear slot replaces: Ma/MaPn use the longcoat art, Pn
     // the boxers, So the beginner shoes, Wp the sword.
@@ -69,18 +63,18 @@ public static partial class Export
     }
 
     private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir, string action,
-        bool female = false, string? gear = null, string? gearBeginner = null, string? hair = null)
+        int skin = 0, string? gear = null, string? gearBeginner = null, string? hair = null)
     {
-        string bodyImg = BodyImg(female);
-        string headImg = HeadImg(female);
-        string faceImg = FaceImg(female);
-        string hairImg = hair ?? HairImg(female);
+        string bodyImg = BodyImg(skin);
+        string headImg = HeadImg(skin);
+        string faceImg = FaceImgDefault;
+        string hairImg = hair ?? HairImgDefault;
         // One gear's parts across one action: same frames, same bones, only
         // the target img's parts kept (prefix beginners feed the trash frame
         // for bones; identical bytes may rewrite beginner pngs, harmless).
         // Isolated parts equal the merged bake: bones only flow forward, so
         // the target sees exactly base + preceding beginners + its own parts.
-        string tag = gear == null ? $"character {(female ? "f" : "m")} {action}" : $"gear {ImgId(gear)} {action}";
+        string tag = gear == null ? $"character skin{skin} {action}" : $"gear {ImgId(gear)} {action}";
         // loose tree (Character.wz) holds origin/map/z; png bytes live in Base _Canvas
         List<string> zNames = new();
         var zmap = baseRoot.Find("zmap.img");
@@ -103,7 +97,7 @@ public static partial class Export
             return false;
         }
 
-        // body/head/face/hair frames of both genders share one png folder
+        // body/head/face/hair frames of every skin share one png folder
         string baseDir = "chara/body";
 
         // frames run 0,1,2... and stop at the first gap (AvatarCanvas.cs:511-522)
@@ -206,7 +200,7 @@ public static partial class Export
             return false;
         }
         string jsonDir = gear == null ? Path.Combine("chara", "body") : Path.Combine("chara", "gear", ImgId(gear));
-        string file = gear == null && female ? $"{action}_f.json" : $"{action}.json";
+        string file = gear == null && skin != 0 ? $"{action}_s{skin}.json" : $"{action}.json";
         WriteJson(Path.Combine(outDir, jsonDir, file), data);
         return true;
     }

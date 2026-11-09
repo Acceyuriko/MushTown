@@ -151,13 +151,14 @@ public partial class MushTownGame
             _rollLog ??= new RollLog(NetLogPath());
             _screen = Screen.Saves; // every launch starts at saves (no session skip)
         }
-        if (shotScreen != null) // menu screenshots ride on a demo save
+        if (shotScreen != null || _shotSkin != null) // menu screenshots and skin shots ride on a demo save
         {
-            _store = DemoStore(_shotFemale);
+            _store = DemoStore(_shotSkin ?? 0);
             _saveSlot = 0;
             _save = _store.Saves[0];
             _screen = shotScreen switch
             {
+                null => Screen.Game,
                 "saves" => Screen.Saves,
                 "server" => Screen.Server,
                 "chars" or "chars2" or "delete" => Screen.Chars,
@@ -219,14 +220,7 @@ public partial class MushTownGame
             if (_screen != Screen.Game) ZeroCamera(); // menu shots draw in screen pixels
             if (shotScreen == "server") _hosts = new List<FoundHost> { new("192.168.1.4", Net.Port, "ACCEYURIKO") };
             if (_screen == Screen.Setup) { _name = "newhero"; _focus = "name"; }
-            GameLog("MushTown saves menu shot");
-        }
-        else if (_shotFemale) // a plain game shot has no screen: still needs the female demo save
-        {
-            _store = DemoStore(female: true);
-            _saveSlot = 0;
-            _save = _store.Saves[0];
-            _slot = 0;
+            if (shotScreen != null) GameLog("MushTown saves menu shot");
         }
     }
 
@@ -262,11 +256,11 @@ public partial class MushTownGame
     }
 
     // The shot dummy: Astra holds the Lv.7 hero plus a mage, Blackveil is empty.
-    private static SaveStore DemoStore(bool female = false)
+    private static SaveStore DemoStore(int skin = 0)
     {
         var store = new SaveStore();
-        store.Saves[0]!.Slots[0] = DemoChara(female);
-        var mage = new CharaSlot { Name = "mage", Level = 2, Map = 20000, Hp = Progression.MaxHp(2), Mp = Progression.MaxMp(2), Female = true };
+        store.Saves[0]!.Slots[0] = DemoChara(skin);
+        var mage = new CharaSlot { Name = "mage", Level = 2, Map = 20000, Hp = Progression.MaxHp(2), Mp = Progression.MaxMp(2) };
         Inventory.GiveCashDefaults(mage);
         Inventory.Ensure(mage);
         store.Saves[0]!.Slots[2] = mage;
@@ -279,11 +273,11 @@ public partial class MushTownGame
     // screen, no account) borrow it too. The bag holds one item per slot
     // (the shop weapon, the shop coat, one ring), so the --wear shot shows
     // the new art whatever order the bag walks in.
-    private static CharaSlot DemoChara(bool female = false)
+    private static CharaSlot DemoChara(int skin = 0)
     {
         var chara = new CharaSlot
         {
-            Female = female,
+            Skin = skin,
             Name = "hero",
             Level = 7,
             Map = 10000,
@@ -489,7 +483,7 @@ public partial class MushTownGame
             _ghost.Frame = ghostPose;
             _portal.Frame = portalPose;
             _motes.Frame = motesPose; // the mid-cycle flash frame would white out the shot
-            _walkFrame = Math.Min(1, Delays("walk1", _save!.Slots[_slot]?.Female ?? false).Count - 1);
+            _walkFrame = Math.Min(1, Delays("walk1", _save!.Slots[_slot]?.Skin ?? 0).Count - 1);
         }
         LoadTexture("ui/cursor.png"); // outside UiFiles (that table is plain pngs; the cursor ships origin jsons too)
         _cursorHot = LoadJson<CursorData>(Path.Combine(_assetsDir, "ui", "cursor.json"));

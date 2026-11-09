@@ -191,7 +191,13 @@ public sealed class CharaSlot
     public List<int>? EquipOrder { get; set; }
     public List<int>? CashOrder { get; set; }
     public List<int>? DecOrder { get; set; }
-    public bool Female { get; set; } // body/head set; CreateHero sets it, old saves are rejected
+    public const int SkinCount = 6;
+    // The official WZ2_skin head ids; every skin shares one body outline,
+    // so only the skin's images differ.
+    private static readonly int[] SkinHeadIds = { 12000, 12001, 12002, 12003, 12011, 12012 };
+    public static int HeadId(int skin) => SkinHeadIds[skin];
+    public static int BodyId(int skin) => SkinHeadIds[skin] - 10000;
+    public int Skin { get; set; } // 0..5 (old saves have no field: 0)
     public int Hair { get; set; } // current hair cosmetic id; CreateHero sets the default
     public int Face { get; set; } // current face cosmetic id; CreateHero sets the default
     public List<int>? CashWorn { get; set; } // worn decorative cash item ids (Fashion, current hair/face coupons)

@@ -55,7 +55,7 @@ public static partial class Export
             Console.WriteLine($"{tag}: {img} not found");
             return false;
         }
-        int bodyFrames = ActionFrameCount(looseRoot, BodyImgMale, action);
+        int bodyFrames = ActionFrameCount(looseRoot, BodyImgDefault, action);
         if (bodyFrames == 0)
         {
             Console.WriteLine($"{tag}: body has no {action} frames");
@@ -71,11 +71,11 @@ public static partial class Export
             }
         }
 
-        // the default look of the male body feeds the bones: same bone tree on both bodies
-        var faceNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{FaceImgMale}\default"));
+        // the default skin's look feeds the bones: every skin shares one outline
+        var faceNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{FaceImgDefault}\default"));
         if (faceNode == null)
         {
-            Console.WriteLine($"{tag}: {FaceImgMale} node not found");
+            Console.WriteLine($"{tag}: {FaceImgDefault} node not found");
             return false;
         }
         Wz_Node? targetFaceNode = null;
@@ -95,23 +95,23 @@ public static partial class Export
 
         for (int frameIdx = 0; frameIdx < bodyFrames; frameIdx++)
         {
-            var bodyFrame = FindImgFrame(looseRoot, BodyImgMale, action, frameIdx);
+            var bodyFrame = FindImgFrame(looseRoot, BodyImgDefault, action, frameIdx);
             if (bodyFrame == null)
             {
-                Console.WriteLine($"{tag} frame {frameIdx}: {BodyImgMale} frame uol is broken");
+                Console.WriteLine($"{tag} frame {frameIdx}: {BodyImgDefault} frame uol is broken");
                 return false;
             }
-            if (!BodyFrameStatic(BodyImgMale, action, frameIdx, bodyFrame)) return false;
-            var headFrame = FindImgFrame(looseRoot, HeadImgMale, action, frameIdx);
+            if (!BodyFrameStatic(BodyImgDefault, action, frameIdx, bodyFrame)) return false;
+            var headFrame = FindImgFrame(looseRoot, HeadImgDefault, action, frameIdx);
             if (headFrame == null)
             {
-                Console.WriteLine($"{tag} frame {frameIdx}: {HeadImgMale} node not found");
+                Console.WriteLine($"{tag} frame {frameIdx}: {HeadImgDefault} node not found");
                 return false;
             }
-            var hairFrame = FindImgFrame(looseRoot, HairImgMale, action, frameIdx);
+            var hairFrame = FindImgFrame(looseRoot, HairImgDefault, action, frameIdx);
             if (hairFrame == null)
             {
-                Console.WriteLine($"{tag} frame {frameIdx}: {HairImgMale} node not found");
+                Console.WriteLine($"{tag} frame {frameIdx}: {HairImgDefault} node not found");
                 return false;
             }
 
@@ -119,11 +119,11 @@ public static partial class Export
             var bones = new BoneSet();
             bool face = Int(bodyFrame, "face", 1) != 0;
             var trash = new CharaFrame();
-            missing += AddFrameParts(baseRoot, trash, bones, ImgId(BodyImgMale), bodyFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
-            missing += AddFrameParts(baseRoot, trash, bones, ImgId(HeadImgMale), headFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+            missing += AddFrameParts(baseRoot, trash, bones, ImgId(BodyImgDefault), bodyFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+            missing += AddFrameParts(baseRoot, trash, bones, ImgId(HeadImgDefault), headFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
             if (face)
-                missing += AddFrameParts(baseRoot, trash, bones, ImgId(FaceImgMale), faceNode, outDir, frameIdx, saved, zNames, face, action, "chara/body");
-            missing += AddFrameParts(baseRoot, trash, bones, ImgId(HairImgMale), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+                missing += AddFrameParts(baseRoot, trash, bones, ImgId(FaceImgDefault), faceNode, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+            missing += AddFrameParts(baseRoot, trash, bones, ImgId(HairImgDefault), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
 
             // the target parts: a hair uses its action frame, a face its one default node
             if (category == "hair")
