@@ -83,9 +83,7 @@ public partial class MushTownGame
     // page picked (Hero stays Hero, not the Warrior branch).
     private string JobLabel() => JobNames.Of(Hero?.Job ?? 110);
 
-    // The idle frame of the portrait: the same clock every other idle in the
-    // game reads, so the doll breathes instead of holding one frame.
-    private int StandFrame() => Idle.At(Delays("stand1", Hero?.Skin ?? 0), (float)_timeMs);
+    private int StandFrame() => IdleFrame(Hero?.Skin ?? 0);
 
     // The stats page: the official panel art with the live numbers.
     private void BuildStatPage(GameObject body)

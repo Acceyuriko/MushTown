@@ -14,6 +14,10 @@ public partial class MushTownGame
 
     internal List<int> Delays(string action, int skin) => _delays[(skin, action)];
 
+    // The live stand1 frame for a skin: the stat and equipment windows use this
+    // so their doll breathes like the world doll.
+    internal int IdleFrame(int skin) => Idle.At(Delays("stand1", skin), (float)_timeMs);
+
     private static string BodyImgId(int skin) => CharaSlot.BodyId(skin).ToString("D8");
     private static string HeadImgId(int skin) => CharaSlot.HeadId(skin).ToString("D8");
     private static string DefaultHairImg() => ItemData.DefaultHair.ToString("D8");
