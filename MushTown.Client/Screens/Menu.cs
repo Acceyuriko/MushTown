@@ -292,6 +292,7 @@ public partial class MushTownGame
             Sp = 18, // earned 21 (creation 3 + 6 level-ups), spent 3 on Slash Blast
             SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
+            Equips = new List<int>(ItemData.StarterEquips),
             EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },
             KeyPresets = DemoPresets(),
         };

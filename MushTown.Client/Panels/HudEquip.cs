@@ -88,6 +88,13 @@ public sealed class EquipWindow : UiWindow
         root.Add(new Picture(IsDeco ? "ui/deco_bg.png" : "ui/equip_bg.png",
             _lay.Get("bgX", 0), _lay.Get("bgY", 0)));
         root.Add(new Picture(PageArt(), _lay.Get("contentX", 12), _lay.Get("contentY", 61)));
+        if ((_page is EquipPage.Equipment or EquipPage.Outfits) && _game.Hero != null)
+        {
+            var doll = new GameObject { NoHit = true };
+            doll.Add(new Rect(new Rectangle(_lay.Get("dollX", 183), _lay.Get("dollY", 218), 1, 1)));
+            doll.Add(new AvatarPreview(_game, "stand1", () => 0, false, () => _game.Hero));
+            root.AddChild(doll);
+        }
         var slots = SlotsForPage();
         var occupied = slots.Select(s => s.Slot).ToHashSet();
         bool bottomLocked = BottomLocked();
