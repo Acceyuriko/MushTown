@@ -1,0 +1,14 @@
+{
+  "Items": [
+    { "Id": 5400000, "Price": 15000, "Count": 1, "Group": "Utility", "Tab": "Convenience" },
+    { "Id": 5051001, "Price": 10000, "Count": 1, "Group": "Utility", "Tab": "Convenience" },
+    { "Id": 1302007, "Price": 300, "Count": 1, "Group": "Fashion", "Tab": "Weapons" },
+    { "Id": 1302005, "Price": 600, "Count": 1, "Group": "Fashion", "Tab": "Weapons" },
+    { "Id": 1302004, "Price": 5500, "Count": 1, "Group": "Fashion", "Tab": "Weapons" },
+    { "Id": 1302015, "Price": 11000, "Count": 1, "Group": "Fashion", "Tab": "Weapons" },
+    { "Id": 1040015, "Price": 300, "Count": 1, "Group": "Fashion", "Tab": "Outfits" },
+    { "Id": 1040007, "Price": 500, "Count": 1, "Group": "Fashion", "Tab": "Outfits" },
+    { "Id": 1040012, "Price": 800, "Count": 1, "Group": "Fashion", "Tab": "Outfits" },
+    { "Id": 1040022, "Price": 1300, "Count": 1, "Group": "Fashion", "Tab": "Outfits" }
+  ]
+}

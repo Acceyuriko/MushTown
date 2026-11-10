@@ -40,7 +40,7 @@ public sealed class MenuWindow : UiWindow
     // The bottom row: the button art stem and what it opens.
     private static readonly (string Stem, Feature Action)[] BottomButtons =
     {
-        ("menu_cashshop", Feature.None),       // Cash Shop
+        ("menu_cashshop", Feature.CashShop),   // Cash Shop
         ("menu_auction", Feature.None),        // Auction House
         ("menu_channel", Feature.None),        // CH. Change Channel
         ("menu_switchchar", Feature.None),     // Switch Character
@@ -195,6 +195,7 @@ public sealed class MenuWindow : UiWindow
         Feature.WorldMap => HotkeyAction.WorldMap,
         Feature.Settings => HotkeyAction.Settings,
         Feature.Keys => HotkeyAction.KeyConfig,
+        Feature.CashShop => HotkeyAction.CashShop,
         _ => null,
     };
 
@@ -239,6 +240,7 @@ public partial class MushTownGame
 {
     // The MENU window (the HUD menu button opens it).
     private MenuWindow _menuWindow = null!;
+    private CashShopWindow _cashShopWindow = null!;
 
     // The keys of the open MENU window: the official says at the bottom of
     // the menu that Tab and the arrows move between the menus (the arrows

@@ -537,15 +537,22 @@ public readonly record struct SkillLive(int Lv, int Sp, int Level, float CdMs, f
 public sealed class InvItem : Component, IDrawable
 {
     private readonly Func<string> _image;
-    public InvItem(Func<string> image) => _image = image;
+    private readonly int _maxSize;
+    public InvItem(Func<string> image, int maxSize = 0) { _image = image; _maxSize = maxSize; }
     public void Draw(UiGfx gfx)
     {
         string image = _image();
         if (image == "") return;
         var r = Owner.Get<Rect>()!.Screen;
         var icon = gfx.Tex(image);
-        gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2,
-            r.Y + (r.Height - icon.Height) / 2), Color.White);
+        int w = icon.Width, h = icon.Height;
+        if (_maxSize > 0 && (w > _maxSize || h > _maxSize))
+        {
+            float scale = MathF.Min((float)_maxSize / w, (float)_maxSize / h);
+            w = Math.Max(1, (int)(w * scale));
+            h = Math.Max(1, (int)(h * scale));
+        }
+        gfx.Sb.Draw(icon, new Rectangle(r.X + (r.Width - w) / 2, r.Y + (r.Height - h) / 2, w, h), Color.White);
     }
 }
 

@@ -14,6 +14,7 @@ internal enum Feature
     Keys,       // Key Bindings
     Settings,   // Settings
     Guide,      // Guides (the contents guide window)
+    CashShop,   // Cash Shop
     Quit,       // Exit Game
 }
 
@@ -35,6 +36,7 @@ public partial class MushTownGame
             case Feature.Keys: OpenKeyWindow(); break;
             case Feature.Settings: OpenSettings(); break;
             case Feature.Guide: ShowWindow(HotkeyAction.GuideCard); break;
+            case Feature.CashShop: ShowWindow(HotkeyAction.CashShop); break;
             case Feature.Quit: ExitGame(); break;
         }
     }

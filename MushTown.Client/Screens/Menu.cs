@@ -164,7 +164,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" => Screen.Game,
+                "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -197,6 +197,14 @@ public partial class MushTownGame
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
             if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);
+            if (shotScreen is "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty")
+            {
+                if (shotScreen == "cashshopfashion") _cashShopWindow.PoseFashion();
+                if (shotScreen == "cashshopfashionoutfits") _cashShopWindow.PoseFashionOutfits();
+                if (shotScreen is "cashshopreset" or "cashshopempty")
+                    _cashShopWindow.PoseSearch(shotScreen == "cashshopreset" ? "reset" : "zzz");
+                ShowWindow(HotkeyAction.CashShop);
+            }
             if (shotScreen is "party" or "partysearch" or "partyask")
             {
                 // the demo party: the shot shows the member rows and the HP panel
@@ -371,6 +379,13 @@ public partial class MushTownGame
             if (item.Name == "") // pre-name jsons would print blank labels
                 throw new InvalidDataException($"item {id} has no name");
         }
+    }
+
+    private void LoadCashShop()
+    {
+        _cashShop = LoadJson<CashShopCatalog>(Path.Combine(_assetsDir, "cashshop", "catalog.json"));
+        if (!_cashShop.Validate(_items, out string error))
+            throw new InvalidDataException(error);
     }
 
     // Drop tables name real items: the server rolls these ids straight into

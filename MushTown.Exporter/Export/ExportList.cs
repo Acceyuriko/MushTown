@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MushTown.Shared;
 
 namespace MushTown.Exporter;
 
@@ -13,5 +14,14 @@ public static class ExportList
             throw new FileNotFoundException($"missing export list: {path}", path);
         return JsonSerializer.Deserialize<int[]>(File.ReadAllText(path))
             ?? throw new InvalidDataException($"export list {path} holds no int array");
+    }
+
+    public static CashShopCatalog LoadCashShop()
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "Export", "lists", "cashshop.json");
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"missing export list: {path}", path);
+        return JsonSerializer.Deserialize<CashShopCatalog>(File.ReadAllText(path))
+            ?? throw new InvalidDataException($"export list {path} holds no cash shop catalog");
     }
 }

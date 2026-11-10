@@ -171,6 +171,7 @@ public partial class MushTownGame : Game
         _guideWindow = new GuideWindow(this);
         _guideCardWindow = new GuideCardWindow(this);
         new EquipWindow(this);
+        _cashShopWindow = new CashShopWindow(this);
         _menuWindow = new MenuWindow(this);
         _partyAskWindow = new PartyAskWindow(this); // the invite popup raises itself when it opens
         // One raise row for everything that can come to the front: pinned
@@ -257,6 +258,7 @@ public partial class MushTownGame : Game
         LoadQuestData(); // NPC/quest json before maps (views validate placements)
         LoadManifest(); // the ship list loads before any scan proves against it
         LoadItemDefs(); // scanned roster before the doll art loop (and before customs validate rewards)
+        LoadCashShop(); // the cash shop catalog proves its ids/prices before any window opens
         ValidateCustomQuests();
         ValidateDropTables(); // after item defs (drop ids prove against them)
         LoadShops(); // keeper stocks prove against the same defs
@@ -458,7 +460,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -520,6 +522,7 @@ public partial class MushTownGame : Game
             if (_showQuest && _questConfirm != QuestConfirmKind.None) { CloseQuestConfirm(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the quest question first
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
             if (_showShop && _shopNotice != "") { _shopNotice = ""; _shopQtyField.Unfocus(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the notice closes before its shop
+            if (_cashShopWindow.SearchFocused) { _cashShopWindow.UnfocusSearch(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // search first: the next Esc closes the shop
             if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the top of the raise row
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
@@ -531,8 +534,10 @@ public partial class MushTownGame : Game
         _chatWindow.UpdateFrame(); // the wheel and a fold a click asked for last frame: that click already reached the open window
         if (_worldMapWindow.SearchFocused && click && !_worldMapWindow.SearchPanelAt(new Point(mx, my)))
             _worldMapWindow.UnfocusSearch(); // the field must not keep the keyboard while the player clicks elsewhere
+        if (_cashShopWindow.SearchFocused && click && !_cashShopWindow.SearchPanelAt(new Point(mx, my)))
+            _cashShopWindow.UnfocusSearch();
         bool shopPopupOpen = _shopQtyId != 0;
-        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || shopPopupOpen; // typing must not fire the actions the same keys bind
+        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || _cashShopWindow.SearchFocused || shopPopupOpen; // typing must not fire the actions the same keys bind
         _input.Poll(kb, new Point(mx, my), click, held, ms.ScrollWheelValue);
         if (shopPopupOpen)
         {
@@ -552,6 +557,11 @@ public partial class MushTownGame : Game
         if (_worldMapWindow.SearchFocused)
         {
             _worldMapWindow.UpdateKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
+            kb = new KeyboardState();
+        }
+        if (_cashShopWindow.SearchFocused)
+        {
+            _cashShopWindow.UpdateKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
             kb = new KeyboardState();
         }
         // Talk opened by Space needs presence: walking out of reach closes it.
@@ -594,6 +604,12 @@ public partial class MushTownGame : Game
         _timeMs = gameTime.TotalGameTime.TotalMilliseconds;
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         float dtMs = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
+        if (_cashShopWindow.Show)
+        {
+            _uiScene.Update(dt);
+            base.Update(gameTime);
+            return;
+        }
         _fighter.Tick(dtMs);
         foreach (int id in _fighter.ExpiredBuffs) EndBuff(id); // same spot, same order (ticks run first now, ends after)
         if (_fighter.RegenDue) PayoutRegen();
@@ -1057,6 +1073,7 @@ public partial class MushTownGame : Game
     internal CharaSlot? Hero => _save?.Slots[_slot];
     internal int Meso => _save?.Slots[_slot]?.Mesos ?? 0;
     internal IReadOnlyDictionary<int, ItemData> Items => _items;
+    internal CashShopCatalog CashShop => _cashShop;
 
     private static string FindAssetsDir()
     {

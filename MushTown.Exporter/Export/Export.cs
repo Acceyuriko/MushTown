@@ -27,6 +27,12 @@ public static partial class Export
             var str = WzRoot.LoadCategory(ExporterPaths.DataDir, "String");
             return ExportMapUi(ui, map, str, outDir) && ExportWorldMap(ui, map, str, outDir);
         }
+        if (name == "cashshop")
+        {
+            var item = WzRoot.LoadCategory(ExporterPaths.DataDir, "Item");
+            var str = WzRoot.LoadCategory(ExporterPaths.DataDir, "String");
+            return ExportCashShopUi(ui, item, str, outDir);
+        }
         return name switch
         {
             "inventory" => ExportInventoryUi(ui, outDir),
@@ -168,6 +174,11 @@ public static partial class Export
             return;
         }
         var ui = WzRoot.LoadCategory(dataDir, "UI");
+        if (!ExportCashShopUi(ui, item, str, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         foreach ((string node, string file) in UiFiles)
         {
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))

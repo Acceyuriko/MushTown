@@ -27,6 +27,7 @@ public enum HotkeyAction
     Guide,       // U: the big guide (the small guide's green plus also opens it)
     GuideCard,   // no key: the MENU window opens the small guide
     Equip,       // E: the equipment window
+    CashShop,    // no key: the MENU window opens the cash shop
     Attack,      // Ctrl: the basic swing
     Jump,        // Alt: the jump
     Talk,        // Space: talk to the nearest NPC
@@ -47,7 +48,6 @@ public enum HotkeyAction
     ToGuild,
     QuestHelper,
     MapleNews,
-    CashShop,
     ToAlliance,
     Legion,
     Medals,

@@ -25,6 +25,7 @@ public partial class MushTownGame
         "party_head_graduation.png", "party_head_bar.png", "party_head_gauge.png",
     };
     private readonly Dictionary<int, ItemData> _items = new();
+    private CashShopCatalog _cashShop = new();
     private ManifestData _manifest = null!;
 
     // Scanned tab rosters (LoadItemDefs): consumables slot USE, equips slot
@@ -84,7 +85,7 @@ public partial class MushTownGame
         HotkeyAction.Inventory, HotkeyAction.Stat, HotkeyAction.Equip, HotkeyAction.Skill,
         HotkeyAction.Quest, HotkeyAction.Settings, HotkeyAction.WorldMap,
         HotkeyAction.Party, HotkeyAction.KeyConfig, HotkeyAction.Guide, HotkeyAction.Menu,
-        HotkeyAction.Chat, HotkeyAction.Minimap,
+        HotkeyAction.CashShop, HotkeyAction.Chat, HotkeyAction.Minimap,
     };
 
     private void HandleHotkey(HotkeyAction action, KeyboardState kb)
