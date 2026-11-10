@@ -46,15 +46,15 @@ public partial class MushTownGame
     }
 
     // The track for the screen: the login theme over the menus, the map's
-    // own track in the game.
+    // own track in the game, the cash shop theme in the shop scene.
     private void PlayScreenBgm()
     {
         bool inGame = _screen == Screen.Game;
-        string key = inGame ? SoundKey.FromBgm(_map.Info.Bgm) : SoundKey.Login;
+        string key = _cashShopScene ? SoundKey.CashShop : inGame ? SoundKey.FromBgm(_map.Info.Bgm) : SoundKey.Login;
         if (key == "")
             throw new InvalidDataException($"map {_mapId} has a bad bgm '{_map.Info.Bgm}'");
         if (!_bgm.Play(key)) return;
-        GameLog($"bgm: {(inGame ? _map.Info.Bgm : "Sound/BgmUI.img/Title")}");
+        GameLog($"bgm: {(_cashShopScene ? "Sound/BgmUI.img/CashShop" : inGame ? _map.Info.Bgm : "Sound/BgmUI.img/Title")}");
     }
 
     private void PlaySfx(string key)

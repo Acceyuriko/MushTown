@@ -133,12 +133,15 @@ public sealed class Scene
         return HoverButton?.LegacyId ?? "";
     }
 
-    public void Draw(UiGfx gfx)
+    // minZ skips the HUD roots in the cash shop scene; the raised windows
+    // (the shop itself) and the tips still draw.
+    public void Draw(UiGfx gfx, int minZ = int.MinValue)
     {
         Layout(); // the draw reads Screen too
         gfx.Hovered = Hovered;
         gfx.HoverButton = HoverButton;
-        foreach (var r in _roots) TreeDraw.DrawObject(r, gfx);
+        foreach (var r in _roots)
+            if (r.Z >= minZ) TreeDraw.DrawObject(r, gfx);
     }
 
     private static GameObject? Hit(IReadOnlyList<GameObject> objs, int gx, int gy)

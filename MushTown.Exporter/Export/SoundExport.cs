@@ -39,6 +39,9 @@ public static class SoundExport
     // The theme over the login flow: Sound\BgmUI.img\Title.
     private const string LoginPath = @"BgmUI.img\Title";
 
+    // The cash shop scene: Sound\BgmUI.img\CashShop.
+    private const string CashShopPath = @"BgmUI.img\CashShop";
+
     public static bool Run(WzRoot root, IEnumerable<string> bgms, string outDir)
     {
         Directory.CreateDirectory(Path.Combine(outDir, "sound"));
@@ -53,9 +56,9 @@ public static class SoundExport
                 Console.WriteLine($"map bgm '{bgm}' is malformed");
                 return false;
             }
-            if (key == SoundKey.Login)
+            if (key is SoundKey.Login or SoundKey.CashShop)
             {
-                Console.WriteLine($"map bgm '{bgm}' wants the file '{key}.wav', the login theme has it");
+                Console.WriteLine($"map bgm '{bgm}' wants the file '{key}.wav', the UI theme has it");
                 return false;
             }
             var parts = bgm.Split('/');
@@ -75,6 +78,8 @@ public static class SoundExport
             if (!Save(root, path, Path.Combine(outDir, "sound", key + ".wav"), false)) return false;
         // The menus before the game start play the login theme.
         if (!Save(root, LoginPath, Path.Combine(outDir, "sound", SoundKey.Login + ".wav"), false)) return false;
+        // The cash shop scene has its own theme.
+        if (!Save(root, CashShopPath, Path.Combine(outDir, "sound", SoundKey.CashShop + ".wav"), false)) return false;
         return true;
     }
 

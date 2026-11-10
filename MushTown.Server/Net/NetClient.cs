@@ -104,6 +104,13 @@ public sealed class NetClient : IDisposable
         }));
     }
 
+    // We stepped into the cash shop: leave the map until the next State.
+    public void SendCashShop()
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.CashShop, w => { }));
+    }
+
     // One basic-attack swing: the body is empty, the server judges from our last State.
     public void SendAttack()
     {

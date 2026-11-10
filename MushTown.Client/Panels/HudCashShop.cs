@@ -19,7 +19,7 @@ public sealed class CashShopWindow : UiWindow
 
     private static readonly string[] ArtFiles =
     {
-        "cashshop_list_bg.png", "cashshop_bg_list.png", "cashshop_no_result.png",
+        "cashshop_scene_bg.png", "cashshop_list_bg.png", "cashshop_bg_list.png", "cashshop_no_result.png",
         "cashshop_item_bg.png", "cashshop_item_bg_main.png",
         "cashshop_preview_back.png", "cashshop_preview_bottom.png", "cashshop_preview_frame.png",
         "cashshop_bg_search.png", "cashshop_bg_cash.png", "cashshop_bg_maplepoint.png", "cashshop_bg_mileage.png",
@@ -43,7 +43,7 @@ public sealed class CashShopWindow : UiWindow
     public CashShopWindow(MushTownGame game) : base(HotkeyAction.CashShop)
     {
         _game = game;
-        Host.Modal = true; // the shop stops the world while it is open
+        Host.Modal = true; // the shop owns the input and the player leaves the map; the world keeps ticking
         Host.Enabled = false;
     }
 
@@ -83,6 +83,8 @@ public sealed class CashShopWindow : UiWindow
         Dirty = true;
     }
 
+    public override void OnShown() => _game.EnterCashShop();
+
     public override void OnClosed()
     {
         _page = CashShopPage.Utility;
@@ -92,6 +94,7 @@ public sealed class CashShopWindow : UiWindow
         _searchField?.Unfocus();
         _searchField = null;
         Dirty = true;
+        _game.LeaveCashShop();
     }
 
     public void Close()
@@ -155,6 +158,7 @@ public sealed class CashShopWindow : UiWindow
 
     private void BuildPreview(GameObject root)
     {
+        AddPicture(root, "cashshop_scene_bg.png", "sceneBgX", "sceneBgY", "sceneBgW", "sceneBgH");
         AddPicture(root, "cashshop_preview_back.png", "previewBackX", "previewBackY", "previewBackW", "previewBackH");
         AddPicture(root, "cashshop_preview_bottom.png", "previewBottomX", "previewBottomY", "previewBottomW", "previewBottomH");
         AddPicture(root, "cashshop_preview_frame.png", "previewFrameX", "previewFrameY", "previewFrameW", "previewFrameH");

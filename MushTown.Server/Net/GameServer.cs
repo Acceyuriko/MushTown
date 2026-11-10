@@ -27,6 +27,7 @@ public sealed partial class GameServer : IDisposable
     private readonly MobWorld _mobs;
     private readonly object _mobLock = new(); // guards _pos/_builds/_names/_questLogs and the MobWorld (read loops run per client)
     private readonly Dictionary<int, (int map, float x, float y, bool facing)> _pos = new();
+    private readonly HashSet<int> _away = new(); // in the cash shop: out of _pos, no attacks/pickups/party invites
     private readonly Dictionary<int, Build> _builds = new(); // combat stats per client (missing = beginner default)
     private readonly Dictionary<int, (string name, int plate)> _names = new(); // name tags per client (missing = CLI session)
     private readonly Dictionary<int, QuestData> _questDefs = new(); // quest defs (shared ref: one log per client over these)
@@ -193,6 +194,7 @@ public sealed partial class GameServer : IDisposable
         lock (_mobLock)
         {
             _pos.Remove(id);
+            _away.Remove(id);
             _builds.Remove(id);
             _names.Remove(id);
             _questLogs.Remove(id);
@@ -211,9 +213,23 @@ public sealed partial class GameServer : IDisposable
         _log($"client {id} left");
     }
 
-    // Clients send State, Attack, Build, SkillCast, Pickup, Name, Chat, the
-    // quest trio (Sync/Accept/Complete) and the party messages; anything else
-    // means a foreign client.
+    // The player stepped into the cash shop: leave the map (the world keeps
+    // ticking) and tell the others. Its next State is a first entry, so the
+    // server pushes the live mobs/drops and everyone sees it again.
+    private void OnCashShop(int id)
+    {
+        bool had;
+        lock (_mobLock)
+        {
+            _away.Add(id);
+            had = _pos.Remove(id);
+        }
+        if (had) Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
+    }
+
+    // Clients send State, Attack, Build, SkillCast, Pickup, Name, Chat, CashShop,
+    // the quest trio (Sync/Accept/Complete) and the party messages; anything
+    // else means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
@@ -250,6 +266,11 @@ public sealed partial class GameServer : IDisposable
         if (payload[0] == Net.PartyHp && payload.Length == 2)
         {
             OnPartyHp(id, payload[1]);
+            return;
+        }
+        if (payload[0] == Net.CashShop && payload.Length == 1)
+        {
+            OnCashShop(id);
             return;
         }
         if (payload[0] == Net.Name)
@@ -303,6 +324,7 @@ public sealed partial class GameServer : IDisposable
         bool first, switched;
         lock (_mobLock)
         {
+            _away.Remove(id); // a State after the shop returns to the saved map
             first = !_pos.TryGetValue(id, out var old);
             switched = !first && old.map != map;
             _pos[id] = (map, x, y, facing);

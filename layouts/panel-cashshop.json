@@ -5,6 +5,11 @@
   "w": 1366,
   "h": 768,
 
+  "sceneBgX": 0,
+  "sceneBgY": 0,
+  "sceneBgW": 1366,
+  "sceneBgH": 768,
+
   "bgSearchX": 0,
   "bgSearchY": 3,
   "bgSearchW": 183,

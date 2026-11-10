@@ -6,6 +6,13 @@ namespace MushTown.Tests;
 public sealed class SoundKeyTests
 {
     [TestMethod]
+    public void CashShop_HasItsOwnUiKey()
+    {
+        Assert.AreEqual("bgm_cashshop", SoundKey.CashShop);
+        Assert.AreNotEqual(SoundKey.Login, SoundKey.CashShop);
+    }
+
+    [TestMethod]
     public void FromBgm_RealTrack_LowerStripped()
     {
         Assert.AreEqual("bgm58_thebeginnigoftheadventure",

@@ -42,6 +42,7 @@ public static class Net
     public const byte QuestAbandon = 33; // client -> server: int quest (forfeit intent; server confirms with QuestGone)
     public const byte QuestGone = 34; // server -> client: int quest (the forfeit landed on the server's copy)
     public const byte PartyHp = 35; // client -> server: byte HP percent (0..100)
+    public const byte CashShop = 36; // client -> server: no body (the player stepped out of the map; the next State returns)
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;

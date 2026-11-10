@@ -606,8 +606,7 @@ public partial class MushTownGame : Game
         float dtMs = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
         if (_cashShopWindow.Show)
         {
-            _uiScene.Update(dt);
-            base.Update(gameTime);
+            UpdateCashShop(dt, (int)dtMs, gameTime);
             return;
         }
         _fighter.Tick(dtMs);
@@ -756,37 +755,7 @@ public partial class MushTownGame : Game
                     RemovePeer(e.Id); // peer on another map: not shown here
                 else if (e.Frame < _charas[(0, Net.ActionName(e.Action))].Frames.Count)
                     ApplyRemote(e); // bad frame: not ours, drop it
-            while (_net.TryTakeName(out var n))
-            {
-                _names[n.Id] = n;
-                if (_remotes.TryGetValue(n.Id, out var p)) // a live peer shows it now (later peers pull it at spawn)
-                {
-                    var plate = p.Owner.Get<PlateArt>()!; // spawn always hangs one
-                    plate.HasName = true;
-                    plate.Name = n.Name;
-                    plate.Plate = n.Plate;
-                }
-            }
-            while (_net.TryTakeChat(out var chat)) _chatWindow.AddLine(chat.Name, chat.Text);
-            // the party: the member list, the invite list and the invite that
-            // waits for an answer (the party chat lines are chat lines)
-            while (_net.TryTakeParty(out var party)) SetPartyMembers(party.Members);
-            while (_net.TryTakePartyPlayers(out var players)) SetPartyPlayers(players.Players);
-            while (_net.TryTakePartyAsk(out var ask)) SetPartyAsk(ask);
-            // the party share of a kill: the same exp path as our own kill
-            while (_net.TryTakeExp(out int exp))
-            {
-                LogEvent($"party share +{exp} exp"); // the log line, like the other game events
-                GainExp(exp);
-            }
-            // Quest events drain before mob hits: a level-up inside ApplyHit
-            // re-syncs, and the sync must carry the counters this frame's
-            // kills pushed (not wipe them on the server's copy).
-            while (_net.TryTakeQuest(out var q))
-            {
-                if (q.Kill) ApplyQuestKill(q);
-                else ApplyQuestOk(q);
-            }
+            DrainSocialNet();
             while (_net.TryTakeMob(out var m))
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
@@ -827,17 +796,7 @@ public partial class MushTownGame : Game
         // Local AI (dropped links tick it live; shots pose it frozen and
         // never reach Update): the world steps every frame and we apply its
         // events like net ones.
-        if (_localWorld != null)
-        {
-            var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _mover.X, _mover.Y) };
-            var ev = _localWorld.Tick((int)dtMs, players);
-            foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
-            foreach (var h in ev.Hurts)
-                if (ApplyHurt(h.Damage))
-                    break; // died: the rest were judged at the corpse
-            ApplySpawns(ev.Spawns);
-            foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);
-        }
+        TickLocalWorld((int)dtMs, withPlayer: true);
         SyncHeroPlate();
 
         base.Update(gameTime);
@@ -909,7 +868,10 @@ public partial class MushTownGame : Game
         if (_loadBeat > 0)
             GraphicsDevice.Clear(Color.Black);
         else if (_screen == Screen.Game)
-            DrawScene();
+        {
+            if (_cashShopWindow.Show) GraphicsDevice.Clear(Color.Black); // the shop is its own scene
+            else DrawScene();
+        }
         else
             DrawMenu();
         if (_screen == Screen.Game)

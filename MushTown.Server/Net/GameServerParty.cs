@@ -57,11 +57,12 @@ public sealed partial class GameServer
     }
 
     // Two players are on the same map when their last state says so (a
-    // player that never sent one is on map 0).
+    // player that never sent one is on map 0); the cash shop is not a map.
     private bool SameMap(int a, int b)
     {
         lock (_mobLock)
         {
+            if (_away.Contains(a) || _away.Contains(b)) return false;
             int ma = _pos.TryGetValue(a, out var pa) ? pa.map : 0;
             int mb = _pos.TryGetValue(b, out var pb) ? pb.map : 0;
             return ma == mb;

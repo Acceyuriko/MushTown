@@ -173,6 +173,101 @@ public sealed class NetTests
         Assert.AreEqual(b.PlayerId, goneAtC2.Id);
     }
 
+    // The cash shop removes the player from the map (Leave to everyone); the
+    // State after it re-enters at the saved spot and peers see it again.
+    [TestMethod]
+    public void Loopback_CashShop_LeavesAndReturns()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(1);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 57);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 57);
+        b.Connect("127.0.0.1", Net.Port + 57);
+
+        a.SendState(1, 10, 20, Net.ActStand, 0, false);
+        Assert.AreEqual(a.PlayerId, WaitTake(b).Id);
+
+        a.SendCashShop();
+        a.SendCashShop();
+        var goneAtA = WaitTake(a);
+        Assert.IsTrue(goneAtA.Gone);
+        Assert.AreEqual(a.PlayerId, goneAtA.Id);
+        var goneAtB = WaitTake(b);
+        Assert.IsTrue(goneAtB.Gone);
+        Assert.AreEqual(a.PlayerId, goneAtB.Id);
+        AssertNo(() => b.TryTake(out _)); // the second CashShop frame sends no second Leave
+
+        a.SendState(1, 11, 21, Net.ActStand, 0, false);
+        var backAtB = WaitTake(b);
+        Assert.IsFalse(backAtB.Gone);
+        Assert.AreEqual(a.PlayerId, backAtB.Id);
+        Assert.AreEqual(1, backAtB.Map);
+        Assert.AreEqual(11f, backAtB.X);
+        Assert.AreEqual(21f, backAtB.Y);
+    }
+
+    // Returning from the cash shop is a first entry at the server: the saved
+    // map's live mob snapshot is pushed again.
+    [TestMethod]
+    public void Loopback_CashShop_ReentryPushesMobs()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(9, """[{"MobId":100000,"X":0,"Cy":100}]""");
+        assets.AddMob(100000, 40);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 58);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 58);
+
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        var first = WaitTakeMob(a);
+        Assert.IsTrue(first.Spawn);
+
+        a.SendCashShop();
+        Assert.IsTrue(WaitTake(a).Gone);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        var back = WaitTakeMob(a);
+        Assert.IsTrue(back.Spawn);
+        Assert.AreEqual(first.Uid, back.Uid);
+        Assert.AreEqual(first.HpLeft, back.HpLeft);
+    }
+
+    // A player in the cash shop is not in the server's map: a swing has no body
+    // to judge from, so no hit reaches the other client.
+    [TestMethod]
+    public void Loopback_CashShop_BlocksAttack()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(9, """[{"MobId":100000,"X":0,"Cy":100}]""");
+        assets.AddMob(100000, 1000);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 59);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 59);
+        b.Connect("127.0.0.1", Net.Port + 59);
+
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        Assert.AreEqual(a.PlayerId, WaitTake(b).Id);
+        Assert.IsTrue(WaitTakeMob(a).Spawn);
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        Assert.AreEqual(b.PlayerId, WaitTake(a).Id);
+        Assert.IsTrue(WaitTakeMob(b).Spawn);
+
+        a.SendAttack();
+        Assert.IsFalse(WaitTakeMob(a).Spawn);
+        Assert.IsFalse(WaitTakeMob(b).Spawn);
+
+        a.SendCashShop();
+        Assert.IsTrue(WaitTake(a).Gone);
+        Assert.IsTrue(WaitTake(b).Gone);
+        a.SendAttack();
+        AssertNo(() => b.TryTakeMob(out _));
+    }
+
     // Names relay to peers with the sender id attached; a newcomer gets
     // the existing names on connect; a re-send overwrites (ring change).
     [TestMethod]
@@ -213,6 +308,23 @@ public sealed class NetTests
         }
         Assert.Fail("timed out waiting for a net event");
         throw new InvalidOperationException("unreachable");
+    }
+
+    private static MobEvent WaitTakeMob(NetClient client)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            if (client.TryTakeMob(out var e)) return e;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for a mob event");
+        throw new InvalidOperationException("unreachable");
+    }
+
+    private static void AssertNo(Func<bool> came)
+    {
+        Thread.Sleep(300);
+        Assert.IsFalse(came(), "an event arrived that should not have");
     }
 
     private static NameEvent WaitTakeName(NetClient client)

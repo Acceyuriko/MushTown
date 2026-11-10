@@ -114,7 +114,7 @@ public partial class MushTownGame
     {
         UpdateHudHover(gx, gy); // every frame (clicks return early below)
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
-        bool modal = _uiScene.ModalOpen; // a confirmation box owns the keys until it is answered
+        bool modal = _uiScene.ModalOpen || _cashShopWindow.Show; // a confirmation box or the shop owns the keys
         // The key window does not block anything: the character keeps moving
         // and fighting on the saved preset, the item keys keep drinking, and
         // every panel key stays alive, so a skill can be dropped onto a key.
@@ -584,7 +584,9 @@ public partial class MushTownGame
         _gfx.Pressed = pressed;
         _gfx.Time = (float)_timeMs;
         _gfx.Mouse = new Point(gx, gy); // the held piece and the tips ride this
-        _uiScene.Draw(_gfx); // one tree, one Z order: balloon, HUD, panels, windows, dialog, hand, tips
+        // one tree, one Z order: balloon, HUD, panels, windows, dialog, hand, tips.
+        // The shop scene hides the HUD roots below the raise row.
+        _uiScene.Draw(_gfx, _cashShopWindow.Show ? RaiseZ : int.MinValue);
     }
 
     // The art on the cursor: the piece in the inventory hand, or the action or

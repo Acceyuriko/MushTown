@@ -588,6 +588,39 @@ public sealed class PartyTests
         WaitTakeAsk(b);
     }
 
+    // The cash shop is not a map: an away player cannot invite a same-map
+    // player. After returning, the same invite goes through.
+    [TestMethod]
+    public void Loopback_CashShop_IsNotASameMap()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(10000);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 60);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 60);
+        b.Connect("127.0.0.1", Net.Port + 60);
+        a.SendState(10000, 0, 0, Net.ActStand, 0, true);
+        b.SendState(10000, 0, 0, Net.ActStand, 0, true);
+        WaitPeerState(b, a.PlayerId, 10000);
+        WaitPeerState(a, b.PlayerId, 10000);
+
+        a.SendPartyMake();
+        WaitTakeParty(a);
+
+        a.SendCashShop();
+        WaitTakeGone(a, a.PlayerId);
+        WaitTakeGone(b, a.PlayerId);
+        a.SendPartyInvite(b.PlayerId);
+        AssertNo(() => b.TryTakePartyAsk(out _));
+
+        a.SendState(10000, 0, 0, Net.ActStand, 0, true);
+        WaitPeerState(b, a.PlayerId, 10000);
+        a.SendPartyInvite(b.PlayerId);
+        Assert.AreEqual(a.PlayerId, WaitTakeAsk(b).Id);
+    }
+
     // The member list carries the level of every member.
     [TestMethod]
     public void Loopback_TheMemberListHasTheLevel()
@@ -1039,6 +1072,17 @@ public sealed class PartyTests
             Thread.Sleep(10);
         }
         Assert.Fail("timed out waiting for the peer state");
+    }
+
+    private static void WaitTakeGone(NetClient client, int id)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            while (client.TryTake(out var e))
+                if (e.Gone && e.Id == id) return;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for Leave");
     }
 
     private static PartyEvent WaitTakeParty(NetClient client)

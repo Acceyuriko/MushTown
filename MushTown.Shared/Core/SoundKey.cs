@@ -16,6 +16,10 @@ public static class SoundKey
     // The exporter writes Sound/BgmUI.img/Title under this key.
     public const string Login = "bgm_login";
 
+    // The cash shop scene theme. The exporter writes Sound/BgmUI.img/CashShop
+    // under this key.
+    public const string CashShop = "bgm_cashshop";
+
     // Map BGM: the WZ info/bgm looks like "Bgm58/The Beginnig of The
     // Adventure". "" means malformed (the exporter rejects it).
     public static string FromBgm(string bgm)

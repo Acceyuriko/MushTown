@@ -18,6 +18,7 @@ public static partial class Export
 
         var files = new List<(string Node, string File)>
         {
+            ("UICashShop.img/mainView/layer:bg", "cashshop_scene_bg.png"),
             ("UICashShop.img/base/layer:bgSearch", "cashshop_bg_search.png"),
             ("UICashShop.img/base/layer:bgCash", "cashshop_bg_cash.png"),
             ("UICashShop.img/base/layer:bgMaplePoint", "cashshop_bg_maplepoint.png"),
