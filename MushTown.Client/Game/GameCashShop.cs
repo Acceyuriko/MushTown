@@ -71,6 +71,7 @@ public partial class MushTownGame
         }
         TickLocalWorld(dtMs, withPlayer: false);
         _uiScene.Update(dt);
+        _cashShopWindow.UpdatePreview(dtMs);
         base.Update(gameTime);
     }
 

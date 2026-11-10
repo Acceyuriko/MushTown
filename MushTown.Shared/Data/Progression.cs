@@ -143,7 +143,7 @@ public static class Progression
         return true;
     }
 
-    private static bool SameBodyArea(string? a, string? b) =>
+    public static bool SameBodyArea(string? a, string? b) =>
         a == b
         || (b == "MaPn" && a is "Ma" or "Pn")
         || (a == "MaPn" && b is "Ma" or "Pn");
