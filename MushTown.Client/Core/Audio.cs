@@ -63,6 +63,10 @@ public partial class MushTownGame
         _sfx[key].Play(_sfxVol / 100f, 0f, 0f);
     }
 
+    // The cash shop preview jumps with its own mover: it uses the same sound
+    // as the world player without opening PlaySfx to the panels.
+    internal void PlayJumpSfx() => PlaySfx("jump");
+
     // The mop whooshes like a polearm; bare beginner hands swing a sword.
     private string SwingKey() =>
         _save?.Slots[_slot]?.Equips?.Contains(ItemData.Mop) == true ? "swing_pole" : "swing_sword";

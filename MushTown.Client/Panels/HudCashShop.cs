@@ -59,6 +59,9 @@ public sealed class CashShopWindow : UiWindow
     private float _lastClickMs;
     private float _attackLeftMs;
     private float _attackStartMs;
+    private int _previewFrame;
+    private float _previewFrameMs;
+    private string _previewFrameAction = "";
     private KeyboardState _previewWas;
     private bool _cartFull;
 
@@ -81,6 +84,15 @@ public sealed class CashShopWindow : UiWindow
     public void PoseFashion()
     {
         _page = CashShopPage.Fashion;
+        _tab = 0;
+        _selectedId = 0;
+        Dirty = true;
+    }
+
+    // The shot pose: Beauty opens on Hair.
+    public void PoseBeauty()
+    {
+        _page = CashShopPage.BeautyHair;
         _tab = 0;
         _selectedId = 0;
         Dirty = true;
@@ -425,6 +437,7 @@ public sealed class CashShopWindow : UiWindow
                 _preview.Input.Locked = false;
                 _preview.Action = "stand1";
             }
+            AdvancePreviewFrame(dtMs, false);
             _previewWas = kb;
             return;
         }
@@ -456,8 +469,26 @@ public sealed class CashShopWindow : UiWindow
             Jump = PlayerMover.JumpV0,
         };
         _preview.Update(dtMs / 1000f);
+        AdvancePreviewFrame(dtMs, _preview.ClimbMoving);
+        if (_preview.JumpSfx) _game.PlayJumpSfx();
         _previewWas = kb;
         _previewFeetRect!.Offset = new Point((int)_preview.X, (int)_preview.Y);
+    }
+
+    private void AdvancePreviewFrame(float dtMs, bool climbMoving)
+    {
+        string action = _preview.Action;
+        if (action != _previewFrameAction)
+        {
+            _previewFrameAction = action;
+            _previewFrame = 0;
+            _previewFrameMs = 0;
+        }
+        // Same rule as the world player: a still climber holds the current
+        // frame; only Up/Down slide advances the ladder animation.
+        if (_preview.Climb == null || climbMoving)
+            (_previewFrame, _previewFrameMs) = SceneMath.AdvanceFrame(_previewFrame, _previewFrameMs, dtMs,
+                _game.Delays(action, _previewChara?.Skin ?? 0));
     }
 
     private int PreviewFrame(string action, int skin)
@@ -473,7 +504,7 @@ public sealed class CashShopWindow : UiWindow
             }
             return Math.Max(0, delays.Count - 1);
         }
-        return _game.IdleFrame(action, skin);
+        return _previewFrame;
     }
 
     private void BuildItems(GameObject root)

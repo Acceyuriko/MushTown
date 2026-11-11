@@ -154,10 +154,12 @@ public static partial class Export
                 bool isTarget = img == gearBeginner;
                 string path = isTarget ? gear! : img;
                 var equipFrame = FindImgFrame(looseRoot, path, action, frameIdx);
+                bool fallback = false;
                 if (equipFrame == null)
                 {
                     // equips without this art (weapon/glove climb frames) reuse
                     // their stand pose; body/head/hair stay strict above
+                    fallback = true;
                     var (standFrame, pose) = FindStandFrame(looseRoot, path, frameIdx);
                     equipFrame = standFrame;
                     if (equipFrame == null)
@@ -168,8 +170,16 @@ public static partial class Export
                     Console.WriteLine($"{tag} frame {frameIdx}: {path} falls back to {pose}");
                 }
                 var sink = gear == null || isTarget ? outFrame : trash!;
+                // A weapon has no ladder/rope frame: its stand art still hangs
+                // on stand1's hand. Center that art on the climber's navel so
+                // the weapon lies on the back; the world and preview both read
+                // this baked frame.
+                (int x, int y)? anchor = fallback && (action is "ladder" or "rope") && isTarget &&
+                                         path.StartsWith(@"Weapon\")
+                    ? bones.Find("navel")
+                    : null;
                 missing += AddFrameParts(baseRoot, sink, bones, ImgId(path), equipFrame, outDir, frameIdx, saved, zNames, face, action,
-                    isTarget ? gearDir : baseDir);
+                    isTarget ? gearDir : baseDir, anchor);
                 if (isTarget) break; // later beginners add no bones the target could use
             }
 
@@ -207,7 +217,8 @@ public static partial class Export
 
     // Adds the png parts of one frame node and returns how many images were missing.
     private static int AddFrameParts(WzRoot baseRoot, CharaFrame outFrame, BoneSet bones, string imgId,
-        Wz_Node frame, string outDir, int frameIdx, HashSet<string> saved, List<string> zNames, bool face, string action, string pngDir)
+        Wz_Node frame, string outDir, int frameIdx, HashSet<string> saved, List<string> zNames, bool face, string action, string pngDir,
+        (int x, int y)? anchor = null)
     {
         int missing = 0;
         foreach (Wz_Node raw in frame.Nodes)
@@ -268,12 +279,18 @@ public static partial class Export
             else z = zNames.Contains(zName) ? zNames.IndexOf(zName) : zNames.Count;
 
             int ox = origin?.X ?? 0, oy = origin?.Y ?? 0;
+            int partX = skin.x - ox, partY = skin.y - oy;
+            if (anchor != null)
+            {
+                partX = anchor.Value.x - png.Width / 2;
+                partY = anchor.Value.y - png.Height / 2;
+            }
             outFrame.Parts.Add(new CharaPart
             {
                 Image = img,
                 Img = imgId,
-                X = skin.x - ox,
-                Y = skin.y - oy,
+                X = partX,
+                Y = partY,
                 Z = z
             });
         }
@@ -297,6 +314,8 @@ public static partial class Export
             }
             return (x, y);
         }
+
+        public (int x, int y)? Find(string name) => _nodes.ContainsKey(name) ? Abs(name) : null;
 
         // Returns where the part's image anchor lands. Bones come from the part's
         // "map" node: the first entry is the bone the image hangs on, the rest are

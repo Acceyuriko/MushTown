@@ -68,7 +68,9 @@ public static partial class Export
 
         for (int group = 100; group <= 1000; group += 100)
         {
-            files.Add(($"UICashShop.img/menu/100/{group}/normal/0", $"cashshop_group_{group}.png"));
+            // Main is not a shop page: its normal image is the gray tab in menu/200.
+            string menu = group == 100 ? "200" : "100";
+            files.Add(($"UICashShop.img/menu/{menu}/{group}/normal/0", $"cashshop_group_{group}.png"));
             if (group is 500 or 600 or 700)
                 files.Add(($"UICashShop.img/menu/{group}/{group}/normal/0", $"cashshop_group_{group}_sel.png"));
         }
