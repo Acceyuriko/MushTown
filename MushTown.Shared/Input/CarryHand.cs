@@ -7,6 +7,7 @@ public enum HandAct
     Moved, // pick, drop, or return: click
     Wore, // the worn set changed: click + doll rebuild
     Drank, // drank the held potion: silent (legacy drinks made no sound)
+    Used, // cash-tab item: the client runs its Utility effect
 }
 
 // One item in the hand (MapleStory pick-up/drop, not press-drag).
@@ -81,6 +82,7 @@ public sealed class CarryHand
             "use" => DrinkHeld(chara, defs, hpPct),
             "equip" => WearHeld(chara, defs),
             "dec" => Progression.WearCash(chara, Id, defs) ? HandAct.Wore : HandAct.None,
+            "cash" => HandAct.Used,
             _ => HandAct.None,
         };
         if (act == HandAct.None) return act;

@@ -460,7 +460,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopcheckout" or "cashshopbuyall";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -522,7 +522,9 @@ public partial class MushTownGame : Game
             if (_showQuest && _questConfirm != QuestConfirmKind.None) { CloseQuestConfirm(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the quest question first
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
             if (_showShop && _shopNotice != "") { _shopNotice = ""; _shopQtyField.Unfocus(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the notice closes before its shop
-            if (_cashShopWindow.SearchFocused) { _cashShopWindow.UnfocusSearch(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // search first: the next Esc closes the shop
+            if (_cashShopWindow.EscLayer()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // CHECK OUT and its notice close before the shop
+            if (_cashShopWindow.SearchFocused) { _cashShopWindow.UnfocusSearch(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // search next: the next Esc closes the shop
+            if (_cashUseId != 0) { EscCashUse(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the CASH Utility popup closes before its inventory
             if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the top of the raise row
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
@@ -537,7 +539,7 @@ public partial class MushTownGame : Game
         if (_cashShopWindow.SearchFocused && click && !_cashShopWindow.SearchPanelAt(new Point(mx, my)))
             _cashShopWindow.UnfocusSearch();
         bool shopPopupOpen = _shopQtyId != 0;
-        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || _cashShopWindow.SearchFocused || shopPopupOpen; // typing must not fire the actions the same keys bind
+        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || _cashShopWindow.SearchFocused || shopPopupOpen || _cashUseId != 0; // typing must not fire the actions the same keys bind
         _input.Poll(kb, new Point(mx, my), click, held, ms.ScrollWheelValue);
         if (shopPopupOpen)
         {
@@ -564,6 +566,7 @@ public partial class MushTownGame : Game
             _cashShopWindow.UpdateKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
             kb = new KeyboardState();
         }
+        if (_cashShopWindow.Show) _cashShopWindow.UpdateWheel(ms.ScrollWheelValue);
         // Talk opened by Space needs presence: walking out of reach closes it.
         // A mouse-opened dialog has no distance rule and stays.
         if (_talkNpc != 0 && !_talkByMouse && !_npcArts.Any(a => a.Spawn.NpcId == _talkNpc && InTalkReach(a)))
@@ -581,7 +584,7 @@ public partial class MushTownGame : Game
         }
 
         if (RightEdge(ms) && (!_hand.Empty || Holding)) { _hand.Return(); ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
-        UpdateHud(kb, click, held, mx, my);
+        UpdateHud(kb, click, held, mx, my, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
         // The MENU window and a confirmation box are modal for the character:
         // while either is open the character ignores the keys. The key window
         // is not: editing keys still leaves the saved preset live, so the

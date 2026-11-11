@@ -18,6 +18,8 @@ public static partial class Export
 
         var files = new List<(string Node, string File)>
         {
+            ("Basic.img/VScr111/enabled/base", "wm_scroll_base.png"),
+            ("Basic.img/VScr111/enabled/thumb0", "wm_scroll_thumb.png"),
             ("UICashShop.img/mainView/layer:bg", "cashshop_scene_bg.png"),
             ("UICashShop.img/base/layer:bgSearch", "cashshop_bg_search.png"),
             ("UICashShop.img/base/layer:bgCash", "cashshop_bg_cash.png"),
@@ -28,6 +30,7 @@ public static partial class Export
             ("UICashShop.img/listView/layer:noResult", "cashshop_no_result.png"),
             ("UICashShop.img/itemBox/canvas:itemBoxBg", "cashshop_item_bg.png"),
             ("UICashShop.img/itemBox/canvas:itemBoxBgMain", "cashshop_item_bg_main.png"),
+            ("UICashShop.img/itemBox/BtBuy/normal/0", "cashshop_item_price.png"),
             ("UICashShop.img/avatarView/layer:preview_back0", "cashshop_preview_back.png"),
             ("UICashShop.img/avatarView/layer:preview_bottom", "cashshop_preview_bottom.png"),
             ("UICashShop.img/avatarView/layer:backGround_frame", "cashshop_preview_frame.png"),

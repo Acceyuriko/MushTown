@@ -32,6 +32,18 @@ public class TextFieldTests
     }
 
     [TestMethod]
+    public void Read_TypesUppercaseAndUnderscore()
+    {
+        var field = Focused();
+        field.Read(new KeyboardState(Keys.LeftShift, Keys.A), 16);
+        field.Read(new KeyboardState(), 16);
+        field.Read(new KeyboardState(Keys.OemMinus), 16);
+        field.Read(new KeyboardState(), 16);
+        field.Read(new KeyboardState(Keys.LeftShift, Keys.OemMinus), 16);
+        Assert.AreEqual("A-_", field.Text);
+    }
+
+    [TestMethod]
     public void Type_ReplaceOnTypeReplacesTheDefaultOnce()
     {
         var field = Focused();

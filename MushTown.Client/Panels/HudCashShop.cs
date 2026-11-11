@@ -8,8 +8,8 @@ namespace MushTown.Client;
 // Which cash shop page the player is on. Beauty uses one state per preview.
 public enum CashShopPage { Utility, Fashion, BeautyHair, BeautyFace }
 
-// The full-screen cash shop window. Week 7 implements the preview actor and
-// the cart; checkout is left for a later ticket.
+// The full-screen cash shop window. Week 8 adds CHECK OUT and the Utility
+// purchase path; the preview actor and cart come from week 7.
 public sealed class CashShopWindow : UiWindow
 {
     private readonly MushTownGame _game;
@@ -18,22 +18,28 @@ public sealed class CashShopWindow : UiWindow
     private static readonly string[] ArtFiles =
     {
         "cashshop_scene_bg.png", "cashshop_list_bg.png", "cashshop_bg_list.png", "cashshop_no_result.png",
-        "cashshop_item_bg.png", "cashshop_item_bg_main.png",
+        "cashshop_item_bg.png", "cashshop_item_bg_main.png", "cashshop_item_price.png",
         "cashshop_preview_back.png", "cashshop_preview_bottom.png", "cashshop_preview_frame.png",
         "cashshop_bg_search.png", "cashshop_bg_cash.png", "cashshop_bg_maplepoint.png", "cashshop_bg_mileage.png",
         "cashshop_exit.png", "cashshop_help_disabled.png", "cashshop_probability_disabled.png", "cashshop_coupon_disabled.png",
         "cashshop_search.png", "cashshop_menu_500.png", "cashshop_menu_600.png", "cashshop_menu_700.png",
         "cashshop_beauty_bg.png", "cashshop_beauty_list.png",
         "cashshop_cart_item_bg.png", "cashshop_takeoffavatar.png",
+        "cashshop_checkout_single.png", "cashshop_checkout_multi.png",
+        "cashshop_checkout_entity.png", "cashshop_checkout_icon_bg.png", "cashshop_checkout_buy.png", "cashshop_checkout_cancel.png",
+        "cashshop_checkout_gift_disabled.png", "cashshop_checkout_result.png", "cashshop_buyavatar.png",
         "cashshop_buyavatar_disabled.png", "cashshop_defaultavatar_disabled.png",
         "cashshop_saveavatar.png", "cashshop_mycoordi.png", "cashshop_actionplay.png",
         "cashshop_petoff.png",
         "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png",
         "wm_pop_yes_n.png", "wm_pop_yes_h.png", "wm_pop_yes_p.png",
+        "wm_scroll_base.png", "wm_scroll_thumb.png",
     };
 
     private static readonly int[] GroupIds = { 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000 };
     private static readonly Color TextInk = new(35, 40, 48);
+
+    private enum CashShopDialog { None, Single, Multi }
 
     private CashShopPage _page = CashShopPage.Utility;
     private int _tab = 2; // Convenience is the third Utility sub tab
@@ -63,7 +69,11 @@ public sealed class CashShopWindow : UiWindow
     private float _previewFrameMs;
     private string _previewFrameAction = "";
     private KeyboardState _previewWas;
-    private bool _cartFull;
+    private CashShopDialog _dialog;
+    private int _checkoutId;
+    private int _checkoutScroll;
+    private int _lastWheel;
+    private string _noticeText = "";
 
     public CashShopWindow(MushTownGame game) : base(HotkeyAction.CashShop)
     {
@@ -120,6 +130,7 @@ public sealed class CashShopWindow : UiWindow
     public override void OnShown()
     {
         ResetPreview();
+        _lastWheel = 0;
         _game.EnterCashShop();
     }
 
@@ -158,6 +169,24 @@ public sealed class CashShopWindow : UiWindow
         if (key == FieldKey.Leave) _searchField.Unfocus();
     }
 
+    // The wheel scrolls the CHECK OUT list when it has more than three rows.
+    public void UpdateWheel(int wheel)
+    {
+        if (_dialog != CashShopDialog.Multi)
+        {
+            _lastWheel = wheel;
+            return;
+        }
+        int delta = wheel - _lastWheel;
+        _lastWheel = wheel;
+        if (delta == 0) return;
+        int max = Math.Max(0, _cart.Count - L("checkoutMultiVisible"));
+        int next = Math.Clamp(_checkoutScroll + (delta > 0 ? -1 : 1), 0, max);
+        if (next == _checkoutScroll) return;
+        _checkoutScroll = next;
+        Dirty = true;
+    }
+
     public override void Build()
     {
         foreach (string file in ArtFiles) _game.LoadTexture("ui/" + file);
@@ -192,7 +221,8 @@ public sealed class CashShopWindow : UiWindow
             BuildItems(root);
         BuildTopBar(root);
         BuildBottom(root);
-        if (_cartFull) BuildCartFull(root);
+        if (_dialog != CashShopDialog.None) BuildCheckout(root);
+        if (_noticeText != "") BuildNotice(root);
         Host.AddChild(root);
     }
 
@@ -236,12 +266,15 @@ public sealed class CashShopWindow : UiWindow
         AddDisabledDim(root, "cashshop_mycoordi.png", "myCoordiX", "myCoordiY", "myCoordiW", "myCoordiH");
         AddDisabledDim(root, "cashshop_actionplay.png", "actionPlayX", "actionPlayY", "actionPlayW", "actionPlayH");
         AddDisabledDim(root, "cashshop_petoff.png", "petOffX", "petOffY", "petOffW", "petOffH");
-        AddDisabled(root, "cashshop_buyavatar_disabled.png", "buyAllX", "buyAllY", "buyAllW", "buyAllH");
+        if (_cart.Count > 0)
+            AddButton(root, "cashshop_buyavatar.png", "buyAllX", "buyAllY", "buyAllW", "buyAllH", OpenBuyAll);
+        else
+            AddDisabled(root, "cashshop_buyavatar_disabled.png", "buyAllX", "buyAllY", "buyAllW", "buyAllH");
     }
 
-    private void BuildCartFull(GameObject root)
+    private void BuildNotice(GameObject root)
     {
-        var notice = new GameObject { Modal = true };
+        var notice = new GameObject();
         notice.Add(new Rect(new Rectangle(L("noticeX"), L("noticeY"), L("noticeW"), L("noticeH"))));
         notice.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
         notice.Add(new SysPopText
@@ -249,14 +282,21 @@ public sealed class CashShopWindow : UiWindow
             Y = L("popTextY"),
             Step = L("popTextStep"),
             MaxWidth = L("noticeW") - L("popTextPad"),
-            Lines = new[] { "The cart is full." },
+            Lines = _game.Ui.Wrap(_noticeText, L("noticeW") - L("popTextPad")),
         });
         var ok = new GameObject();
         ok.Add(new Rect(new Rectangle(L("popYesX"), L("noticeH") - L("popBottomH") + L("popBtnY"), L("popBtnW"), L("popBtnH"))));
-        ok.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _cartFull = false; Dirty = true; } });
+        ok.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _noticeText = ""; Dirty = true; } });
         ok.Add(new Image("ui/wm_pop_yes"));
         notice.AddChild(ok);
-        root.AddChild(notice);
+
+        var blocker = new GameObject();
+        blocker.Add(new Rect(new Rectangle(0, 0, L("w"), L("h"))));
+        blocker.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => { } });
+        var modal = new GameObject { Modal = true };
+        modal.AddChild(blocker);
+        modal.AddChild(notice);
+        root.AddChild(modal);
     }
 
     // The preview actor starts at the official feet point and can walk the
@@ -320,6 +360,44 @@ public sealed class CashShopWindow : UiWindow
         Dirty = true;
     }
 
+    // The shot poses for the two CHECK OUT forms.
+    public void PoseCheckout()
+    {
+        _page = CashShopPage.Utility;
+        _tab = 2;
+        _checkoutId = 5051001;
+        _dialog = CashShopDialog.Single;
+        _selectedId = 0;
+        Dirty = true;
+    }
+
+    public void PoseBuyAll()
+    {
+        PoseCart();
+        _dialog = CashShopDialog.Multi;
+        _checkoutScroll = 0;
+        Dirty = true;
+    }
+
+    public bool EscLayer()
+    {
+        if (_dialog != CashShopDialog.None)
+        {
+            _dialog = CashShopDialog.None;
+            _checkoutId = 0;
+            _checkoutScroll = 0;
+            Dirty = true;
+            return true;
+        }
+        if (_noticeText != "")
+        {
+            _noticeText = "";
+            Dirty = true;
+            return true;
+        }
+        return false;
+    }
+
     private void OnCardClick(int id)
     {
         if (_lastClickId == id && _game.TimeMs - _lastClickMs <= L("doubleClickMs"))
@@ -339,7 +417,7 @@ public sealed class CashShopWindow : UiWindow
         {
             _cart.Remove(id);
             _previewFashion.Remove(id);
-            _cartFull = false;
+            _noticeText = "";
             RebuildPreviewChara();
             Dirty = true;
             return;
@@ -364,7 +442,7 @@ public sealed class CashShopWindow : UiWindow
         {
             if (_cart.Count >= L("cartSlots"))
             {
-                _cartFull = true;
+                _noticeText = "The cart is full.";
                 Dirty = true;
                 return;
             }
@@ -391,9 +469,231 @@ public sealed class CashShopWindow : UiWindow
         _previewFashion.Clear();
         _previewHair = 0;
         _previewFace = 0;
-        _cartFull = false;
+        _noticeText = "";
+        _dialog = CashShopDialog.None;
+        _checkoutId = 0;
+        _checkoutScroll = 0;
         _lastClickId = 0;
         _attackLeftMs = 0;
+    }
+
+    private CashShopItem? CatalogItem(int id) =>
+        _game.CashShop.Items.FirstOrDefault(item => item.Id == id);
+
+    private void OpenCheckout(CashShopItem item)
+    {
+        _dialog = CashShopDialog.Single;
+        _checkoutId = item.Id;
+        _checkoutScroll = 0;
+        _noticeText = "";
+        _selectedId = item.Id;
+        Dirty = true;
+    }
+
+    private void OpenBuyAll()
+    {
+        if (_cart.Count == 0) return;
+        _dialog = CashShopDialog.Multi;
+        _checkoutScroll = 0;
+        _noticeText = "";
+        Dirty = true;
+    }
+
+    private void CloseCheckout()
+    {
+        _dialog = CashShopDialog.None;
+        _checkoutId = 0;
+        _checkoutScroll = 0;
+        Dirty = true;
+    }
+
+    private void BuildCheckout(GameObject root)
+    {
+        bool multi = _dialog == CashShopDialog.Multi;
+        var panel = new GameObject();
+        panel.Add(new Rect(new Rectangle(
+            L(multi ? "checkoutMultiX" : "checkoutSingleX"),
+            L(multi ? "checkoutMultiY" : "checkoutSingleY"),
+            L(multi ? "checkoutMultiW" : "checkoutSingleW"),
+            L(multi ? "checkoutMultiH" : "checkoutSingleH"))));
+        panel.Add(new Picture("ui/" + (multi ? "cashshop_checkout_multi.png" : "cashshop_checkout_single.png")));
+        if (multi) BuildMultiRows(panel); else BuildSingleRow(panel);
+
+        int closeX = L("checkoutCloseX"), closeY = L("checkoutCloseY");
+        var close = new GameObject();
+        close.Add(new Rect(new Rectangle(closeX, closeY, L("checkoutCloseW"), L("checkoutCloseH"))));
+        close.Add(new Button { Kind = ButtonKind.Click, OnClick = CloseCheckout });
+        close.Add(new Picture("ui/cashshop_exit.png"));
+        panel.AddChild(close);
+
+        if (multi)
+        {
+            CheckoutButton(panel, "cashshop_checkout_buy.png", L("checkoutBuyX"), L("checkoutMultiButtonY"),
+                L("checkoutBuyW"), L("checkoutBuyH"), BuyAll);
+            CheckoutButton(panel, "cashshop_checkout_cancel.png", L("checkoutCancelX"), L("checkoutMultiButtonY"),
+                L("checkoutCancelW"), L("checkoutCancelH"), CloseCheckout);
+            CheckoutButton(panel, "cashshop_checkout_gift_disabled.png", L("checkoutGiftX"), L("checkoutMultiButtonY"),
+                L("checkoutGiftW"), L("checkoutGiftH"), null);
+        }
+        else
+        {
+            CheckoutButton(panel, "cashshop_checkout_buy.png", L("checkoutBuyX"), L("checkoutSingleButtonY"),
+                L("checkoutBuyW"), L("checkoutBuyH"), BuySingle);
+            CheckoutButton(panel, "cashshop_checkout_cancel.png", L("checkoutCancelX"), L("checkoutSingleButtonY"),
+                L("checkoutCancelW"), L("checkoutCancelH"), CloseCheckout);
+            CheckoutButton(panel, "cashshop_checkout_gift_disabled.png", L("checkoutGiftX"), L("checkoutSingleButtonY"),
+                L("checkoutGiftW"), L("checkoutGiftH"), null);
+        }
+
+        var blocker = new GameObject();
+        blocker.Add(new Rect(new Rectangle(0, 0, L("w"), L("h"))));
+        blocker.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => { } });
+        var modal = new GameObject { Modal = true };
+        modal.AddChild(blocker);
+        modal.AddChild(panel);
+        root.AddChild(modal);
+    }
+
+    private void BuildSingleRow(GameObject panel)
+    {
+        var item = CatalogItem(_checkoutId);
+        if (item == null) return;
+        CheckoutRow(panel, item, L("checkoutEntityY"));
+        CheckoutPicture(panel, "cashshop_checkout_result.png", L("checkoutResultX"), L("checkoutResultY"),
+            L("checkoutResultW"), L("checkoutResultH"));
+        CheckoutValue(panel, () => _game.Meso.ToString("#,##0"), L("checkoutMesoValueX"), L("checkoutMesoValueY"));
+        CheckoutValue(panel, () => ((long)item.Price * item.Count).ToString("#,##0"), L("checkoutCostValueX"), L("checkoutCostValueY"));
+    }
+
+    private void BuildMultiRows(GameObject panel)
+    {
+        int count = _cart.Count;
+        int visible = L("checkoutMultiVisible");
+        int max = Math.Max(0, count - visible);
+        _checkoutScroll = Math.Clamp(_checkoutScroll, 0, max);
+        long total = 0;
+        foreach (int id in _cart)
+        {
+            var item = CatalogItem(id);
+            if (item != null) total += (long)item.Price * item.Count;
+        }
+        for (int i = _checkoutScroll; i < count && i < _checkoutScroll + visible; i++)
+        {
+            var item = CatalogItem(_cart[i]);
+            if (item == null) continue;
+            CheckoutRow(panel, item, L("checkoutMultiRowY") + (i - _checkoutScroll) * L("checkoutMultiRowH"));
+        }
+        CheckoutPicture(panel, "cashshop_checkout_result.png", L("checkoutResultX"), L("checkoutMultiResultY"),
+            L("checkoutResultW"), L("checkoutResultH"));
+        CheckoutValue(panel, () => _game.Meso.ToString("#,##0"), L("checkoutMesoValueX"), L("checkoutMultiMesoValueY"));
+        CheckoutValue(panel, () => total.ToString("#,##0"), L("checkoutCostValueX"), L("checkoutMultiCostValueY"));
+        if (count > visible)
+        {
+            int scrollX = L("checkoutScrollX"), scrollY = L("checkoutScrollY");
+            int scrollH = L("checkoutScrollH"), thumbH = L("checkoutScrollThumbH");
+            CheckoutPicture(panel, "wm_scroll_base.png", scrollX, scrollY, L("checkoutScrollW"), scrollH);
+            int travel = scrollH - thumbH;
+            int top = scrollY + (int)((float)_checkoutScroll / max * travel);
+            CheckoutPicture(panel, "wm_scroll_thumb.png", scrollX, top, L("checkoutScrollW"), thumbH);
+        }
+    }
+
+    private void CheckoutRow(GameObject panel, CashShopItem item, int y)
+    {
+        CheckoutPicture(panel, "cashshop_checkout_entity.png", L("checkoutEntityX"), y,
+            L("checkoutEntityW"), L("checkoutEntityH"));
+        CheckoutPicture(panel, "cashshop_checkout_icon_bg.png", L("checkoutIconX"), y + L("checkoutIconY"),
+            L("checkoutIconW"), L("checkoutIconH"));
+        var icon = new GameObject { NoHit = true };
+        icon.Add(new Rect(new Rectangle(L("checkoutIconX") + L("checkoutItemIconX"), y + L("checkoutItemIconY"),
+            L("checkoutItemIconSize"), L("checkoutItemIconSize"))));
+        icon.Add(new InvItem(() => _game.Items[item.Id].Image, L("checkoutItemIconSize")));
+        panel.AddChild(icon);
+        CheckoutText(panel, () => _game.Items[item.Id].Name, L("checkoutNameX"), y + L("checkoutNameY"),
+            L("checkoutNameW"), L("checkoutNameH"), TextInk, TextAlign.Left, L("checkoutNameFont"));
+        CheckoutText(panel, () => $"{item.Count} x {item.Price:#,##0}", L("checkoutQtyX"), y + L("checkoutQtyY"),
+            L("checkoutQtyW"), L("checkoutQtyH"), Color.White, TextAlign.Center, L("checkoutFont"));
+        CheckoutText(panel, () => ((long)item.Price * item.Count).ToString("#,##0"), L("checkoutPriceX"),
+            y + L("checkoutPriceY"), L("checkoutPriceW"), L("checkoutPriceH"), TextInk, TextAlign.Right, L("checkoutFont"));
+    }
+
+    private static void CheckoutPicture(GameObject panel, string file, int x, int y, int w, int h)
+    {
+        var o = new GameObject { NoHit = true };
+        o.Add(new Rect(new Rectangle(x, y, w, h)));
+        o.Add(new Picture("ui/" + file));
+        panel.AddChild(o);
+    }
+
+    private static void CheckoutText(GameObject panel, Func<string> text, int x, int y, int w, int h,
+        Color ink, TextAlign align, int font)
+    {
+        var o = new GameObject { NoHit = true };
+        o.Add(new Rect(new Rectangle(x, y, w, h)));
+        o.Add(new Text { Value = text, Ink = ink, X = 0, W = w, Align = align, Font = font >= 14 ? LabelFont.Mid : LabelFont.Small });
+        panel.AddChild(o);
+    }
+
+    private void CheckoutValue(GameObject panel, Func<string> text, int x, int y) =>
+        CheckoutText(panel, text, x - L("checkoutValueW"), y, L("checkoutValueW"), L("checkoutValueH"), TextInk, TextAlign.Right, L("checkoutFont"));
+
+    private static void CheckoutButton(GameObject panel, string file, int x, int y, int w, int h, Action? click)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(x, y, w, h)));
+        if (click != null) o.Add(new Button { Kind = ButtonKind.Click, OnClick = click });
+        o.Add(new Picture("ui/" + file));
+        panel.AddChild(o);
+    }
+
+    private void BuySingle()
+    {
+        var item = CatalogItem(_checkoutId);
+        var chara = _game.Hero;
+        if (item == null || chara == null) return;
+        if (!CashShop.Buy(chara, item.Id, item.Price, _game.Items[item.Id], item.Count, item.Group != "Utility"))
+        {
+            CloseCheckout();
+            _noticeText = "You don't have enough mesos.";
+            Dirty = true;
+            return;
+        }
+        _cart.Remove(item.Id);
+        _game.CashShopLog($"bought {_game.Items[item.Id].Name} x{item.Count} for {(long)item.Price * item.Count:#,##0} mesos");
+        _game.CashShopSave();
+        CloseCheckout();
+    }
+
+    private void BuyAll()
+    {
+        var chara = _game.Hero;
+        if (chara == null || _cart.Count == 0) return;
+        var items = new List<CashShopItem>();
+        var adds = new List<(int Id, int Count)>();
+        long total = 0;
+        foreach (int id in _cart)
+        {
+            var item = CatalogItem(id);
+            if (item == null) continue;
+            items.Add(item);
+            adds.Add((item.Id, item.Count));
+            total += (long)item.Price * item.Count;
+        }
+        if (total > chara.Mesos || !Inventory.CanAddAll(chara, "dec", adds))
+        {
+            CloseCheckout();
+            _noticeText = "You don't have enough mesos.";
+            Dirty = true;
+            return;
+        }
+        foreach (var item in items)
+        {
+            CashShop.Buy(chara, item.Id, item.Price, _game.Items[item.Id], item.Count, true);
+            _game.CashShopLog($"bought {_game.Items[item.Id].Name} x{item.Count} for {(long)item.Price * item.Count:#,##0} mesos");
+        }
+        _cart.Clear();
+        _game.CashShopSave();
+        CloseCheckout();
     }
 
     private void RebuildPreviewChara() => _previewChara = PreviewChara();
@@ -426,9 +726,14 @@ public sealed class CashShopWindow : UiWindow
     // share feet. The shop update calls it every frame while the shop is open.
     internal void UpdatePreview(float dtMs)
     {
+        var kb = Keyboard.GetState();
+        if (_dialog != CashShopDialog.None || _noticeText != "")
+        {
+            _previewWas = kb;
+            return;
+        }
         if (_previewMap == null) return;
         if (_previewFeetRect == null) return;
-        var kb = Keyboard.GetState();
         _attackLeftMs = Math.Max(0, _attackLeftMs - dtMs);
         if (SearchFocused)
         {
@@ -553,9 +858,10 @@ public sealed class CashShopWindow : UiWindow
         cell.AddChild(name);
 
         var price = new GameObject();
-        price.Add(new Rect(new Rectangle(L("priceX"), L("priceY"), L("priceW"), L("priceH"))));
+        price.Add(new Rect(new Rectangle(L("priceButtonX"), L("priceButtonY"), L("priceButtonW"), L("priceButtonH"))));
         price.Add(new ItemTip(() => item.Id));
-        price.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OnCardClick(item.Id) });
+        price.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OpenCheckout(item) });
+        price.Add(new Picture("ui/cashshop_item_price.png"));
         price.Add(new CenterText(() => item.Price.ToString("#,##0"), TextInk, L("priceFont")));
         cell.AddChild(price);
 
@@ -811,4 +1117,12 @@ public sealed class CashShopWindow : UiWindow
         while (text.Length > 0 && gfx.Ui.GetSized(text + "..", font).Width > width) text = text[..^1];
         return gfx.Ui.GetSized(text + "..", font);
     }
+}
+
+public partial class MushTownGame
+{
+    // The cash shop window is a separate class; these two writes stay behind
+    // the game's own save and log rules.
+    internal void CashShopLog(string line) => GameLog(line);
+    internal void CashShopSave() => SaveChara();
 }

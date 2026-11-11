@@ -1,6 +1,9 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
+
+using CashShopData = MushTown.Shared.CashShop;
 
 namespace MushTown.Client;
 
@@ -13,6 +16,11 @@ public partial class MushTownGame
 
     // Every number of this window lives in layouts/panel-inventory.json.
     private static readonly PanelLayout _invLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-inventory.json"));
+    // The Utility popup is a cash shop feature; its numbers live with the shop.
+    private static readonly PanelLayout _cashLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-cashshop.json"));
+    private readonly TextField _cashUseField = new(_cashLay) { Limit = 12, Ink = new Color(48, 48, 48) };
+    private int _cashUseId;
+    private string _cashUseNotice = "";
 
     private bool _invWide; // the wide window is open
     private bool _invPlaced; // the window took the spot from the layout file
@@ -256,6 +264,7 @@ public partial class MushTownGame
             new Color(96, 104, 113)));
         body.AddChild(coin);
         _invHost.AddChild(body);
+        if (_cashUseId != 0) _invHost.AddChild(CashUsePopup());
         _invBuiltTab = _invTab;
     }
 
@@ -293,6 +302,11 @@ public partial class MushTownGame
         }
         foreach (string side in new[] { "nw", "ne", "sw", "se", "n", "s", "w", "e", "c" })
             LoadTexture($"ui/tip_{side}.png"); // the tooltip frame: the stat window loads it too, this one must not depend on that
+        foreach (string pop in new[] { "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png", "wm_pop_textbox.png" })
+            LoadTexture("ui/" + pop);
+        foreach (string b in new[] { "wm_pop_yes", "wm_pop_no" })
+            foreach (string s in new[] { "n", "h", "p" })
+                LoadTexture($"ui/{b}_{s}.png");
     }
 
     // The official expand button: "+" opens the wide window, "-" goes back.
@@ -396,5 +410,133 @@ public partial class MushTownGame
         {
             PlaySfx("click");
         }
+        else if (act == HandAct.Used)
+        {
+            PlaySfx("click");
+            OpenCashUse(id);
+        }
+    }
+
+    // CASH tab double-click: Character Name Change opens the input popup;
+    // SP Reset Scroll opens its confirmation. Every other cash item has no
+    // use in this week.
+    private void OpenCashUse(int id)
+    {
+        if (id is not (5400000 or 5051001)) return;
+        _cashUseId = id;
+        _cashUseNotice = "";
+        var chara = _save?.Slots[_slot];
+        if (id == 5400000)
+        {
+            _cashUseField.SetText(chara?.Name ?? "");
+            _cashUseField.Focus(Keyboard.GetState());
+        }
+        BuildInvScene();
+        _invBuilt = true;
+    }
+
+    private void CloseCashUse()
+    {
+        _cashUseId = 0;
+        _cashUseNotice = "";
+        _cashUseField.Unfocus();
+        BuildInvScene();
+        _invBuilt = true;
+    }
+
+    private GameObject CashUsePopup()
+    {
+        int w = _cashLay.Get("utilityPopW", 318), h = _cashLay.Get("utilityPopH", 160);
+        var box = new Rectangle((GameWidth - w) / 2 - _invPos.X, (GameHeight - h) / 2 - _invPos.Y, w, h);
+        var popup = new GameObject();
+        popup.Add(new Rect(box));
+        popup.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
+        popup.Add(new SysPopText
+        {
+            Y = _cashLay.Get("utilityPopTextY", 34),
+            Step = _cashLay.Get("utilityPopTextStep", 17),
+            MaxWidth = w - _cashLay.Get("utilityPopTextPad", 16),
+            Lines = _cashUseNotice != ""
+                ? new[] { _cashUseNotice }
+                : _cashUseId == 5400000
+                    ? new[] { "Enter a new character name." }
+                    : new[] { "Reset all skills and refund their SP?" },
+        });
+        if (_cashUseId == 5400000)
+        {
+            popup.AddChild(PictureAt("ui/wm_pop_textbox.png", 0, _cashLay.Get("utilityTextBoxY", 47), w,
+                _cashLay.Get("utilityTextBoxH", 44)));
+            var input = new GameObject();
+            input.Add(new Rect(new Rectangle(
+                _cashLay.Get("utilityNameFieldX", 48), _cashLay.Get("utilityNameFieldY", 62),
+                _cashLay.Get("utilityNameFieldW", 200), _cashLay.Get("utilityNameFieldH", 20))));
+            input.Add(_cashUseField);
+            popup.AddChild(input);
+        }
+        int by = _cashLay.Get("utilityYesY", 105);
+        popup.AddChild(ArtButton(new Rectangle(_cashLay.Get("utilityYesX", 73), by,
+            _cashLay.Get("utilityBtnW", 83), _cashLay.Get("utilityBtnH", 26)), "ui/wm_pop_yes",
+            _cashUseId == 5400000 ? ConfirmCashName : ConfirmCashReset));
+        popup.AddChild(ArtButton(new Rectangle(_cashLay.Get("utilityNoX", 162), _cashLay.Get("utilityNoY", 105),
+            _cashLay.Get("utilityBtnW", 83), _cashLay.Get("utilityBtnH", 26)), "ui/wm_pop_no", CloseCashUse));
+        var root = new GameObject { Modal = true };
+        root.AddChild(PanelButton(new Rectangle(-_invPos.X, -_invPos.Y, GameWidth, GameHeight), "cashuseblock", () => { }, ButtonKind.Silent));
+        root.AddChild(popup);
+        return root;
+    }
+
+    private void ConfirmCashName()
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return;
+        string name = _cashUseField.Text;
+        if (name == chara.Name)
+        {
+            _cashUseNotice = "The name is unchanged.";
+            BuildInvScene();
+            _invBuilt = true;
+            return;
+        }
+        if (Inventory.Count(chara, "cash", _cashUseId) <= 0 || !CashShopData.Rename(_store, _saveSlot, _slot, name))
+        {
+            _cashUseNotice = "That name is not valid.";
+            BuildInvScene();
+            _invBuilt = true;
+            return;
+        }
+        Inventory.Remove(chara, "cash", _cashUseId, 1);
+        SaveChara();
+        PushName();
+        SyncHeroPlate();
+        CloseCashUse();
+    }
+
+    private void ConfirmCashReset()
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return;
+        if (!CashShopData.ResetSkills(chara))
+        {
+            _cashUseNotice = "You have no skills to reset.";
+            BuildInvScene();
+            _invBuilt = true;
+            return;
+        }
+        Inventory.Remove(chara, "cash", _cashUseId, 1);
+        SaveChara();
+        PushBuild();
+        _skillBuilt = false;
+        CloseCashUse();
+    }
+
+    private void UpdateCashUseKeys(KeyboardState kb, float dtMs)
+    {
+        if (_cashUseId != 5400000) return;
+        if (_cashUseField.Read(kb, dtMs) == FieldKey.Submit) ConfirmCashName();
+    }
+
+    private void EscCashUse()
+    {
+        if (_cashUseId != 0) CloseCashUse();
     }
 }

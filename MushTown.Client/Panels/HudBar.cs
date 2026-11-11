@@ -110,9 +110,10 @@ public partial class MushTownGame
 
     private Texture2D Tex(string file) => _textures["ui/" + file];
 
-    private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy)
+    private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy, float dtMs)
     {
         UpdateHudHover(gx, gy); // every frame (clicks return early below)
+        if (_cashUseId != 0) UpdateCashUseKeys(kb, dtMs); // the CASH Utility input keeps its keys
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
         bool modal = _uiScene.ModalOpen || _cashShopWindow.Show; // a confirmation box or the shop owns the keys
         // The key window does not block anything: the character keeps moving

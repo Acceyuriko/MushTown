@@ -81,13 +81,14 @@ public sealed class TextField : Component, IDrawable
         FieldKey answer = FieldKey.None;
         if (Focused)
         {
+            bool shift = IsShiftDown(kb);
             foreach (var key in now)
             {
                 if (_down.Contains(key)) continue; // held down: the repeat below handles it
                 if (key == Keys.Enter) { answer = FieldKey.Submit; break; }
                 if (key == Keys.Escape) { answer = FieldKey.Leave; break; }
-                Press(key);
-                if (CharOf(key) == '\0' && key != Keys.Back) continue; // a key that types nothing does not start the repeat
+                Press(key, shift);
+                if (CharOf(key, shift) == '\0' && key != Keys.Back) continue; // a key that types nothing does not start the repeat
                 _repeatKey = key;
                 _repeatMs = 0;
             }
@@ -103,17 +104,20 @@ public sealed class TextField : Component, IDrawable
         if (_repeatKey == Keys.None || !kb.IsKeyDown(_repeatKey)) { _repeatKey = Keys.None; return; }
         _repeatMs += dtMs;
         if (_repeatMs < RepeatDelayMs) return;
-        Press(_repeatKey);
+        Press(_repeatKey, IsShiftDown(kb));
         _repeatMs = Math.Min(_repeatMs - RepeatRateMs, RepeatDelayMs - RepeatRateMs); // a long stall must not dump a burst of characters
     }
 
     // One press: a character goes into the text, Backspace deletes.
-    private void Press(Keys key)
+    private void Press(Keys key, bool shift)
     {
         if (key == Keys.Back) { Backspace(); return; }
-        char c = CharOf(key);
+        char c = CharOf(key, shift);
         if (c != '\0') Type(c);
     }
+
+    private static bool IsShiftDown(KeyboardState kb) =>
+        kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift);
 
     public void Draw(UiGfx gfx)
     {
@@ -130,9 +134,9 @@ public sealed class TextField : Component, IDrawable
     }
 
     // The typed character for a key (letters, digits, space, the usual marks).
-    private static char CharOf(Keys key)
+    private static char CharOf(Keys key, bool shift)
     {
-        if (key >= Keys.A && key <= Keys.Z) return (char)('a' + (key - Keys.A));
+        if (key >= Keys.A && key <= Keys.Z) return (char)((shift ? 'A' : 'a') + (key - Keys.A));
         if (key >= Keys.D0 && key <= Keys.D9) return (char)('0' + (key - Keys.D0));
         if (key >= Keys.NumPad0 && key <= Keys.NumPad9) return (char)('0' + (key - Keys.NumPad0));
         return key switch
@@ -140,7 +144,7 @@ public sealed class TextField : Component, IDrawable
             Keys.Space => ' ',
             Keys.OemPeriod => '.',
             Keys.OemComma => ',',
-            Keys.OemMinus => '-',
+            Keys.OemMinus => shift ? '_' : '-',
             Keys.OemQuestion => '?',
             Keys.OemQuotes => '\'',
             Keys.OemSemicolon => ';',
