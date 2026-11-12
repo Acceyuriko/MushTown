@@ -477,8 +477,13 @@ public sealed class CashShopWindow : UiWindow
         _attackLeftMs = 0;
     }
 
-    private CashShopItem? CatalogItem(int id) =>
-        _game.CashShop.Items.FirstOrDefault(item => item.Id == id);
+    private CashShopItem? CatalogItem(int id)
+    {
+        var item = _game.CashShop.Items.FirstOrDefault(item => item.Id == id);
+        if (item != null) return item;
+        var look = _game.CashShop.Hairs.Concat(_game.CashShop.Faces).FirstOrDefault(look => look.ItemId == id);
+        return look == null ? null : new CashShopItem { Id = look.ItemId, Price = look.Price, Count = 1, Group = "Beauty", Tab = "Look" };
+    }
 
     private void OpenCheckout(CashShopItem item)
     {
@@ -882,12 +887,93 @@ public sealed class CashShopWindow : UiWindow
             root.AddChild(title);
         }
 
+        if (_tab == 0)
+        {
+            var looks = _game.CashShop.Hairs.Where(look => !look.Default && look.Price > 0).ToList();
+            int slots = L("beautyRows") * L("beautyCols");
+            for (int i = 0; i < looks.Count && i < slots; i++)
+            {
+                int col = i % L("beautyCols");
+                int row = i / L("beautyCols");
+                int x = L("beautyCardX") + col * (L("beautyCardW") + L("beautyCardGapX"));
+                int y = L("beautyCardY") + row * (L("beautyCardH") + L("beautyCardGapY"));
+                AddBeautyCard(root, looks[i], new Rectangle(x, y, L("beautyCardW"), L("beautyCardH")));
+            }
+        }
+
         _noResult = new GameObject { NoHit = true };
         _noResult.Add(new Rect(new Rectangle(L("noResultX"), L("noResultY"), L("noResultW"), L("noResultH"))));
         _noResult.Add(new Picture("ui/cashshop_no_result.png"));
         _noResult.Enabled = false;
         root.AddChild(_noResult);
         ApplyFilter();
+    }
+
+    private void AddBeautyCard(GameObject root, CashShopLook look, Rectangle box)
+    {
+        var cell = new GameObject();
+        cell.Add(new Rect(box));
+        cell.Add(new CardBack(() => _selectedId == look.ItemId));
+        cell.Add(new ItemTip(() => look.ItemId));
+        cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PreviewBeauty(look) });
+
+        var doll = new GameObject { NoHit = true };
+        doll.Add(new Rect(new Rectangle(L("beautyDollDx"), L("beautyDollDy"), 1, 1)));
+        doll.Add(new AvatarPreview(_game, "stand1", false, () => 0, () => BeautyChara(look)));
+        cell.AddChild(doll);
+
+        var name = new GameObject { NoHit = true };
+        name.Add(new Rect(new Rectangle(L("beautyNameX"), L("beautyNameY"), L("beautyNameW"), L("beautyNameH"))));
+        name.Add(new CenterText(() => look.Name, TextInk, L("beautyNameFont")));
+        cell.AddChild(name);
+
+        var price = new GameObject();
+        price.Add(new Rect(new Rectangle(L("beautyPriceX"), L("beautyPriceY"), L("beautyPriceW"), L("beautyPriceH"))));
+        price.Add(new ItemTip(() => look.ItemId));
+        price.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OpenCheckout(CatalogItem(look.ItemId)!) });
+        price.Add(new CenterText(() => look.Price.ToString("#,##0"), TextInk, L("beautyPriceFont")));
+        cell.AddChild(price);
+
+        root.AddChild(cell);
+        _cells.Add((cell, look.Name));
+    }
+
+    private void PreviewBeauty(CashShopLook look)
+    {
+        int oldIndex = _cart.FindIndex(id => _game.CashShop.Hairs.Any(hair => hair.ItemId == id));
+        if (oldIndex >= 0)
+        {
+            if (_cart[oldIndex] == look.ItemId) return;
+            _cart[oldIndex] = look.ItemId;
+        }
+        else
+        {
+            if (_cart.Count >= L("cartSlots"))
+            {
+                _noticeText = "The cart is full.";
+                Dirty = true;
+                return;
+            }
+            _cart.Add(look.ItemId);
+        }
+        _previewHair = look.Cosmetic;
+        _selectedId = look.ItemId;
+        RebuildPreviewChara();
+        Dirty = true;
+    }
+
+    private CharaSlot? BeautyChara(CashShopLook look)
+    {
+        var hero = _game.Hero;
+        if (hero == null) return null;
+        return new CharaSlot
+        {
+            Skin = hero.Skin,
+            Hair = look.Cosmetic,
+            Face = hero.Face,
+            Equips = hero.Equips,
+            CashWorn = hero.CashWorn,
+        };
     }
 
     private void BuildTopBar(GameObject root)

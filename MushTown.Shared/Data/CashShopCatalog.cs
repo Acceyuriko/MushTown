@@ -5,6 +5,8 @@ namespace MushTown.Shared;
 public sealed class CashShopCatalog
 {
     public List<CashShopItem> Items { get; set; } = new();
+    public List<CashShopLook> Hairs { get; set; } = new();
+    public List<CashShopLook> Faces { get; set; } = new();
 
     // The visual sub-tab index of each item, or -1 when Group/Tab is unknown.
     public static int TabIndex(string group, string tab) => (group, tab) switch
@@ -50,6 +52,44 @@ public sealed class CashShopCatalog
                 return false;
             }
         }
+        if (!ValidateLooks(Hairs, "hair", out error)) return false;
+        if (!ValidateLooks(Faces, "face", out error)) return false;
+        error = "";
+        return true;
+    }
+
+    // A look list is optional in a test catalog, but when present it must
+    // have one free default and only the other rows can be sold.
+    private static bool ValidateLooks(List<CashShopLook> looks, string kind, out string error)
+    {
+        int defaults = 0;
+        int freeNonDefaults = 0;
+        foreach (var look in looks)
+        {
+            if (look.ItemId <= 0) { error = $"cashshop {kind} {look.ItemId} has a bad item id"; return false; }
+            if (look.Cosmetic <= 0) { error = $"cashshop {kind} {look.ItemId} has a bad cosmetic {look.Cosmetic}"; return false; }
+            if (look.Name == "") { error = $"cashshop {kind} {look.ItemId} has no name"; return false; }
+            if (look.Price < 0) { error = $"cashshop {kind} {look.ItemId} has a bad price {look.Price}"; return false; }
+            if (look.Default)
+            {
+                defaults++;
+                if (look.Price != 0) { error = $"cashshop default {kind} {look.ItemId} must be free"; return false; }
+            }
+            else if (look.Price == 0)
+            {
+                freeNonDefaults++;
+            }
+        }
+        if (looks.Count > 0 && defaults != 1)
+        {
+            error = $"cashshop {kind} list has {defaults} defaults, want exactly one";
+            return false;
+        }
+        if (freeNonDefaults > 1)
+        {
+            error = $"cashshop {kind} list has {freeNonDefaults} free non-default rows, want at most one free non-default row";
+            return false;
+        }
         error = "";
         return true;
     }
@@ -64,6 +104,12 @@ public sealed class CashShopCatalog
                 error = $"cashshop item {item.Id} has no exported ItemData";
                 return false;
             }
+        foreach (var look in Hairs.Concat(Faces))
+            if (!items.ContainsKey(look.ItemId))
+            {
+                error = $"cashshop {look.Name} {look.ItemId} has no exported ItemData";
+                return false;
+            }
         error = "";
         return true;
     }
@@ -76,4 +122,13 @@ public sealed class CashShopItem
     public int Count { get; set; }
     public string Group { get; set; } = "";
     public string Tab { get; set; } = "";
+}
+
+public sealed class CashShopLook
+{
+    public int ItemId { get; set; }
+    public int Cosmetic { get; set; }
+    public string Name { get; set; } = "";
+    public long Price { get; set; }
+    public bool Default { get; set; }
 }

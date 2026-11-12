@@ -10,5 +10,31 @@
     { "Id": 1040007, "Price": 500, "Count": 1, "Group": "Fashion", "Tab": "Outfits" },
     { "Id": 1040012, "Price": 800, "Count": 1, "Group": "Fashion", "Tab": "Outfits" },
     { "Id": 1040022, "Price": 1300, "Count": 1, "Group": "Fashion", "Tab": "Outfits" }
+  ],
+  "Hairs": [
+    { "ItemId": 5157000, "Cosmetic": 33580, "Name": "Waxed Hair", "Price": 2800 },
+    { "ItemId": 5157010, "Cosmetic": 40120, "Name": "Pageboy Hair", "Price": 2800 },
+    { "ItemId": 5157038, "Cosmetic": 61860, "Name": "Amelie Hair", "Price": 2800 },
+    { "ItemId": 5157042, "Cosmetic": 64320, "Name": "Celine Hair", "Price": 2800 },
+    { "ItemId": 5157046, "Cosmetic": 68150, "Name": "Blanche Hair", "Price": 3800 },
+    { "ItemId": 5157062, "Cosmetic": 60830, "Name": "Formal Elfi Hair", "Price": 5800 },
+    { "ItemId": 5157065, "Cosmetic": 36680, "Name": "Spade Hair", "Price": 2800 },
+    { "ItemId": 5157257, "Cosmetic": 30020, "Name": "Messy Hair", "Price": 0, "Default": true },
+    { "ItemId": 5157258, "Cosmetic": 33390, "Name": "Messy Hair", "Price": 0 },
+    { "ItemId": 5157296, "Cosmetic": 65370, "Name": "Dark Lyrk Hair", "Price": 1800 },
+    { "ItemId": 5157298, "Cosmetic": 45110, "Name": "Noah Hair", "Price": 3800 }
+  ],
+  "Faces": [
+    { "ItemId": 5158001, "Cosmetic": 20053, "Name": "Crow Face", "Price": 1800 },
+    { "ItemId": 5158005, "Cosmetic": 23017, "Name": "Crescent Eye Face", "Price": 2800 },
+    { "ItemId": 5158008, "Cosmetic": 23091, "Name": "New Aran Face", "Price": 3800 },
+    { "ItemId": 5158010, "Cosmetic": 23085, "Name": "New Evan Face", "Price": 2800 },
+    { "ItemId": 5158018, "Cosmetic": 55058, "Name": "Reiner Face", "Price": 2800 },
+    { "ItemId": 5158019, "Cosmetic": 25095, "Name": "Petulant Face", "Price": 5800 },
+    { "ItemId": 5158029, "Cosmetic": 28072, "Name": "Sleepy Time Face", "Price": 2800 },
+    { "ItemId": 5158049, "Cosmetic": 21063, "Name": "Cutie Pie Face", "Price": 3800 },
+    { "ItemId": 5158105, "Cosmetic": 21029, "Name": "Kitty Cat Face", "Price": 2800 },
+    { "ItemId": 5158151, "Cosmetic": 20000, "Name": "Defiant Face", "Price": 0, "Default": true },
+    { "ItemId": 5158152, "Cosmetic": 20002, "Name": "Defiant Face", "Price": 0 }
   ]
 }

@@ -133,8 +133,40 @@ public static partial class Export
             }
         }
 
+        // Every coupon icon resolves to the shared hair/face coupon icon.
+        foreach (var (looks, iconId, kind) in new[] { (catalog.Hairs, 5157053, "hair"), (catalog.Faces, 5158018, "face") })
+        {
+            foreach (var look in looks)
+            {
+                string nodePath = $"Cash/0515.img/{look.ItemId:D8}";
+                if (item.Find(nodePath) == null)
+                {
+                    Console.WriteLine($"cashshop look {look.ItemId} has no Item/Cash node");
+                    return false;
+                }
+                int cosmetic = Int(item.Find($"{nodePath}/spec"), "cosmetic");
+                if (cosmetic != look.Cosmetic)
+                {
+                    Console.WriteLine($"cashshop look {look.ItemId} gives cosmetic {cosmetic}, expected {look.Cosmetic}");
+                    return false;
+                }
+                var data = new ItemData
+                {
+                    ItemId = look.ItemId,
+                    Name = look.Name,
+                    Image = $"cashitem/{look.ItemId}.png",
+                    Desc = CleanDesc(str.Find($@"Cash.img\{look.ItemId}\desc")?.GetValueEx<string>("") ?? "", kind).Replace("\\r", ""),
+                    Cash = true,
+                    Cosmetic = look.Cosmetic,
+                };
+                if (!UiPng.Save(item, "Item", $"Cash/0515.img/{iconId:D8}/info/icon", Path.Combine(outDir, "cashitem", $"{look.ItemId}.png")))
+                    return false;
+                WriteJson(Path.Combine(outDir, "cashitem", $"{look.ItemId}.json"), data);
+            }
+        }
+
         WriteJson(Path.Combine(outDir, "cashshop", "catalog.json"), catalog);
-        Console.WriteLine($"cashshop: {files.Count} ui files, {catalog.Items.Count} items");
+        Console.WriteLine($"cashshop: {files.Count} ui files, {catalog.Items.Count} items, {catalog.Hairs.Count + catalog.Faces.Count} looks");
         return true;
     }
 }
