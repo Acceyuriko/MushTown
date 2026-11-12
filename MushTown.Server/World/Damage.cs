@@ -16,20 +16,20 @@ public static class Damage
     // roll01 blends min->max (v1 rolls uniform; official MS rolls per damage line).
     // def is the fraction of damage the mob blocks (0-1). dmgPct adds +damage%
     // (Weapon Mastery); crit01 < critPct/100 crits.
-    public static int Calc(double roll01, double crit01, double def, Build build) =>
+    public static long Calc(double roll01, double crit01, double def, Build build) =>
         SkillCalc(roll01, crit01, def, build, 100);
 
     // Skill hit: the cast-time pct (skill level and combo orbs folded in by
     // the caster) plus the attacker's +damage%, then the same
     // defense/crit/global/min-1 tail. v1 rolls one line (official MS rolls
     // per attack line; multi-line display is polish).
-    public static int SkillCalc(double roll01, double crit01, double def, Build build, int pct)
+    public static long SkillCalc(double roll01, double crit01, double def, Build build, int pct)
     {
-        (int minRange, int maxRange) = Progression.PanelRange(build.Str, build.Dex, build.WeaponAtk);
+        (long minRange, long maxRange) = Progression.PanelRange(build.Str, build.Dex, build.WeaponAtk);
         double roll = minRange + (maxRange - minRange) * roll01;
         double skilled = roll * (pct + build.DmgPct) / 100; // 技能倍率
         double guarded = skilled * (1 - def);
         double critted = crit01 * 100 < build.CritPct ? guarded * CritMult : guarded;
-        return Math.Max(1, (int)(critted * GlobalMult)); // every hit lands for >= 1
+        return Math.Max(1L, (long)(critted * GlobalMult)); // every hit lands for >= 1
     }
 }

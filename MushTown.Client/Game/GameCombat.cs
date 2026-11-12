@@ -98,11 +98,11 @@ public partial class MushTownGame
     // through, death respawns at the map spawn with full pools (buffs stay).
     // Returns true on death: the caller drops the rest of the frame's touches
     // (judged at the corpse, not the spawn).
-    private bool ApplyHurt(int damage)
+    private bool ApplyHurt(long damage)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return false; // CLI sessions have no one to hurt
-        int dealt = Progression.ApplyHurt(chara, damage, OwnDef());
+        long dealt = Progression.ApplyHurt(chara, damage, OwnDef());
         if (dealt == 0) return false; // harmless touch: no number, no death
         var num = TakeNumber();
         num.Text = dealt.ToString(); num.X = _mover.X; num.Y = _mover.Y - 90;
@@ -333,12 +333,12 @@ public partial class MushTownGame
         var chara = _save?.Slots[_slot];
         if (chara == null) return Progression.Beginner;
         var worn = ItemData.EquipBonus(chara.Equips, _items);
-        int str = chara.Str + worn.str
+        long str = chara.Str + worn.str
             + _skills[SkillData.PhysicalTraining].Str * SkillLv(SkillData.PhysicalTraining)
             + _skills[SkillData.AgileArms].Str * SkillLv(SkillData.AgileArms);
-        int dex = chara.Dex + worn.dex
+        long dex = chara.Dex + worn.dex
             + _skills[SkillData.PhysicalTraining].Dex * SkillLv(SkillData.PhysicalTraining);
-        int atk = worn.weapon > 0
+        long atk = worn.weapon > 0
             ? worn.weapon + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor)
             : 0; // an empty hand has no weapon attack, even with Guardian Armor
         if (_fighter.Buffs.ContainsKey(SkillData.SpiritBlade))
@@ -390,7 +390,7 @@ public partial class MushTownGame
     // new build and quest mirror to the server (the local judge reads the
     // build fresh every swing; level is the one quest field the server
     // cannot evolve itself).
-    private void GainExp(int exp)
+    private void GainExp(long exp)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions have no one to level

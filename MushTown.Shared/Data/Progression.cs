@@ -13,11 +13,11 @@ public static class Progression
     // EXP to climb from this level to the next. Linear v1 curve: levels 1-10
     // cost 1035 total, and one training center pays about that much per
     // clear, so grinding the training mobs always outruns the cap.
-    public static int ExpNext(int level) => 20 * level + 15;
+    public static long ExpNext(int level) => 20L * level + 15;
 
     // Vitals grow per level; a level-up refills both pools (official does too).
-    public static int MaxHp(int level) => 50 + 30 * (level - 1);
-    public static int MaxMp(int level) => 5 + 5 * (level - 1);
+    public static long MaxHp(int level) => 50 + 30L * (level - 1);
+    public static long MaxMp(int level) => 5 + 5L * (level - 1);
 
     // Melee weapon multiplier. bwiki's weapon table page is gone (template
     // 404), so 4.6 is a v1 guess, kept visible here until verified.
@@ -28,10 +28,10 @@ public static class Progression
 
     // The bwiki panel range (实际面板): warrior STR main, DEX sub. Damage.Calc
     // rolls inside this range; the stat panel shows it.
-    public static (int min, int max) PanelRange(int str, int dex, int weaponAtk)
+    public static (long min, long max) PanelRange(long str, long dex, long weaponAtk)
     {
-        int max = (int)(WeaponMult * (str * 4 + dex) * weaponAtk / 100);
-        return ((int)(max * MeleeMastery), max);
+        long max = (long)(WeaponMult * (str * 4 + dex) * weaponAtk / 100);
+        return ((long)(max * MeleeMastery), max);
     }
 
     // Combat stats the client sends the server (Build message) so damage is
@@ -45,7 +45,7 @@ public static class Progression
 
     // Max-HP pool with the +MaxHP% of learned skills (Iron Body, Warrior
     // Mastery, Endure) folded in. MP has no buff source in v1.
-    public static int BuffedMaxHp(int level, int hpPct) => MaxHp(level) * (100 + hpPct) / 100;
+    public static long BuffedMaxHp(int level, int hpPct) => MaxHp(level) * (100 + hpPct) / 100;
 
     // Active damage pct at a skill level: lv 1 deals DmgLo, max deals DmgHi,
     // linear between. Single-level skills (max 1) always deal DmgLo.
@@ -86,7 +86,7 @@ public static class Progression
     // Adds EXP, levels up while the bar is full. Each level: auto stat points
     // (+4 STR +1 DEX warrior ratio), +3 SP, pools refilled to the new (buffed)
     // max. Returns levels gained (0 when the bar is not full yet).
-    public static int ApplyExp(CharaSlot chara, int exp, int hpPct = 0)
+    public static int ApplyExp(CharaSlot chara, long exp, int hpPct = 0)
     {
         chara.Exp += exp;
         int ups = 0;
@@ -106,7 +106,7 @@ public static class Progression
 
     // Drinks one potion: needs a bottle in the bag and a pool that is not
     // full. Returns false when nothing happens (empty or already full).
-    public static bool UsePotion(CharaSlot chara, int itemId, int healHp, int healMp, int hpPct = 0)
+    public static bool UsePotion(CharaSlot chara, int itemId, long healHp, long healMp, int hpPct = 0)
     {
         var use = chara.Use;
         if (use == null || !use.TryGetValue(itemId, out int count) || count <= 0)
@@ -264,10 +264,10 @@ public static class Progression
 
     // One mob touch: DEF% blocks its share (min 1 when damage lands), HP
     // floors at 0. Returns the damage dealt (the client shows it; Hp 0 means dead).
-    public static int ApplyHurt(CharaSlot chara, int damage, int defPct)
+    public static long ApplyHurt(CharaSlot chara, long damage, int defPct)
     {
         if (damage <= 0) return 0; // a Touch-0 mob is harmless, not chip damage
-        int dealt = Math.Max(1, damage * (100 - defPct) / 100);
+        long dealt = Math.Max(1, damage * (100 - defPct) / 100);
         chara.Hp = Math.Max(0, chara.Hp - dealt);
         return dealt;
     }
@@ -277,4 +277,4 @@ public static class Progression
 // client-side: nothing consumes them until later milestones. The last three
 // fold skill sources: +damage% (Weapon Mastery), crit% (Weapon/Chance),
 // Final Attack proc% — the client recomputes them on every learn/buff tick.
-public readonly record struct Build(int Str, int Dex, int WeaponAtk, int DmgPct, int CritPct, int FinalPct);
+public readonly record struct Build(long Str, long Dex, long WeaponAtk, int DmgPct, int CritPct, int FinalPct);

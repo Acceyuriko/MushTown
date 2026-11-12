@@ -125,7 +125,7 @@ public sealed partial class GameServer : IDisposable
                     foreach (var s in ev.Spawns)
                         Broadcast(MobSpawnFrame(s));
                     foreach (var t in ev.Takes)
-                        BroadcastDropTake(t.uid, t.map, 0, 0, 0, 0);
+                        BroadcastDropTake(t.uid, t.map, 0, 0, 0, 0, 0);
                 }
             }
         }
@@ -308,11 +308,11 @@ public sealed partial class GameServer : IDisposable
             OnSkill(id, BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5));
             return;
         }
-        if (payload[0] == Net.Build && payload.Length == 25)
+        if (payload[0] == Net.Build && payload.Length == 37)
         {
             lock (_mobLock)
-                _builds[id] = new Build(BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5), BitConverter.ToInt32(payload, 9),
-                    BitConverter.ToInt32(payload, 13), BitConverter.ToInt32(payload, 17), BitConverter.ToInt32(payload, 21));
+                _builds[id] = new Build(BitConverter.ToInt64(payload, 1), BitConverter.ToInt64(payload, 9), BitConverter.ToInt64(payload, 17),
+                    BitConverter.ToInt32(payload, 25), BitConverter.ToInt32(payload, 29), BitConverter.ToInt32(payload, 33));
             return;
         }
         if (payload[0] != Net.State || payload.Length != 20)
@@ -557,7 +557,7 @@ public sealed partial class GameServer : IDisposable
             if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to judge from
             var d = _mobs.Pickup(uid, p.map, p.x, p.y);
             if (d == null) return;
-            BroadcastDropTake(d.Uid, d.Map, id, d.Kind, d.Id, d.Count);
+            BroadcastDropTake(d.Uid, d.Map, id, d.Kind, d.Id, d.Count, d.Amount);
         }
     }
 
@@ -570,7 +570,7 @@ public sealed partial class GameServer : IDisposable
     }
 
     // One drop gone: claimed (taker + loot) or expired (taker 0, no loot).
-    private void BroadcastDropTake(int uid, int map, int taker, int kind, int id, int count) =>
+    private void BroadcastDropTake(int uid, int map, int taker, int kind, int id, int count, long amount) =>
         Broadcast(Net.Encode(Net.DropTake, w =>
         {
             w.Write(uid);
@@ -579,6 +579,7 @@ public sealed partial class GameServer : IDisposable
             w.Write(kind);
             w.Write(id);
             w.Write(count);
+            w.Write(amount);
         }));
 
     // One judged hit to every client (basic swings and skills share this wire shape).
@@ -587,7 +588,7 @@ public sealed partial class GameServer : IDisposable
     // is the attacker's share: a party kill splits it (GameServerParty).
     private void BroadcastHit(MobWorld.Hit h, int attacker)
     {
-        int exp = h.HpLeft == 0 ? ShareKillExp(h.Exp, attacker, h.Map) : h.Exp;
+        long exp = h.HpLeft == 0 ? ShareKillExp(h.Exp, attacker, h.Map) : h.Exp;
         Broadcast(Net.Encode(Net.MobHit, w =>
         {
             w.Write(h.Uid);
@@ -641,6 +642,7 @@ public sealed partial class GameServer : IDisposable
             w.Write(d.Kind);
             w.Write(d.Id);
             w.Write(d.Count);
+            w.Write(d.Amount);
         });
 
     private void Broadcast(byte[] frame, int exceptId = -1)

@@ -171,18 +171,18 @@ public sealed class CharaSlot
     public string Name { get; set; } = "";
     public int Job { get; set; } = 110; // picked class id (110 = Hero: the only line the game plays; old saves have none)
     public int Level { get; set; } = 1;
-    public int Exp { get; set; }
+    public long Exp { get; set; }
     public int Map { get; set; } = 10000;
     public int? X { get; set; }
     public int? Y { get; set; }
-    public int Mesos { get; set; }
+    public long Mesos { get; set; }
     public int Sp { get; set; }
-    public int Hp { get; set; } = Progression.MaxHp(1);
-    public int Mp { get; set; } = Progression.MaxMp(1);
-    public int Str { get; set; } = 4;
-    public int Dex { get; set; } = 4;
-    public int Int { get; set; } = 4;
-    public int Luk { get; set; } = 4;
+    public long Hp { get; set; } = Progression.MaxHp(1);
+    public long Mp { get; set; } = Progression.MaxMp(1);
+    public long Str { get; set; } = 4;
+    public long Dex { get; set; } = 4;
+    public long Int { get; set; } = 4;
+    public long Luk { get; set; } = 4;
     public Dictionary<int, int>? Use { get; set; } // itemId -> count (USE tab)
     public Dictionary<int, int>? EquipBag { get; set; } // itemId -> count (EQUIP tab bag; each copy takes one cell)
     public Dictionary<int, int>? CashBag { get; set; } // itemId -> count (CASH tab, non-decorative)

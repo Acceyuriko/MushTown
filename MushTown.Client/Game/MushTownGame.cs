@@ -674,7 +674,7 @@ public partial class MushTownGame : Game
                 else if (_localWorld != null)
                 {
                     var d = _localWorld.Pickup(best, _mapId, _mover.X, _mover.Y);
-                    if (d != null) ApplyDropTake(d.Uid, true, d.Kind, d.Id, d.Count);
+                    if (d != null) ApplyDropTake(d.Uid, true, d.Kind, d.Id, d.Count, d.Amount);
                 }
             }
         }
@@ -780,8 +780,8 @@ public partial class MushTownGame : Game
             while (_net.TryTakeDrop(out var d))
             {
                 if (d.Map != _mapId) continue; // another map's loot: not shown here
-                if (d.Spawn) ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count);
-                else ApplyDropTake(d.Uid, d.Taker == _net.PlayerId, d.Kind, d.Id, d.Count);
+                if (d.Spawn) ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount);
+                else ApplyDropTake(d.Uid, d.Taker == _net.PlayerId, d.Kind, d.Id, d.Count, d.Amount);
             }
             while (_net.TryTakeFx(out var f))
             {
@@ -1036,7 +1036,7 @@ public partial class MushTownGame : Game
     internal float PlayerX => _mover.X;
     internal float PlayerY => _mover.Y;
     internal CharaSlot? Hero => _save?.Slots[_slot];
-    internal int Meso => _save?.Slots[_slot]?.Mesos ?? 0;
+    internal long Meso => _save?.Slots[_slot]?.Mesos ?? 0;
     internal IReadOnlyDictionary<int, ItemData> Items => _items;
     internal CashShopCatalog CashShop => _cashShop;
 

@@ -154,7 +154,7 @@ public sealed class QuestLog : Component
     // Turn-in payout: mesos drop in the purse, potions in the USE bag.
     // Returns the EXP grant: the caller routes it through GainExp like kills,
     // so level-ups log and push the build on the same path.
-    public int TurnIn(CharaSlot chara, int quest)
+    public long TurnIn(CharaSlot chara, int quest)
     {
         var q = Defs[quest];
         chara.Mesos += q.RewardMeso;

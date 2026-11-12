@@ -22,7 +22,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<PartyEvent> _partyEvents = new();
     private readonly ConcurrentQueue<PartyPlayersEvent> _partyPlayersEvents = new();
     private readonly ConcurrentQueue<PartyAskEvent> _partyAskEvents = new();
-    private readonly ConcurrentQueue<int> _expEvents = new();
+    private readonly ConcurrentQueue<long> _expEvents = new();
     private readonly object _sendLock = new();
     private TcpClient? _tcp;
     private CancellationTokenSource? _cts;
@@ -292,7 +292,7 @@ public sealed class NetClient : IDisposable
     public bool TryTakePartyAsk(out PartyAskEvent e) => _partyAskEvents.TryDequeue(out e);
 
     // The party share of a kill (the exp the server split off for us).
-    public bool TryTakeExp(out int exp) => _expEvents.TryDequeue(out exp);
+    public bool TryTakeExp(out long exp) => _expEvents.TryDequeue(out exp);
 
     private async Task ReadLoop(NetReader reader, CancellationToken ct)
     {
@@ -326,16 +326,16 @@ public sealed class NetClient : IDisposable
                 p[17], p[18], p[19] != 0));
         else if (p[0] == Net.Leave && p.Length == 5)
             _events.Enqueue(new RemoteEvent(true, BitConverter.ToInt32(p, 1), 0, 0, 0, 0, 0, false));
-        else if (p[0] == Net.MobSpawn && p.Length == 29)
+        else if (p[0] == Net.MobSpawn && p.Length == 37)
             _mobEvents.Enqueue(new MobEvent(true,
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
                 BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17),
-                BitConverter.ToInt32(p, 21), 0, BitConverter.ToInt32(p, 25), 0, 0, 0));
-        else if (p[0] == Net.MobHit && p.Length == 29)
+                BitConverter.ToInt64(p, 21), 0, BitConverter.ToInt64(p, 29), 0, 0, 0));
+        else if (p[0] == Net.MobHit && p.Length == 41)
             _mobEvents.Enqueue(new MobEvent(false,
                 BitConverter.ToInt32(p, 1), 0, BitConverter.ToInt32(p, 5), 0, 0, 0,
-                BitConverter.ToInt32(p, 9), BitConverter.ToInt32(p, 13),
-                BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21), BitConverter.ToInt32(p, 25)));
+                BitConverter.ToInt64(p, 9), BitConverter.ToInt64(p, 17),
+                BitConverter.ToInt32(p, 25), BitConverter.ToInt64(p, 29), BitConverter.ToInt32(p, 37)));
         else if (p[0] == Net.SkillFx && p.Length == 22)
             _fxEvents.Enqueue(new SkillFxEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
@@ -344,20 +344,21 @@ public sealed class NetClient : IDisposable
             _moveEvents.Enqueue(new MoveEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),
                 BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13), p[17] != 0));
-        else if (p[0] == Net.Hurt && p.Length == 17)
+        else if (p[0] == Net.Hurt && p.Length == 21)
             _hurtEvents.Enqueue(new HurtEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
-                BitConverter.ToInt32(p, 13)));
-        else if (p[0] == Net.DropSpawn && p.Length == 29)
+                BitConverter.ToInt64(p, 13)));
+        else if (p[0] == Net.DropSpawn && p.Length == 37)
             _dropEvents.Enqueue(new DropEvent(true,
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),
                 BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13),
-                BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21), BitConverter.ToInt32(p, 25), 0));
-        else if (p[0] == Net.DropTake && p.Length == 25)
+                BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21), BitConverter.ToInt32(p, 25),
+                BitConverter.ToInt64(p, 29), 0));
+        else if (p[0] == Net.DropTake && p.Length == 33)
             _dropEvents.Enqueue(new DropEvent(false,
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), 0, 0,
                 BitConverter.ToInt32(p, 13), BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21),
-                BitConverter.ToInt32(p, 9)));
+                BitConverter.ToInt64(p, 25), BitConverter.ToInt32(p, 9)));
         else if (p[0] == Net.QuestOk && p.Length == 6)
             _questEvents.Enqueue(new QuestEvent(false,
                 BitConverter.ToInt32(p, 1), 0, 0, p[5] != 0));
@@ -460,7 +461,7 @@ public sealed class NetClient : IDisposable
             {
                 using var ms = new MemoryStream(p, 1, p.Length - 1);
                 using var r = new BinaryReader(ms);
-                _expEvents.Enqueue(r.ReadInt32());
+                _expEvents.Enqueue(r.ReadInt64());
             }
             catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
             {

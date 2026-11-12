@@ -28,19 +28,19 @@ public partial class MushTownGame
     private void DrainDrops(MobWorld world)
     {
         foreach (var d in world.TakeDrops())
-            ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count);
+            ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount);
     }
 
-    private void ApplyDropSpawn(int uid, float x, float y, int kind, int id, int count)
+    private void ApplyDropSpawn(int uid, float x, float y, int kind, int id, int count, long amount)
     {
         var o = new GameObject();
-        _drops[uid] = o.Add(new DropArt { X = x, Y = y, Kind = kind, Id = id, Count = count });
+        _drops[uid] = o.Add(new DropArt { X = x, Y = y, Kind = kind, Id = id, Count = count, Amount = amount });
         _world.AddChild(o);
     }
 
     // One drop gone: everyone clears the view, the taker claims the loot.
     // Mesos pile up; known drops land in a bag (equips in EQUIP, potions in USE).
-    private void ApplyDropTake(int uid, bool mine, int kind, int id, int count)
+    private void ApplyDropTake(int uid, bool mine, int kind, int id, int count, long amount)
     {
         if (_drops.Remove(uid, out var gone)) _world.RemoveChild(gone.Owner);
         var chara = _save?.Slots[_slot];
@@ -48,8 +48,8 @@ public partial class MushTownGame
         PlaySfx("pickup");
         if (kind == DropKind.Mesos)
         {
-            chara.Mesos += id;
-            LogEvent($"picked up {id} mesos");
+            chara.Mesos += amount;
+            LogEvent($"picked up {amount} mesos");
         }
         else // the server only drops known ids
         {

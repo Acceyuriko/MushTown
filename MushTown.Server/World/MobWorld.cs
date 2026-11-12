@@ -11,22 +11,22 @@ public sealed class MobWorld
 {
     // One spawn pushed to clients entering the map (live Hp, not MaxHp: a
     // late joiner must see wounded mobs as wounded). Respawns reuse it.
-    public sealed record Spawn(int Uid, int Mob, int Map, float X, float Y, int MaxHp, int Hp);
+    public sealed record Spawn(int Uid, int Mob, int Map, float X, float Y, long MaxHp, long Hp);
 
     // One mob caught by a swing. HpLeft 0 means it died (no separate die message).
     // Exp is the mob's kill award (the killer's client claims it).
     // Skill is 0 for a basic swing, else the skill whose hit spark to play.
-    public sealed record Hit(int Uid, int Map, int Damage, int HpLeft, int Exp, int Skill, int Mob);
+    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob);
 
     // One mob step (10Hz on the wire): Uid now stands at X/Y, facing along.
     public sealed record Move(int Uid, int Map, float X, float Y, bool FacingRight);
 
     // One touch that landed: Mob's Uid dealt Damage to Victim. The victim's
     // client folds DEF and drains HP (death respawns at the map spawn).
-    public sealed record Hurt(int Victim, int Uid, int Mob, int Map, int Damage);
+    public sealed record Hurt(int Victim, int Uid, int Mob, int Map, long Damage);
 
-    // One ground drop: Kind is Mesos (Id = amount) or Item (Id + Count).
-    public sealed record Drop(int Uid, int Map, float X, float Y, int Kind, int Id, int Count);
+    // One ground drop: Kind is Mesos (Amount) or Item (Id + Count).
+    public sealed record Drop(int Uid, int Map, float X, float Y, int Kind, int Id, int Count, long Amount);
 
     // One tick's events, in wire order: moves snap poses, hurts drain HP,
     // spawns re-plant the respawned, takes clear expired drops. Kill drops
@@ -64,12 +64,13 @@ public sealed class MobWorld
         public int Kind;
         public int Id;
         public int Count;
+        public long Amount;
         public float MsLeft;
     }
 
     private readonly string _assetsDir;
     private readonly Dictionary<int, MapData> _maps = new();
-    private readonly Dictionary<int, (int hp, double def, int exp, int touch, int speed, int aggro, bool boss)> _stats = new();
+    private readonly Dictionary<int, (long hp, double def, long exp, long touch, int speed, int aggro, bool boss)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
     private readonly Dictionary<int, DropTable> _dropTables = new();
     private readonly List<Mob> _lives = new();
@@ -129,7 +130,7 @@ public sealed class MobWorld
     // One fresh body at the spawn feet (first plant and respawns share it).
     // Mobs face left until the AI turns them.
     private static Mob Plant(int uid, int mob, int map, float x, float y,
-        (int hp, double def, int exp, int touch, int speed, int aggro, bool boss) st) => new()
+        (long hp, double def, long exp, long touch, int speed, int aggro, bool boss) st) => new()
         {
             Uid = uid,
             MobId = mob,
@@ -165,7 +166,7 @@ public sealed class MobWorld
         var list = new List<Drop>();
         foreach (var d in _drops)
             if (d.Map == map)
-                list.Add(new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count));
+                list.Add(new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount));
         return list;
     }
 
@@ -236,16 +237,16 @@ public sealed class MobWorld
             if (d.Map != map || Math.Abs(x - d.X) > PickDx || Math.Abs(y - d.Y) > PickDy)
                 return null;
             _drops.RemoveAt(i);
-            return new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count);
+            return new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount);
         }
         return null;
     }
 
     // Quest-scripted bonus lines per kill: (mob, attacker) -> extra payouts
-    // (kind/id/count/dx, placed like table rolls). Null in v1 (the bag
+    // (kind/id/count/amount/dx, placed like table rolls). Null in v1 (the bag
     // holds no quest items yet); the hook stays so the first scripted
     // drop needs no rewire. attacker 0 is the local player.
-    public Func<int, int, List<(int kind, int id, int count, float dx)>>? BonusDrops { get; set; }
+    public Func<int, int, List<(int kind, int id, int count, long amount, float dx)>>? BonusDrops { get; set; }
 
     // One basic-attack swing at (x, y): every mob in reach takes one damage
     // roll, and the dead are removed. rng comes from the caller (tests pass a seed).
@@ -260,7 +261,7 @@ public sealed class MobWorld
             float dx = m.X - x;
             bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
-            int damage = Damage.Calc(rng.NextDouble(), rng.NextDouble(), m.Def, build);
+            long damage = Damage.Calc(rng.NextDouble(), rng.NextDouble(), m.Def, build);
             m.Hp = Math.Max(0, m.Hp - damage);
             hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId));
             if (m.Hp != 0) continue;
@@ -330,7 +331,7 @@ public sealed class MobWorld
     // (the boss always pays its purse).
     private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker)
     {
-        int damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct);
+        long damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct);
         m.Hp = Math.Max(0, m.Hp - damage);
         if (m.Hp == 0)
         {
@@ -378,14 +379,14 @@ public sealed class MobWorld
         var data = _maps[m.Map];
         var table = _dropTables[m.MobId];
         foreach (var p in table.Roll(rng))
-            DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count);
+            DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count, p.amount);
         if (BonusDrops != null)
             foreach (var p in BonusDrops(m.MobId, attacker))
-                DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count);
+                DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count, p.amount);
     }
 
     // One loot drop: clamped inside the VR, lands on the ground below.
-    private void DropOne(MapData data, Mob m, float x, int kind, int id, int count)
+    private void DropOne(MapData data, Mob m, float x, int kind, int id, int count, long amount)
     {
         float cx = Math.Clamp(x, data.Info.VrLeft, data.Info.VrRight);
         var d = new GroundDrop
@@ -397,10 +398,11 @@ public sealed class MobWorld
             Kind = kind,
             Id = id,
             Count = count,
+            Amount = amount,
             MsLeft = DropMs
         };
         _drops.Add(d);
-        _fresh.Add(new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count));
+        _fresh.Add(new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount));
     }
 
     // Drop landing height: the first ground at or below the kill, else the

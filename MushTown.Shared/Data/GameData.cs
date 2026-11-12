@@ -221,10 +221,10 @@ public sealed class MobData
 {
     public int MobId { get; set; }
     public string Name { get; set; } = "";
-    public int MaxHp { get; set; }
+    public long MaxHp { get; set; }
     public double Def { get; set; } // fraction of damage blocked, 0-1 (PDRate/100; v1: nothing ignores it)
-    public int Exp { get; set; } // kill award (the WZ exp node)
-    public int Touch { get; set; } // contact damage (flat: mobs roll no variance in v1)
+    public long Exp { get; set; } // kill award (the WZ exp node)
+    public long Touch { get; set; } // contact damage (flat: mobs roll no variance in v1)
     public int Speed { get; set; } // walk px/s (100 + the WZ speed percent)
     public int Aggro { get; set; } // chase range in x px (0 = never chases)
     public bool Boss { get; set; } // v1 boss (Mushmom only): long grave, fat purse, wide touch, HP bar
@@ -350,9 +350,9 @@ public sealed class ItemData
     public string Name { get; set; } = ""; // String.wz name (Consume/Eqp): the exporter fails loud when missing
     public string Desc { get; set; } = ""; // the flavour text of String.wz: potions, cash coupons and cash rings have one
     public string Image { get; set; } = "";
-    public int Hp { get; set; }
-    public int Mp { get; set; }
-    public int Price { get; set; } // WZ info/price: what the shop charges (sell pays half, min 1)
+    public long Hp { get; set; }
+    public long Mp { get; set; }
+    public long Price { get; set; } // WZ info/price: what the shop charges (sell pays half, min 1)
     public int ReqLevel { get; set; } // WZ info/reqLevel: the level it asks for (0 = none, and v1 does not enforce it)
     public string? Slot { get; set; } // equip slot (WZ islot); null = consumable
     public int Atk { get; set; } // WZ incPAD

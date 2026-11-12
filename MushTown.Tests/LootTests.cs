@@ -21,8 +21,8 @@ public sealed class LootTests
         assets.AddMob(100000, 1);
         var world = new MobWorld(assets.Dir);
         world.EnterMap(7);
-        world.BonusDrops = (_, _) => new List<(int kind, int id, int count, float dx)>
-            { (DropKind.Item, 2000000, 3, 35) };
+        world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount, float dx)>
+            { (DropKind.Item, 2000000, 3, 0, 35) };
 
         var hits = world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner);
         Assert.AreEqual(0, hits[0].HpLeft);
@@ -49,7 +49,7 @@ public sealed class LootTests
         world.BonusDrops = (mob, attacker) =>
         {
             heard = (mob, attacker);
-            return new List<(int kind, int id, int count, float dx)>();
+            return new List<(int kind, int id, int count, long amount, float dx)>();
         };
 
         world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner, attacker: 7);
@@ -71,7 +71,7 @@ public sealed class LootTests
         world.BonusDrops = (mob, attacker) =>
         {
             heard = (mob, attacker);
-            return new List<(int kind, int id, int count, float dx)>();
+            return new List<(int kind, int id, int count, long amount, float dx)>();
         };
 
         var hits = world.SkillStrike(7, 100, 100, true, new Random(0), Progression.Beginner, SkillData.SlashBlast, 150, attacker: 7);
@@ -92,7 +92,7 @@ public sealed class LootTests
         world.BonusDrops = (_, attacker) =>
         {
             heard = attacker;
-            return new List<(int kind, int id, int count, float dx)>();
+            return new List<(int kind, int id, int count, long amount, float dx)>();
         };
 
         world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner);

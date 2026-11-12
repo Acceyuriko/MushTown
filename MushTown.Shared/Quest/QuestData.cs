@@ -39,8 +39,8 @@ public sealed class QuestData
     public List<QuestKill> Kills { get; set; } = new(); // Check/1/mob, key order; #a order is a single digit; the detail panel shows 4
     public bool NeedItemsToComplete { get; set; } // Check/1/item non-empty: v1 cannot verify, never completes
     public bool NeedItemsToAccept { get; set; } // Check/0/item non-empty: v1 cannot accept
-    public int RewardExp { get; set; } // Act/1/exp (TalkAction grants it through GainExp, like kills)
-    public int RewardMeso { get; set; } // Act/1/meso (GrantRewards drops it in the purse)
+    public long RewardExp { get; set; } // Act/1/exp (TalkAction grants it through GainExp, like kills)
+    public long RewardMeso { get; set; } // Act/1/meso (GrantRewards drops it in the purse)
     public List<QuestReward> RewardItems { get; set; } = new(); // Act/1/item (potions only in v1: no ETC bag yet)
     // Turn-in preview + log receipt: one short line per reward, no prefix
     // (the talk page heads them with "Reward:", the log wraps them in parens).

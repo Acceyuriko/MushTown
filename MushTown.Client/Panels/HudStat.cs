@@ -160,12 +160,12 @@ public partial class MushTownGame
         {
             case 0:
                 {
-                    int maxHp = Progression.BuffedMaxHp(c?.Level ?? 1, OwnHpPct());
+                    long maxHp = Progression.BuffedMaxHp(c?.Level ?? 1, OwnHpPct());
                     return $"{c?.Hp ?? maxHp} / {maxHp}";
                 }
             case 1:
                 {
-                    int maxMp = Progression.MaxMp(c?.Level ?? 1);
+                    long maxMp = Progression.MaxMp(c?.Level ?? 1);
                     return $"{c?.Mp ?? maxMp} / {maxMp}";
                 }
             case 2: return $"{OwnBuild().Str}";
@@ -193,11 +193,11 @@ public partial class MushTownGame
     // The combat power: our own number, not the official one (the official
     // formula is not in the WZ). It grows with the level, the attack and the
     // main stats, so the gear and the skills move it.
-    private int CombatPower()
+    private long CombatPower()
     {
         var b = OwnBuild();
         int level = _save?.Slots[_slot]?.Level ?? 1;
-        return level * 100 + b.WeaponAtk * 4 + b.Str + b.Dex;
+        return level * 100L + b.WeaponAtk * 4 + b.Str + b.Dex;
     }
 }
 

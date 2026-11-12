@@ -124,7 +124,7 @@ public class MobAiTests
         var fresh = world.TakeDrops();
         Assert.IsTrue(fresh.Count >= 1);
         Assert.AreEqual(DropKind.Mesos, fresh[0].Kind);
-        Assert.IsTrue(fresh[0].Id is >= 10 and <= 30);
+        Assert.IsTrue(fresh[0].Amount is >= 10 and <= 30);
         Assert.AreEqual(1, fresh[0].Count);
         Assert.AreEqual(7, fresh[0].Map);
         Assert.AreEqual(0, world.TakeDrops().Count); // drained: second take is empty
@@ -154,7 +154,7 @@ public class MobAiTests
         var fresh = world.TakeDrops();
         Assert.AreEqual(4, fresh.Count);
         Assert.AreEqual(DropKind.Mesos, fresh[0].Kind);
-        Assert.IsTrue(fresh[0].Id is >= 150 and <= 300);
+        Assert.IsTrue(fresh[0].Amount is >= 150 and <= 300);
         Assert.AreEqual(DropKind.Item, fresh[1].Kind);
         Assert.AreEqual(ItemData.RedPotion, fresh[1].Id);
         Assert.AreEqual(2, fresh[1].Count);
@@ -533,7 +533,8 @@ public class MobAiTests
         var takeA = WaitTakeDrop(a);
         Assert.IsFalse(takeA.Spawn);
         Assert.AreEqual(a.PlayerId, takeA.Taker);
-        Assert.AreEqual(mesos.Id, takeA.Id); // the take carries the loot
+        Assert.AreEqual(DropKind.Mesos, takeA.Kind);
+        Assert.AreEqual(mesos.Amount, takeA.Amount); // the take carries the loot
         var takeB = WaitTakeDrop(b);
         Assert.AreEqual(a.PlayerId, takeB.Taker);
     }

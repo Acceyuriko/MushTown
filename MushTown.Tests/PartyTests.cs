@@ -1039,11 +1039,11 @@ public sealed class PartyTests
         Assert.AreEqual(100, hit.Exp);
     }
 
-    private static int WaitTakeExp(NetClient client)
+    private static long WaitTakeExp(NetClient client)
     {
         for (int i = 0; i < 500; i++)
         {
-            if (client.TryTakeExp(out int exp)) return exp;
+            if (client.TryTakeExp(out long exp)) return exp;
             Thread.Sleep(10);
         }
         Assert.Fail("timed out waiting for an exp share");

@@ -15,6 +15,45 @@ public class SaveTests
     }
 
     [TestMethod]
+    public void Save_LoadsTenBillionMesos()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            var hero = store.CreateHero(0, 0, "hero", 110);
+            hero.Mesos = 10_000_000_000L;
+            store.Save(path);
+            var loaded = SaveStore.Load(path).Saves[0]!.Slots[0]!;
+            Assert.AreEqual(10_000_000_000L, loaded.Mesos);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Load_OldIntMesos_BecomesLong()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            var hero = store.CreateHero(0, 0, "hero", 110);
+            hero.Mesos = 12345;
+            store.Save(path);
+            File.WriteAllText(path, File.ReadAllText(path).Replace("\"Mesos\":12345", "\"Mesos\":2147483647"));
+            var loaded = SaveStore.Load(path).Saves[0]!.Slots[0]!;
+            Assert.AreEqual(2147483647L, loaded.Mesos);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void CreateHero_SixtySlots_NameUniquePerFile()
     {
         var store = new SaveStore();

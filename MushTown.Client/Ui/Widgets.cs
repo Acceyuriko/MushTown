@@ -134,8 +134,8 @@ public sealed class Image : Component, IDrawable
 public sealed class Bar : Component, IDrawable
 {
     private readonly string _back, _fill, _cover;
-    private readonly Func<(int Value, int Max)> _amount;
-    public Bar(string back, string fill, string cover, Func<(int Value, int Max)> amount)
+    private readonly Func<(long Value, long Max)> _amount;
+    public Bar(string back, string fill, string cover, Func<(long Value, long Max)> amount)
     {
         _back = back; _fill = fill; _cover = cover; _amount = amount;
     }
@@ -253,8 +253,8 @@ public sealed class BarNumber : Component, IDrawable
 public sealed class BossBar : Component, IDrawable
 {
     private readonly int _w;
-    private readonly Func<(string Name, int Hp, int MaxHp)?> _boss;
-    public BossBar(int width, Func<(string Name, int Hp, int MaxHp)?> boss) { _w = width; _boss = boss; }
+    private readonly Func<(string Name, long Hp, long MaxHp)?> _boss;
+    public BossBar(int width, Func<(string Name, long Hp, long MaxHp)?> boss) { _w = width; _boss = boss; }
     public void Draw(UiGfx gfx)
     {
         var b = _boss();

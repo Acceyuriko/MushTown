@@ -21,8 +21,8 @@ public sealed class TempAssets : IDisposable
             $"{{\"MapId\":{map},\"Life\":{lifeJson},\"Footholds\":{fhJson}," +
             $"\"Info\":{{\"VrLeft\":{vrLeft},\"VrTop\":{vrTop},\"VrRight\":{vrRight},\"VrBottom\":{vrBottom}}}}}");
 
-    public void AddMob(int mob, int hp, double def = 0, int exp = 0,
-        int touch = 5, int speed = 40, int aggro = 200, bool boss = false)
+    public void AddMob(int mob, long hp, double def = 0, long exp = 0,
+        long touch = 5, int speed = 40, int aggro = 200, bool boss = false)
     {
         File.WriteAllText(Path.Combine(Dir, "mob", $"{mob}.json"),
             $"{{\"MobId\":{mob},\"MaxHp\":{hp},\"Def\":{def.ToString(CultureInfo.InvariantCulture)},\"Exp\":{exp}," +
@@ -35,7 +35,7 @@ public sealed class TempAssets : IDisposable
 
     // Drop tables live beside assets/ (repo data, like quests/), so the temp
     // world nests assets one deeper and each test owns its drops sibDir.
-    public void AddDrops(int mob, string itemsJson, int mesoMin = 10, int mesoMax = 30)
+    public void AddDrops(int mob, string itemsJson, long mesoMin = 10, long mesoMax = 30)
     {
         string dir = Path.Combine(Path.GetDirectoryName(Dir)!, "drops");
         Directory.CreateDirectory(dir);

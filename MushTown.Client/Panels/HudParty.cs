@@ -348,8 +348,8 @@ public partial class MushTownGame
         if (_net == null || !_net.Connected || PartyMembers.Length == 0) return;
         var chara = _save?.Slots[_slot];
         if (chara == null) return;
-        int maxHp = Progression.BuffedMaxHp(chara.Level, OwnHpPct());
-        int pct = chara.Hp * 100 / maxHp;
+        long maxHp = Progression.BuffedMaxHp(chara.Level, OwnHpPct());
+        int pct = (int)(chara.Hp * 100 / maxHp);
         if (_sentPartyHp >= 0 && Math.Abs(pct - _sentPartyHp) <= 5) return;
         _sentPartyHp = pct;
         _net.SendPartyHp(pct);

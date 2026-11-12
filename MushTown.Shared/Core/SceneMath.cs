@@ -204,7 +204,7 @@ public static class SceneMath
     // Bar fill width, integer math (a float ratio can round a boundary
     // pixel the other way). Same expression the legacy draws used, so
     // corrupt saves break exactly like before (loud, not clamped).
-    public static int BarWidth(int fillW, int value, int max) => fillW * value / max;
+    public static int BarWidth(int fillW, long value, long max) => (int)((long)fillW * value / max);
 
     // Camera viscosity: critically damped spring (Damp = 2*sqrt(Stiff)), so the
     // camera lags about 70 px while walking and settles without overshoot.

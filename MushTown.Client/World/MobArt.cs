@@ -14,8 +14,8 @@ public sealed class MobArt : Component
     public float X;
     public float Y;
     public bool FacingRight; // AI poses face along (raw art faces left)
-    public int Hp;
-    public int MaxHp;
+    public long Hp;
+    public long MaxHp;
     public string Action { get; private set; } = ""; // stand, move, hit1, die1
     public List<MobFrame> Frames { get; private set; } = null!; // the frames of the current action: SetAction fills it
     public int Frame;
@@ -93,7 +93,7 @@ public static class Idle
     }
 }
 
-// One ground drop: a meso pile (Id = amount) or a potion (Id + Count).
+// One ground drop: a meso pile (Amount) or a potion (Id + Count).
 public sealed class DropArt : Component
 {
     public float X;
@@ -101,4 +101,5 @@ public sealed class DropArt : Component
     public int Kind;
     public int Id;
     public int Count;
+    public long Amount;
 }

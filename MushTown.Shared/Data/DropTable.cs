@@ -9,18 +9,22 @@ public sealed class DropTable : Component
     public DropData Def { get; }
     public DropTable(DropData def) { Def = def; } // dumb ctor
 
-    // One kill's payouts: (kind, id, count, dx from the corpse). Meso
-    // always pays at -7; paying items compact into 14px slots from +7,
-    // so a coat with no potion lands at +7, not the old fixed +21.
-    public List<(int kind, int id, int count, float dx)> Roll(Random rng)
+    // One kill's payouts: (kind, item id, count, meso amount, dx from the
+    // corpse). Meso always pays at -7; paying items compact into 14px slots
+    // from +7, so a coat with no potion lands at +7, not the old fixed +21.
+    public List<(int kind, int id, int count, long amount, float dx)> Roll(Random rng)
     {
-        var list = new List<(int kind, int id, int count, float dx)>();
-        list.Add((DropKind.Mesos, Def.MesoMin + rng.Next(Def.MesoMax - Def.MesoMin + 1), 1, -7));
+        var list = new List<(int kind, int id, int count, long amount, float dx)>();
+        long span = Def.MesoMax - Def.MesoMin + 1;
+        long amount = Def.MesoMin + (span <= int.MaxValue
+            ? rng.Next((int)span)
+            : rng.NextInt64(span));
+        list.Add((DropKind.Mesos, 0, 1, amount, -7));
         int slot = 0;
         foreach (var d in Def.Items)
         {
             if (rng.NextDouble() >= d.Chance) continue;
-            list.Add((DropKind.Item, d.Item, d.Count, 7 + 14 * slot));
+            list.Add((DropKind.Item, d.Item, d.Count, 0, 7 + 14 * slot));
             slot++;
         }
         return list;

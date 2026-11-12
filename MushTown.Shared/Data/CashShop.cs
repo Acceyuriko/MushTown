@@ -4,20 +4,20 @@ namespace MushTown.Shared;
 // whole price before it changes the character.
 public static class CashShop
 {
-    public static bool Buy(CharaSlot chara, int id, int price, ItemData def, int count, bool decorative)
+    public static bool Buy(CharaSlot chara, int id, long price, ItemData def, int count, bool decorative)
     {
-        long total = (long)price * count;
+        long total = price * count;
         string tab = decorative ? "dec" : "cash";
         if (count <= 0 || total > chara.Mesos || !Inventory.CanAdd(chara, tab, id, count)) return false;
-        chara.Mesos -= (int)total;
+        chara.Mesos -= total;
         return Inventory.Add(chara, tab, id, count);
     }
 
-    public static bool BuyHair(CharaSlot chara, int id, int price) => BuyPack(chara, id, price);
+    public static bool BuyHair(CharaSlot chara, int id, long price) => BuyPack(chara, id, price);
 
-    public static bool BuyFace(CharaSlot chara, int id, int price) => BuyPack(chara, id, price);
+    public static bool BuyFace(CharaSlot chara, int id, long price) => BuyPack(chara, id, price);
 
-    private static bool BuyPack(CharaSlot chara, int id, int price)
+    private static bool BuyPack(CharaSlot chara, int id, long price)
     {
         if (price > chara.Mesos || !Inventory.CanAdd(chara, "dec", id, 1)) return false;
         chara.Mesos -= price;

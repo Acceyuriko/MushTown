@@ -10,15 +10,15 @@ public static class Net
     public const byte State = 3;   // both ways: int id, int map, float x, float y, byte action, byte frame, byte facing
     public const byte Leave = 4;   // server -> client: int id (a peer is gone)
     public const byte Attack = 5;  // client -> server: no body (server judges from the last State)
-    public const byte MobSpawn = 6; // server -> client: int uid, int mob, int map, float x, float y, int maxHp, int hp
-    public const byte MobHit = 7;  // server -> client: int uid, int map, int damage, int hpLeft (0 = dead), int attacker, int exp, int skill (0 = basic)
-    public const byte Build = 8;   // client -> server: int str, int dex, int weaponAtk, int dmgPct, int critPct, int finalPct (resent on level-up/learn/buff)
+    public const byte MobSpawn = 6; // server -> client: int uid, int mob, int map, float x, float y, long maxHp, long hp
+    public const byte MobHit = 7;  // server -> client: int uid, int map, long damage, long hpLeft (0 = dead), int attacker, long exp, int skill (0 = basic)
+    public const byte Build = 8;   // client -> server: long str, long dex, long weaponAtk, int dmgPct, int critPct, int finalPct (resent on level-up/learn/buff)
     public const byte SkillCast = 9; // client -> server: int skill, int pct (cast-time damage pct, orbs folded in; buffs send 0)
     public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing
     public const byte MobMove = 11;  // server -> client: int uid, int map, float x, float y, byte facing (10Hz, occupied maps only)
-    public const byte Hurt = 12;     // server -> client: int uid, int mob, int map, int damage (sent to the victim only, so no victim id rides along)
-    public const byte DropSpawn = 13; // server -> client: int uid, int map, float x, float y, int kind, int id, int count
-    public const byte DropTake = 14; // server -> client: int uid, int map, int taker, int kind, int id, int count (taker 0 = expired)
+    public const byte Hurt = 12;     // server -> client: int uid, int mob, int map, long damage (sent to the victim only, so no victim id rides along)
+    public const byte DropSpawn = 13; // server -> client: int uid, int map, float x, float y, int kind, int id, int count, long amount
+    public const byte DropTake = 14; // server -> client: int uid, int map, int taker, int kind, int id, int count, long amount (taker 0 = expired)
     public const byte Pickup = 15;   // client -> server: int uid (the drop to grab; server checks map + reach)
     public const byte Name = 16;     // client -> server: string name, int plate; relay adds int id first
     public const byte QuestSync = 17; // client -> server: int level, int n + n quest ids, int n + n done ids, int n + n (string key, int count) kills
@@ -38,7 +38,7 @@ public static class Net
     public const byte PartyList = 30;   // client -> server: the players of my map (the invite list)
     public const byte PartyPlayers = 31; // server -> client: int n + n * (int id, string name, int level, int hpPct)
 
-    public const byte ExpShare = 32; // server -> client: int exp (a party member's share of a kill)
+    public const byte ExpShare = 32; // server -> client: long exp (a party member's share of a kill)
     public const byte QuestAbandon = 33; // client -> server: int quest (forfeit intent; server confirms with QuestGone)
     public const byte QuestGone = 34; // server -> client: int quest (the forfeit landed on the server's copy)
     public const byte PartyHp = 35; // client -> server: byte HP percent (0..100)
@@ -137,8 +137,8 @@ public readonly record struct NameEvent(int Id, string Name, int Plate);
 // the mob's Exp (awarded on the killing blow), and the Skill id (0 = basic
 // swing, else the skill whose hit spark each client plays on the mob).
 public readonly record struct MobEvent(
-    bool Spawn, int Uid, int Mob, int Map, float X, float Y, int MaxHp, int Damage, int HpLeft,
-    int Attacker, int Exp, int Skill);
+    bool Spawn, int Uid, int Mob, int Map, float X, float Y, long MaxHp, long Damage, long HpLeft,
+    int Attacker, long Exp, int Skill);
 
 // One skill effect from the server: Attacker cast Skill at X/Y facing right
 // or left. The caster plays its own effect live and never gets this echo.
@@ -152,12 +152,12 @@ public readonly record struct MoveEvent(int Uid, int Map, float X, float Y, bool
 
 // One touch that landed on us: Mob's Uid dealt Damage (pre-DEF). Sent to
 // the victim only, so no victim id rides along.
-public readonly record struct HurtEvent(int Uid, int Mob, int Map, int Damage);
+public readonly record struct HurtEvent(int Uid, int Mob, int Map, long Damage);
 
-// One drop event: a spawn (Spawn true, Kind/Id/Count set) or a take (Spawn
-// false). The taker's client claims Kind/Id/Count; taker 0 means expired.
+// One drop event: a spawn (Spawn true, Kind/Id/Count/Amount set) or a take
+// (Spawn false). The taker's client claims the loot; taker 0 means expired.
 public readonly record struct DropEvent(
-    bool Spawn, int Uid, int Map, float X, float Y, int Kind, int Id, int Count, int Taker);
+    bool Spawn, int Uid, int Map, float X, float Y, int Kind, int Id, int Count, long Amount, int Taker);
 
 // One quest event from the server: a confirmed intent (Kill false, Quest +
 // Completed set) or an authoritative kill counter (Kill true, Quest/Index/Count).

@@ -93,7 +93,7 @@ public partial class MushTownGame
 
     // A spawn the server pushed (or the local world listed): the view starts
     // at the live HP, so late joiners see wounded mobs as wounded.
-    private void ApplySpawn(int uid, int mob, float x, float y, int maxHp, int hp)
+    private void ApplySpawn(int uid, int mob, float x, float y, long maxHp, long hp)
     {
         var o = new GameObject();
         var art = o.Add(new MobArt { Mob = mob, Data = LoadMob(mob), X = x, Y = y, Hp = hp, MaxHp = maxHp });
@@ -109,7 +109,7 @@ public partial class MushTownGame
     // A skill hit also plants the skill's spark on the mob's body (skills
     // without spark art, like Scarring Sword, skip it). Our own hits feed
     // the combo orb while Combo Attack lives (its bonus hits don't recurse).
-    private void ApplyHit(int uid, int damage, int hpLeft, bool mine, int exp, int skill)
+    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
         m.Hp = hpLeft;
@@ -180,6 +180,6 @@ public partial class MushTownGame
         foreach (var s in _localWorld.MobsOn(_mapId))
             ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);
         foreach (var d in _localWorld.DropsOn(_mapId))
-            ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count);
+            ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount);
     }
 }

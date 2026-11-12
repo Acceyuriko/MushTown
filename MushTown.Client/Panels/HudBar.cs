@@ -416,7 +416,7 @@ public partial class MushTownGame
     private static Rectangle MpBox() => new(Layout.HpMp.X, Layout.HpMp.Y + 24, 205, 19);
 
     // The living boss on this map, if any (v1 has one: Mushmom).
-    private (string Name, int Hp, int MaxHp)? FindBoss()
+    private (string Name, long Hp, long MaxHp)? FindBoss()
     {
         foreach (var m in _mobs.Values)
             if (m.Hp > 0 && _mobData[m.Mob].Boss)
@@ -427,19 +427,19 @@ public partial class MushTownGame
     private string HpText()
     {
         var chara = _save?.Slots[_slot];
-        int maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct());
+        long maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct());
         return $"{chara?.Hp ?? maxHp}/{maxHp}";
     }
 
     private string MpText()
     {
         var chara = _save?.Slots[_slot];
-        int maxMp = Progression.MaxMp(chara?.Level ?? 1);
+        long maxMp = Progression.MaxMp(chara?.Level ?? 1);
         return $"{chara?.Mp ?? maxMp}/{maxMp}";
     }
 
     // Live EXP for the bar (CLI sessions have none: the fill stays empty).
-    private (int Value, int Max) ExpFill()
+    private (long Value, long Max) ExpFill()
     {
         var chara = _save?.Slots[_slot];
         return chara == null ? (0, 1) : (chara.Exp, Progression.ExpNext(chara.Level));

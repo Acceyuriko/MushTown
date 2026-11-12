@@ -5,7 +5,7 @@ namespace MushTown.Tests;
 [TestClass]
 public class ShopTests
 {
-    private static CharaSlot Hero(int mesos) => new() { Name = "hero", Mesos = mesos };
+    private static CharaSlot Hero(long mesos) => new() { Name = "hero", Mesos = mesos };
 
     private static ItemData Def(int id, int price, string? slot = null) =>
         new() { ItemId = id, Price = price, Slot = slot };
@@ -150,13 +150,24 @@ public class ShopTests
     }
 
     [TestMethod]
-    public void Sell_Count_Overflow_FailsAndKeepsTheStack()
+    public void BuyAndSell_WithTenBillionMesos_KeepsLongTotals()
+    {
+        var hero = Hero(10_000_000_000L);
+        var def = Def(ItemData.RedPotion, 1_000_000_000);
+        Assert.IsTrue(Shop.Buy(hero, ItemData.RedPotion, def.Price, def, 2));
+        Assert.AreEqual(8_000_000_000L, hero.Mesos);
+        Assert.IsTrue(Shop.Sell(hero, ItemData.RedPotion, def, 2));
+        Assert.AreEqual(9_000_000_000L, hero.Mesos);
+    }
+
+    [TestMethod]
+    public void Sell_BeyondInt_KeepsFullPayout()
     {
         var hero = Hero(0);
         hero.Use = new Dictionary<int, int> { [ItemData.BluePotion] = 3 };
-        Assert.IsFalse(Shop.Sell(hero, ItemData.BluePotion, Def(ItemData.BluePotion, int.MaxValue), 3));
-        Assert.AreEqual(3, hero.Use[ItemData.BluePotion]);
-        Assert.AreEqual(0, hero.Mesos);
+        Assert.IsTrue(Shop.Sell(hero, ItemData.BluePotion, Def(ItemData.BluePotion, int.MaxValue), 3));
+        Assert.AreEqual(3_221_225_469L, hero.Mesos);
+        Assert.IsFalse(hero.Use.ContainsKey(ItemData.BluePotion));
     }
 
     [TestMethod]

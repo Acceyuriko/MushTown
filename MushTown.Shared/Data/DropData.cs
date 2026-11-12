@@ -5,8 +5,8 @@ namespace MushTown.Shared;
 public sealed class DropData
 {
     public int MobId { get; set; }
-    public int MesoMin { get; set; }
-    public int MesoMax { get; set; }
+    public long MesoMin { get; set; }
+    public long MesoMax { get; set; }
     public List<DropItem> Items { get; set; } = new();
 }
 

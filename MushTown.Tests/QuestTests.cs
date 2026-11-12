@@ -307,7 +307,7 @@ public class QuestTests
         }
         var order = new[] { 90002, 90101, 90001, 90102, 90103, 90104, 90105 };
         // Mob pay comes from the exported mob files, like the game reads it.
-        var pay = new Dictionary<int, int>();
+        var pay = new Dictionary<int, long>();
         foreach (int mob in order.SelectMany(id => quests[id].Kills).Select(k => k.Mob).Distinct())
             pay[mob] = JsonSerializer.Deserialize<MobData>(
                 File.ReadAllText(Path.Combine(root, "assets", "mob", $"{mob}.json"))!)!.Exp;
@@ -341,7 +341,7 @@ public class QuestTests
         Assert.AreEqual(15, chara.Use![ItemData.BluePotion]);
     }
 
-    private static void RunChainQuest(CharaSlot chara, QuestLog log, QuestData q, Dictionary<int, int> pay)
+    private static void RunChainQuest(CharaSlot chara, QuestLog log, QuestData q, Dictionary<int, long> pay)
     {
         Assert.IsTrue(log.Accept(chara, q.QuestId), $"chain stuck at {q.QuestId}");
         foreach (var k in q.Kills)

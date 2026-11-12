@@ -225,7 +225,7 @@ public sealed partial class GameServer
     // award. The recipients are picked once, so a member that leaves in the
     // middle never eats a share. A share that cannot be sent goes back to
     // the killer: the exp must not vanish.
-    private int ShareKillExp(int exp, int killer, int map)
+    private long ShareKillExp(long exp, int killer, int map)
     {
         var (party, members) = _party.PartyAndMembers(killer);
         if (party == 0) return exp;
@@ -246,7 +246,7 @@ public sealed partial class GameServer
             }
         }
         if (sharing.Count == 0) return exp;
-        int each = exp / (sharing.Count + 1);
+        long each = exp / (sharing.Count + 1);
         if (each == 0) return exp; // too small to split
         var frame = Net.Encode(Net.ExpShare, w => w.Write(each));
         int sent = 0;

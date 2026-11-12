@@ -36,6 +36,33 @@ public class CombatTests
     }
 
     [TestMethod]
+    public void Damage_AboveInt_DoesNotOverflow()
+    {
+        var build = new Build(4_000_000_000L, 4_000_000_000L, 4_000_000_000L, 0, 0, 0);
+        long damage = Damage.Calc(1.0, 1.0, 0.0, build);
+        Assert.IsTrue(damage > int.MaxValue);
+        Assert.IsTrue(damage > 0);
+    }
+
+    [TestMethod]
+    public void MobWorld_AboveIntHpAndExp_DoesNotOverflow()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":0,"Cy":100}]""");
+        assets.AddMob(100000, 5_000_000_000L, exp: 5_000_000_000L);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        Assert.AreEqual(5_000_000_000L, world.MobsOn(7)[0].MaxHp);
+
+        var build = new Build(4_000_000_000L, 4_000_000_000L, 4_000_000_000L, 0, 0, 0);
+        var hits = world.Strike(7, -50, 100, true, new Random(0), build);
+        Assert.AreEqual(1, hits.Count);
+        Assert.IsTrue(hits[0].Damage > int.MaxValue);
+        Assert.AreEqual(0L, hits[0].HpLeft);
+        Assert.AreEqual(5_000_000_000L, hits[0].Exp);
+    }
+
+    [TestMethod]
     public void MobWorld_SpawnOnce_StrikeHitsInReach()
     {
         using var assets = new TempAssets();

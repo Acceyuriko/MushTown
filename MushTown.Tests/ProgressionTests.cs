@@ -24,6 +24,24 @@ public class ProgressionTests
     }
 
     [TestMethod]
+    public void Vitals_AboveInt_StayLong()
+    {
+        var chara = new CharaSlot
+        {
+            Name = "hero",
+            Level = 500_000_000,
+            Hp = 1_000_000_000L,
+            Mp = 1_000_000_000L,
+            Use = new Dictionary<int, int> { [ItemData.RedPotion] = 1 },
+        };
+        Assert.IsTrue(Progression.MaxHp(chara.Level) > int.MaxValue);
+        Assert.IsTrue(Progression.MaxMp(chara.Level) > int.MaxValue);
+        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 2_000_000_000L, 2_000_000_000L));
+        Assert.IsTrue(chara.Hp > int.MaxValue);
+        Assert.IsTrue(chara.Mp > int.MaxValue);
+    }
+
+    [TestMethod]
     public void PanelRange_BeginnerIs5to29()
     {
         Assert.AreEqual((5, 29), Progression.PanelRange(4, 4, Progression.WeaponAtk));

@@ -93,7 +93,7 @@ public partial class MushTownGame
         while (_net.TryTakeParty(out var party)) SetPartyMembers(party.Members);
         while (_net.TryTakePartyPlayers(out var players)) SetPartyPlayers(players.Players);
         while (_net.TryTakePartyAsk(out var ask)) SetPartyAsk(ask);
-        while (_net.TryTakeExp(out int exp))
+        while (_net.TryTakeExp(out long exp))
         {
             LogEvent($"party share +{exp} exp");
             GainExp(exp);

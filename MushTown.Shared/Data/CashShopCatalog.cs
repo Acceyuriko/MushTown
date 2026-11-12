@@ -72,7 +72,7 @@ public sealed class CashShopCatalog
 public sealed class CashShopItem
 {
     public int Id { get; set; }
-    public int Price { get; set; }
+    public long Price { get; set; }
     public int Count { get; set; }
     public string Group { get; set; } = "";
     public string Tab { get; set; } = "";
