@@ -30,6 +30,7 @@ public sealed class UiText : IDisposable
     private readonly Font _font;
     private readonly Font _small;
     private readonly Font _mid;
+    private readonly Font _large;
     private readonly Font _meso;
     private Font _list;
     private Font _cancel;
@@ -38,6 +39,7 @@ public sealed class UiText : IDisposable
     private readonly Dictionary<string, Texture2D> _cache = new();
     private readonly Dictionary<string, Texture2D> _cacheSmall = new();
     private readonly Dictionary<string, Texture2D> _cacheMid = new();
+    private readonly Dictionary<string, Texture2D> _cacheLarge = new();
     private readonly Dictionary<string, Texture2D> _cacheMeso = new();
     private readonly Dictionary<int, Font> _sized = new(); // px -> font (the balloons ask for theirs)
     private readonly Dictionary<(string text, int px), Texture2D> _cacheSized = new();
@@ -52,6 +54,7 @@ public sealed class UiText : IDisposable
     // The cap band of the small font: the rows a row of text is centred on.
     public InkBand SmallInk { get; }
     public InkBand MidInk { get; } // the same band for the middle font
+    public InkBand LargeInk { get; } // the same band for the large font
     public InkBand MesoInk { get; } // the same band for the bold meso font
 
     public UiText(GraphicsDevice gd, string fontsDir)
@@ -81,6 +84,8 @@ public sealed class UiText : IDisposable
         SmallInk = MeasureBand(_small);
         _mid = Maple(16);
         MidInk = MeasureBand(_mid);
+        _large = Maple(20);
+        LargeInk = MeasureBand(_large);
         // Meso keeps Arial as its missing-TTF fallback (Maple() falls back to YaHei).
         _meso = _mapleBold != null
             ? new Font(_mapleBold, 12, FontStyle.Bold, GraphicsUnit.Pixel)
@@ -126,6 +131,9 @@ public sealed class UiText : IDisposable
 
     // Middle size for the class-select stat rows: 12px reads too small in the big panel.
     public Texture2D GetMid(string text) => GetFrom(_cacheMid, _mid, text);
+
+    // Large size for the CHECK OUT item name.
+    public Texture2D GetLarge(string text) => GetFrom(_cacheLarge, _large, text);
 
     // Small sibling for HUD labels (names, tabs, rows, slots).
     public Texture2D GetSmall(string text) => GetFrom(_cacheSmall, _small, text);
@@ -292,6 +300,7 @@ public sealed class UiText : IDisposable
         _font.Dispose();
         _small.Dispose();
         _mid.Dispose();
+        _large.Dispose();
         _meso.Dispose();
         _list.Dispose();
         _cancel.Dispose();
@@ -303,6 +312,7 @@ public sealed class UiText : IDisposable
         foreach (var tex in _cache.Values) tex.Dispose();
         foreach (var tex in _cacheSmall.Values) tex.Dispose();
         foreach (var tex in _cacheMid.Values) tex.Dispose();
+        foreach (var tex in _cacheLarge.Values) tex.Dispose();
         foreach (var tex in _cacheMeso.Values) tex.Dispose();
         foreach (var tex in _cacheList.Values) tex.Dispose();
         foreach (var tex in _cacheCancel.Values) tex.Dispose();

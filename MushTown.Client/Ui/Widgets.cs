@@ -175,7 +175,7 @@ public sealed class Picture : Component, IDrawable
 }
 
 // Baked-text sizes a live label or Text can ask for.
-public enum LabelFont { Small, Mid }
+public enum LabelFont { Small, Mid, Large }
 
 // Live baked text at a rect offset (UiText caches by string, so steady
 // text costs one lookup; changing text adds entries like the old draws).
@@ -191,6 +191,7 @@ public sealed class LiveLabel : Component, IDrawable
         var r = Owner.Get<Rect>()!.Screen;
         var tex = _font switch
         {
+            LabelFont.Large => gfx.Ui.GetLarge(_text()),
             LabelFont.Mid => gfx.Ui.GetMid(_text()),
             _ => gfx.Ui.GetSmall(_text()),
         };
@@ -538,7 +539,8 @@ public sealed class InvItem : Component, IDrawable
 {
     private readonly Func<string> _image;
     private readonly int _maxSize;
-    public InvItem(Func<string> image, int maxSize = 0) { _image = image; _maxSize = maxSize; }
+    private readonly bool _fill;
+    public InvItem(Func<string> image, int maxSize = 0, bool fill = false) { _image = image; _maxSize = maxSize; _fill = fill; }
     public void Draw(UiGfx gfx)
     {
         string image = _image();
@@ -546,7 +548,13 @@ public sealed class InvItem : Component, IDrawable
         var r = Owner.Get<Rect>()!.Screen;
         var icon = gfx.Tex(image);
         int w = icon.Width, h = icon.Height;
-        if (_maxSize > 0 && (w > _maxSize || h > _maxSize))
+        if (_fill)
+        {
+            float scale = MathF.Min((float)r.Width / w, (float)r.Height / h);
+            w = Math.Max(1, (int)(w * scale));
+            h = Math.Max(1, (int)(h * scale));
+        }
+        else if (_maxSize > 0 && (w > _maxSize || h > _maxSize))
         {
             float scale = MathF.Min((float)_maxSize / w, (float)_maxSize / h);
             w = Math.Max(1, (int)(w * scale));

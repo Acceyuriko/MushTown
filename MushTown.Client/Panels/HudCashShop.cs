@@ -607,7 +607,7 @@ public sealed class CashShopWindow : UiWindow
         var icon = new GameObject { NoHit = true };
         icon.Add(new Rect(new Rectangle(L("checkoutIconX") + L("checkoutItemIconX"), y + L("checkoutItemIconY"),
             L("checkoutItemIconSize"), L("checkoutItemIconSize"))));
-        icon.Add(new InvItem(() => _game.Items[item.Id].Image, L("checkoutItemIconSize")));
+        icon.Add(new InvItem(() => _game.Items[item.Id].Image, fill: true));
         panel.AddChild(icon);
         CheckoutText(panel, () => _game.Items[item.Id].Name, L("checkoutNameX"), y + L("checkoutNameY"),
             L("checkoutNameW"), L("checkoutNameH"), TextInk, TextAlign.Left, L("checkoutNameFont"));
@@ -630,7 +630,7 @@ public sealed class CashShopWindow : UiWindow
     {
         var o = new GameObject { NoHit = true };
         o.Add(new Rect(new Rectangle(x, y, w, h)));
-        o.Add(new Text { Value = text, Ink = ink, X = 0, W = w, Align = align, Font = font >= 14 ? LabelFont.Mid : LabelFont.Small });
+        o.Add(new Text { Value = text, Ink = ink, X = 0, W = w, Align = align, Font = font >= 18 ? LabelFont.Large : font >= 14 ? LabelFont.Mid : LabelFont.Small });
         panel.AddChild(o);
     }
 
@@ -849,12 +849,12 @@ public sealed class CashShopWindow : UiWindow
 
         var icon = new GameObject { NoHit = true };
         icon.Add(new Rect(new Rectangle(L("iconX"), L("iconBottom") - L("iconSize"), L("iconSize"), L("iconSize"))));
-        icon.Add(new InvItem(() => _game.Items[item.Id].Image, L("iconSize")));
+        icon.Add(new InvItem(() => _game.Items[item.Id].Image, fill: true));
         cell.AddChild(icon);
 
         var name = new GameObject { NoHit = true };
         name.Add(new Rect(new Rectangle(L("nameX"), L("nameY"), L("cardW"), L("textH"))));
-        name.Add(new CenterText(() => _game.Items[item.Id].Name, TextInk, L("nameFont")));
+        name.Add(new CenterText(() => _game.Items[item.Id].Name, TextInk, L("nameFont"), true, L("nameStep")));
         cell.AddChild(name);
 
         var price = new GameObject();
@@ -1085,13 +1085,35 @@ public sealed class CashShopWindow : UiWindow
         private readonly Func<string> _text;
         private readonly Color _ink;
         private readonly int _font;
-        public CenterText(Func<string> text, Color ink, int font) { _text = text; _ink = ink; _font = font; }
+        private readonly bool _wrap;
+        private readonly int _step;
+        public CenterText(Func<string> text, Color ink, int font, bool wrap = false, int step = 0)
+        {
+            _text = text;
+            _ink = ink;
+            _font = font;
+            _wrap = wrap;
+            _step = step;
+        }
 
         public void Draw(UiGfx gfx)
         {
             var r = Owner.Get<Rect>()!.Screen;
-            var tex = FitSized(gfx, _text(), r.Width, _font);
-            gfx.Sb.Draw(tex, new Vector2(r.X + (r.Width - tex.Width) / 2, r.Y + (r.Height - tex.Height) / 2), _ink);
+            if (!_wrap)
+            {
+                var tex = FitSized(gfx, _text(), r.Width, _font);
+                gfx.Sb.Draw(tex, new Vector2(r.X + (r.Width - tex.Width) / 2, r.Y + (r.Height - tex.Height) / 2), _ink);
+                return;
+            }
+
+            var lines = gfx.Ui.Wrap(_text(), r.Width, _font);
+            int y = r.Y;
+            foreach (string line in lines)
+            {
+                var tex = FitSized(gfx, line, r.Width, _font);
+                gfx.Sb.Draw(tex, new Vector2(r.X + (r.Width - tex.Width) / 2, y), _ink);
+                y += _step;
+            }
         }
     }
 

@@ -25,9 +25,19 @@ public sealed class Text : Component, IDrawable
     {
         var r = Owner.Get<Rect>()!.Screen;
         int boxW = W > 0 ? W : r.Width - X;
-        var t = Font == LabelFont.Mid ? gfx.Ui.GetMid(Value()) : Fit(gfx, Value(), boxW);
-        Draw(gfx.Sb, gfx.Ui, t, new Rectangle(r.X + X, r.Y, boxW, r.Height), Ink, Line, Align,
-            Font == LabelFont.Mid ? gfx.Ui.MidInk : null);
+        var t = Font switch
+        {
+            LabelFont.Large => gfx.Ui.GetLarge(Value()),
+            LabelFont.Mid => gfx.Ui.GetMid(Value()),
+            _ => Fit(gfx, Value(), boxW),
+        };
+        InkBand? band = Font switch
+        {
+            LabelFont.Large => gfx.Ui.LargeInk,
+            LabelFont.Mid => gfx.Ui.MidInk,
+            _ => null,
+        };
+        Draw(gfx.Sb, gfx.Ui, t, new Rectangle(r.X + X, r.Y, boxW, r.Height), Ink, Line, Align, band);
     }
 
     // One line of small text in a box: the component above and the world's name
