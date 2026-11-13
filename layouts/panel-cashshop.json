@@ -1,5 +1,5 @@
 {
-  "_help": "Cash shop window: every position, size and font size used by HudCashShop.cs. previewFeetY=354 is the exported background's grass line; WZ vector:avatar y=330 lands in the bushes. Bottom tabs use the WZ normal origins; Main uses menu/200/100 at 40,720; Fashion on the Beauty page uses 672.",
+  "_help": "Cash shop window: every position, size and font size used by HudCashShop.cs. previewFeetY=354 is the exported background's grass line; WZ vector:avatar y=330 lands in the bushes. Bottom tabs use the WZ normal origins; Main uses menu/200/100 at 40,720; Fashion on the Beauty page uses 672. popWhiteTop/popWhiteH/popBtnGap are shared by SysPopUi; the quest window, world map and CASH Utility popup all read them.",
   "x": 0,
   "y": 0,
   "w": 1366,
@@ -175,10 +175,13 @@
   "popTextStep": 17,
   "popTextPad": 16,
   "popBottomH": 59,
+  "popWhiteTop": 3,
+  "popWhiteH": 46,
   "popBtnY": 14,
   "popYesX": 117,
   "popBtnW": 83,
   "popBtnH": 26,
+  "popBtnGap": 6,
 
   "navBgX": 0,
   "navBgY": 662,
@@ -405,18 +408,10 @@
   "utilityPopW": 318,
   "utilityPopH": 160,
   "utilityPopTextY": 34,
-  "utilityPopTextStep": 17,
-  "utilityPopTextPad": 16,
   "utilityTextBoxY": 47,
   "utilityTextBoxH": 44,
   "utilityNameFieldX": 48,
   "utilityNameFieldY": 62,
   "utilityNameFieldW": 200,
-  "utilityNameFieldH": 20,
-  "utilityYesX": 73,
-  "utilityYesY": 105,
-  "utilityNoX": 162,
-  "utilityNoY": 105,
-  "utilityBtnW": 83,
-  "utilityBtnH": 26
+  "utilityNameFieldH": 20
 }

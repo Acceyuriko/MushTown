@@ -448,20 +448,14 @@ public partial class MushTownGame
     {
         int w = _cashLay.Get("utilityPopW", 318), h = _cashLay.Get("utilityPopH", 160);
         var box = new Rectangle((GameWidth - w) / 2 - _invPos.X, (GameHeight - h) / 2 - _invPos.Y, w, h);
-        var popup = new GameObject();
-        popup.Add(new Rect(box));
-        popup.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
-        popup.Add(new SysPopText
-        {
-            Y = _cashLay.Get("utilityPopTextY", 34),
-            Step = _cashLay.Get("utilityPopTextStep", 17),
-            MaxWidth = w - _cashLay.Get("utilityPopTextPad", 16),
-            Lines = _cashUseNotice != ""
-                ? new[] { _cashUseNotice }
-                : _cashUseId == 5400000
-                    ? new[] { "Enter a new character name." }
-                    : new[] { "Reset all skills and refund their SP?" },
-        });
+        var lines = _cashUseNotice != ""
+            ? new[] { _cashUseNotice }
+            : _cashUseId == 5400000
+                ? new[] { "Enter a new character name." }
+                : new[] { "Reset all skills and refund their SP?" };
+        var popup = SysPopUi.Build(box, lines,
+            _cashUseId == 5400000 ? ConfirmCashName : ConfirmCashReset, CloseCashUse, _cashLay,
+            _cashLay.Get("utilityPopTextY", 34));
         if (_cashUseId == 5400000)
         {
             popup.AddChild(PictureAt("ui/wm_pop_textbox.png", 0, _cashLay.Get("utilityTextBoxY", 47), w,
@@ -473,16 +467,17 @@ public partial class MushTownGame
             input.Add(_cashUseField);
             popup.AddChild(input);
         }
-        int by = _cashLay.Get("utilityYesY", 105);
-        popup.AddChild(ArtButton(new Rectangle(_cashLay.Get("utilityYesX", 73), by,
-            _cashLay.Get("utilityBtnW", 83), _cashLay.Get("utilityBtnH", 26)), "ui/wm_pop_yes",
-            _cashUseId == 5400000 ? ConfirmCashName : ConfirmCashReset));
-        popup.AddChild(ArtButton(new Rectangle(_cashLay.Get("utilityNoX", 162), _cashLay.Get("utilityNoY", 105),
-            _cashLay.Get("utilityBtnW", 83), _cashLay.Get("utilityBtnH", 26)), "ui/wm_pop_no", CloseCashUse));
         var root = new GameObject { Modal = true };
         root.AddChild(PanelButton(new Rectangle(-_invPos.X, -_invPos.Y, GameWidth, GameHeight), "cashuseblock", () => { }, ButtonKind.Silent));
         root.AddChild(popup);
         return root;
+    }
+
+    // --screen cashuserename/cashusereset: open the popup over the CASH tab.
+    internal void PoseCashUse(int id)
+    {
+        _invTab = 4; // 0 Equip, 1 Use, 2 Etc, 3 Set-up, 4 Cash, 5 Dec
+        OpenCashUse(id);
     }
 
     private void ConfirmCashName()

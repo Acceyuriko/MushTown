@@ -807,24 +807,33 @@ public sealed class ChatScrollBar : Component, IDrawable
 
 // The official system popup (Basic.img/sysPop): a top cap, a stretchable
 // middle and a bottom bar that carries the two buttons. The world map uses it
-// for its teleport question; the quest window uses the same popup for its own.
+// for its teleport question; the quest window uses the same popup for its own;
+// the CASH Utility popup (HudInventory) uses it for rename and SP reset.
+// The button row is centered here, so every caller shares one layout rule.
 public static class SysPopUi
 {
-    public static GameObject Build(Rectangle box, IReadOnlyList<string> lines, Action yes, Action no, PanelLayout lay)
+    public static GameObject Build(Rectangle box, IReadOnlyList<string> lines, Action yes, Action no, PanelLayout lay,
+        int? textY = null)
     {
         var o = new GameObject();
         o.Add(new Rect(box));
         o.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
         o.Add(new SysPopText
         {
-            Y = lay.Get("popTextY", 38),
+            Y = textY ?? lay.Get("popTextY", 38),
             Step = lay.Get("popTextStep", 17),
             MaxWidth = box.Width - lay.Get("popTextPad", 16),
             Lines = lines,
         });
-        int by = box.Height - lay.Get("popBottomH", 59) + lay.Get("popBtnY", 14);
-        o.AddChild(ButtonAt("ui/wm_pop_yes", lay.Get("popYesX", 73), by, yes, lay));
-        o.AddChild(ButtonAt("ui/wm_pop_no", lay.Get("popNoX", 162), by, no, lay));
+        int buttonW = lay.Get("popBtnW", 83);
+        int gap = lay.Get("popBtnGap", 6);
+        int bottomH = lay.Get("popBottomH", 59);
+        int whiteTop = lay.Get("popWhiteTop", 3);
+        int whiteH = lay.Get("popWhiteH", 46);
+        int left = (box.Width - buttonW * 2 - gap) / 2;
+        int by = box.Height - bottomH + whiteTop + (whiteH - lay.Get("popBtnH", 26)) / 2;
+        o.AddChild(ButtonAt("ui/wm_pop_yes", left, by, yes, lay));
+        o.AddChild(ButtonAt("ui/wm_pop_no", left + buttonW + gap, by, no, lay));
         return o;
     }
 

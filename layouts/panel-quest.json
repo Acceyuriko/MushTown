@@ -1,5 +1,5 @@
 {
-  "_help": "Quest window (official UI/Quest.img/Main art). Game pixels in 1366x768. x,y = the window top-left. The list panel is 420 wide, the info panel 322 wide, both 550 tall (official art sizes). All other numbers are offsets inside their panel.",
+  "_help": "Quest window (official UI/Quest.img/Main art). Game pixels in 1366x768. x,y = the window top-left. The list panel is 420 wide, the info panel 322 wide, both 550 tall (official art sizes). All other numbers are offsets inside their panel. popWhiteTop/popWhiteH/popBtnGap are shared by SysPopUi; the quest window, world map and CASH Utility popup all read them.",
   "x": 312,
   "y": 109,
   "titleH": 27,
@@ -61,12 +61,12 @@
   "confirmW": 318,
   "confirmH": 143,
   "popBottomH": 59,
+  "popWhiteTop": 3,
+  "popWhiteH": 46,
   "popBtnW": 83,
   "popBtnH": 26,
+  "popBtnGap": 6,
   "popTextY": 38,
   "popTextStep": 17,
-  "popTextPad": 16,
-  "popYesX": 73,
-  "popNoX": 162,
-  "popBtnY": 14
+  "popTextPad": 16
 }
