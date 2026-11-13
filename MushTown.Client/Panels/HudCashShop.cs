@@ -18,16 +18,20 @@ public sealed class CashShopWindow : UiWindow
     private static readonly string[] ArtFiles =
     {
         "cashshop_scene_bg.png", "cashshop_list_bg.png", "cashshop_bg_list.png", "cashshop_no_result.png",
-        "cashshop_item_bg.png", "cashshop_item_bg_main.png", "cashshop_item_price.png",
+        "cashshop_item_bg.png", "cashshop_item_bg_main.png",
+        "cashshop_item_price_n.png", "cashshop_item_price_h.png", "cashshop_item_price_p.png",
         "cashshop_preview_back.png", "cashshop_preview_bottom.png", "cashshop_preview_frame.png",
         "cashshop_bg_search.png", "cashshop_bg_cash.png", "cashshop_bg_maplepoint.png", "cashshop_bg_mileage.png",
         "cashshop_exit.png", "cashshop_help_disabled.png", "cashshop_probability_disabled.png", "cashshop_coupon_disabled.png",
         "cashshop_search.png", "cashshop_menu_500.png", "cashshop_menu_600.png", "cashshop_menu_700.png",
         "cashshop_beauty_bg.png", "cashshop_beauty_list.png",
-        "cashshop_cart_item_bg.png", "cashshop_takeoffavatar.png",
+        "cashshop_cart_item_bg.png",
+        "cashshop_defaultavatar_n.png", "cashshop_defaultavatar_h.png", "cashshop_defaultavatar_p.png",
+        "cashshop_takeoffavatar_n.png", "cashshop_takeoffavatar_h.png", "cashshop_takeoffavatar_p.png",
+        "cashshop_buyavatar_n.png", "cashshop_buyavatar_h.png", "cashshop_buyavatar_p.png",
         "cashshop_checkout_single.png", "cashshop_checkout_multi.png",
         "cashshop_checkout_entity.png", "cashshop_checkout_icon_bg.png", "cashshop_checkout_buy.png", "cashshop_checkout_cancel.png",
-        "cashshop_checkout_gift_disabled.png", "cashshop_checkout_result.png", "cashshop_buyavatar.png",
+        "cashshop_checkout_gift_disabled.png", "cashshop_checkout_result.png",
         "cashshop_buyavatar_disabled.png", "cashshop_defaultavatar_disabled.png",
         "cashshop_saveavatar.png", "cashshop_mycoordi.png", "cashshop_actionplay.png",
         "cashshop_petoff.png",
@@ -106,6 +110,18 @@ public sealed class CashShopWindow : UiWindow
         _tab = 0;
         _selectedId = 0;
         Dirty = true;
+    }
+
+    // The shot pose: one Fashion preview plus a selected hair, so the Beauty
+    // cards and the right preview show the same gear and hair.
+    public void PoseBeautyGear()
+    {
+        _page = CashShopPage.Fashion;
+        _tab = 0;
+        _selectedId = 0;
+        AddPreview(1302007);
+        PoseBeauty();
+        PreviewBeauty(_game.CashShop.Hairs.First(hair => hair.ItemId == 5157000));
     }
 
     // The shot pose: Fashion opens on Outfits.
@@ -260,14 +276,17 @@ public sealed class CashShopWindow : UiWindow
 
     private void BuildPreviewButtons(GameObject root)
     {
-        AddDisabled(root, "cashshop_defaultavatar_disabled.png", "defaultAvatarX", "defaultAvatarY", "defaultAvatarW", "defaultAvatarH");
-        AddButton(root, "cashshop_takeoffavatar.png", "takeoffAvatarX", "takeoffAvatarY", "takeoffAvatarW", "takeoffAvatarH", ClearPreview);
+        if (_previewFashion.Count > 0 || _previewHair != 0 || _previewFace != 0)
+            AddStateButton(root, "cashshop_defaultavatar", "defaultAvatarX", "defaultAvatarY", "defaultAvatarW", "defaultAvatarH", ClearPreview);
+        else
+            AddDisabled(root, "cashshop_defaultavatar_disabled.png", "defaultAvatarX", "defaultAvatarY", "defaultAvatarW", "defaultAvatarH");
+        AddStateButton(root, "cashshop_takeoffavatar", "takeoffAvatarX", "takeoffAvatarY", "takeoffAvatarW", "takeoffAvatarH", ClearPreview);
         AddDisabledDim(root, "cashshop_saveavatar.png", "saveAvatarX", "saveAvatarY", "saveAvatarW", "saveAvatarH");
         AddDisabledDim(root, "cashshop_mycoordi.png", "myCoordiX", "myCoordiY", "myCoordiW", "myCoordiH");
         AddDisabledDim(root, "cashshop_actionplay.png", "actionPlayX", "actionPlayY", "actionPlayW", "actionPlayH");
         AddDisabledDim(root, "cashshop_petoff.png", "petOffX", "petOffY", "petOffW", "petOffH");
         if (_cart.Count > 0)
-            AddButton(root, "cashshop_buyavatar.png", "buyAllX", "buyAllY", "buyAllW", "buyAllH", OpenBuyAll);
+            AddStateButton(root, "cashshop_buyavatar", "buyAllX", "buyAllY", "buyAllW", "buyAllH", OpenBuyAll);
         else
             AddDisabled(root, "cashshop_buyavatar_disabled.png", "buyAllX", "buyAllY", "buyAllW", "buyAllH");
     }
@@ -400,15 +419,21 @@ public sealed class CashShopWindow : UiWindow
 
     private void OnCardClick(int id)
     {
-        if (_lastClickId == id && _game.TimeMs - _lastClickMs <= L("doubleClickMs"))
+        if (ConsumeDoubleClick(id))
         {
-            _lastClickId = 0;
             TogglePreview(id);
             return;
         }
         _selectedId = id;
         _lastClickId = id;
         _lastClickMs = _game.TimeMs;
+    }
+
+    private bool ConsumeDoubleClick(int id)
+    {
+        if (_lastClickId != id || _game.TimeMs - _lastClickMs > L("doubleClickMs")) return false;
+        _lastClickId = 0;
+        return true;
     }
 
     private void TogglePreview(int id)
@@ -866,7 +891,7 @@ public sealed class CashShopWindow : UiWindow
         price.Add(new Rect(new Rectangle(L("priceButtonX"), L("priceButtonY"), L("priceButtonW"), L("priceButtonH"))));
         price.Add(new ItemTip(() => item.Id));
         price.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OpenCheckout(item) });
-        price.Add(new Picture("ui/cashshop_item_price.png"));
+        price.Add(new Image("ui/cashshop_item_price"));
         price.Add(new CenterText(() => item.Price.ToString("#,##0"), TextInk, L("priceFont")));
         cell.AddChild(price);
 
@@ -915,11 +940,11 @@ public sealed class CashShopWindow : UiWindow
         cell.Add(new Rect(box));
         cell.Add(new CardBack(() => _selectedId == look.ItemId));
         cell.Add(new ItemTip(() => look.ItemId));
-        cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PreviewBeauty(look) });
+        cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OnBeautyCardClick(look) });
 
         var doll = new GameObject { NoHit = true };
         doll.Add(new Rect(new Rectangle(L("beautyDollDx"), L("beautyDollDy"), 1, 1)));
-        doll.Add(new AvatarPreview(_game, "stand1", false, () => 0, () => BeautyChara(look)));
+        doll.Add(new AvatarPreview(_game, "stand1", false, () => 0, () => BeautyChara(look), L("beautyDollScale") / 100f));
         cell.AddChild(doll);
 
         var name = new GameObject { NoHit = true };
@@ -928,9 +953,10 @@ public sealed class CashShopWindow : UiWindow
         cell.AddChild(name);
 
         var price = new GameObject();
-        price.Add(new Rect(new Rectangle(L("beautyPriceX"), L("beautyPriceY"), L("beautyPriceW"), L("beautyPriceH"))));
+        price.Add(new Rect(new Rectangle(L("beautyPriceButtonX"), L("beautyPriceButtonY"), L("beautyPriceButtonW"), L("beautyPriceButtonH"))));
         price.Add(new ItemTip(() => look.ItemId));
         price.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OpenCheckout(CatalogItem(look.ItemId)!) });
+        price.Add(new Image("ui/cashshop_item_price"));
         price.Add(new CenterText(() => look.Price.ToString("#,##0"), TextInk, L("beautyPriceFont")));
         cell.AddChild(price);
 
@@ -938,9 +964,35 @@ public sealed class CashShopWindow : UiWindow
         _cells.Add((cell, look.Name));
     }
 
+    private void OnBeautyCardClick(CashShopLook look)
+    {
+        if (ConsumeDoubleClick(look.ItemId))
+        {
+            ToggleBeautyPreview(look);
+            return;
+        }
+        _selectedId = look.ItemId;
+        _lastClickId = look.ItemId;
+        _lastClickMs = _game.TimeMs;
+    }
+
+    private void ToggleBeautyPreview(CashShopLook look)
+    {
+        int oldIndex = HairCartIndex();
+        if (oldIndex >= 0 && _cart[oldIndex] == look.ItemId)
+        {
+            _cart.RemoveAt(oldIndex);
+            _previewHair = 0;
+            RebuildPreviewChara();
+            Dirty = true;
+            return;
+        }
+        PreviewBeauty(look);
+    }
+
     private void PreviewBeauty(CashShopLook look)
     {
-        int oldIndex = _cart.FindIndex(id => _game.CashShop.Hairs.Any(hair => hair.ItemId == id));
+        int oldIndex = HairCartIndex();
         if (oldIndex >= 0)
         {
             if (_cart[oldIndex] == look.ItemId) return;
@@ -962,18 +1014,15 @@ public sealed class CashShopWindow : UiWindow
         Dirty = true;
     }
 
+    private int HairCartIndex() =>
+        _cart.FindIndex(id => _game.CashShop.Hairs.Any(hair => hair.ItemId == id));
+
     private CharaSlot? BeautyChara(CashShopLook look)
     {
-        var hero = _game.Hero;
-        if (hero == null) return null;
-        return new CharaSlot
-        {
-            Skin = hero.Skin,
-            Hair = look.Cosmetic,
-            Face = hero.Face,
-            Equips = hero.Equips,
-            CashWorn = hero.CashWorn,
-        };
+        var chara = PreviewChara();
+        if (chara == null) return null;
+        chara.Hair = look.Cosmetic;
+        return chara;
     }
 
     private void BuildTopBar(GameObject root)
@@ -1117,6 +1166,15 @@ public sealed class CashShopWindow : UiWindow
         o.Add(new Rect(new Rectangle(L(x), L(y), L(w), L(h))));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
         o.Add(new Picture("ui/" + file));
+        root.AddChild(o);
+    }
+
+    private void AddStateButton(GameObject root, string stem, string x, string y, string w, string h, Action onClick)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(L(x), L(y), L(w), L(h))));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+        o.Add(new Image("ui/" + stem));
         root.AddChild(o);
     }
 

@@ -140,10 +140,10 @@ public partial class MushTownGame
                 DrawTexture(b.Image, x + i * cx, y + j * cy, b.Flip);
     }
 
-    private void DrawTexture(string image, int worldX, int worldY, bool flip)
+    private void DrawTexture(string image, int worldX, int worldY, bool flip, float scale = 1f)
     {
         _spriteBatch.Draw(_textures[image], new Vector2(worldX - _camera.X, worldY - _camera.Y), null, Color.White,
-            0f, Vector2.Zero, 1f, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+            0f, Vector2.Zero, scale, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
     }
 
     internal void LoadTexture(string image)

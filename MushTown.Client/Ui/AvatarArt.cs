@@ -67,20 +67,24 @@ public partial class MushTownGame
         parts.AddRange(gear.Frames[frame].Parts); // boot load guarantees art for art gear
     }
 
-    private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null)
+    private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null,
+        float scale = 1f)
     {
         var parts = MergeParts(action, frame, chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
             chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace);
         foreach (var part in parts)
         {
+            int dx = (int)MathF.Round(part.X * scale);
+            int dy = (int)MathF.Round(part.Y * scale);
             if (facingRight)
             {
                 var tex = _textures[part.Image];
-                DrawTexture(part.Image, SceneMath.FlipDrawX(feetX, part.X, tex.Width), feetY + part.Y, true);
+                int x = (int)MathF.Round(feetX - (part.X + tex.Width) * scale);
+                DrawTexture(part.Image, x, feetY + dy, true, scale);
             }
             else
             {
-                DrawTexture(part.Image, feetX + part.X, feetY + part.Y, false);
+                DrawTexture(part.Image, feetX + dx, feetY + dy, false, scale);
             }
         }
     }
@@ -148,12 +152,13 @@ public partial class MushTownGame
 
     // The same drawing on a UI spot: the world draw adds the camera, so park
     // it for the call (the menus draw at screen pixels).
-    internal void DrawAvatarOnScreen(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null)
+    internal void DrawAvatarOnScreen(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null,
+        float scale = 1f)
     {
         int camX = _camera.X, camY = _camera.Y;
         _camera.X = 0;
         _camera.Y = 0;
-        DrawAvatar(feetX, feetY, action, frame, facingRight, chara);
+        DrawAvatar(feetX, feetY, action, frame, facingRight, chara, scale);
         _camera.X = camX;
         _camera.Y = camY;
     }
@@ -169,10 +174,12 @@ public sealed class AvatarPreview : Component, IDrawable
     private readonly Func<int>? _frame;
     private readonly bool _faceRight;
     private readonly Func<CharaSlot?>? _chara;
+    private readonly float _scale;
 
-    public AvatarPreview(MushTownGame game, string action, bool faceRight, Func<int>? frame = null, Func<CharaSlot?>? chara = null)
+    public AvatarPreview(MushTownGame game, string action, bool faceRight, Func<int>? frame = null, Func<CharaSlot?>? chara = null,
+        float scale = 1f)
     {
-        _game = game; _action = action; _frame = frame; _faceRight = faceRight; _chara = chara;
+        _game = game; _action = action; _frame = frame; _faceRight = faceRight; _chara = chara; _scale = scale;
     }
 
     public void Draw(UiGfx gfx)
@@ -180,6 +187,6 @@ public sealed class AvatarPreview : Component, IDrawable
         var r = Owner.Get<Rect>()!.Screen;
         var chara = _chara?.Invoke();
         int frame = _frame?.Invoke() ?? _game.IdleFrame(_action, chara?.Skin ?? 0);
-        _game.DrawAvatarOnScreen(r.X, r.Y, _action, frame, _faceRight, chara);
+        _game.DrawAvatarOnScreen(r.X, r.Y, _action, frame, _faceRight, chara, _scale);
     }
 }
