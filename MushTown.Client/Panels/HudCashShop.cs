@@ -112,6 +112,15 @@ public sealed class CashShopWindow : UiWindow
         Dirty = true;
     }
 
+    // The shot pose: Beauty opens on Faces.
+    public void PoseFace()
+    {
+        _page = CashShopPage.BeautyFace;
+        _tab = 1;
+        _selectedId = 0;
+        Dirty = true;
+    }
+
     // The shot pose: one Fashion preview plus a selected hair, so the Beauty
     // cards and the right preview show the same gear and hair.
     public void PoseBeautyGear()
@@ -121,7 +130,14 @@ public sealed class CashShopWindow : UiWindow
         _selectedId = 0;
         AddPreview(1302007);
         PoseBeauty();
-        PreviewBeauty(_game.CashShop.Hairs.First(hair => hair.ItemId == 5157000));
+        PreviewBeauty(_game.CashShop.Hairs.First(hair => hair.ItemId == 5157000), false);
+    }
+
+    // The shot pose: the Face cards keep the same Fashion and hair preview.
+    public void PoseFaceGear()
+    {
+        PoseBeautyGear();
+        PoseFace();
     }
 
     // The shot pose: Fashion opens on Outfits.
@@ -912,9 +928,11 @@ public sealed class CashShopWindow : UiWindow
             root.AddChild(title);
         }
 
-        if (_tab == 0)
+        if (_tab is 0 or 1)
         {
-            var looks = _game.CashShop.Hairs.Where(look => !look.Default && look.Price > 0).ToList();
+            bool face = _tab == 1;
+            var looks = (face ? _game.CashShop.Faces : _game.CashShop.Hairs)
+                .Where(look => !look.Default && look.Price > 0).ToList();
             int slots = L("beautyRows") * L("beautyCols");
             for (int i = 0; i < looks.Count && i < slots; i++)
             {
@@ -922,7 +940,7 @@ public sealed class CashShopWindow : UiWindow
                 int row = i / L("beautyCols");
                 int x = L("beautyCardX") + col * (L("beautyCardW") + L("beautyCardGapX"));
                 int y = L("beautyCardY") + row * (L("beautyCardH") + L("beautyCardGapY"));
-                AddBeautyCard(root, looks[i], new Rectangle(x, y, L("beautyCardW"), L("beautyCardH")));
+                AddBeautyCard(root, looks[i], new Rectangle(x, y, L("beautyCardW"), L("beautyCardH")), face);
             }
         }
 
@@ -934,17 +952,17 @@ public sealed class CashShopWindow : UiWindow
         ApplyFilter();
     }
 
-    private void AddBeautyCard(GameObject root, CashShopLook look, Rectangle box)
+    private void AddBeautyCard(GameObject root, CashShopLook look, Rectangle box, bool face)
     {
         var cell = new GameObject();
         cell.Add(new Rect(box));
         cell.Add(new CardBack(() => _selectedId == look.ItemId));
         cell.Add(new ItemTip(() => look.ItemId));
-        cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OnBeautyCardClick(look) });
+        cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => OnBeautyCardClick(look, face) });
 
         var doll = new GameObject { NoHit = true };
         doll.Add(new Rect(new Rectangle(L("beautyDollDx"), L("beautyDollDy"), 1, 1)));
-        doll.Add(new AvatarPreview(_game, "stand1", false, () => 0, () => BeautyChara(look), L("beautyDollScale") / 100f));
+        doll.Add(new AvatarPreview(_game, "stand1", false, () => 0, () => BeautyChara(look, face), L("beautyDollScale") / 100f));
         cell.AddChild(doll);
 
         var name = new GameObject { NoHit = true };
@@ -964,11 +982,11 @@ public sealed class CashShopWindow : UiWindow
         _cells.Add((cell, look.Name));
     }
 
-    private void OnBeautyCardClick(CashShopLook look)
+    private void OnBeautyCardClick(CashShopLook look, bool face)
     {
         if (ConsumeDoubleClick(look.ItemId))
         {
-            ToggleBeautyPreview(look);
+            ToggleBeautyPreview(look, face);
             return;
         }
         _selectedId = look.ItemId;
@@ -976,23 +994,24 @@ public sealed class CashShopWindow : UiWindow
         _lastClickMs = _game.TimeMs;
     }
 
-    private void ToggleBeautyPreview(CashShopLook look)
+    private void ToggleBeautyPreview(CashShopLook look, bool face)
     {
-        int oldIndex = HairCartIndex();
+        int oldIndex = LookCartIndex(face);
         if (oldIndex >= 0 && _cart[oldIndex] == look.ItemId)
         {
             _cart.RemoveAt(oldIndex);
-            _previewHair = 0;
+            if (face) _previewFace = 0;
+            else _previewHair = 0;
             RebuildPreviewChara();
             Dirty = true;
             return;
         }
-        PreviewBeauty(look);
+        PreviewBeauty(look, face);
     }
 
-    private void PreviewBeauty(CashShopLook look)
+    private void PreviewBeauty(CashShopLook look, bool face)
     {
-        int oldIndex = HairCartIndex();
+        int oldIndex = LookCartIndex(face);
         if (oldIndex >= 0)
         {
             if (_cart[oldIndex] == look.ItemId) return;
@@ -1008,20 +1027,25 @@ public sealed class CashShopWindow : UiWindow
             }
             _cart.Add(look.ItemId);
         }
-        _previewHair = look.Cosmetic;
+        if (face) _previewFace = look.Cosmetic;
+        else _previewHair = look.Cosmetic;
         _selectedId = look.ItemId;
         RebuildPreviewChara();
         Dirty = true;
     }
 
-    private int HairCartIndex() =>
-        _cart.FindIndex(id => _game.CashShop.Hairs.Any(hair => hair.ItemId == id));
+    private int LookCartIndex(bool face)
+    {
+        var looks = face ? _game.CashShop.Faces : _game.CashShop.Hairs;
+        return _cart.FindIndex(id => looks.Any(look => look.ItemId == id));
+    }
 
-    private CharaSlot? BeautyChara(CashShopLook look)
+    private CharaSlot? BeautyChara(CashShopLook look, bool face)
     {
         var chara = PreviewChara();
         if (chara == null) return null;
-        chara.Hair = look.Cosmetic;
+        if (face) chara.Face = look.Cosmetic;
+        else chara.Hair = look.Cosmetic;
         return chara;
     }
 

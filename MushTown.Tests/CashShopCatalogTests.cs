@@ -94,18 +94,43 @@ public class CashShopCatalogTests
     [TestMethod]
     public void ShippedCashShopList_HasNineSellableHairs()
     {
-        string? path = null;
-        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
-            if (File.Exists(Path.Combine(d.FullName, "MushTown.Exporter", "Export", "lists", "cashshop.json")))
-            {
-                path = Path.Combine(d.FullName, "MushTown.Exporter", "Export", "lists", "cashshop.json");
-                break;
-            }
-        if (path == null) { Assert.Inconclusive("no cashshop list above the test output: this check needs the repo"); return; }
+        var catalog = ShippedCatalog();
+        if (catalog == null) { Assert.Inconclusive("no cashshop list above the test output: this check needs the repo"); return; }
 
-        var catalog = System.Text.Json.JsonSerializer.Deserialize<CashShopCatalog>(File.ReadAllText(path))!;
         Assert.AreEqual(1, catalog.Hairs.Count(hair => hair.Default));
         Assert.AreEqual(9, catalog.Hairs.Count(hair => !hair.Default && hair.Price > 0));
         Assert.IsTrue(catalog.ValidateShape(out string error), error);
+    }
+
+    [TestMethod]
+    public void ShippedCashShopList_HasNineSellableFaces()
+    {
+        var catalog = ShippedCatalog();
+        if (catalog == null) { Assert.Inconclusive("no cashshop list above the test output: this check needs the repo"); return; }
+
+        var sellable = catalog.Faces.Where(face => !face.Default && face.Price > 0).ToList();
+        Assert.AreEqual(1, catalog.Faces.Count(face => face.Default));
+        Assert.AreEqual(9, sellable.Count);
+        Assert.IsFalse(sellable.Any(face => face.ItemId is 5158151 or 5158152));
+
+        var defaultFace = catalog.Faces.Single(face => face.ItemId == 5158151);
+        Assert.IsTrue(defaultFace.Default);
+        Assert.AreEqual(0, defaultFace.Price);
+        var spareFace = catalog.Faces.Single(face => face.ItemId == 5158152);
+        Assert.IsFalse(spareFace.Default);
+        Assert.AreEqual(0, spareFace.Price);
+
+        Assert.IsTrue(catalog.ValidateShape(out string error), error);
+    }
+
+    private static CashShopCatalog? ShippedCatalog()
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            string path = Path.Combine(d.FullName, "MushTown.Exporter", "Export", "lists", "cashshop.json");
+            if (File.Exists(path))
+                return System.Text.Json.JsonSerializer.Deserialize<CashShopCatalog>(File.ReadAllText(path));
+        }
+        return null;
     }
 }

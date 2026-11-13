@@ -164,7 +164,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
+                "inv" or "use" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -197,15 +197,17 @@ public partial class MushTownGame
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
             if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);
-            if (shotScreen is "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopcheckout" or "cashshopbuyall")
+            if (shotScreen is "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall")
             {
                 if (shotScreen == "cashshopfashion") _cashShopWindow.PoseFashion();
                 if (shotScreen == "cashshopbeauty") _cashShopWindow.PoseBeauty();
+                if (shotScreen == "cashshopface") _cashShopWindow.PoseFace();
                 if (shotScreen == "cashshopfashionoutfits") _cashShopWindow.PoseFashionOutfits();
                 if (shotScreen is "cashshopreset" or "cashshopempty")
                     _cashShopWindow.PoseSearch(shotScreen == "cashshopreset" ? "reset" : "zzz");
                 ShowWindow(HotkeyAction.CashShop);
                 if (shotScreen == "cashshopbeautygear") _cashShopWindow.PoseBeautyGear();
+                if (shotScreen == "cashshopfacegear") _cashShopWindow.PoseFaceGear();
                 if (shotScreen == "cashshopcart") _cashShopWindow.PoseCart();
                 if (shotScreen == "cashshopladder") _cashShopWindow.PoseLadder();
                 if (shotScreen == "cashshopcheckout") _cashShopWindow.PoseCheckout();
