@@ -70,7 +70,7 @@ public sealed class MobWorld
 
     private readonly string _assetsDir;
     private readonly Dictionary<int, MapData> _maps = new();
-    private readonly Dictionary<int, (long hp, double def, long exp, long touch, int speed, int aggro, bool boss)> _stats = new();
+    private readonly Dictionary<int, (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
     private readonly Dictionary<int, DropTable> _dropTables = new();
     private readonly List<Mob> _lives = new();
@@ -117,7 +117,7 @@ public sealed class MobWorld
                     throw new InvalidDataException($"mob {life.MobId} has bad stats (hp {mob.MaxHp}, def {mob.Def}, exp {mob.Exp})");
                 if (mob.Touch < 0 || mob.Speed <= 0 || mob.Aggro < 0)
                     throw new InvalidDataException($"mob {life.MobId} has bad ai stats (touch {mob.Touch}, speed {mob.Speed}, aggro {mob.Aggro})");
-                st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss);
+                st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss, mob.Level, mob.ElemAttr);
                 _stats[life.MobId] = st;
                 _dropTables[life.MobId] = new DropTable(LoadDropTable(life.MobId));
             }
@@ -130,7 +130,7 @@ public sealed class MobWorld
     // One fresh body at the spawn feet (first plant and respawns share it).
     // Mobs face left until the AI turns them.
     private static Mob Plant(int uid, int mob, int map, float x, float y,
-        (long hp, double def, long exp, long touch, int speed, int aggro, bool boss) st) => new()
+        (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr) st) => new()
         {
             Uid = uid,
             MobId = mob,
@@ -139,6 +139,8 @@ public sealed class MobWorld
             Y = y,
             HomeX = x,
             HomeY = y,
+            Level = st.level,
+            ElemAttr = st.elemAttr,
             Hp = st.hp,
             MaxHp = st.hp,
             Def = st.def,
@@ -261,7 +263,8 @@ public sealed class MobWorld
             float dx = m.X - x;
             bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
-            long damage = Damage.Calc(rng.NextDouble(), rng.NextDouble(), m.Def, build);
+            long damage = Damage.Calc(rng.NextDouble(), rng.NextDouble(), m.Def, build, m.Level, m.ElemAttr,
+                AttackElement.Physical, m.Boss);
             m.Hp = Math.Max(0, m.Hp - damage);
             hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId));
             if (m.Hp != 0) continue;
@@ -331,7 +334,8 @@ public sealed class MobWorld
     // (the boss always pays its purse).
     private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker)
     {
-        long damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct);
+        long damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
+            m.Level, m.ElemAttr, AttackElement.Physical, m.Boss);
         m.Hp = Math.Max(0, m.Hp - damage);
         if (m.Hp == 0)
         {

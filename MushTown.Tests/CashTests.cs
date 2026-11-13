@@ -55,8 +55,8 @@ public sealed class CashTests
         var hand = new CarryHand();
         int cell = chara.DecOrder!.IndexOf(CashSword);
 
-        Assert.AreEqual(HandAct.Moved, hand.Click(chara, "dec", CashSword, defs, 100, 1000, cell));
-        Assert.AreEqual(HandAct.Wore, hand.Click(chara, "dec", CashSword, defs, 100, 1100, cell));
+        Assert.AreEqual(HandAct.Moved, hand.Click(chara, "dec", CashSword, defs, 50, 5, 1000, cell));
+        Assert.AreEqual(HandAct.Wore, hand.Click(chara, "dec", CashSword, defs, 50, 5, 1100, cell));
         CollectionAssert.Contains(chara.CashWorn, CashSword);
         Assert.AreEqual(0, Inventory.Count(chara, "dec", CashSword));
     }

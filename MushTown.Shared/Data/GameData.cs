@@ -221,8 +221,10 @@ public sealed class MobData
 {
     public int MobId { get; set; }
     public string Name { get; set; } = "";
+    public int Level { get; set; } = 0; // WZ info/level; 0 = unknown/neutral (old JSON)
+    public string ElemAttr { get; set; } = ""; // WZ info/elemAttr, e.g. "F2I3"; empty = neutral
     public long MaxHp { get; set; }
-    public double Def { get; set; } // fraction of damage blocked, 0-1 (PDRate/100; v1: nothing ignores it)
+    public double Def { get; set; } // fraction of damage blocked, 0-1 (PDRate/100)
     public long Exp { get; set; } // kill award (the WZ exp node)
     public long Touch { get; set; } // contact damage (flat: mobs roll no variance in v1)
     public int Speed { get; set; } // walk px/s (100 + the WZ speed percent)

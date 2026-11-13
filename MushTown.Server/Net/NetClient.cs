@@ -131,6 +131,13 @@ public sealed class NetClient : IDisposable
             w.Write(build.DmgPct);
             w.Write(build.CritPct);
             w.Write(build.FinalPct);
+            w.Write(build.BossPct);
+            w.Write(build.NormalPct);
+            w.Write(build.FinalDamagePct);
+            w.Write(build.CritDamage);
+            w.Write(build.IedPct);
+            w.Write(build.Level);
+            w.Write(build.WeaponType);
         }));
     }
 

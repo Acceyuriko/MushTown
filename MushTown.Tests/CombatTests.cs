@@ -6,23 +6,23 @@ namespace MushTown.Tests;
 [TestClass]
 public class CombatTests
 {
-    // The v1 beginner (4/4, weapon 32): max range 29, min 5. Each stage below
-    // pins one line of Damage.Calc (bwiki structure: range -> roll -> defense
-    // -> min 1). Live rolls use NextDouble, so 29 itself never lands; the
+    // The v1 beginner (4/4, weapon 32, default 1.20 coefficient): panel 2..7.
+    // Each stage below pins one line of Damage.Calc (range -> roll -> defense
+    // -> min 1). Live rolls use NextDouble, so 7 itself never lands; the
     // test pins the formula bound, not a live roll.
     [TestMethod]
     public void Damage_RollsInsideRange()
     {
-        Assert.AreEqual(5, Damage.Calc(0.0, 1.0, 0.0, Progression.Beginner));
-        Assert.AreEqual(29, Damage.Calc(1.0, 1.0, 0.0, Progression.Beginner));
-        Assert.AreEqual(17, Damage.Calc(0.5, 1.0, 0.0, Progression.Beginner));
+        Assert.AreEqual(2, Damage.Calc(0.0, 1.0, 0.0, Progression.Beginner, -1));
+        Assert.AreEqual(7, Damage.Calc(1.0, 1.0, 0.0, Progression.Beginner, -1));
+        Assert.AreEqual(4, Damage.Calc(0.5, 1.0, 0.0, Progression.Beginner, -1));
     }
 
     [TestMethod]
     public void Damage_DefenseBlocks()
     {
-        Assert.AreEqual(14, Damage.Calc(1.0, 1.0, 0.5, Progression.Beginner));
-        Assert.AreEqual(1, Damage.Calc(0.0, 1.0, 0.99, Progression.Beginner));
+        Assert.AreEqual(3, Damage.Calc(1.0, 1.0, 0.5, Progression.Beginner, -1));
+        Assert.AreEqual(1, Damage.Calc(0.0, 1.0, 0.99, Progression.Beginner, -1));
     }
 
     // +damage% (Weapon Mastery) raises the 100% base; a crit pays 150%.
@@ -30,16 +30,16 @@ public class CombatTests
     [TestMethod]
     public void Damage_MasteryAndCrit()
     {
-        Assert.AreEqual(43, Damage.Calc(1.0, 1.0, 0.0, new Build(4, 4, 32, 50, 0, 0)));
-        Assert.AreEqual(43, Damage.Calc(1.0, 0.0, 0.0, new Build(4, 4, 32, 0, 100, 0)));
-        Assert.AreEqual(65, Damage.Calc(1.0, 0.0, 0.0, new Build(4, 4, 32, 50, 100, 0))); // both stack
+        Assert.AreEqual(10, Damage.Calc(1.0, 1.0, 0.0, new Build(4, 4, 32, 50, 0, 0), -1));
+        Assert.AreEqual(10, Damage.Calc(1.0, 0.0, 0.0, new Build(4, 4, 32, 0, 100, 0), -1));
+        Assert.AreEqual(15, Damage.Calc(1.0, 0.0, 0.0, new Build(4, 4, 32, 50, 100, 0), -1)); // both stack
     }
 
     [TestMethod]
     public void Damage_AboveInt_DoesNotOverflow()
     {
         var build = new Build(4_000_000_000L, 4_000_000_000L, 4_000_000_000L, 0, 0, 0);
-        long damage = Damage.Calc(1.0, 1.0, 0.0, build);
+        long damage = Damage.Calc(1.0, 1.0, 0.0, build, -1);
         Assert.IsTrue(damage > int.MaxValue);
         Assert.IsTrue(damage > 0);
     }
@@ -84,7 +84,7 @@ public class CombatTests
         var hits = world.Strike(7, -50, 100, true, rng, Progression.Beginner);
         Assert.AreEqual(1, hits.Count);
         Assert.AreEqual(spawns[0].Uid, hits[0].Uid);
-        Assert.IsTrue(hits[0].Damage is >= 5 and <= 29);
+        Assert.IsTrue(hits[0].Damage is >= 2 and <= 7);
         Assert.AreEqual(40 - hits[0].Damage, hits[0].HpLeft);
     }
 
@@ -149,7 +149,7 @@ public class CombatTests
         Assert.AreNotEqual(hits[0].Uid, hits[1].Uid);
     }
 
-    // Defense scales the rolled damage (half of the 5..29 range here).
+    // Defense scales the rolled damage (half of the 2..7 range here).
     [TestMethod]
     public void MobWorld_Strike_DefReducesDamage()
     {
@@ -159,7 +159,7 @@ public class CombatTests
         var world = new MobWorld(assets.Dir);
         world.EnterMap(7);
         var hit = world.Strike(7, 0, 100, true, new Random(7), Progression.Beginner)[0];
-        Assert.IsTrue(hit.Damage is >= 2 and <= 14);
+        Assert.IsTrue(hit.Damage is >= 1 and <= 3);
     }
 
     [TestMethod]
@@ -203,14 +203,14 @@ public class CombatTests
         Assert.AreEqual(40, spawn.HpLeft); // fresh spawn: full HP
 
         MobEvent hit = default;
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 20; i++)
         {
             a.SendAttack();
             hit = WaitTakeMob(a);
             Assert.IsFalse(hit.Spawn);
             Assert.AreEqual(spawn.Uid, hit.Uid);
             Assert.AreEqual(9, hit.Map);
-            Assert.IsTrue(hit.Damage is >= 5 and <= 29);
+            Assert.IsTrue(hit.Damage is >= 2 and <= 7);
             if (hit.HpLeft == 0) break;
         }
         Assert.AreEqual(0, hit.HpLeft);
@@ -233,7 +233,7 @@ public class CombatTests
 
         a.SendState(9, -50, 100, Net.ActStand, 0, true);
         Assert.IsTrue(WaitTakeMob(a).Spawn);
-        a.SendBuild(new Build(99, 99, 99, 0, 0, 0)); // panel min 450: one swing kills a 40 HP mob
+        a.SendBuild(new Build(99, 99, 99, 0, 0, 0)); // panel min 118: one swing kills a 40 HP mob
         a.SendAttack();
         var hit = WaitTakeMob(a);
         Assert.IsFalse(hit.Spawn);

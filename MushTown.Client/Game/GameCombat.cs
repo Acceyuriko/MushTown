@@ -114,8 +114,8 @@ public partial class MushTownGame
     // Death: full pools, feet back on the spawn ground, motion cleared.
     private void Die(CharaSlot chara)
     {
-        chara.Hp = Progression.BuffedMaxHp(chara.Level, OwnHpPct());
-        chara.Mp = Progression.MaxMp(chara.Level);
+        chara.Hp = MaxHpNow();
+        chara.Mp = MaxMpNow();
         _mover.X = _map.Info.SpawnX;
         _mover.Ground = SceneMath.GroundBelow(_map.Footholds, _map.Info.SpawnX, _map.Info.SpawnY)
             ?? throw new InvalidDataException($"map {_mapId} has no ground under spawn");
@@ -126,14 +126,6 @@ public partial class MushTownGame
         _showShop = false; _shopQtyId = 0; _shopNotice = ""; _shopQtyField.Unfocus(); // and the NPC-bound shop
         LogEvent("you died");
     }
-
-    // DEF% from every source: worn gear, Iron Body while live, Guardian
-    // Armor and Endure always. Mob touches are the only thing it blocks.
-    private int OwnDef() =>
-        ItemData.EquipBonus(_save?.Slots[_slot]?.Equips, _items).def
-        + (_fighter.Buffs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0)
-        + _skills[SkillData.GuardianArmor].DefPct * SkillLv(SkillData.GuardianArmor)
-        + _skills[SkillData.Endure].DefPct * SkillLv(SkillData.Endure);
 
     // Swings and damaging casts need a judge: net play sends, the local
     // world strikes right here. The disconnect frame has neither yet.
@@ -233,7 +225,7 @@ public partial class MushTownGame
         if (_net != null && _net.Connected) _net.SendSkillCast(id, pct);
         else if (_localWorld != null)
         {
-            foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, OwnBuild(), id, pct))
+            foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), id, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
             DrainDrops(_localWorld);
         }
@@ -309,10 +301,8 @@ public partial class MushTownGame
         var chara = _save?.Slots[_slot];
         int lv = SkillLv(SkillData.SelfRecovery);
         if (chara == null || lv <= 0) return;
-        chara.Hp = Math.Min(chara.Hp + _skills[SkillData.SelfRecovery].RegenHp * lv,
-            Progression.BuffedMaxHp(chara.Level, OwnHpPct()));
-        chara.Mp = Math.Min(chara.Mp + _skills[SkillData.SelfRecovery].RegenMp * lv,
-            Progression.MaxMp(chara.Level));
+        chara.Hp = Math.Min(chara.Hp + _skills[SkillData.SelfRecovery].RegenHp * lv, MaxHpNow());
+        chara.Mp = Math.Min(chara.Mp + _skills[SkillData.SelfRecovery].RegenMp * lv, MaxMpNow());
     }
 
     // Our own cast or a peer's echo: the effect centers on the torso.
@@ -325,52 +315,9 @@ public partial class MushTownGame
         fx.X = x; fx.Y = y - SkillFx.CastDy; fx.FacingRight = facingRight;
     }
 
-    // Our combat stats for the server (Build) and the local judge. CLI
-    // sessions have no character, so they swing as beginners. Passives and
-    // worn gear fold in by level; Spirit Blade multiplies the weapon live.
-    private Build OwnBuild()
-    {
-        var chara = _save?.Slots[_slot];
-        if (chara == null) return Progression.Beginner;
-        var worn = ItemData.EquipBonus(chara.Equips, _items);
-        long str = chara.Str + worn.str
-            + _skills[SkillData.PhysicalTraining].Str * SkillLv(SkillData.PhysicalTraining)
-            + _skills[SkillData.AgileArms].Str * SkillLv(SkillData.AgileArms);
-        long dex = chara.Dex + worn.dex
-            + _skills[SkillData.PhysicalTraining].Dex * SkillLv(SkillData.PhysicalTraining);
-        long atk = worn.weapon > 0
-            ? worn.weapon + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor)
-            : 0; // an empty hand has no weapon attack, even with Guardian Armor
-        if (_fighter.Buffs.ContainsKey(SkillData.SpiritBlade))
-            atk = atk * (100 + _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade)) / 100;
-        int dmg = _skills[SkillData.WeaponMastery].DmgPct * SkillLv(SkillData.WeaponMastery);
-        int crit = _skills[SkillData.WeaponMastery].CritPct * SkillLv(SkillData.WeaponMastery)
-            + _skills[SkillData.ChanceAttack].CritPct * SkillLv(SkillData.ChanceAttack);
-        int final = _skills[SkillData.FinalAttack].ProcPct * SkillLv(SkillData.FinalAttack);
-        return new Build(str, dex, atk, dmg, crit, final);
-    }
-
     // Ctrl is a weapon swing: no weapon in hand means no swing at all.
-    private bool HasWeapon() => OwnBuild().WeaponAtk > 0;
-
     // The attack art follows the appearance: cash weapon first, then gear.
     private string AttackAction() => Progression.AttackAction(Hero, _items);
-
-    // +MaxHP% from every source: Iron Body while live, Warrior Mastery and
-    // Endure always. Pools, potions, and refills all cap at the buffed max.
-    private int OwnHpPct() =>
-        (_fighter.Buffs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].HpPct * SkillLv(SkillData.IronBody) : 0)
-        + _skills[SkillData.WarriorMastery].HpPct * SkillLv(SkillData.WarriorMastery)
-        + _skills[SkillData.Endure].HpPct * SkillLv(SkillData.Endure);
-
-    // Warrior Mastery speeds run and jump together (one column, both axes).
-    private float OwnWalk() =>
-        PlayerMover.WalkSpeed * (100 + _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery)) / 100;
-    private float OwnJump() =>
-        PlayerMover.JumpV0 * (100 + _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery)) / 100;
-
-    // Builds change on level-up, learn, and buff edges: push them all.
-    private void PushBuild() => _net?.SendBuild(OwnBuild());
 
     // Our name + plate, so peers draw our tag (CLI sessions have no chara: skip).
     private void PushName()
@@ -394,12 +341,14 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions have no one to level
-        int ups = Progression.ApplyExp(chara, exp, OwnHpPct());
+        int ups = Progression.ApplyExp(chara, exp, MaxHpNow());
         if (ups > 0)
         {
             LogEvent($"level up! now Lv.{chara.Level} (STR {chara.Str} DEX {chara.Dex})");
             PlaySfx("levelup");
             PushBuild();
+            chara.Hp = MaxHpNow();
+            chara.Mp = MaxMpNow();
             PushQuestSync();
         }
     }

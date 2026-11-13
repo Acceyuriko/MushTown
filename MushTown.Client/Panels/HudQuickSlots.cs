@@ -186,6 +186,6 @@ public partial class MushTownGame
         var chara = _save?.Slots[_slot];
         if (chara == null || !_hand.Empty) return; // the bag hand owns the next click
         if (!_items.TryGetValue(id, out var item)) return;
-        Progression.UsePotion(chara, id, item.Hp, item.Mp, OwnHpPct());
+        Progression.UsePotion(chara, id, item.Hp, item.Mp, MaxHpNow(), MaxMpNow());
     }
 }

@@ -10,15 +10,15 @@ public class SkillTests
     private const int Leap = SkillData.WarLeap;
 
     // SkillCalc = the panel roll times the skill's percent, then the same
-    // defense/min-1 tail. Beginner 5..29 at 150% pins 7..43, a crit 65.
+    // defense/min-1 tail. Beginner 2..7 at 150% pins 3..10, a crit 15.
     [TestMethod]
     public void SkillCalc_ScalesPanelRoll()
     {
-        Assert.AreEqual(7, Damage.SkillCalc(0.0, 1.0, 0.0, Progression.Beginner, 150));
-        Assert.AreEqual(43, Damage.SkillCalc(1.0, 1.0, 0.0, Progression.Beginner, 150));
-        Assert.AreEqual(21, Damage.SkillCalc(1.0, 1.0, 0.5, Progression.Beginner, 150));
-        Assert.AreEqual(1, Damage.SkillCalc(0.0, 1.0, 0.99, Progression.Beginner, 150));
-        Assert.AreEqual(65, Damage.SkillCalc(1.0, 0.0, 0.0, new Build(4, 4, 32, 0, 100, 0), 150));
+        Assert.AreEqual(3, Damage.SkillCalc(0.0, 1.0, 0.0, Progression.Beginner, 150, -1));
+        Assert.AreEqual(10, Damage.SkillCalc(1.0, 1.0, 0.0, Progression.Beginner, 150, -1));
+        Assert.AreEqual(5, Damage.SkillCalc(1.0, 1.0, 0.5, Progression.Beginner, 150, -1));
+        Assert.AreEqual(1, Damage.SkillCalc(0.0, 1.0, 0.99, Progression.Beginner, 150, -1));
+        Assert.AreEqual(15, Damage.SkillCalc(1.0, 0.0, 0.0, new Build(4, 4, 32, 0, 100, 0), 150, -1));
     }
 
     // The cast gate: the skill must be learned, and level, MP, and
@@ -64,7 +64,7 @@ public class SkillTests
         Assert.AreEqual(2, hits.Count); // the 500px mob is out, the cap drops one more
         Assert.AreEqual(spawns[1].Uid, hits[0].Uid); // x=10 first: nearest wins
         Assert.AreEqual(spawns[3].Uid, hits[1].Uid); // x=-90 next: behind counts too
-        Assert.IsTrue(hits[0].Damage is >= 7 and <= 43);
+        Assert.IsTrue(hits[0].Damage is >= 3 and <= 10);
         Assert.AreEqual(Slash, hits[0].Skill);
         Assert.AreEqual(35, hits[0].Exp);
     }

@@ -183,7 +183,7 @@ public class CashShopTests
         Assert.IsTrue(Inventory.Add(hero, "cash", 5400000, 1));
         var hand = new CarryHand();
         var defs = new Dictionary<int, ItemData> { [5400000] = Def(5400000) };
-        Assert.AreEqual(HandAct.Moved, hand.Click(hero, "cash", 5400000, defs, 0, 1000, 0));
-        Assert.AreEqual(HandAct.Used, hand.Click(hero, "cash", 5400000, defs, 0, 1100, 0));
+        Assert.AreEqual(HandAct.Moved, hand.Click(hero, "cash", 5400000, defs, Progression.MaxHp(hero.Level), Progression.MaxMp(hero.Level), 1000, 0));
+        Assert.AreEqual(HandAct.Used, hand.Click(hero, "cash", 5400000, defs, Progression.MaxHp(hero.Level), Progression.MaxMp(hero.Level), 1100, 0));
     }
 }

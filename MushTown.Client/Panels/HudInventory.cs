@@ -398,7 +398,7 @@ public partial class MushTownGame
         var chara = _save?.Slots[_slot];
         if (chara == null || kind == "") return; // CLI sessions carry no bag
         int id = ItemId(kind, index);
-        var act = _hand.Click(chara, kind, id, _items, OwnHpPct(), _timeMs, index);
+        var act = _hand.Click(chara, kind, id, _items, MaxHpNow(), MaxMpNow(), _timeMs, index);
         if (act == HandAct.Wore)
         {
             if (WindowFor(HotkeyAction.Equip) is { } equipWindow) equipWindow.Dirty = true;

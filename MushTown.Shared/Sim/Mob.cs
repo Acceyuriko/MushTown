@@ -23,6 +23,8 @@ public sealed class Mob : Component
     public float HomeY;
     public bool FacingRight;
     public float TouchMs; // ms until this mob may touch again
+    public int Level;
+    public string ElemAttr = "";
     public long Hp;
     public long MaxHp;
     public double Def;

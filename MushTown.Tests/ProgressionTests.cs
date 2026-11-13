@@ -36,25 +36,33 @@ public class ProgressionTests
         };
         Assert.IsTrue(Progression.MaxHp(chara.Level) > int.MaxValue);
         Assert.IsTrue(Progression.MaxMp(chara.Level) > int.MaxValue);
-        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 2_000_000_000L, 2_000_000_000L));
+        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 2_000_000_000L, 2_000_000_000L,
+            Progression.MaxHp(chara.Level), Progression.MaxMp(chara.Level)));
         Assert.IsTrue(chara.Hp > int.MaxValue);
         Assert.IsTrue(chara.Mp > int.MaxValue);
     }
 
     [TestMethod]
-    public void PanelRange_BeginnerIs5to29()
+    public void PanelRange_BeginnerIs2to7()
     {
-        Assert.AreEqual((5, 29), Progression.PanelRange(4, 4, Progression.WeaponAtk));
+        var s = StatAggregator.Aggregate(new[]
+        {
+            new StatModifier(StatKey.STR, StatValueType.FLAT, 4, "test"),
+            new StatModifier(StatKey.DEX, StatValueType.FLAT, 4, "test"),
+            new StatModifier(StatKey.ATT, StatValueType.FLAT, Progression.WeaponAtk, "test"),
+        });
+        var job = new JobProfile(StatKey.STR, StatKey.DEX, WeaponType.Default);
+        Assert.AreEqual((2L, 7L), DamageChain.PanelRange(s, job));
     }
 
     [TestMethod]
     public void ApplyExp_LevelsUpWithAutoStats()
     {
         var chara = new CharaSlot { Name = "hero" };
-        Assert.AreEqual(0, Progression.ApplyExp(chara, 34));
+        Assert.AreEqual(0, Progression.ApplyExp(chara, 34, Progression.MaxHp(1)));
         Assert.AreEqual(1, chara.Level);
         Assert.AreEqual(34, chara.Exp);
-        Assert.AreEqual(1, Progression.ApplyExp(chara, 1)); // 35 = ExpNext(1)
+        Assert.AreEqual(1, Progression.ApplyExp(chara, 1, Progression.MaxHp(2))); // 35 = ExpNext(1)
         Assert.AreEqual(2, chara.Level);
         Assert.AreEqual(0, chara.Exp);
         Assert.AreEqual(8, chara.Str); // +4 auto
@@ -67,7 +75,7 @@ public class ProgressionTests
     public void ApplyExp_BigAward_LevelsTwice()
     {
         var chara = new CharaSlot { Name = "hero" };
-        Assert.AreEqual(2, Progression.ApplyExp(chara, 100)); // 35 + 55 = 90, 10 left
+        Assert.AreEqual(2, Progression.ApplyExp(chara, 100, Progression.MaxHp(3))); // 35 + 55 = 90, 10 left
         Assert.AreEqual(3, chara.Level);
         Assert.AreEqual(10, chara.Exp);
         Assert.AreEqual(12, chara.Str);
@@ -79,10 +87,12 @@ public class ProgressionTests
     {
         var chara = new CharaSlot { Name = "hero", Hp = 10 };
         chara.Use = new Dictionary<int, int> { { ItemData.RedPotion, 2 } };
-        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0));
+        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0,
+            Progression.MaxHp(1), Progression.MaxMp(1)));
         Assert.AreEqual(50, chara.Hp); // clamped to MaxHp(1)
         Assert.AreEqual(1, chara.Use[ItemData.RedPotion]);
-        Assert.IsFalse(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0)); // full pool: nothing happens
+        Assert.IsFalse(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0,
+            Progression.MaxHp(1), Progression.MaxMp(1))); // full pool: nothing happens
         Assert.AreEqual(1, chara.Use[ItemData.RedPotion]);
     }
 
@@ -90,10 +100,13 @@ public class ProgressionTests
     public void UsePotion_EmptyOrMissing_ReturnsFalse()
     {
         var chara = new CharaSlot { Name = "hero", Hp = 10 }; // Use null (pre-W10 save)
-        Assert.IsFalse(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0));
+        Assert.IsFalse(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0,
+            Progression.MaxHp(1), Progression.MaxMp(1)));
         chara.Use = new Dictionary<int, int> { { ItemData.RedPotion, 1 } };
-        Assert.IsFalse(Progression.UsePotion(chara, ItemData.BluePotion, 0, 100)); // not in the bag
-        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0));
+        Assert.IsFalse(Progression.UsePotion(chara, ItemData.BluePotion, 0, 100,
+            Progression.MaxHp(1), Progression.MaxMp(1))); // not in the bag
+        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0,
+            Progression.MaxHp(1), Progression.MaxMp(1)));
         Assert.IsFalse(chara.Use.ContainsKey(ItemData.RedPotion)); // the last bottle leaves no zero behind
     }
 
@@ -102,7 +115,8 @@ public class ProgressionTests
     {
         var chara = new CharaSlot { Name = "hero", Mp = 1 };
         chara.Use = new Dictionary<int, int> { { ItemData.BluePotion, 1 } };
-        Assert.IsTrue(Progression.UsePotion(chara, ItemData.BluePotion, 0, 100));
+        Assert.IsTrue(Progression.UsePotion(chara, ItemData.BluePotion, 0, 100,
+            Progression.MaxHp(1), Progression.MaxMp(1)));
         Assert.AreEqual(5, chara.Mp); // clamped to MaxMp(1)
     }
 
@@ -111,7 +125,7 @@ public class ProgressionTests
     public void ApplyExp_BanksSkillPoints()
     {
         var chara = new CharaSlot { Name = "hero" };
-        Assert.AreEqual(2, Progression.ApplyExp(chara, 100));
+        Assert.AreEqual(2, Progression.ApplyExp(chara, 100, Progression.MaxHp(3)));
         Assert.AreEqual(6, chara.Sp);
     }
 
@@ -178,30 +192,22 @@ public class ProgressionTests
         Assert.AreEqual(9, young.Sp);
     }
 
-    // Iron Body's +HP% stretches the pool (Endure stacks on top).
+    // Level-up refills and potions both use the max supplied by the caller.
     [TestMethod]
-    public void BuffedMaxHp_StretchesPool()
-    {
-        Assert.AreEqual(50, Progression.BuffedMaxHp(1, 0));
-        Assert.AreEqual(65, Progression.BuffedMaxHp(1, 30));
-    }
-
-    // Level-up refills and potions both cap at the buffed max, not base.
-    [TestMethod]
-    public void ApplyExp_RefillsToBuffedMax()
+    public void ApplyExp_RefillsToGivenMax()
     {
         var chara = new CharaSlot { Name = "hero" };
-        Assert.AreEqual(1, Progression.ApplyExp(chara, 35, 100));
-        Assert.AreEqual(160, chara.Hp); // BuffedMaxHp(2, 100), not MaxHp(2) = 80
+        Assert.AreEqual(1, Progression.ApplyExp(chara, 35, 160));
+        Assert.AreEqual(160, chara.Hp);
     }
 
     [TestMethod]
-    public void UsePotion_HealsToBuffedMax()
+    public void UsePotion_HealsToGivenMax()
     {
         var chara = new CharaSlot { Name = "hero", Hp = 10 };
         chara.Use = new Dictionary<int, int> { { ItemData.RedPotion, 1 } };
-        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0, 100));
-        Assert.AreEqual(60, chara.Hp); // over the base 50: the buff holds it
+        Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0, 60, 5));
+        Assert.AreEqual(60, chara.Hp);
     }
 
     private static Dictionary<int, ItemData> EquipDefs() => new()

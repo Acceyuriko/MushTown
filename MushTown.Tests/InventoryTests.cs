@@ -311,7 +311,7 @@ public sealed class InventoryTests
         var c = new CharaSlot { Use = new Dictionary<int, int> { [Red] = 1 }, Hp = 1 };
         Inventory.Ensure(c);
 
-        Assert.IsTrue(Progression.UsePotion(c, Red, 50, 0));
+        Assert.IsTrue(Progression.UsePotion(c, Red, 50, 0, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level)));
         Assert.AreEqual(0, c.UseOrder![0]);
     }
 }

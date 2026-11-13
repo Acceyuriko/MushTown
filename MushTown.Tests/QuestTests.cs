@@ -340,7 +340,7 @@ public class QuestTests
         Assert.IsTrue(log.IsComplete(chara, 1027));
         Assert.IsTrue(log.Complete(chara, 1027));
         log.TurnIn(chara, 1027);
-        Progression.ApplyExp(chara, quests[1027].RewardExp);
+        Progression.ApplyExp(chara, quests[1027].RewardExp, Progression.MaxHp(chara.Level));
         Assert.AreEqual(6, chara.Level);
         Assert.AreEqual(64, chara.Exp);
         Assert.AreEqual(310, chara.Mesos);
@@ -355,12 +355,12 @@ public class QuestTests
             for (int i = 0; i < k.Count; i++)
             {
                 log.BumpKills(chara, k.Mob);
-                Progression.ApplyExp(chara, pay[k.Mob]); // each kill pays, like GainExp
+                Progression.ApplyExp(chara, pay[k.Mob], Progression.MaxHp(chara.Level)); // each kill pays, like GainExp
             }
         Assert.IsTrue(log.IsComplete(chara, q.QuestId), $"chain cannot finish {q.QuestId}");
         Assert.IsTrue(log.Complete(chara, q.QuestId));
         log.TurnIn(chara, q.QuestId);
-        Progression.ApplyExp(chara, q.RewardExp);
+        Progression.ApplyExp(chara, q.RewardExp, Progression.MaxHp(chara.Level));
     }
 
     [TestMethod]

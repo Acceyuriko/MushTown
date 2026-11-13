@@ -31,8 +31,9 @@ public sealed class CarryHand
     public bool StillThere(CharaSlot chara) =>
         Kind != null && Inventory.SlotId(chara, Kind, Cell) == Id;
 
-    // One slot click. hpPct feeds the shared drink guard (buffed max HP).
-    public HandAct Click(CharaSlot chara, string tab, int id, IReadOnlyDictionary<int, ItemData> defs, int hpPct, double nowMs, int index)
+    // One slot click. maxHp/maxMp feed the shared drink guard.
+    public HandAct Click(CharaSlot chara, string tab, int id, IReadOnlyDictionary<int, ItemData> defs,
+        long maxHp, long maxMp, double nowMs, int index)
     {
         if (Kind == null)
         {
@@ -49,12 +50,12 @@ public sealed class CarryHand
             // Something else removed or moved the cell (sell, drink, reward,
             // pickup): drop the stale preview and treat this as a fresh click.
             Return();
-            return Click(chara, tab, id, defs, hpPct, nowMs, index);
+            return Click(chara, tab, id, defs, maxHp, maxMp, nowMs, index);
         }
         if (Cell == index)
         {
             if (_lastKind == tab && _lastId == Id && _lastCell == index && nowMs - _lastMs <= DoubleMs)
-                return DoubleClickHeld(chara, defs, hpPct);
+                return DoubleClickHeld(chara, defs, maxHp, maxMp);
             Kind = null;
             Cell = -1;
             Disarm();
@@ -75,11 +76,12 @@ public sealed class CarryHand
         Cell = -1;
     }
 
-    private HandAct DoubleClickHeld(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs, int hpPct)
+    private HandAct DoubleClickHeld(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs,
+        long maxHp, long maxMp)
     {
         HandAct act = Kind switch
         {
-            "use" => DrinkHeld(chara, defs, hpPct),
+            "use" => DrinkHeld(chara, defs, maxHp, maxMp),
             "equip" => WearHeld(chara, defs),
             "dec" => Progression.WearCash(chara, Id, defs) ? HandAct.Wore : HandAct.None,
             "cash" => HandAct.Used,
@@ -92,10 +94,11 @@ public sealed class CarryHand
         return act;
     }
 
-    private HandAct DrinkHeld(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs, int hpPct)
+    private HandAct DrinkHeld(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs,
+        long maxHp, long maxMp)
     {
         var item = defs[Id];
-        Progression.UsePotion(chara, Id, item.Hp, item.Mp, hpPct);
+        Progression.UsePotion(chara, Id, item.Hp, item.Mp, maxHp, maxMp);
         return HandAct.Drank;
     }
 

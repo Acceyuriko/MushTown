@@ -160,33 +160,33 @@ public partial class MushTownGame
         {
             case 0:
                 {
-                    long maxHp = Progression.BuffedMaxHp(c?.Level ?? 1, OwnHpPct());
+                    long maxHp = _stats.IntValue(StatKey.MAX_HP);
                     return $"{(c?.Hp ?? maxHp):#,##0} / {maxHp:#,##0}";
                 }
             case 1:
                 {
-                    long maxMp = Progression.MaxMp(c?.Level ?? 1);
+                    long maxMp = _stats.IntValue(StatKey.MAX_MP);
                     return $"{(c?.Mp ?? maxMp):#,##0} / {maxMp:#,##0}";
                 }
-            case 2: return $"{OwnBuild().Str:#,##0}";
-            case 3: return $"{OwnBuild().Dex:#,##0}";
-            case 4: return $"{(c?.Int ?? 4):#,##0}";
-            case 5: return $"{(c?.Luk ?? 4):#,##0}";
+            case 2: return $"{_stats.IntValue(StatKey.STR):#,##0}";
+            case 3: return $"{_stats.IntValue(StatKey.DEX):#,##0}";
+            case 4: return $"{_stats.IntValue(StatKey.INT):#,##0}";
+            case 5: return $"{_stats.IntValue(StatKey.LUK):#,##0}";
             case 6: return DamageRange();
-            case 8: return $"{OwnBuild().FinalPct}%"; // final damage
-            case 12: return $"{OwnBuild().WeaponAtk:#,##0}";
-            case 13: return $"{OwnBuild().CritPct}%"; // critical rate
+            case 8: return $"{CurrentBuild().FinalPct}%"; // Final Attack proc chance (panel text unchanged this ticket)
+            case 12: return $"{DamageChain.TotalAttack(_stats):#,##0}";
+            case 13: return $"{_stats.IntValue(StatKey.CRIT_RATE)}%"; // critical rate
             case 22: return $"{(c?.Mesos ?? 0).ToString("#,##0")}";
             case 26: return $"{(c?.Exp ?? 0):#,##0} / {Progression.ExpNext(c?.Level ?? 1):#,##0}";
             default: return "0";
         }
     }
 
-    // The damage range the panel shows: the melee range of the own build.
+    // The damage range the panel shows: the current class and weapon profile
+    // read from the same snapshot as the rest of the panel.
     private string DamageRange()
     {
-        var b = OwnBuild();
-        var (lo, hi) = Progression.PanelRange(b.Str, b.Dex, b.WeaponAtk);
+        var (lo, hi) = DamageChain.PanelRange(_stats, CurrentJob());
         return $"{lo:#,##0}~{hi:#,##0}";
     }
 
@@ -195,9 +195,9 @@ public partial class MushTownGame
     // main stats, so the gear and the skills move it.
     private long CombatPower()
     {
-        var b = OwnBuild();
         int level = _save?.Slots[_slot]?.Level ?? 1;
-        return level * 100L + b.WeaponAtk * 4 + b.Str + b.Dex;
+        return level * 100L + DamageChain.TotalAttack(_stats) * 4
+            + _stats.IntValue(StatKey.STR) + _stats.IntValue(StatKey.DEX);
     }
 }
 

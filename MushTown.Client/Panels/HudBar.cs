@@ -427,14 +427,14 @@ public partial class MushTownGame
     private string HpText()
     {
         var chara = _save?.Slots[_slot];
-        long maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct());
+        long maxHp = MaxHpNow();
         return $"{(chara?.Hp ?? maxHp):#,##0}/{maxHp:#,##0}";
     }
 
     private string MpText()
     {
         var chara = _save?.Slots[_slot];
-        long maxMp = Progression.MaxMp(chara?.Level ?? 1);
+        long maxMp = MaxMpNow();
         return $"{(chara?.Mp ?? maxMp):#,##0}/{maxMp:#,##0}";
     }
 

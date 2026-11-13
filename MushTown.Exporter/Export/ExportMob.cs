@@ -14,8 +14,9 @@ public static partial class Export
     // Orange Mushroom 1210102).
     // Every stat except Aggro comes from the mob's info node in the WZ: MaxHp =
     // maxHP, Exp = exp, Def = PDRate/100, Touch = PADamage, Speed = 100 + speed
-    // px/s (the WZ speed is a percent; the player walks 140), Boss = boss. Aggro
-    // (chase range in x px) has no WZ field, so it stays a v1 feel number.
+    // px/s (the WZ speed is a percent; the player walks 140), Boss = boss,
+    // Level = level, ElemAttr = elemAttr. Aggro (chase range in x px) has no WZ
+    // field, so it stays a v1 feel number.
     // Boss pin: the WZ carries no boss life, so v1 pins Mushmom to map
     // 2000000 (main ground y=527 runs -212..1440; the pin stands east of the
     // NPCs). Its attack1 art ships but never plays: v1 bosses touch like
@@ -72,6 +73,8 @@ public static partial class Export
         {
             MobId = mobId,
             Name = mobName,
+            Level = Int(info, "level", 0),
+            ElemAttr = info.Nodes["elemAttr"]?.GetValueEx<string>("") ?? "",
             MaxHp = maxHp,
             Def = Int(info, "PDRate", 0) / 100.0,
             Exp = Int(info, "exp", 0),

@@ -1,13 +1,13 @@
 namespace MushTown.Shared;
 
-// Leveling, vitals, and the attack panel: pure math shared by the client
-// (EXP bar, stat panel, potions) and the server (damage judging).
+// Leveling and vitals: pure math shared by the client (EXP bar, potions) and
+// the server (damage judging). The attack panel lives in DamageChain.
 // W10 plays a fixed warrior line: auto stat points on level-up (M4).
 public static class Progression
 {
-    // Local no-save / CLI dummy weapon attack. v1 placeholder: 32 keeps the
-    // damage range the tests and the early mobs are tuned for (5..29). Real
-    // characters use their worn weapon; the starter Sword 01302000 has incPAD 15.
+    // CLI/no-save placeholder attack. There is no character or equipment
+    // behind this value; 32 is unrelated to any item. Real characters use
+    // their worn weapon.
     public const int WeaponAtk = 32;
 
     // EXP to climb from this level to the next. Linear v1 curve: levels 1-10
@@ -19,21 +19,6 @@ public static class Progression
     public static long MaxHp(int level) => 50 + 30L * (level - 1);
     public static long MaxMp(int level) => 5 + 5L * (level - 1);
 
-    // Melee weapon multiplier. bwiki's weapon table page is gone (template
-    // 404), so 4.6 is a v1 guess, kept visible here until verified.
-    private const double WeaponMult = 4.6;
-
-    // Melee base mastery: bwiki 熟练度 floor 20% (no beginner skill raises it).
-    private const double MeleeMastery = 0.20;
-
-    // The bwiki panel range (实际面板): warrior STR main, DEX sub. Damage.Calc
-    // rolls inside this range; the stat panel shows it.
-    public static (long min, long max) PanelRange(long str, long dex, long weaponAtk)
-    {
-        long max = (long)(WeaponMult * (str * 4 + dex) * weaponAtk / 100);
-        return ((long)(max * MeleeMastery), max);
-    }
-
     // Combat stats the client sends the server (Build message) so damage is
     // judged on the real attacker. Beginner is the default for clients that
     // never sent one (CLI sessions). DmgPct/CritPct/FinalPct fold every
@@ -42,10 +27,6 @@ public static class Progression
 
     // Skill points banked per level-up (creation banks one level too).
     public const int SpPerLevel = 3;
-
-    // Max-HP pool with the +MaxHP% of learned skills (Iron Body, Warrior
-    // Mastery, Endure) folded in. MP has no buff source in v1.
-    public static long BuffedMaxHp(int level, int hpPct) => MaxHp(level) * (100 + hpPct) / 100;
 
     // Active damage pct at a skill level: lv 1 deals DmgLo, max deals DmgHi,
     // linear between. Single-level skills (max 1) always deal DmgLo.
@@ -84,9 +65,9 @@ public static class Progression
     }
 
     // Adds EXP, levels up while the bar is full. Each level: auto stat points
-    // (+4 STR +1 DEX warrior ratio), +3 SP, pools refilled to the new (buffed)
-    // max. Returns levels gained (0 when the bar is not full yet).
-    public static int ApplyExp(CharaSlot chara, long exp, int hpPct = 0)
+    // (+4 STR +1 DEX warrior ratio), +3 SP, pools refilled to the max supplied
+    // by the caller. Returns levels gained (0 when the bar is not full yet).
+    public static int ApplyExp(CharaSlot chara, long exp, long maxHp)
     {
         chara.Exp += exp;
         int ups = 0;
@@ -97,7 +78,7 @@ public static class Progression
             chara.Str += 4;
             chara.Dex += 1;
             chara.Sp += SpPerLevel;
-            chara.Hp = BuffedMaxHp(chara.Level, hpPct);
+            chara.Hp = maxHp;
             chara.Mp = MaxMp(chara.Level);
             ups++;
         }
@@ -106,17 +87,16 @@ public static class Progression
 
     // Drinks one potion: needs a bottle in the bag and a pool that is not
     // full. Returns false when nothing happens (empty or already full).
-    public static bool UsePotion(CharaSlot chara, int itemId, long healHp, long healMp, int hpPct = 0)
+    public static bool UsePotion(CharaSlot chara, int itemId, long healHp, long healMp, long maxHp, long maxMp)
     {
         var use = chara.Use;
         if (use == null || !use.TryGetValue(itemId, out int count) || count <= 0)
             return false;
-        bool need = (healHp > 0 && chara.Hp < BuffedMaxHp(chara.Level, hpPct))
-            || (healMp > 0 && chara.Mp < MaxMp(chara.Level));
+        bool need = (healHp > 0 && chara.Hp < maxHp) || (healMp > 0 && chara.Mp < maxMp);
         if (!need) return false;
         Inventory.Remove(chara, "use", itemId, 1);
-        chara.Hp = Math.Min(chara.Hp + healHp, BuffedMaxHp(chara.Level, hpPct));
-        chara.Mp = Math.Min(chara.Mp + healMp, MaxMp(chara.Level));
+        chara.Hp = Math.Min(chara.Hp + healHp, maxHp);
+        chara.Mp = Math.Min(chara.Mp + healMp, maxMp);
         return true;
     }
 
@@ -273,8 +253,20 @@ public static class Progression
     }
 }
 
-// The attacker's combat stats (warrior line: STR/DEX + weapon). Int/Luk stay
-// client-side: nothing consumes them until later milestones. The last three
-// fold skill sources: +damage% (Weapon Mastery), crit% (Weapon/Chance),
-// Final Attack proc% — the client recomputes them on every learn/buff tick.
-public readonly record struct Build(long Str, long Dex, long WeaponAtk, int DmgPct, int CritPct, int FinalPct);
+// The attacker's combat stats. Str/Dex are the final main/sub values;
+// WeaponAtk is the final total attack. FinalPct is the Final Attack proc
+// chance (not final damage; the chain has its own FinalDamagePct).
+public readonly record struct Build(
+    long Str,
+    long Dex,
+    long WeaponAtk,
+    int DmgPct,
+    int CritPct,
+    int FinalPct,
+    int BossPct = 0,
+    int NormalPct = 0,
+    int FinalDamagePct = 0,
+    int CritDamage = 0,
+    int IedPct = 0,
+    int Level = 1,
+    int WeaponType = 0);

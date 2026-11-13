@@ -507,6 +507,7 @@ public partial class MushTownGame : Game
             return;
         }
 
+        RefreshStats(); // one snapshot per frame: panels, movement and damage all read it
         var kb = Keyboard.GetState();
         // One layer per press: the edge is taken here, before the chat sees the
         // keys. The chat keeps its own Esc (it leaves the input), so the layer
@@ -618,7 +619,7 @@ public partial class MushTownGame : Game
         foreach (int id in _fighter.ExpiredBuffs) EndBuff(id); // same spot, same order (ticks run first now, ends after)
         if (_fighter.RegenDue) PayoutRegen();
         if (_save?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
-            c.Hp = Math.Min(c.Hp, Progression.BuffedMaxHp(c.Level, OwnHpPct()));
+            c.Hp = Math.Min(c.Hp, MaxHpNow());
         SendPartyHpIfChanged();
 
         // fresh edges: portal tap, drop and ladder leap fire once per tap
@@ -648,7 +649,7 @@ public partial class MushTownGame : Game
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
             {
-                foreach (var h in _localWorld.Strike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, OwnBuild()))
+                foreach (var h in _localWorld.Strike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild()))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                 DrainDrops(_localWorld);
             }

@@ -12,7 +12,7 @@ public static class Net
     public const byte Attack = 5;  // client -> server: no body (server judges from the last State)
     public const byte MobSpawn = 6; // server -> client: int uid, int mob, int map, float x, float y, long maxHp, long hp
     public const byte MobHit = 7;  // server -> client: int uid, int map, long damage, long hpLeft (0 = dead), int attacker, long exp, int skill (0 = basic)
-    public const byte Build = 8;   // client -> server: long str, long dex, long weaponAtk, int dmgPct, int critPct, int finalPct (resent on level-up/learn/buff)
+    public const byte Build = 8;   // client -> server: Build fields (resent on level-up/learn/buff)
     public const byte SkillCast = 9; // client -> server: int skill, int pct (cast-time damage pct, orbs folded in; buffs send 0)
     public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing
     public const byte MobMove = 11;  // server -> client: int uid, int map, float x, float y, byte facing (10Hz, occupied maps only)

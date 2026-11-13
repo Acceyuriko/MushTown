@@ -41,11 +41,11 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1000, 0));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0));
         Assert.AreEqual(("use", Red), (hand.Kind, hand.Id));
         Assert.AreEqual(3, c.Use![Red]); // moving a cell keeps the count
 
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 2000, 2));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 2000, 2));
         Assert.IsTrue(hand.Empty);
         Assert.AreEqual(0, c.UseOrder![0]);
         Assert.AreEqual(Red, c.UseOrder[2]);
@@ -58,8 +58,8 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000, 0);
-        Assert.AreEqual(HandAct.Drank, hand.Click(c, "use", Red, defs, 0, 1200, 0));
+        hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0);
+        Assert.AreEqual(HandAct.Drank, hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1200, 0));
         Assert.IsTrue(hand.Empty);
         Assert.AreEqual(2, c.Use![Red]);
         Assert.AreEqual(60, c.Hp);
@@ -71,8 +71,8 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000, 0);
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1000 + CarryHand.DoubleMs + 1, 0));
+        hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0);
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000 + CarryHand.DoubleMs + 1, 0));
         Assert.IsTrue(hand.Empty);
         Assert.AreEqual(3, c.Use![Red]);
         Assert.AreEqual(10, c.Hp); // nothing drank
@@ -85,8 +85,8 @@ public sealed class CarryTests
         var c = Chara();
         c.Hp = Progression.MaxHp(c.Level);
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000, 0);
-        Assert.AreEqual(HandAct.Drank, hand.Click(c, "use", Red, defs, 0, 1200, 0));
+        hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0);
+        Assert.AreEqual(HandAct.Drank, hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1200, 0));
         Assert.AreEqual(3, c.Use![Red]); // the guard refused: none lost
     }
 
@@ -96,8 +96,8 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000, 0);
-        Assert.AreEqual(HandAct.None, hand.Click(c, "equip", Sword, defs, 0, 1100, 0));
+        hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0);
+        Assert.AreEqual(HandAct.None, hand.Click(c, "equip", Sword, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1100, 0));
         Assert.AreEqual(("use", Red), (hand.Kind, hand.Id)); // still held
     }
 
@@ -107,9 +107,9 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Sword, defs, 0, 1000, 0));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Sword, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0));
         Assert.AreEqual(1, c.EquipBag![Sword]);
-        Assert.AreEqual(HandAct.Wore, hand.Click(c, "equip", Sword, defs, 0, 1200, 0));
+        Assert.AreEqual(HandAct.Wore, hand.Click(c, "equip", Sword, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1200, 0));
         Assert.IsTrue(hand.Empty);
         Assert.AreEqual(1, c.Equips!.Count(w => w == Sword));
         Assert.IsFalse(c.EquipBag.ContainsKey(Sword));
@@ -125,8 +125,8 @@ public sealed class CarryTests
         Inventory.Ensure(c);
         var hand = new CarryHand();
 
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Sword, defs, 0, 1000, 0));
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Axe, defs, 0, 1100, 1));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Sword, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "equip", Axe, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1100, 1));
         Assert.IsTrue(hand.Empty);
         Assert.AreEqual(Axe, c.EquipOrder![0]);
         Assert.AreEqual(Sword, c.EquipOrder[1]);
@@ -141,10 +141,10 @@ public sealed class CarryTests
         var c = Chara();
         Assert.IsTrue(Inventory.Add(c, "use", Blue, 1));
         var hand = new CarryHand();
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, 0, 1000, 0));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0));
         Assert.IsTrue(Inventory.Remove(c, "use", Red, 3)); // sold or drunk elsewhere
 
-        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Blue, defs, 0, 1100, 1));
+        Assert.AreEqual(HandAct.Moved, hand.Click(c, "use", Blue, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1100, 1));
         Assert.AreEqual(("use", Blue), (hand.Kind, hand.Id));
     }
 
@@ -154,10 +154,10 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000, 0);
+        hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0);
         Inventory.Remove(c, "use", Red, 3);
 
-        Assert.AreEqual(HandAct.None, hand.Click(c, "use", 0, defs, 0, 1100, 0));
+        Assert.AreEqual(HandAct.None, hand.Click(c, "use", 0, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1100, 0));
         Assert.IsTrue(hand.Empty);
     }
 
@@ -167,7 +167,7 @@ public sealed class CarryTests
         var defs = Defs();
         var c = Chara();
         var hand = new CarryHand();
-        hand.Click(c, "use", Red, defs, 0, 1000, 0);
+        hand.Click(c, "use", Red, defs, Progression.MaxHp(c.Level), Progression.MaxMp(c.Level), 1000, 0);
         hand.Return();
         Assert.IsTrue(hand.Empty);
         Assert.AreEqual(Red, c.UseOrder![0]);

@@ -13,6 +13,7 @@ public partial class MushTownGame
     private void SetupShotMobs()
     {
         StartLocalWorld();
+        RefreshStats();
         if (_shotDmg > 0)
         {
             var num = TakeNumber();
@@ -28,6 +29,7 @@ public partial class MushTownGame
             // The demo bag holds one item per slot: the doll wears them all.
             foreach (int id in chara.EquipBag!.Keys.ToList())
                 Progression.WearEquip(chara, id, _items);
+            RefreshStats();
             BuildStatScene(); // the Character Info portrait shows the worn items: bake them in
         }
         if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))
@@ -79,7 +81,7 @@ public partial class MushTownGame
                 if (world.IsDamageSkill(_shotSkill))
                 {
                     int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
-                    foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, true, new Random(0), OwnBuild(), _shotSkill, pct))
+                    foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, true, new Random(0), CurrentBuild(), _shotSkill, pct))
                         ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                     DrainDrops(world);
                 }
@@ -90,7 +92,7 @@ public partial class MushTownGame
                 var rng = new Random(0);
                 bool killed = false;
                 for (int i = 0; i < 20 && !killed; i++)
-                    foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, rng, OwnBuild()))
+                    foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, rng, CurrentBuild()))
                     {
                         ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                         killed |= h.HpLeft == 0;
@@ -100,7 +102,7 @@ public partial class MushTownGame
             }
             else
             {
-                foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, new Random(0), OwnBuild()))
+                foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, new Random(0), CurrentBuild()))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
                 DrainDrops(world);
             }
