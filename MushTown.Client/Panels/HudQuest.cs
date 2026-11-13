@@ -328,8 +328,8 @@ public partial class MushTownGame
                 objectives.Add(($"{MobName(sel.Kills[i].Mob)} {n}/{sel.Kills[i].Count}", n >= sel.Kills[i].Count));
             }
             var rewards = new List<QuestRewardIcon>();
-            if (sel.RewardExp > 0) rewards.Add(new("ui/quest_exp.png", "x" + sel.RewardExp, _questLay.Get("rewardExpDy", 6))); // png has 11 empty rows at the bottom
-            if (sel.RewardMeso > 0) rewards.Add(new("ui/quest_meso.png", "x" + sel.RewardMeso));
+            if (sel.RewardExp > 0) rewards.Add(new("ui/quest_exp.png", "x" + sel.RewardExp.ToString("#,##0"), _questLay.Get("rewardExpDy", 6))); // png has 11 empty rows at the bottom
+            if (sel.RewardMeso > 0) rewards.Add(new("ui/quest_meso.png", "x" + sel.RewardMeso.ToString("#,##0")));
             foreach (var r in sel.RewardItems)
                 rewards.Add(new(_items[r.Item].Image, "x" + r.Count));
             string footer = done || taken ? "" : $"Talk to {NpcName(sel.Npc0)}";

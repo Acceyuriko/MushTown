@@ -2,7 +2,7 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Shot staging: frozen local worlds for --hit/--skill/--drop/--aiticks.
+// Shot staging: frozen local worlds for --hit/--skill/--drop/--dmg/--aiticks.
 public partial class MushTownGame
 {
     // Shot mode: a frozen local world. --hit plants the player mid-swing next
@@ -13,6 +13,13 @@ public partial class MushTownGame
     private void SetupShotMobs()
     {
         StartLocalWorld();
+        if (_shotDmg > 0)
+        {
+            var num = TakeNumber();
+            num.Text = _shotDmg.ToString();
+            num.X = _mover.X;
+            num.Y = _mover.Y - 90;
+        }
         SetupShotQuests(); // quest/talk screens run the real accept/open path (other shots no-op)
         if (_shotWear) // --wear runs the real WearEquip path on the demo (plain shots grow one, like --skill buffs)
         {

@@ -15,6 +15,14 @@ public class SaveTests
     }
 
     [TestMethod]
+    public void CreateHero_StartsWithTenBillionMesos()
+    {
+        var store = new SaveStore();
+        var hero = store.CreateHero(0, 0, "hero", 110);
+        Assert.AreEqual(10_000_000_000L, hero.Mesos);
+    }
+
+    [TestMethod]
     public void Save_LoadsTenBillionMesos()
     {
         string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");

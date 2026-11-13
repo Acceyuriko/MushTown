@@ -520,6 +520,13 @@ public class SceneMathTests
     }
 
     [TestMethod]
+    public void BarWidth_ValuesAboveIntMax()
+    {
+        Assert.AreEqual(60, SceneMath.BarWidth(100, 6_000_000_000L, 10_000_000_000L));
+        Assert.AreEqual(100, SceneMath.BarWidth(100, 10_000_000_000L, 10_000_000_000L));
+    }
+
+    [TestMethod]
     public void SpringStep_ManySteps_SettlesNearTarget()
     {
         float x = 0, v = 0, prev = 0;

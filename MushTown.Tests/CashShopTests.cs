@@ -5,7 +5,7 @@ namespace MushTown.Tests;
 [TestClass]
 public class CashShopTests
 {
-    private static CharaSlot Hero(int mesos) => new() { Name = "hero", Mesos = mesos, Hair = 30020, Face = 20000 };
+    private static CharaSlot Hero(long mesos) => new() { Name = "hero", Mesos = mesos, Hair = 30020, Face = 20000 };
 
     private static ItemData Def(int id, string? slot = null) =>
         new() { ItemId = id, Price = 0, Slot = slot };
@@ -39,6 +39,15 @@ public class CashShopTests
         Assert.IsTrue(CashShop.Buy(hero, 1302007, 300, Def(1302007, "Wp"), 2, true));
         Assert.AreEqual(0, hero.Mesos);
         Assert.AreEqual(2, hero.DecBag![1302007]);
+    }
+
+    [TestMethod]
+    public void Buy_TenBillionMesos_KeepsLongBalance()
+    {
+        var hero = Hero(10_000_000_000L);
+        Assert.IsTrue(CashShop.Buy(hero, 5400000, 10_000, Def(5400000), 1, false));
+        Assert.AreEqual(9_999_990_000L, hero.Mesos);
+        Assert.AreEqual(1, hero.CashBag![5400000]);
     }
 
     [TestMethod]

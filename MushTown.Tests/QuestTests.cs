@@ -209,6 +209,13 @@ public class QuestTests
         Assert.AreEqual(0, new QuestData().RewardLines(_ => "").Count);
     }
 
+    [TestMethod]
+    public void RewardLines_LongValuesUseThousandsSeparators()
+    {
+        var q = new QuestData { RewardExp = 10_000_000_000L, RewardMeso = 9_876_543_210L };
+        CollectionAssert.AreEqual(new[] { "10,000,000,000 EXP", "9,876,543,210 mesos" }, q.RewardLines(_ => ""));
+    }
+
     // Meso-only payouts never touch the bag: a pre-W10 null bag stays null.
     [TestMethod]
     public void TurnIn_MesoOnlyKeepsNullBag()

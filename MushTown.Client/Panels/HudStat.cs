@@ -161,23 +161,23 @@ public partial class MushTownGame
             case 0:
                 {
                     long maxHp = Progression.BuffedMaxHp(c?.Level ?? 1, OwnHpPct());
-                    return $"{c?.Hp ?? maxHp} / {maxHp}";
+                    return $"{(c?.Hp ?? maxHp):#,##0} / {maxHp:#,##0}";
                 }
             case 1:
                 {
                     long maxMp = Progression.MaxMp(c?.Level ?? 1);
-                    return $"{c?.Mp ?? maxMp} / {maxMp}";
+                    return $"{(c?.Mp ?? maxMp):#,##0} / {maxMp:#,##0}";
                 }
-            case 2: return $"{OwnBuild().Str}";
-            case 3: return $"{OwnBuild().Dex}";
-            case 4: return $"{c?.Int ?? 4}";
-            case 5: return $"{c?.Luk ?? 4}";
+            case 2: return $"{OwnBuild().Str:#,##0}";
+            case 3: return $"{OwnBuild().Dex:#,##0}";
+            case 4: return $"{(c?.Int ?? 4):#,##0}";
+            case 5: return $"{(c?.Luk ?? 4):#,##0}";
             case 6: return DamageRange();
             case 8: return $"{OwnBuild().FinalPct}%"; // final damage
-            case 12: return $"{OwnBuild().WeaponAtk}";
+            case 12: return $"{OwnBuild().WeaponAtk:#,##0}";
             case 13: return $"{OwnBuild().CritPct}%"; // critical rate
             case 22: return $"{(c?.Mesos ?? 0).ToString("#,##0")}";
-            case 26: return $"{c?.Exp ?? 0} / {Progression.ExpNext(c?.Level ?? 1)}";
+            case 26: return $"{(c?.Exp ?? 0):#,##0} / {Progression.ExpNext(c?.Level ?? 1):#,##0}";
             default: return "0";
         }
     }
@@ -187,7 +187,7 @@ public partial class MushTownGame
     {
         var b = OwnBuild();
         var (lo, hi) = Progression.PanelRange(b.Str, b.Dex, b.WeaponAtk);
-        return $"{lo}~{hi}";
+        return $"{lo:#,##0}~{hi:#,##0}";
     }
 
     // The combat power: our own number, not the official one (the official

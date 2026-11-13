@@ -304,7 +304,7 @@ public partial class MushTownGame
             Map = 10000,
             X = 100,
             Y = 200,
-            Mesos = 12345,
+            Mesos = SaveStore.NewHeroMesos,
             Exp = 77,
             Hp = Progression.MaxHp(7),
             Mp = Progression.MaxMp(7),

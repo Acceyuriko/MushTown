@@ -12,6 +12,7 @@ public sealed class SaveStore
 {
     public const int MaxSaves = 3;
     public const int MaxHeroes = 60; // 12 per page x 5 pages, like the official select
+    public const long NewHeroMesos = 10_000_000_000L; // new hero starting mesos
 
     public List<SaveData?> Saves { get; set; } = new();
 
@@ -104,6 +105,7 @@ public sealed class SaveStore
         {
             Name = name,
             Job = job,
+            Mesos = NewHeroMesos,
             Sp = Progression.SpPerLevel, // creation banks the first level's points
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },

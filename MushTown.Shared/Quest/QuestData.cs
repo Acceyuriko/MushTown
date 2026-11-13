@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace MushTown.Shared;
@@ -47,8 +48,8 @@ public sealed class QuestData
     public List<string> RewardLines(Func<int, string> itemName)
     {
         var lines = new List<string>();
-        if (RewardExp > 0) lines.Add($"{RewardExp} EXP");
-        if (RewardMeso > 0) lines.Add($"{RewardMeso} mesos");
+        if (RewardExp > 0) lines.Add($"{RewardExp.ToString("#,##0", CultureInfo.InvariantCulture)} EXP");
+        if (RewardMeso > 0) lines.Add($"{RewardMeso.ToString("#,##0", CultureInfo.InvariantCulture)} mesos");
         foreach (var r in RewardItems) lines.Add($"{itemName(r.Item)} x{r.Count}");
         return lines;
     }

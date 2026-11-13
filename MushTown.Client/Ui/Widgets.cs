@@ -216,8 +216,8 @@ public sealed class PlateLevel : Component, IDrawable
     }
 }
 
-// Centered art-digit number (was DrawBarNumber). The "/" is baked 12px
-// (font:number is Arial 12; the WZ separator name breaks path lookup).
+// Centered art-digit number (was DrawBarNumber). "/" and "," are 12px small
+// text (font:number is Arial 12); the digit art has neither character.
 public sealed class BarNumber : Component, IDrawable
 {
     private readonly Func<string> _text;
@@ -229,13 +229,13 @@ public sealed class BarNumber : Component, IDrawable
         string text = _text();
         int dh = gfx.Tex("ui/hud_num0.png").Height;
         int w = 0;
-        foreach (char ch in text) w += ch == '/' ? gfx.Ui.GetSmall("/").Width : gfx.Tex($"ui/hud_num{ch}.png").Width;
+        foreach (char ch in text) w += ch is '/' or ',' ? gfx.Ui.GetSmall(ch.ToString()).Width : gfx.Tex($"ui/hud_num{ch}.png").Width;
         int x = r.X + _centerDx - w / 2;
         foreach (char ch in text)
         {
-            if (ch == '/')
+            if (ch is '/' or ',')
             {
-                var s = gfx.Ui.GetSmall("/");
+                var s = gfx.Ui.GetSmall(ch.ToString());
                 gfx.Sb.Draw(s, new Vector2(x, r.Y + _dy + (dh - s.Height) / 2), Color.White);
                 x += s.Width;
             }
@@ -260,7 +260,7 @@ public sealed class BossBar : Component, IDrawable
         var b = _boss();
         if (b == null) return;
         int x = (MushTownGame.GameWidth - _w) / 2;
-        var head = gfx.Ui.GetSmall($"{b.Value.Name}  {b.Value.Hp} / {b.Value.MaxHp}");
+        var head = gfx.Ui.GetSmall($"{b.Value.Name}  {b.Value.Hp:#,##0} / {b.Value.MaxHp:#,##0}");
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(x - 4, 8, _w + 8, 32), new Color(0, 0, 0, 120));
         gfx.Sb.Draw(head, new Vector2(x + (_w - head.Width) / 2, 10), new Color(255, 220, 0));
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(x, 28, _w, 8), Color.Black);

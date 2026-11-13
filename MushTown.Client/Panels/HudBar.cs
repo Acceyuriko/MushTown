@@ -428,14 +428,14 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         long maxHp = Progression.BuffedMaxHp(chara?.Level ?? 1, OwnHpPct());
-        return $"{chara?.Hp ?? maxHp}/{maxHp}";
+        return $"{(chara?.Hp ?? maxHp):#,##0}/{maxHp:#,##0}";
     }
 
     private string MpText()
     {
         var chara = _save?.Slots[_slot];
         long maxMp = Progression.MaxMp(chara?.Level ?? 1);
-        return $"{chara?.Mp ?? maxMp}/{maxMp}";
+        return $"{(chara?.Mp ?? maxMp):#,##0}/{maxMp:#,##0}";
     }
 
     // Live EXP for the bar (CLI sessions have none: the fill stays empty).
