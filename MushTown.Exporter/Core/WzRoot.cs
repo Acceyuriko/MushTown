@@ -54,7 +54,8 @@ public sealed class WzRoot
             ? n.Text.Contains(name, StringComparison.OrdinalIgnoreCase)
             : n.Text == name);
 
-    // Every descendant of node, top-down. Used by FindAll.
+    // Every descendant of node, top-down. Each extracted image is released
+    // after its subtree: a full-tree find must not keep every image alive.
     public static IEnumerable<Wz_Node> Walk(Wz_Node node)
     {
         foreach (Wz_Node child in node.Nodes)
@@ -64,7 +65,14 @@ public sealed class WzRoot
             if (child.Value is Wz_Image img)
             {
                 img.TryExtract();
-                foreach (Wz_Node sub in Walk(img.Node)) yield return sub;
+                try
+                {
+                    foreach (Wz_Node sub in Walk(img.Node)) yield return sub;
+                }
+                finally
+                {
+                    img.Unextract();
+                }
             }
             else
             {

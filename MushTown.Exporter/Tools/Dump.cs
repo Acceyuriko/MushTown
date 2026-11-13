@@ -170,19 +170,27 @@ public static class Dump
         string indent = new string(' ', level * 2);
 
         // Image nodes carry their content in img.Node; extracting it fills the children in.
+        Wz_Image? img = node.Value as Wz_Image;
         Wz_Node content = node;
-        if (node.Value is Wz_Image img)
+        if (img != null)
         {
             img.TryExtract();
             content = img.Node;
         }
 
-        Console.WriteLine($"{indent}{node.Text} = {Describe(node.Value)} ({content.Nodes.Count} children)");
-        if (level >= maxDepth) return;
-
-        foreach (Wz_Node child in content.Nodes)
+        try
         {
-            Print(child, maxDepth, level + 1);
+            Console.WriteLine($"{indent}{node.Text} = {Describe(node.Value)} ({content.Nodes.Count} children)");
+            if (level >= maxDepth) return;
+
+            foreach (Wz_Node child in content.Nodes)
+            {
+                Print(child, maxDepth, level + 1);
+            }
+        }
+        finally
+        {
+            img?.Unextract();
         }
     }
 
