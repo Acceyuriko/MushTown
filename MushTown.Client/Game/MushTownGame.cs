@@ -40,6 +40,7 @@ public partial class MushTownGame : Game
     private readonly int _shotSkillTab; // --skilltab: which job tab the skill window opens on
     private readonly bool _shotDrop; // --drop: swing until the first kill, show its drops
     private readonly bool _shotWear; // --wear: the demo wears its whole EQUIP bag
+    private readonly string? _shotWearOnly; // --wear-only: keep only these comma-separated slots
     private readonly bool _shotBalloonRing; // *balloonring*: the balloon is posed with the chat ring's style
     private readonly int _shotAiticks; // --aiticks <n>: n 100ms AI steps at the posed feet
     private readonly long _shotDmg; // --dmg <n>: one posed floating damage number
@@ -115,7 +116,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -136,6 +137,7 @@ public partial class MushTownGame : Game
         _shotDrop = shotDrop;
         _shotAiticks = shotAiticks;
         _shotWear = shotWear;
+        _shotWearOnly = shotWearOnly;
         _shotDmg = shotDmg;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
         _panelHosts = new[] { _invHost, _statHost, _skillHost, _questHost, _settingsHost, _shopHost }; // the panel-id order the Z row and the hit lookups use

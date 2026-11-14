@@ -55,15 +55,13 @@ public sealed class EquipWindow : UiWindow
         ["badge"] = new(6, 5, "badge"),
     };
 
-    // The Outfits page reuses the same grid, but Weapon and Secondary sit in
-    // the fourth row and Hair / Face / Skin fill the middle row.
-    private static readonly Dictionary<string, SlotCell> DecoBoxes = new(SharedBoxes)
+    // The Outfits page uses the same 7x6 grid. It starts from the Equipment
+    // boxes, then adds its own Hair / Face / Skin boxes in the last row.
+    private static readonly Dictionary<string, SlotCell> DecoBoxes = new(EquipBoxes)
     {
-        ["weapon"] = new(5, 3, "weapon"),
-        ["secondary"] = new(6, 3, "secondary"),
-        ["hair"] = new(2, 4, "hair"),
-        ["face"] = new(3, 4, "face"),
-        ["skin"] = new(4, 4, "skin"),
+        ["hair"] = new(2, 5, "hair"),
+        ["face"] = new(3, 5, "face"),
+        ["skin"] = new(4, 5, "skin"),
     };
 
     private enum EquipPage { Equipment, Pet, Outfits, Android, DamageSkins }

@@ -27,7 +27,13 @@ public partial class MushTownGame
             _save ??= new SaveData();
             var chara = _save.Slots[_slot] ??= DemoChara();
             // The demo bag holds one item per slot: the doll wears them all.
-            foreach (int id in chara.EquipBag!.Keys.ToList())
+            var ids = chara.EquipBag!.Keys.AsEnumerable();
+            if (!string.IsNullOrEmpty(_shotWearOnly))
+            {
+                var slots = _shotWearOnly.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                ids = ids.Where(id => _items.TryGetValue(id, out var data) && data.Slot != null && slots.Contains(data.Slot));
+            }
+            foreach (int id in ids.ToList())
                 Progression.WearEquip(chara, id, _items);
             RefreshStats();
             BuildStatScene(); // the Character Info portrait shows the worn items: bake them in

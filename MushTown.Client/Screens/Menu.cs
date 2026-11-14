@@ -174,7 +174,8 @@ public partial class MushTownGame
             if (shotScreen is "cashuserename" or "cashusereset")
                 PoseCashUse(shotScreen == "cashuserename" ? 5400000 : 5051001);
             if (shotScreen == "invscroll") { _showInv = true; _invTab = 1; FillInvScrollShot(); }
-            if (shotScreen is "stat" or "equipui" or "decorations" or "hud") DressDemoForShot();
+            if (shotScreen is "stat" or "equipui" or "decorations" or "hud")
+                DressDemoForShot(shotScreen is "equipui" or "decorations");
             if (shotScreen is "stat" or "hud") _showStat = true;
             if (shotScreen is "equipui" or "decorations")
             {
@@ -263,15 +264,27 @@ public partial class MushTownGame
     }
 
     // The character info and the equipment window show the starter kit every
-    // new hero gets: sword, shirt, boxers and shoes. The demo bag's old shop
-    // gear goes too, so the inventory page keeps only the demo ring. The
-    // backup coupons and cash armor prove the W5 look in the static shots.
-    private void DressDemoForShot()
+    // new hero gets: sword, shirt, boxers and shoes. The extended demo gear
+    // fills the equipment window only: stat and hud shots keep the old values.
+    // The demo bag's old shop gear goes, so the inventory page keeps the demo
+    // ring. The backup coupons and cash armor prove the W5 look in the static
+    // shots.
+    private void DressDemoForShot(bool extended = false)
     {
         var chara = _save!.Slots[_slot]!;
         chara.Equips = new List<int>(ItemData.StarterEquips);
         foreach (int id in new[] { ItemData.LongSword, ItemData.LolicoArmor })
             Inventory.Remove(chara, "equip", id, 1);
+        if (extended)
+        {
+            chara.Equips.Add(ItemData.IslandRing);
+            Inventory.Remove(chara, "equip", ItemData.IslandRing, 1);
+            foreach (int id in ItemData.DemoSlotGear)
+            {
+                chara.Equips.Add(id);
+                Inventory.Remove(chara, "equip", id, 1);
+            }
+        }
         Inventory.Add(chara, "dec", ItemData.LolicoArmor, 1);
         Progression.WearCash(chara, ItemData.LolicoArmor, _items);
         Progression.WearCash(chara, ItemData.HairCouponAlt, _items);
@@ -293,9 +306,9 @@ public partial class MushTownGame
     // The Lv.7 shot dummy: leveled stats (6 level-ups at +4/+1), half-full
     // EXP bar, full pools, 3 SP spent on Slash Blast (Lv.7 casts Spirit
     // Blade, the only buff with loop art). Plain --skill buff shots (no
-    // screen, no account) borrow it too. The bag holds one item per slot
-    // (the shop weapon, the shop coat, one ring), so the --wear shot shows
-    // the new art whatever order the bag walks in.
+    // screen, no account) borrow it too. The bag holds the shop gear, one
+    // ring and one sample for each extended slot (paper-doll art or icon
+    // only), so --wear has every demo piece available.
     private static CharaSlot DemoChara(int skin = 0)
     {
         var chara = new CharaSlot
@@ -319,6 +332,7 @@ public partial class MushTownGame
             EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },
             KeyPresets = DemoPresets(),
         };
+        foreach (int id in ItemData.DemoSlotGear) chara.EquipBag[id] = 1;
         Inventory.GiveCashDefaults(chara);
         Inventory.Ensure(chara);
         return chara;
@@ -375,16 +389,16 @@ public partial class MushTownGame
                 throw new InvalidDataException($"manifest lists item {id} with no exported def");
         foreach (var (id, item) in _items)
         {
-            if (item.Slot != null) // equips: the slot must hide a beginner img or be a ring; rings name a plate
+            if (item.Slot != null) // equips: every known slot has a box; rings name a plate
             {
-                if (!ItemData.BeginnerImgs.ContainsKey(item.Slot) && item.Slot != "Ri")
+                if (!EquipSlots.KnownSlots.Contains(item.Slot))
                     throw new InvalidDataException($"equip {id} has a bad slot");
                 if (item.Slot == "Ri" && item.NameTag == 0 && item.ChatBalloon == 0) // a chat ring changes the balloon, not the plate
                     throw new InvalidDataException($"equip {id} has no nametag");
                 if (ItemData.BeginnerImgs.ContainsKey(item.Slot) && !item.HasArt)
                     throw new InvalidDataException($"equip {id} has no art");
             }
-            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0 && !ItemData.StarterEquips.Contains(id)) // stale jsons price 0, except cash items, rings and the free starter kit
+            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0 && !ItemData.StarterEquips.Contains(id) && !ItemData.DemoSlotGear.Contains(id)) // stale jsons price 0, except cash items, rings, starter kit and demo samples
                 throw new InvalidDataException($"item {id} has a bad price");
             if (item.Name == "") // pre-name jsons would print blank labels
                 throw new InvalidDataException($"item {id} has no name");

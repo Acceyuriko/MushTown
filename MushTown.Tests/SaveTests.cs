@@ -127,6 +127,28 @@ public class SaveTests
     }
 
     [TestMethod]
+    public void Save_Load_RoundtripsEveryEquipSlot()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-equips-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            var hero = store.CreateHero(0, 0, "hero", 110);
+            var ids = new List<int>(ItemData.StarterEquips);
+            ids.AddRange(DemoSlots.All.Select(x => x.Id));
+            ids.Add(ItemData.IslandRing);
+            hero.Equips = ids;
+            store.Save(path);
+            CollectionAssert.AreEqual(ids,
+                SaveStore.Load(path).Saves[0]!.Slots[0]!.Equips);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void Save_Load_RoundtripsSkin()
     {
         string path = Path.Combine(Path.GetTempPath(), $"saves-skin-{Guid.NewGuid():N}.json");

@@ -9,33 +9,53 @@ public static partial class Export
 {
     private static readonly int[] PotionIds = ExportList.Load("potions");
 
-    // The gear we ship: the img path + the beginner doll part it replaces
-    // (null = the gear has no doll art, the rings carry none). One list:
-    // the item def and the doll bake both come from here.
-    private static readonly (string gear, string? beginner)[] Gears = new[]
+    // One gear row: the img path, the beginner doll part it replaces (null =
+    // no beginner part), and whether the exporter writes doll frames. A row
+    // with art but no beginner is an extra slot (hat, cape, ...). A row with
+    // no art is still an item def: its icon shows in the equipment window.
+    private readonly record struct GearRow(string gear, string? beginner, bool art);
+
+    private static readonly GearRow[] Gears = new[]
     {
         // The classic beginner kit every new character wears.
-        (@"Weapon\01302000.img", BeginnerSword),
-        (@"Coat\01040002.img", BeginnerLongcoat),
-        (@"Pants\01060026.img", BeginnerBoxers),
-        (@"Shoes\01072833.img", BeginnerShoes),
-        (@"Coat\01040039.img", BeginnerLongcoat),
-        (@"Weapon\01442004.img", BeginnerSword),
-        (@"Ring\01112134.img", null),
-        (@"Ring\01112135.img", null),
-        (@"Ring\01112162.img", null),
+        new GearRow(@"Weapon\01302000.img", BeginnerSword, true),
+        new GearRow(@"Coat\01040002.img", BeginnerLongcoat, true),
+        new GearRow(@"Pants\01060026.img", BeginnerBoxers, true),
+        new GearRow(@"Shoes\01072833.img", BeginnerShoes, true),
+        new GearRow(@"Coat\01040039.img", BeginnerLongcoat, true),
+        new GearRow(@"Weapon\01442004.img", BeginnerSword, true),
+        new GearRow(@"Ring\01112134.img", null, false),
+        new GearRow(@"Ring\01112135.img", null, false),
+        new GearRow(@"Ring\01112162.img", null, false),
         // The chat rings: they change the speech balloon (info/chatBalloon), not the plate.
-        (@"Ring\01112200.img", null),
-        (@"Ring\01112205.img", null),
+        new GearRow(@"Ring\01112200.img", null, false),
+        new GearRow(@"Ring\01112205.img", null, false),
         // The gear of the two shops (Sid 11000, Pan 21000).
-        (@"Weapon\01302007.img", BeginnerSword),
-        (@"Weapon\01302005.img", BeginnerSword),
-        (@"Weapon\01302004.img", BeginnerSword),
-        (@"Weapon\01302015.img", BeginnerSword),
-        (@"Coat\01040015.img", BeginnerLongcoat),
-        (@"Coat\01040007.img", BeginnerLongcoat),
-        (@"Coat\01040012.img", BeginnerLongcoat),
-        (@"Coat\01040022.img", BeginnerLongcoat),
+        new GearRow(@"Weapon\01302007.img", BeginnerSword, true),
+        new GearRow(@"Weapon\01302005.img", BeginnerSword, true),
+        new GearRow(@"Weapon\01302004.img", BeginnerSword, true),
+        new GearRow(@"Weapon\01302015.img", BeginnerSword, true),
+        new GearRow(@"Coat\01040015.img", BeginnerLongcoat, true),
+        new GearRow(@"Coat\01040007.img", BeginnerLongcoat, true),
+        new GearRow(@"Coat\01040012.img", BeginnerLongcoat, true),
+        new GearRow(@"Coat\01040022.img", BeginnerLongcoat, true),
+        // The extended art slots. Hats, gloves, capes, shields, face, eye and
+        // earring accessories carry doll art. Pendant, belt, medal, pocket,
+        // badge and shoulder have icon-only items in this WZ version; they
+        // still get item defs so their boxes can show the icon.
+        new GearRow(@"Cap\01000025.img", null, true),
+        new GearRow(@"Glove\01082000.img", null, true),
+        new GearRow(@"Cape\01103725.img", null, true),
+        new GearRow(@"Shield\01092003.img", null, true),
+        new GearRow(@"Accessory\01012091.img", null, true),
+        new GearRow(@"Accessory\01022271.img", null, true),
+        new GearRow(@"Accessory\01032020.img", null, true),
+        new GearRow(@"Accessory\01122013.img", null, false),
+        new GearRow(@"Accessory\01132017.img", null, false),
+        new GearRow(@"Accessory\01140002.img", null, false),
+        new GearRow(@"Accessory\01162000.img", null, false),
+        new GearRow(@"Accessory\01182000.img", null, false),
+        new GearRow(@"Accessory\01152196.img", null, false),
     };
 
     // The four free default hair/face coupons: the icon node they link to.
@@ -175,10 +195,10 @@ public static partial class Export
     private static List<(string Gear, ItemData Data)>? ReadEquips(WzRoot chara, WzRoot str)
     {
         var defs = new List<(string, ItemData)>();
-        foreach ((string gear, string? beginner) in Gears)
+        foreach (GearRow row in Gears)
         {
-            int id = int.Parse(ImgId(gear));
-            var info = chara.Find($@"{gear}\info");
+            int id = int.Parse(ImgId(row.gear));
+            var info = chara.Find($@"{row.gear}\info");
             if (info == null)
             {
                 Console.WriteLine($"equip {id} has no info");
@@ -186,23 +206,22 @@ public static partial class Export
             }
             foreach (Wz_Node c in info.Nodes)
             {
-                if (c.Text.StartsWith("inc") && c.Text is not ("incPAD" or "incPDD" or "incSTR" or "incDEX"))
+                // Demo icon rows only need the icon; their combat stats are
+                // not part of the v1 gear model.
+                if (c.Text.StartsWith("inc") && c.Text is not ("incPAD" or "incPDD" or "incSTR" or "incDEX") &&
+                    !ItemData.DemoSlotGear.Contains(id))
                 {
                     Console.WriteLine($"equip {id} has unsupported stat {c.Text}");
                     return null;
                 }
             }
-            string cat = gear.Split('\\')[0]; // Coat/Weapon/Ring: the Eqp.img shelf matches the Character folder
+            string cat = row.gear.Split('\\')[0]; // Coat/Weapon/Ring: the Eqp.img shelf matches the Character folder
             string name = str.Find($@"Eqp.img\Eqp\{cat}\{id}\name")?.GetValueEx<string>("") ?? "";
             if (name == "")
             {
                 Console.WriteLine($"equip {id} has no String name");
                 return null;
             }
-            // The doll art only fits the slots the doll has: the game boots
-            // on the same slot (ItemData.Slot), so check the same node. A
-            // piece with art must replace the part its slot names; a ring
-            // carries no art (its name tag plate does the drawing).
             string slot = Str(info, "islot");
             if (slot == "")
             {
@@ -210,23 +229,24 @@ public static partial class Export
                 return null;
             }
             int tag = Int(info, "nameTag");
-            if (beginner == null)
+            if (!EquipSlots.KnownSlots.Contains(slot))
             {
-                if (slot != "Ri")
+                Console.WriteLine($"equip {id} has slot {slot}, which the doll does not know");
+                return null;
+            }
+            if (row.art)
+            {
+                if (row.beginner != null &&
+                    (!ItemData.BeginnerImgs.TryGetValue(slot, out string? part) || part != ImgId(row.beginner)))
                 {
-                    Console.WriteLine($"equip {id} has no art (slot {slot} needs one)");
-                    return null;
-                }
-                if (tag != 0 && !NameTagNodes.Contains(tag)) // 0 = no plate (a chat ring); else the boot loads the plate by this node
-                {
-                    Console.WriteLine($"equip {id} is a ring with no exported name tag ({tag})");
+                    Console.WriteLine($"equip {id} pairs {ImgId(row.beginner)} with slot {slot}, " +
+                        $"which replaces {ItemData.BeginnerImgs.GetValueOrDefault(slot, "nothing")}");
                     return null;
                 }
             }
-            else if (!ItemData.BeginnerImgs.TryGetValue(slot, out string? part) || part != ImgId(beginner))
+            else if (slot == "Ri" && tag != 0 && !NameTagNodes.Contains(tag)) // 0 = no plate (a chat ring); else the boot loads the plate by this node
             {
-                Console.WriteLine($"equip {id} pairs {ImgId(beginner)} with slot {slot}, " +
-                    $"which replaces {ItemData.BeginnerImgs.GetValueOrDefault(slot, "nothing")}");
+                Console.WriteLine($"equip {id} is a ring with no exported name tag ({tag})");
                 return null;
             }
             var data = new ItemData
@@ -245,10 +265,10 @@ public static partial class Export
                 ReqLevel = Int(info, "reqLevel"),
                 NameTag = tag,
                 ChatBalloon = Int(info, "chatBalloon"),
-                HasArt = beginner != null,
+                HasArt = row.art,
                 Cash = Int(info, "cash") != 0,
             };
-            if (data.Price <= 0 && !data.Cash && !ItemData.StarterEquips.Contains(id)) // cash gear carries no meso price; starter gear is free
+            if (data.Price <= 0 && !data.Cash && !ItemData.StarterEquips.Contains(id) && !ItemData.DemoSlotGear.Contains(id)) // cash gear and demo samples are free
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
                 return null;
@@ -258,7 +278,7 @@ public static partial class Export
                 Console.WriteLine($"equip {id} wants balloon style {data.ChatBalloon}, which the chat export does not write");
                 return null;
             }
-            defs.Add((gear, data));
+            defs.Add((row.gear, data));
         }
         return defs;
     }

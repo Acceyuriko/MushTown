@@ -14,6 +14,19 @@ public sealed class EquipSlotsTests
         [7] = new ItemData { ItemId = 7, Slot = "MaPn" },
         [8] = new ItemData { ItemId = 8, Slot = "Pn" },
         [9] = new ItemData { ItemId = 9, Slot = "So" },
+        [10] = new ItemData { ItemId = 10, Slot = "Cp" },
+        [11] = new ItemData { ItemId = 11, Slot = "Gv" },
+        [12] = new ItemData { ItemId = 12, Slot = "Sr" },
+        [13] = new ItemData { ItemId = 13, Slot = "Si" },
+        [14] = new ItemData { ItemId = 14, Slot = "Af" },
+        [15] = new ItemData { ItemId = 15, Slot = "Ay" },
+        [16] = new ItemData { ItemId = 16, Slot = "Ae" },
+        [17] = new ItemData { ItemId = 17, Slot = "Pe" },
+        [18] = new ItemData { ItemId = 18, Slot = "Be" },
+        [19] = new ItemData { ItemId = 19, Slot = "Sh" },
+        [20] = new ItemData { ItemId = 20, Slot = "Me" },
+        [21] = new ItemData { ItemId = 21, Slot = "Po" },
+        [22] = new ItemData { ItemId = 22, Slot = "Ba" },
         [3] = new ItemData { ItemId = 3, Cosmetic = 30020 },
         [4] = new ItemData { ItemId = 4, Cosmetic = 20000 },
     };
@@ -61,11 +74,49 @@ public sealed class EquipSlotsTests
     }
 
     [TestMethod]
-    public void Worn_RingFillsNothing()
+    public void Worn_EveryExtendedSlotFillsItsBox()
+    {
+        var chara = new CharaSlot { Equips = Enumerable.Range(10, 13).ToList() };
+
+        CollectionAssert.AreEqual(new[]
+        {
+            ("hat", 10), ("gloves", 11), ("cape", 12), ("secondary", 13),
+            ("face_acc", 14), ("eye_acc", 15), ("earrings", 16), ("pendant1", 17),
+            ("belt", 18), ("shoulder", 19), ("medal", 20), ("pocket", 21), ("badge", 22),
+        }, EquipSlots.Worn(chara, Defs));
+    }
+
+    [TestMethod]
+    public void Worn_EveryDemoSlotFillsItsBox()
+    {
+        var defs = DemoSlots.All.ToDictionary(
+            x => x.Id, x => new ItemData { ItemId = x.Id, Slot = x.Slot });
+        var chara = new CharaSlot { Equips = DemoSlots.All.Select(x => x.Id).ToList() };
+
+        CollectionAssert.AreEqual(
+            DemoSlots.All.Select(x => (x.Box, x.Id)).ToArray(),
+            EquipSlots.Worn(chara, defs));
+    }
+
+    [TestMethod]
+    public void KnownSlots_IsTheFullSlotTable()
+    {
+        var expected = new[]
+        {
+            "Wp", "Ma", "MaPn", "Pn", "So", "Cp", "Gv", "Sr", "Si",
+            "Af", "Ay", "Ae", "Ri", "Pe", "Be", "Sh", "Me", "Po", "Ba",
+        };
+
+        CollectionAssert.AreEquivalent(expected, EquipSlots.KnownSlots.ToArray());
+        CollectionAssert.AreEquivalent(ItemData.DemoSlotGear, DemoSlots.All.Select(x => x.Id).ToArray());
+    }
+
+    [TestMethod]
+    public void Worn_RingFillsRingBox()
     {
         var chara = new CharaSlot { Equips = new List<int> { 5 } };
 
-        Assert.AreEqual(0, EquipSlots.Worn(chara, Defs).Count);
+        CollectionAssert.AreEqual(new[] { ("ring1", 5) }, EquipSlots.Worn(chara, Defs));
     }
 
     [TestMethod]

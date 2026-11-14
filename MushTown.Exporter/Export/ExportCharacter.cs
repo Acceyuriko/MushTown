@@ -16,8 +16,9 @@ public static partial class Export
     private static string BodyImg(int skin) => $"{CharaSlot.BodyId(skin):D8}.img";
     private static string HeadImg(int skin) => $"{CharaSlot.HeadId(skin):D8}.img";
 
-    // The doll part a gear slot replaces: Ma/MaPn use the longcoat art, Pn
-    // the boxers, So the beginner shoes, Wp the sword.
+    // The beginner part a gear slot replaces: Ma/MaPn use the longcoat art,
+    // Pn the boxers, So the shoes, Wp the sword. Extra slots have no beginner
+    // part and get their own art branch below.
     private const string BeginnerLongcoat = @"Longcoat\01050287.img";
     private const string BeginnerSword = @"Weapon\01302000.img";
     private const string BeginnerShoes = @"Shoes\01072833.img";
@@ -147,7 +148,8 @@ public static partial class Export
             missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(headImg), headFrame, outDir, frameIdx, saved, zNames, face, action, baseDir);
             if (face) // back-facing frames drop the whole face img (AvatarCanvas.cs:1111-1117)
                 missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(faceImg), faceNode, outDir, frameIdx, saved, zNames, face, action, baseDir);
-            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(hairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action, baseDir);
+            missing += AddFrameParts(baseRoot, baseSink, bones, ImgId(hairImg), hairFrame, outDir, frameIdx, saved, zNames, face, action, baseDir,
+                allHair: true);
             foreach (string img in CharaEquips)
             {
                 if (gear == null && img != BeginnerBoxers) continue; // the plain body is underwear only
@@ -181,6 +183,31 @@ public static partial class Export
                 missing += AddFrameParts(baseRoot, sink, bones, ImgId(path), equipFrame, outDir, frameIdx, saved, zNames, face, action,
                     isTarget ? gearDir : baseDir, anchor);
                 if (isTarget) break; // later beginners add no bones the target could use
+            }
+            if (gear != null && gearBeginner == null)
+            {
+                // An extra slot has no beginner part in CharaEquips. Its art
+                // still hangs on the same body bones; a piece without an
+                // action (face accessories) uses its default frame.
+                var equipFrame = FindImgFrame(looseRoot, gear, action, frameIdx);
+                if (equipFrame == null)
+                {
+                    var (standFrame, pose) = FindStandFrame(looseRoot, gear, frameIdx);
+                    equipFrame = standFrame;
+                    if (equipFrame == null)
+                    {
+                        equipFrame = WzNodeUtil.ResolveUol(looseRoot.Find($@"{gear}\default"));
+                        pose = "default";
+                    }
+                    if (equipFrame == null)
+                    {
+                        Console.WriteLine($"{tag} frame {frameIdx}: {gear} node not found");
+                        return false;
+                    }
+                    Console.WriteLine($"{tag} frame {frameIdx}: {gear} falls back to {pose}");
+                }
+                missing += AddFrameParts(baseRoot, outFrame, bones, ImgId(gear), equipFrame, outDir, frameIdx, saved, zNames,
+                    face, action, gearDir);
             }
 
             if (outFrame.Parts.Count == 0)
@@ -216,9 +243,10 @@ public static partial class Export
     }
 
     // Adds the png parts of one frame node and returns how many images were missing.
+    // allHair keeps both hair sets; the client chooses one set from the hat state.
     private static int AddFrameParts(WzRoot baseRoot, CharaFrame outFrame, BoneSet bones, string imgId,
         Wz_Node frame, string outDir, int frameIdx, HashSet<string> saved, List<string> zNames, bool face, string action, string pngDir,
-        (int x, int y)? anchor = null)
+        (int x, int y)? anchor = null, bool allHair = false)
     {
         int missing = 0;
         foreach (Wz_Node raw in frame.Nodes)
@@ -227,12 +255,14 @@ public static partial class Export
             // the image and bones, so naming follows the raw node (AvatarCanvas.cs:749)
             string name = raw.Text;
             Wz_Node? part = WzNodeUtil.ResolveUol(raw);
-            // beginner: face flag from the body frame, EarType 0, hair out (the
-            // beginner set has no cap, so hairOverHead shows), first weapon
-            // a dangling part has no parent; the frame itself tells multi weapons apart
+            // beginner: face flag from the body frame, EarType 0, hair out;
+            // a dangling part has no parent; the frame itself tells multi
+            // weapons apart. Exported hair keeps both sets so the client can
+            // pick the set that matches the hat.
             bool multiWeapon = (part?.ParentNode ?? frame).Nodes["weapon1"] != null;
-            bool visible = SceneMath.PartVisible(name, face, earType: 0, hairCover: false,
-                showHairShade: false, weaponIndex: 0, multiWeapon: multiWeapon);
+            bool visible = allHair && IsHairPart(name) ||
+                           SceneMath.PartVisible(name, face, earType: 0, hairCover: false,
+                               showHairShade: false, weaponIndex: 0, multiWeapon: multiWeapon);
             if (part == null)
             {
                 // a hidden part needs no image; a visible one with a dangling uol is loud
@@ -296,6 +326,9 @@ public static partial class Export
         }
         return missing;
     }
+
+    private static bool IsHairPart(string name) =>
+        name is "hairOverHead" or "backHairOverCape" or "backHair" or "hair" or "backHairBelowCap";
 
     // Bone tree of one animation frame. Mirrors AvatarCanvas.CreateBone/AppendBone.
     private sealed class BoneSet

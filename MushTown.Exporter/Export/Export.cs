@@ -116,12 +116,12 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
-        foreach ((string gear, string? beginner) in Gears)
+        foreach (GearRow row in Gears)
         {
-            if (beginner == null) continue; // the rings carry no doll art
+            if (!row.art) continue; // rings and icon-only accessories carry no doll art
             foreach (string action in Net.Actions)
             {
-                if (!ExportCharacter(baseRoot, chara, outDir, action, gear: gear, gearBeginner: beginner))
+                if (!ExportCharacter(baseRoot, chara, outDir, action, gear: row.gear, gearBeginner: row.beginner))
                 {
                     Environment.ExitCode = 1;
                     return;

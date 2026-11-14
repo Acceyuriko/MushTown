@@ -100,9 +100,9 @@ public static class Progression
         return true;
     }
 
-    // Wears one from the EQUIP bag. A top, pants or overall all fight over
-    // the same body area: an overall takes both boxes, so it swaps out a top
-    // and pants; a top or pants swaps out an overall. True when worn.
+    // Wears one from the EQUIP bag. Same slot replaces same slot; an overall
+    // occupies the top and bottom area, so it swaps out a top and pants, and a
+    // top or pants swaps out an overall. True when worn.
     public static bool WearEquip(CharaSlot chara, int id, IReadOnlyDictionary<int, ItemData> defs)
     {
         var def = defs[id]; // callers only pass loaded equips (client boot proves their slots)

@@ -123,7 +123,8 @@ public static partial class Export
             missing += AddFrameParts(baseRoot, trash, bones, ImgId(HeadImgDefault), headFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
             if (face)
                 missing += AddFrameParts(baseRoot, trash, bones, ImgId(FaceImgDefault), faceNode, outDir, frameIdx, saved, zNames, face, action, "chara/body");
-            missing += AddFrameParts(baseRoot, trash, bones, ImgId(HairImgDefault), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body");
+            missing += AddFrameParts(baseRoot, trash, bones, ImgId(HairImgDefault), hairFrame, outDir, frameIdx, saved, zNames, face, action, "chara/body",
+                allHair: true);
 
             // the target parts: a hair uses its action frame, a face its one default node
             if (category == "hair")
@@ -134,7 +135,8 @@ public static partial class Export
                     Console.WriteLine($"{tag} frame {frameIdx}: target frame missing");
                     return false;
                 }
-                missing += AddFrameParts(baseRoot, outFrame, bones, id, targetFrame, outDir, frameIdx, saved, zNames, face, action, targetDir);
+                missing += AddFrameParts(baseRoot, outFrame, bones, id, targetFrame, outDir, frameIdx, saved, zNames, face, action, targetDir,
+                    allHair: true);
             }
             else if (face)
             {

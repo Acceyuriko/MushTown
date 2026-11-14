@@ -245,6 +245,32 @@ public class ProgressionTests
         Assert.IsFalse(Progression.WearEquip(chara, 1442000, EquipDefs())); // not in the bag
     }
 
+    // Every demo slot uses the same generic one-piece rule as weapons.
+    [TestMethod]
+    public void WearEquip_EveryDemoSlotSwapsSameSlot()
+    {
+        foreach (var (id, slot, _) in DemoSlots.All)
+        {
+            int oldId = id + 1_000_000;
+            var defs = new Dictionary<int, ItemData>
+            {
+                [id] = new() { ItemId = id, Slot = slot },
+                [oldId] = new() { ItemId = oldId, Slot = slot },
+            };
+            var chara = new CharaSlot
+            {
+                Name = "hero",
+                EquipBag = new Dictionary<int, int> { { id, 1 } },
+                Equips = new List<int> { oldId },
+            };
+
+            Assert.IsTrue(Progression.WearEquip(chara, id, defs), $"wear {id} ({slot})");
+            CollectionAssert.AreEqual(new[] { id }, chara.Equips, $"{slot} should replace {oldId}");
+            Assert.AreEqual(1, chara.EquipBag![oldId], $"{slot} old item should return to the bag");
+            Assert.IsFalse(chara.EquipBag.ContainsKey(id), $"{slot} new item should leave the bag");
+        }
+    }
+
     // Rings share one finger: wearing a second swaps the first out, and a
     // ring coexists with the weapon (different slots).
     [TestMethod]
@@ -340,7 +366,20 @@ public class ProgressionTests
         Assert.AreEqual(1, chara.EquipBag[3]);
     }
 
-    // Takeoff returns the piece to the bag; unworn slots do nothing.
+    // Takeoff returns every demo piece to the bag; unworn slots do nothing.
+    [TestMethod]
+    public void TakeOffEquip_EveryDemoSlotReturnsToBag()
+    {
+        foreach (var (id, slot, _) in DemoSlots.All)
+        {
+            var chara = new CharaSlot { Name = "hero", Equips = new List<int> { id } };
+
+            Assert.IsTrue(Progression.TakeOffEquip(chara, id), $"take off {id} ({slot})");
+            Assert.AreEqual(0, chara.Equips.Count, $"{slot} should be empty");
+            Assert.AreEqual(1, chara.EquipBag![id], $"{slot} should return to the bag");
+        }
+    }
+
     [TestMethod]
     public void TakeOffEquip_ReturnsToBag()
     {

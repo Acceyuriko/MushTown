@@ -277,7 +277,7 @@ public sealed class ItemData
     // Ids the code branches on (drops, shop stock, demo bags, swing sound,
     // tests). The roster itself is the scanned item dir: adding an item
     // means exporting it, no list edit here. (1040038 skipped: its official
-    // name is unfit; cap-class gear skipped: hats re-hang the hair.)
+    // name is unfit.)
     public const int RedPotion = 2000000; // +50 HP (spec hp)
     public const int BluePotion = 2000003; // +100 MP (spec mp)
     public const int Mop = 1442004; // Janitor's Mop (Wp, PAD 47): Mushmom purse
@@ -295,6 +295,28 @@ public sealed class ItemData
     public const int StarterPants = 1060026; // Blue-Striped Boxers (Pn, PDD 1)
     public const int StarterShoes = 1072833; // Yellow Adventure Shoes (So, PDD 2)
     public static readonly int[] StarterEquips = { StarterSword, StarterTop, StarterPants, StarterShoes };
+
+    // Demo/test gear for every extended slot: the demo bag wears these in
+    // --wear, and the tests use the same ids. Some have only icons in this
+    // WZ version; their boxes show the icon and the doll draws no art.
+    public const int DemoHat = 1000025; // Pilgrim Hat (Cp)
+    public const int DemoGloves = 1082000; // Steel Fingerless Gloves (Gv)
+    public const int DemoCape = 1103725; // Challenger Cape (Sr), wide enough to see beside the body
+    public const int DemoShield = 1092003; // Stolen Fence (Si)
+    public const int DemoFace = 1012091; // Charm (Af)
+    public const int DemoEye = 1022271; // Frost Fiends Mask (Ay)
+    public const int DemoEarring = 1032020; // Gold Drop Earrings (Ae), large enough to see beside the head
+    public const int DemoPendant = 1122013; // Pendant (Pe), icon-only
+    public const int DemoBelt = 1132017; // Belt (Be), icon-only
+    public const int DemoMedal = 1140002; // Medal (Me), icon-only
+    public const int DemoPocket = 1162000; // Pocket (Po), icon-only
+    public const int DemoBadge = 1182000; // Badge (Ba), icon-only
+    public const int DemoShoulder = 1152196; // Arcane Umbra Knight Shoulder (Sh), icon-only
+    public static readonly int[] DemoSlotGear =
+    {
+        DemoHat, DemoGloves, DemoCape, DemoShield, DemoFace, DemoEye, DemoEarring,
+        DemoPendant, DemoBelt, DemoMedal, DemoPocket, DemoBadge, DemoShoulder,
+    };
 
     // The four free default hair/face coupons (Cash/0515.img). They are all
     // ordinary items now: no gender decides which pair a new character gets.

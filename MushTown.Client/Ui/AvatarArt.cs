@@ -30,39 +30,45 @@ public partial class MushTownGame
         int hair, int face)
     {
         var gearParts = new List<CharaPart>();
-        // A cash item replaces the gear of the same body part (Ma and MaPn
-        // both cover the longcoat, Pn the boxers, Wp the sword, So the shoes).
-        var cashBodyParts = new HashSet<string>();
+        // A cash item replaces the gear of the same slot (Ma and MaPn share
+        // the top area; every other slot is a plain name match).
+        var cashSlots = new List<string>();
         if (cashWorn != null)
             foreach (int id in cashWorn)
-                if (_items.TryGetValue(id, out var d) && d.Slot != null &&
-                    ItemData.BeginnerImgs.TryGetValue(d.Slot, out string? part))
-                    cashBodyParts.Add(part);
+                if (_items.TryGetValue(id, out var d) && d.Slot != null)
+                    cashSlots.Add(d.Slot);
         if (worn != null)
             foreach (int id in worn)
             {
                 if (!_items.TryGetValue(id, out var d) || d.Slot == null) continue;
-                if (cashBodyParts.Contains(ItemData.BeginnerImgs.GetValueOrDefault(d.Slot, ""))) continue;
+                if (cashSlots.Any(slot => Progression.SameBodyArea(slot, d.Slot))) continue;
                 AppendGear(gearParts, id, action, frame);
             }
-        // Cash: one piece per body part, even when the list holds two overalls.
-        var cashDrawn = new HashSet<string>();
+        // Cash: one piece per slot, even when a broken save holds two.
+        var cashDrawn = new List<string>();
         if (cashWorn != null)
             foreach (int id in cashWorn)
             {
                 if (!_items.TryGetValue(id, out var d) || d.Slot == null) continue;
-                if (ItemData.BeginnerImgs.TryGetValue(d.Slot, out string? part) && !cashDrawn.Add(part)) continue;
+                if (cashDrawn.Any(slot => Progression.SameBodyArea(slot, d.Slot))) continue;
+                cashDrawn.Add(d.Slot);
                 AppendGear(gearParts, id, action, frame);
             }
         var hairData = _hairs.GetValueOrDefault((hair.ToString("D8"), action));
         var faceData = _faces.GetValueOrDefault((face.ToString("D8"), action));
+        bool hasHat = HasSlot(worn, "Cp") || HasSlot(cashWorn, "Cp");
         return AvatarMerge.Parts(Body(action, skin).Frames[frame].Parts, gearParts,
             hairData?.Frames[frame].Parts, faceData?.Frames[frame].Parts,
-            DefaultHairImg(), DefaultFaceImg());
+            DefaultHairImg(), DefaultFaceImg(), hasHat);
     }
+
+    private bool HasSlot(List<int>? ids, string slot) =>
+        ids != null && ids.Any(id => _items.TryGetValue(id, out var data) && data.Slot == slot);
 
     private void AppendGear(List<CharaPart> parts, int id, string action, int frame)
     {
+        // The back-facing ladder/rope frames must not draw face or eye gear on the skull.
+        if (action is "ladder" or "rope" && _items.TryGetValue(id, out var data) && data.Slot is "Af" or "Ay") return;
         if (!_gear.TryGetValue((id.ToString("D8"), action), out var gear)) return; // art-less gear (rings): nothing to draw
         parts.AddRange(gear.Frames[frame].Parts); // boot load guarantees art for art gear
     }
@@ -126,9 +132,12 @@ public partial class MushTownGame
         int skin = Hero?.Skin ?? 0;
         string bodyImg = BodyImgId(skin), headImg = HeadImgId(skin);
         var stand = Body("stand1", skin).Frames[0].Parts;
-        var parts = stand.Where(p => p.Img == bodyImg || p.Img == headImg).ToList();
-        parts.AddRange(look.Frames[0].Parts);
-        parts = parts.OrderByDescending(p => p.Z).ToList(); // back to front, like the doll
+        var bodyParts = stand.Where(p => p.Img == bodyImg || p.Img == headImg).ToList();
+        bool hairLook = _hairs.ContainsKey((id, "stand1"));
+        var parts = AvatarMerge.Parts(bodyParts, Array.Empty<CharaPart>(),
+            hairLook ? look.Frames[0].Parts : null,
+            hairLook ? null : look.Frames[0].Parts,
+            DefaultHairImg(), DefaultFaceImg()); // no hat: drop the hair-under-cap set
         foreach (var p in parts) LoadTexture(p.Image);
         // The head keeps 65% of the box and sits in the middle; the chest
         // shows under it and the box crops whatever hangs past the bottom.

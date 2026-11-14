@@ -4,9 +4,13 @@ namespace MushTown.Shared;
 // and the worn cash items on the Outfits page. The slot name picks the box.
 public static class EquipSlots
 {
-    // The window boxes one gear WZ slot fills. Add a row for a new slot and
-    // its box art; the window itself stays the same. "Ma" is a top, "Pn" is
-    // pants, "MaPn" is an overall: it shows in Top and locks Bottom.
+    // The window boxes one gear WZ slot fills. Add a row here and its label
+    // art; DecoBoxes reuses this table and only adds its own hair/face/skin
+    // boxes. The codes are the WZ islot values: "Cp" hat, "Gv" gloves, "Sr"
+    // cape, "Si" shield, "Af" face accessory, "Ay" eye accessory, "Ae"
+    // earring, "Ri" ring, "Pe" pendant, "Be" belt, "Sh" shoulder, "Me" medal,
+    // "Po" pocket, "Ba" badge. "Ma" is a top, "Pn" is pants, "MaPn" is an
+    // overall: it shows in Top and locks Bottom.
     private static readonly Dictionary<string, string[]> Boxes = new()
     {
         ["Wp"] = new[] { "weapon" },
@@ -14,10 +18,29 @@ public static class EquipSlots
         ["MaPn"] = new[] { "top" },
         ["Pn"] = new[] { "bottom" },
         ["So"] = new[] { "shoes" },
+        ["Cp"] = new[] { "hat" },
+        ["Gv"] = new[] { "gloves" },
+        ["Sr"] = new[] { "cape" },
+        ["Si"] = new[] { "secondary" },
+        ["Af"] = new[] { "face_acc" },
+        ["Ay"] = new[] { "eye_acc" },
+        ["Ae"] = new[] { "earrings" },
+        ["Ri"] = new[] { "ring1" },
+        ["Pe"] = new[] { "pendant1" },
+        ["Be"] = new[] { "belt" },
+        ["Sh"] = new[] { "shoulder" },
+        ["Me"] = new[] { "medal" },
+        ["Po"] = new[] { "pocket" },
+        ["Ba"] = new[] { "badge" },
     };
 
-    // The worn gear: a weapon fills Weapon, an overall fills Top and locks
-    // Bottom so no pants can be worn under it.
+    // The one slot table: item validation and the exporter use these keys.
+    // Equipment-window display does not hardcode Wp/Ma; attack and nametag
+    // logic still have their own special cases.
+    public static IReadOnlySet<string> KnownSlots { get; } = new HashSet<string>(Boxes.Keys);
+
+    // The worn gear: every known slot fills its box; an overall fills Top and
+    // locks Bottom so no pants can be worn under it.
     public static List<(string Slot, int Id)> Worn(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs)
     {
         var list = new List<(string, int)>();
