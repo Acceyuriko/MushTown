@@ -119,6 +119,71 @@ public sealed class MoverTests
     }
 
     [TestMethod]
+    public void LadderTopPlatform_ReturnsTop_NotBottomGround()
+    {
+        var map = TestMap();
+        Assert.IsNull(PlayerMover.LadderTopPlatform(map, map.Ladders[0])); // the ground at Y2 is the ladder's own bottom
+        var platform = new FootholdItem { X1 = 450, Y1 = 198, X2 = 550, Y2 = 198 };
+        map.Footholds.Insert(0, platform);
+        Assert.AreEqual(platform, PlayerMover.LadderTopPlatform(map, map.Ladders[0]));
+    }
+
+    [TestMethod]
+    public void Ladder_Top_StopsOnPlatformBelowTallTip()
+    {
+        var map = TestMap();
+        map.Footholds.Insert(0, new FootholdItem { X1 = 450, Y1 = 100, X2 = 550, Y2 = 100 });
+        map.Ladders[0] = new LadderItem { X = 500, Y1 = 0, Y2 = 300, Ladder = true };
+        var m = Mover(map, 500, 300);
+        var up = Input();
+        up.Up = true;
+        m.Input = up;
+        for (int i = 0; i < 300 && m.Climb == null; i++) // grab on
+        {
+            m.Update(Dt);
+            Assert.IsTrue(m.Y >= 100f, $"grab frame {i}: Y={m.Y}");
+        }
+        for (int i = 0; i < 300 && m.Climb != null; i++) // climb to the platform
+        {
+            m.Update(Dt);
+            Assert.IsTrue(m.Y >= 100f, $"climb frame {i}: Y={m.Y}");
+        }
+        Assert.IsNull(m.Climb);
+        Assert.AreEqual(map.Footholds[0], m.Ground);
+        Assert.AreEqual(100f, m.Y); // not the ladder tip at 0
+    }
+
+    [TestMethod]
+    public void Ladder_Top_LandsOnPlatformAboveTip()
+    {
+        var map = TestMap(); // the usual ladder: the platform is 2px above the tip
+        map.Footholds.Insert(0, new FootholdItem { X1 = 450, Y1 = 198, X2 = 550, Y2 = 198 });
+        var m = Mover(map, 500, 300);
+        var up = Input();
+        up.Up = true;
+        m.Input = up;
+        for (int i = 0; i < 300 && m.Climb == null; i++) m.Update(Dt); // grab on
+        for (int i = 0; i < 300 && m.Climb != null; i++) m.Update(Dt); // climb to the top
+        Assert.IsNull(m.Climb);
+        Assert.AreEqual(map.Footholds[0], m.Ground);
+        Assert.AreEqual(198f, m.Y); // landed on the platform above the tip
+    }
+
+    [TestMethod]
+    public void Ladder_Top_IgnoresGroundAtLadderBottom()
+    {
+        var map = TestMap(); // the ladder ends 100px above its own bottom ground
+        var m = Mover(map, 500, 300);
+        var up = Input();
+        up.Up = true;
+        m.Input = up;
+        for (int i = 0; i < 300 && m.Climb == null; i++) m.Update(Dt); // grab on
+        for (int i = 0; i < 300 && m.Y > map.Ladders[0].Y1; i++) m.Update(Dt); // climb to the tip
+        Assert.AreEqual(map.Ladders[0], m.Climb); // the bottom ground is not a platform: stay on the ladder
+        Assert.AreEqual(200f, m.Y);
+    }
+
+    [TestMethod]
     public void Drop_DownJump_LandsOnLowerFloor()
     {
         var map = TestMap();

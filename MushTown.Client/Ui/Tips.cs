@@ -49,7 +49,8 @@ public sealed class Tips : Component, IDrawable
 
         int iconX = _statLay.Get("detailIconX", 8), iconY = _statLay.Get("detailIconY", 8);
         // a hair or face coupon shows the doll's bust instead of the coupon art
-        int iconSize = _game.HasLookBust(item.Cosmetic) ? _statLay.Get("detailBustSize", 48) : _statLay.Get("detailIconSize", 32);
+        bool bust = _game.HasLookBust(item.Cosmetic);
+        int iconSize = bust ? _statLay.Get("detailBustSize", 48) : _statLay.Get("detailIconSize", 32);
         // the text starts after the icon whatever its size (the bust is wider than a plain icon)
         int textX = iconX + iconSize + _statLay.Get("detailIconGap", 8);
         int nameX = Math.Max(_statLay.Get("detailNameX", 48), textX), nameY = _statLay.Get("detailNameY", 6);
@@ -66,7 +67,9 @@ public sealed class Tips : Component, IDrawable
 
         NineSlice.Draw(gfx, "tip", box);
         var icon = new Rectangle(box.X + iconX, box.Y + iconY, iconSize, iconSize);
-        if (!_game.DrawLookBust(gfx, icon, item.Cosmetic))
+        if (bust)
+            _game.DrawLookBust(gfx, icon, item.Cosmetic);
+        else
         {
             var art = gfx.Tex(item.Image); // native size, like every other item icon
             gfx.Sb.Draw(art, new Vector2(icon.X + (iconSize - art.Width) / 2, icon.Y + (iconSize - art.Height) / 2), Color.White);

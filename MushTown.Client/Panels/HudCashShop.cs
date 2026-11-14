@@ -30,8 +30,11 @@ public sealed class CashShopWindow : UiWindow
         "cashshop_takeoffavatar_n.png", "cashshop_takeoffavatar_h.png", "cashshop_takeoffavatar_p.png",
         "cashshop_buyavatar_n.png", "cashshop_buyavatar_h.png", "cashshop_buyavatar_p.png",
         "cashshop_checkout_single.png", "cashshop_checkout_multi.png",
-        "cashshop_checkout_entity.png", "cashshop_checkout_icon_bg.png", "cashshop_checkout_buy.png", "cashshop_checkout_cancel.png",
-        "cashshop_checkout_gift_disabled.png", "cashshop_checkout_result.png",
+        "cashshop_checkout_entity.png", "cashshop_checkout_icon_bg.png",
+        "cashshop_checkout_buy_n.png", "cashshop_checkout_buy_h.png", "cashshop_checkout_buy_p.png",
+        "cashshop_checkout_cancel_n.png", "cashshop_checkout_cancel_h.png", "cashshop_checkout_cancel_p.png",
+        "cashshop_checkout_gift_n.png", "cashshop_checkout_gift_h.png", "cashshop_checkout_gift_p.png",
+        "cashshop_checkout_result.png",
         "cashshop_buyavatar_disabled.png", "cashshop_defaultavatar_disabled.png",
         "cashshop_saveavatar.png", "cashshop_mycoordi.png", "cashshop_actionplay.png",
         "cashshop_petoff.png",
@@ -574,20 +577,20 @@ public sealed class CashShopWindow : UiWindow
 
         if (multi)
         {
-            CheckoutButton(panel, "cashshop_checkout_buy.png", L("checkoutBuyX"), L("checkoutMultiButtonY"),
+            CheckoutButton(panel, "cashshop_checkout_buy", L("checkoutBuyX"), L("checkoutMultiButtonY"),
                 L("checkoutBuyW"), L("checkoutBuyH"), BuyAll);
-            CheckoutButton(panel, "cashshop_checkout_cancel.png", L("checkoutCancelX"), L("checkoutMultiButtonY"),
+            CheckoutButton(panel, "cashshop_checkout_cancel", L("checkoutCancelX"), L("checkoutMultiButtonY"),
                 L("checkoutCancelW"), L("checkoutCancelH"), CloseCheckout);
-            CheckoutButton(panel, "cashshop_checkout_gift_disabled.png", L("checkoutGiftX"), L("checkoutMultiButtonY"),
+            CheckoutButton(panel, "cashshop_checkout_gift", L("checkoutGiftX"), L("checkoutMultiButtonY"),
                 L("checkoutGiftW"), L("checkoutGiftH"), null);
         }
         else
         {
-            CheckoutButton(panel, "cashshop_checkout_buy.png", L("checkoutBuyX"), L("checkoutSingleButtonY"),
+            CheckoutButton(panel, "cashshop_checkout_buy", L("checkoutBuyX"), L("checkoutSingleButtonY"),
                 L("checkoutBuyW"), L("checkoutBuyH"), BuySingle);
-            CheckoutButton(panel, "cashshop_checkout_cancel.png", L("checkoutCancelX"), L("checkoutSingleButtonY"),
+            CheckoutButton(panel, "cashshop_checkout_cancel", L("checkoutCancelX"), L("checkoutSingleButtonY"),
                 L("checkoutCancelW"), L("checkoutCancelH"), CloseCheckout);
-            CheckoutButton(panel, "cashshop_checkout_gift_disabled.png", L("checkoutGiftX"), L("checkoutSingleButtonY"),
+            CheckoutButton(panel, "cashshop_checkout_gift", L("checkoutGiftX"), L("checkoutSingleButtonY"),
                 L("checkoutGiftW"), L("checkoutGiftH"), null);
         }
 
@@ -683,12 +686,16 @@ public sealed class CashShopWindow : UiWindow
     private void CheckoutValue(GameObject panel, Func<string> text, int x, int y) =>
         CheckoutText(panel, text, x - L("checkoutValueW"), y, L("checkoutValueW"), L("checkoutValueH"), TextInk, TextAlign.Right, L("checkoutFont"));
 
-    private static void CheckoutButton(GameObject panel, string file, int x, int y, int w, int h, Action? click)
+    private static void CheckoutButton(GameObject panel, string stem, int x, int y, int w, int h, Action? click)
     {
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(x, y, w, h)));
-        if (click != null) o.Add(new Button { Kind = ButtonKind.Click, OnClick = click });
-        o.Add(new Picture("ui/" + file));
+        o.Add(new Button
+        {
+            Kind = click == null ? ButtonKind.Silent : ButtonKind.Click,
+            OnClick = click,
+        });
+        o.Add(new Image("ui/" + stem));
         panel.AddChild(o);
     }
 
@@ -838,8 +845,10 @@ public sealed class CashShopWindow : UiWindow
         // Same rule as the world player: a still climber holds the current
         // frame; only Up/Down slide advances the ladder animation.
         if (_preview.Climb == null || climbMoving)
-            (_previewFrame, _previewFrameMs) = SceneMath.AdvanceFrame(_previewFrame, _previewFrameMs, dtMs,
-                _game.Delays(action, _previewChara?.Skin ?? 0));
+        {
+            _previewFrameMs += dtMs;
+            _previewFrame = Idle.Frame(action, _game.Delays(action, _previewChara?.Skin ?? 0), _previewFrameMs);
+        }
     }
 
     private int PreviewFrame(string action, int skin)

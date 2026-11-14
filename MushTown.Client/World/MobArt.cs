@@ -77,6 +77,7 @@ public sealed class MobArt : Component
 // The frame an idle animation shows at a given time: the delays of the frames
 // add up and the time runs through them again and again. A live mob plays its
 // frames on Update; a world map tip plays an NPC or a monster with this.
+// Only character dolls use Frame; NPCs and monsters stay on At.
 public static class Idle
 {
     public static int At(IReadOnlyList<int> delays, float timeMs)
@@ -91,6 +92,30 @@ public static class Idle
         }
         return delays.Count - 1;
     }
+
+    // The standing doll walks 1-2-3-2-1, not 1-2-3-1: the return leg plays
+    // the middle frames backwards. One and two frames have nothing to mirror.
+    public static int PingPongAt(IReadOnlyList<int> delays, float timeMs)
+    {
+        int count = delays.Count;
+        if (count <= 2) return At(delays, timeMs);
+        int forward = 0;
+        foreach (int delay in delays) forward += delay;
+        int back = forward - delays[0] - delays[count - 1];
+        int t = (int)(timeMs % (forward + back));
+        if (t < forward) return At(delays, t);
+        t -= forward;
+        for (int i = count - 2; i >= 1; i--)
+        {
+            t -= delays[i];
+            if (t < 0) return i;
+        }
+        return 1;
+    }
+
+    // A character doll's frame: stand1 uses PingPongAt, every other action At.
+    public static int Frame(string action, IReadOnlyList<int> delays, float timeMs) =>
+        action == "stand1" ? PingPongAt(delays, timeMs) : At(delays, timeMs);
 }
 
 // One ground drop: a meso pile (Amount) or a potion (Id + Count).

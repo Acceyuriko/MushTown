@@ -33,6 +33,7 @@ public sealed class PlayerMover : Component
     private const int DropFrames = 3; // down+jump ignores landings for ~3 frames: just enough to clear the dropped line
     private const int PortalCooldown = 30; // frames after travel during which Up cannot travel again (~0.5s)
     private const int GrabCooldown = 20; // frames after leaving a ladder during which Up/Down cannot re-grab (~0.33s)
+    public const int LadderTopDrop = 120; // a ladder may end above its platform: step onto a top platform within this drop
 
     // Feet position, horizontal/vertical speed, and the foothold stood on
     // (null means airborne, so there is no separate on-ground flag).
@@ -221,21 +222,30 @@ public sealed class PlayerMover : Component
         Ground = null;
     }
 
+    // The platform an upward climb can step onto, or null. The ground at the
+    // ladder's own bottom is not a top platform.
+    public static FootholdItem? LadderTopPlatform(MapData map, LadderItem ladder)
+    {
+        var top = SceneMath.MountTop(map.Footholds, ladder.X, ladder.Y1, LadderTopDrop);
+        return top != null && SceneMath.FootholdY(top, ladder.X) < ladder.Y2 ? top : null;
+    }
+
     // Slide along the grabbed ladder or rope. Up at the top steps onto the
-    // platform above when one is there; Down at the bottom lets go.
+    // platform when one is there; a normal platform sits just above the tip,
+    // while a tall ladder may end above its platform. Down at the bottom lets go.
     private void ClimbMove(bool up, bool down, float dt)
     {
         var l = Climb!;
         int dirY = (down ? 1 : 0) - (up ? 1 : 0);
         float ny = Math.Clamp(Y + dirY * ClimbSpeed * dt, l.Y1, l.Y2);
         ClimbMoving = ny != Y;
-        if (up && ny <= l.Y1)
+        if (up && LadderTopPlatform(Map, l) is { } g)
         {
-            var g = SceneMath.MountTop(Map.Footholds, l.X, l.Y1);
-            if (g != null)
+            int topY = SceneMath.FootholdY(g, l.X);
+            if (ny <= Math.Max(l.Y1, topY)) // ordinary ladder: tip first; tall ladder: platform first
             {
                 Ground = g;
-                Y = SceneMath.FootholdY(g, l.X);
+                Y = topY;
                 Climb = null;
                 ClimbMoving = false;
                 _grabCooldown = GrabCooldown; // just mounted: walk off before Up can re-grab

@@ -24,9 +24,9 @@ public partial class MushTownGame
         var hero = _save?.Slots[_slot];
         draws.Add((feetY, () =>
         {
-            DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero);
+            int centerX = DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero);
             if (hero != null)
-                DrawName(feetX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
+                DrawName(centerX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
         }
         ));
         foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers draw the plain body until appearance sync (week 13)
@@ -35,12 +35,12 @@ public partial class MushTownGame
             var plate = r.Owner.Get<PlateArt>()!; // spawn always hangs one
             draws.Add((ry, () =>
             {
-                DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight);
+                int centerX = DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight);
                 int hpPct = PartyHpOf(r.Id);
                 if (hpPct >= 0)
-                    DrawPartyHeadHp(BodyCenterX(rx, Net.ActionName(r.Action), r.Frame, r.FacingRight, null) - _camera.X, ry - _camera.Y, hpPct);
+                    DrawPartyHeadHp(centerX - _camera.X, ry - _camera.Y, hpPct);
                 if (plate.HasName)
-                    DrawName(rx - _camera.X, ry + NameDown - _camera.Y, plate.Name, plate.Plate);
+                    DrawName(centerX - _camera.X, ry + NameDown - _camera.Y, plate.Name, plate.Plate);
             }
             ));
         }
@@ -144,6 +144,19 @@ public partial class MushTownGame
     {
         _spriteBatch.Draw(_textures[image], new Vector2(worldX - _camera.X, worldY - _camera.Y), null, Color.White,
             0f, Vector2.Zero, scale, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+    }
+
+    // A shot has no OS cursor in its pixels: draw the same art the live cursor
+    // would show at the hovered point. The state comes from the same hover
+    // answer and the same Select call as the live cursor.
+    private void DrawShotCursor(int mx, int my)
+    {
+        var (id, grab, npc) = HudHover(mx, my);
+        int want = CursorAnim.Select(id, grab, _hand.Empty && !Holding && !WornHeld, false, npc);
+        var set = CursorData(want);
+        if (set == null) return;
+        var f = set.Frames[0];
+        _spriteBatch.Draw(_textures[f.Image], new Vector2(mx - f.X, my - f.Y), Color.White);
     }
 
     internal void LoadTexture(string image)

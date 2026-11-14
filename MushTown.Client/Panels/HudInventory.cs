@@ -127,6 +127,38 @@ public partial class MushTownGame
         return new Rectangle(_invPos.X + r.X, _invPos.Y + r.Y, r.Width, r.Height);
     }
 
+    // A bag equip dropped on its matching equipment box goes on. The box must
+    // be the front window: a covered slot does not take the drop.
+    private bool DropBagOnEquip(int gx, int gy)
+    {
+        if (_hand.Empty || _hand.Kind != "equip") return false;
+        if (WindowFor(HotkeyAction.Equip) is not EquipWindow window
+            || !window.Show || !window.EquipmentPage) return false;
+        if (RootOf(_uiScene.TopAt(gx, gy)) != window.Host) return false;
+        if (window.SlotAt(gx, gy) is not { } slot
+            || !EquipSlots.Accepts(slot, _hand.Id, _items)) return false;
+        if (Hero is not { } chara || !Progression.WearEquip(chara, _hand.Id, _items)) return false;
+        _hand.Return();
+        window.Dirty = true;
+        SaveChara();
+        PushBuild();
+        PushName();
+        return true;
+    }
+
+    // A worn item dropped on the bag grid comes off. The bag decides where it
+    // lands: a full bag refuses the drop and the item stays in hand.
+    private bool DropWornHeld(int gx, int gy)
+    {
+        if (!WornHeld) return false;
+        if (!_showInv || !InvGridScreenRect().Contains(gx, gy)
+            || RootOf(_uiScene.TopAt(gx, gy)) != _invHost) return false;
+        if (!TakeOffWorn(_wornHeldId, _wornHeldCash)) return true;
+        ClearWornHand();
+        if (WindowFor(HotkeyAction.Equip) is { } window) window.Dirty = true;
+        return true;
+    }
+
     private static string TabKind(int tab) => tab switch
     {
         0 => "equip",
@@ -142,7 +174,14 @@ public partial class MushTownGame
         o.Add(new Rect(r));
         o.Add(new Slot { OnClick = () => ClickSlot(itemKind, index()) });
         o.Add(new ItemTip(() => count() == 0 ? 0 : ItemId(itemKind, index()))); // the empty cell shows no tip
-        o.Add(new InvItem(() => count() == 0 ? "" : ItemImage(ItemId(itemKind, index()))));
+        Func<int> liveId = () => count() == 0 ? 0 : ItemId(itemKind, index());
+        if (itemKind == "dec")
+        {
+            o.Add(new LookBust(() => CouponBust(liveId()), (gfx, rect, cosmetic) => DrawLookBust(gfx, rect, cosmetic)));
+            o.Add(new InvItem(() => CouponBust(liveId()) != 0 ? "" : ItemImage(liveId())));
+        }
+        else
+            o.Add(new InvItem(() => count() == 0 ? "" : ItemImage(ItemId(itemKind, index()))));
         if (itemKind != "equip")
         {
             var number = new GameObject { NoHit = true };

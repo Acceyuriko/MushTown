@@ -68,17 +68,7 @@ public sealed class EquipWindow : UiWindow
 
     private EquipPage _page = EquipPage.Equipment;
 
-    private int _lastWornId;
-    private double _lastWornMs = -CarryHand.DoubleMs;
-
-    public override void OnShown() => ResetWornClick();
-    public override void OnClosed() => ResetWornClick();
-
-    private void ResetWornClick()
-    {
-        _lastWornId = 0;
-        _lastWornMs = -CarryHand.DoubleMs;
-    }
+    public override void OnClosed() => _game.ClearWornHand();
 
     private void CloseEquipWindow()
     {
@@ -219,13 +209,15 @@ public sealed class EquipWindow : UiWindow
             var data = items[id];
             var o = new GameObject();
             o.Add(new Rect(box));
-            o.Add(new Button { OnClick = () => ClickWorn(slot, id) });
-            o.Add(new ItemTip(() => id));
-            if ((slot is "hair" or "face") && _game.HasLookBust(data.Cosmetic))
+            if (slot is not ("hair" or "face"))
             {
-                int cosmetic = data.Cosmetic;
-                o.Add(new LookBust((gfx, rect) => _game.DrawLookBust(gfx, rect, cosmetic)));
+                o.Add(new Button { OnClick = () => ClickWorn(id) });
+                o.Add(new Grab(() => true));
             }
+            o.Add(new ItemTip(() => id));
+            int cosmetic = _game.CouponBust(id);
+            if (cosmetic != 0)
+                o.Add(new LookBust(() => cosmetic, (gfx, rect, c) => _game.DrawLookBust(gfx, rect, c)));
             else
             {
                 _game.LoadTexture(data.Image);
@@ -235,25 +227,22 @@ public sealed class EquipWindow : UiWindow
         }
     }
 
-    // A double-click on a worn item takes it off. Hair and face coupons stay
-    // here: the DEC bag is where a new coupon replaces them.
-    private void ClickWorn(string slot, int id)
+    // A click on a worn item picks it up. Dropping it on the bag takes it off.
+    private void ClickWorn(int id)
     {
-        double now = _game.TimeMs;
-        bool doubleClick = _lastWornId == id && now - _lastWornMs <= CarryHand.DoubleMs;
-        _lastWornId = id;
-        _lastWornMs = now;
-        if (!doubleClick) return;
-        _lastWornId = 0;
-        _lastWornMs = -CarryHand.DoubleMs;
-        if (IsDeco)
-        {
-            if (slot is "hair" or "face") return;
-            if (!_game.TakeOffWorn(id, cash: true)) return;
-        }
-        else if (!_game.TakeOffWorn(id, cash: false)) return;
-        Dirty = true; // the slot and the doll changed
+        _game.PickUpWorn(id, IsDeco);
     }
+
+    // The box under a point, or null. The drop uses it to decide whether the
+    // item belongs in that slot.
+    internal string? SlotAt(int gx, int gy)
+    {
+        foreach (var (slot, cell) in EquipBoxes)
+            if (OnScreen(SlotBox(cell)).Contains(gx, gy)) return slot;
+        return null;
+    }
+
+    internal bool EquipmentPage => _page == EquipPage.Equipment;
 
     // The box of one window slot: the page's table names its grid cell.
     private Rectangle SlotBox(string slot) => SlotBox((IsDeco ? DecoBoxes : EquipBoxes)[slot]);
@@ -277,8 +266,8 @@ public sealed class EquipWindow : UiWindow
     private void SetPage(EquipPage page)
     {
         if (_page == page) return;
+        _game.ClearWornHand();
         _page = page;
-        ResetWornClick();
         Dirty = true; // the frame, tabs and canvas change together
     }
 
@@ -302,6 +291,33 @@ public sealed class EquipWindow : UiWindow
 
 public partial class MushTownGame
 {
+    private int _wornHeldId;
+    private bool _wornHeldCash;
+
+    internal bool WornHeld => _wornHeldId != 0;
+
+    // A worn item can be picked up while neither hand holds anything. Any
+    // later click is a drop or puts the piece back (HudBar handles that
+    // before a button can run).
+    internal void PickUpWorn(int id, bool cash)
+    {
+        if (!_hand.Empty || Holding) return;
+        _wornHeldId = id;
+        _wornHeldCash = cash;
+    }
+
+    internal void ClearWornHand()
+    {
+        _wornHeldId = 0;
+        _wornHeldCash = false;
+    }
+
+    // The bust a coupon draws, or 0 when this build has no exported look.
+    internal int CouponBust(int id) =>
+        _items.TryGetValue(id, out var data) && data.Cosmetic != 0 && HasLookBust(data.Cosmetic)
+            ? data.Cosmetic
+            : 0;
+
     internal bool TakeOffWorn(int id, bool cash)
     {
         if (Hero is not { } chara) return false;
@@ -322,7 +338,17 @@ public partial class MushTownGame
 // slot box (the game draws it, so the item tip shows the same bust).
 public sealed class LookBust : Component, IDrawable
 {
-    private readonly Action<UiGfx, Rectangle> _draw;
-    public LookBust(Action<UiGfx, Rectangle> draw) => _draw = draw;
-    public void Draw(UiGfx gfx) => _draw(gfx, Owner.Get<Rect>()!.Screen);
+    private readonly Func<int> _cosmetic;
+    private readonly Action<UiGfx, Rectangle, int> _draw;
+    public LookBust(Func<int> cosmetic, Action<UiGfx, Rectangle, int> draw)
+    {
+        _cosmetic = cosmetic;
+        _draw = draw;
+    }
+    public void Draw(UiGfx gfx)
+    {
+        int cosmetic = _cosmetic();
+        if (cosmetic == 0) return;
+        _draw(gfx, Owner.Get<Rect>()!.Screen, cosmetic);
+    }
 }

@@ -280,6 +280,7 @@ public partial class MushTownGame
     {
         Held = null;
         _heldFromSlot = false;
+        ClearWornHand();
     }
 
     // The icon art of a skill id, or "" when it is not a skill of this

@@ -16,7 +16,8 @@ public partial class MushTownGame
 
     // The live frame for an action and skin: AvatarPreview uses this so a
     // panel doll breathes like the world doll.
-    internal int IdleFrame(string action, int skin) => Idle.At(Delays(action, skin), TimeMs);
+    internal int IdleFrame(string action, int skin) =>
+        Idle.Frame(action, Delays(action, skin), TimeMs);
 
     private static string BodyImgId(int skin) => CharaSlot.BodyId(skin).ToString("D8");
     private static string HeadImgId(int skin) => CharaSlot.HeadId(skin).ToString("D8");
@@ -73,11 +74,12 @@ public partial class MushTownGame
         parts.AddRange(gear.Frames[frame].Parts); // boot load guarantees art for art gear
     }
 
-    private void DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null,
+    private int DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null,
         float scale = 1f)
     {
         var parts = MergeParts(action, frame, chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
             chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace);
+        int centerX = AvatarCenterX(feetX, parts, facingRight, chara?.Skin ?? 0);
         foreach (var part in parts)
         {
             int dx = (int)MathF.Round(part.X * scale);
@@ -93,16 +95,16 @@ public partial class MushTownGame
                 DrawTexture(part.Image, feetX + dx, feetY + dy, false, scale);
             }
         }
+        return centerX;
     }
 
-    // The horizontal center of the drawn body. The parts are not symmetric
-    // around the feet, so a balloon hung on the feet leans when the character
-    // turns. Hair may be wider than the body, so pick the body by its img id.
-    private int BodyCenterX(int feetX, string action, int frame, bool facingRight, CharaSlot? chara)
+    // The horizontal center of the drawn body, from parts the caller already
+    // merged. The parts are not symmetric around the feet, so a balloon hung
+    // on the feet leans when the character turns. Hair may be wider than the
+    // body, so pick the body by its img id.
+    private int AvatarCenterX(int feetX, List<CharaPart> parts, bool facingRight, int skin)
     {
-        var parts = MergeParts(action, frame, chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
-            chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace);
-        string bodyImg = BodyImgId(chara?.Skin ?? 0);
+        string bodyImg = BodyImgId(skin);
         CharaPart? body = parts.FirstOrDefault(p => p.Img == bodyImg);
         if (body == null) return feetX;
         int w = _textures[body.Image].Width;
@@ -121,14 +123,11 @@ public partial class MushTownGame
     // The bust of one hair or face coupon: the current body and head, shrunk
     // to the box and cropped at the chest, with the head in the middle of the
     // box. A hair coupon drops the face, a face coupon drops the hair (each
-    // coupon previews its own part). False when the look has no art yet, so
-    // the caller can fall back to the coupon icon.
-    internal bool DrawLookBust(UiGfx gfx, Rectangle box, int cosmetic)
+    // coupon previews its own part).
+    internal void DrawLookBust(UiGfx gfx, Rectangle box, int cosmetic)
     {
-        if (cosmetic == 0) return false;
         string id = cosmetic.ToString("D8");
-        var look = _hairs.GetValueOrDefault((id, "stand1")) ?? _faces.GetValueOrDefault((id, "stand1"));
-        if (look == null || look.Frames[0].Parts.Count == 0) return false;
+        var look = _hairs.GetValueOrDefault((id, "stand1")) ?? _faces.GetValueOrDefault((id, "stand1"))!;
         int skin = Hero?.Skin ?? 0;
         string bodyImg = BodyImgId(skin), headImg = HeadImgId(skin);
         var stand = Body("stand1", skin).Frames[0].Parts;
@@ -156,7 +155,6 @@ public partial class MushTownGame
             var src = new Rectangle(0, 0, tex.Width, (int)MathF.Round(tex.Height - cut / scale));
             gfx.Sb.Draw(tex, new Vector2(dx, dy), src, Color.White, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         }
-        return true;
     }
 
     // The same drawing on a UI spot: the world draw adds the camera, so park

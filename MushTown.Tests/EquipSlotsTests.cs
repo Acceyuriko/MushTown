@@ -120,6 +120,17 @@ public sealed class EquipSlotsTests
     }
 
     [TestMethod]
+    public void Accepts_OnlyTheItemsOwnBox()
+    {
+        Assert.IsTrue(EquipSlots.Accepts("top", 2, Defs));
+        Assert.IsFalse(EquipSlots.Accepts("bottom", 2, Defs));
+        Assert.IsTrue(EquipSlots.Accepts("weapon", 1, Defs));
+        Assert.IsFalse(EquipSlots.Accepts("top", 99, Defs));
+        Assert.IsTrue(EquipSlots.Accepts("top", 7, Defs)); // an overall fills Top
+        Assert.IsFalse(EquipSlots.Accepts("bottom", 7, Defs));
+    }
+
+    [TestMethod]
     public void Worn_EmptyOrUnknownIdFillsNothing()
     {
         Assert.AreEqual(0, EquipSlots.Worn(new CharaSlot(), Defs).Count);

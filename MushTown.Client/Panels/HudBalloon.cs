@@ -67,9 +67,14 @@ public partial class MushTownGame
     // The feet of the character on screen: the bubble hangs over the head.
     // The balloon hangs on the body center line, not on the feet: the body is
     // drawn off-center, so the tail would lean when the character turns.
-    private Point FeetOnScreen() => new(
-        BodyCenterX((int)Math.Floor(_mover.X), _mover.Action, _frame, _mover.FacingRight, _save?.Slots[_slot]) - _camera.X,
-        (int)Math.Floor(_mover.Y) - _camera.Y);
+    private Point FeetOnScreen()
+    {
+        int skin = _save?.Slots[_slot]?.Skin ?? 0;
+        var parts = Body(_mover.Action, skin).Frames[_frame].Parts;
+        return new(
+            AvatarCenterX((int)Math.Floor(_mover.X), parts, _mover.FacingRight, skin) - _camera.X,
+            (int)Math.Floor(_mover.Y) - _camera.Y);
+    }
 
     // The message the bubble shows: the one the player sent.
     private string BubbleText()

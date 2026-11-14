@@ -95,13 +95,15 @@ public static class SceneMath
         return best;
     }
 
-    // Ladder-top mount: the platform at the top sits ~2px above Y1. Mounts
-    // only when the nearest ground at/below Y1-10 lands within [Y1-10, Y1+2];
-    // ground farther below (or none) means no mount.
-    public static FootholdItem? MountTop(List<FootholdItem> footholds, int x, int y1)
+    // Ladder-top mount: the platform at the top usually sits ~2px above Y1.
+    // Mounts when the nearest ground at/below Y1-10 lands within
+    // [Y1-10, Y1+maxDrop]; a tall ladder may extend above its platform, so
+    // the caller can allow a larger drop. Ground farther below (or none)
+    // means no mount.
+    public static FootholdItem? MountTop(List<FootholdItem> footholds, int x, int y1, int maxDrop = 2)
     {
         var g = GroundBelow(footholds, x, y1 - 10);
-        return g != null && FootholdY(g, x) <= y1 + 2 ? g : null;
+        return g != null && FootholdY(g, x) <= y1 + maxDrop ? g : null;
     }
 
     // Camera clamp that also works when the map is smaller than the view.

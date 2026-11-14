@@ -8,7 +8,7 @@ public partial class MushTownGame
 {
     // The doll on the card plays the stand animation (the WZ stand1 frames).
     private int _setupFrame;
-    private float _setupTimer;
+    private float _setupMs;
 
     // Every number of this page lives in layouts/setup-layout.json: the board
     // place, the boxes inside it, the text sizes. The offsets are relative to
@@ -44,7 +44,7 @@ public partial class MushTownGame
     {
         // Shots never run Update, so the doll gets its frame from --frame there.
         _setupFrame = _shotPath != null ? _shotFrame : 0;
-        _setupTimer = 0;
+        _setupMs = 0;
         _menuScene = new Scene();
         var bg = new GameObject { NoHit = true };
         bg.Add(new Rect(new Rectangle(0, 0, GameWidth, GameHeight)));
@@ -126,7 +126,9 @@ public partial class MushTownGame
     private void UpdateSetup(bool click, bool enter, bool esc, int gx, int gy, float dtMs)
     {
         // the doll on the card plays the stand1 frames, like the in-game character
-        (_setupFrame, _setupTimer) = SceneMath.AdvanceFrame(_setupFrame, _setupTimer, dtMs, Delays("stand1", 0));
+        _setupMs += dtMs;
+        if (_shotPath == null)
+            _setupFrame = Idle.Frame("stand1", Delays("stand1", 0), _setupMs);
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         if (esc) { SetupToJob(); return; }
         GameObject? took = click ? ClickTree(_scenes.Current, gx, gy) : null;

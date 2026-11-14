@@ -39,6 +39,14 @@ public static class EquipSlots
     // logic still have their own special cases.
     public static IReadOnlySet<string> KnownSlots { get; } = new HashSet<string>(Boxes.Keys);
 
+    // A gear item can be dropped on this window box. An overall fills Top
+    // only, so it cannot be dropped on Bottom.
+    public static bool Accepts(string box, int id, IReadOnlyDictionary<int, ItemData> defs) =>
+        defs.TryGetValue(id, out var data)
+        && data.Slot != null
+        && Boxes.TryGetValue(data.Slot, out var boxes)
+        && Array.IndexOf(boxes, box) >= 0;
+
     // The worn gear: every known slot fills its box; an overall fills Top and
     // locks Bottom so no pants can be worn under it.
     public static List<(string Slot, int Id)> Worn(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs)

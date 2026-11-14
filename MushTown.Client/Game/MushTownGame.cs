@@ -76,7 +76,7 @@ public partial class MushTownGame : Game
     private FootholdItem _spawnGround = null!;
     private string _shownAction = "stand1"; // last action the frames advanced on (resets the frame on change)
     private int _frame;
-    private float _timerMs;
+    private float _frameMs; // the shown action's clock: Idle.Frame reads it
     private readonly Fighter _fighter = new(); // combat clocks, ticked at frame-top (never in the world step)
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
@@ -312,6 +312,31 @@ public partial class MushTownGame : Game
 
             // a shot named *guideboss* or *guidespecial* opens that guide tab
             string shotName = Path.GetFileNameWithoutExtension(_shotPath)!;
+            if (shotName.Contains("ladder_top") || shotName.Contains("ladder_center"))
+            {
+                var ladder = _map.Ladders.FirstOrDefault(l => l.Ladder) ?? _map.Ladders.FirstOrDefault();
+                if (ladder != null)
+                {
+                    _mover.X = ladder.X;
+                    _mover.Y = shotName.Contains("ladder_top")
+                        ? ladder.Y1
+                        : (ladder.Y1 + ladder.Y2) / 2;
+                    _mover.Climb = ladder;
+                    _mover.Ground = null;
+                    _mover.ClimbMoving = false;
+                    _mover.Action = "ladder";
+                    _mover.FacingRight = true;
+                    if (shotName.Contains("ladder_top") && PlayerMover.LadderTopPlatform(_map, ladder) is { } top)
+                    {
+                        _mover.Climb = null;
+                        _mover.Ground = top;
+                        _mover.Y = SceneMath.FootholdY(top, ladder.X);
+                        _mover.Action = "stand1";
+                    }
+                    _frame = 0;
+                    SnapCamera();
+                }
+            }
             if (shotName.Contains("guideboss")) _guideWindow.SetTab(1);
             if (shotName.Contains("guidespecial")) _guideWindow.SetTab(2);
             // the world map travel: the shot lands on the map it travelled to
@@ -464,7 +489,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "equipui" or "decorations" or "dec" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -588,7 +613,7 @@ public partial class MushTownGame : Game
             _uiScene.ClearHover();
         }
 
-        if (RightEdge(ms) && (!_hand.Empty || Holding)) { _hand.Return(); ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
+        if (RightEdge(ms) && (!_hand.Empty || Holding || WornHeld)) { _hand.Return(); ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
         UpdateHud(kb, click, held, mx, my, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
         // The MENU window and a confirmation box are modal for the character:
         // while either is open the character ignores the keys. The key window
@@ -742,10 +767,14 @@ public partial class MushTownGame : Game
         {
             _shownAction = _mover.Action;
             _frame = 0;
-            _timerMs = 0;
+            _frameMs = 0;
         }
-        if (_mover.Climb == null || _mover.ClimbMoving) // still on a ladder: hold the pose
-            (_frame, _timerMs) = SceneMath.AdvanceFrame(_frame, _timerMs, dtMs, Delays(_shownAction, Hero?.Skin ?? 0));
+        // A moving pose advances; a still ladder holds its frame.
+        if (_mover.Climb == null || _mover.ClimbMoving)
+        {
+            _frameMs += dtMs;
+            _frame = Idle.Frame(_shownAction, Delays(_shownAction, Hero?.Skin ?? 0), _frameMs);
+        }
 
         var (targetX, targetY) = CameraTarget();
         _camera.Follow(dt, targetX, targetY);
@@ -898,6 +927,7 @@ public partial class MushTownGame : Game
                 var (mx, my) = ShotMouse();
                 if (mx >= 0) { _uiScene.Layout(); _uiScene.Hover(mx, my); } // shots never run Update: the tips read the hover here
                 DrawHud(mx, my, false); // no hand: clean art
+                if (mx >= 0) DrawShotCursor(mx, my); // the OS cursor is outside the shot: draw its art here
             }
             _spriteBatch.End();
         }

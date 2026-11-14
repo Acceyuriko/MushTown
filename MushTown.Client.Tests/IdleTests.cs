@@ -26,6 +26,44 @@ public class IdleTests
         Assert.AreEqual(0, Idle.At(new[] { 100 }, 5000));
     }
 
+    [TestMethod]
+    public void PingPongAt_MirrorsTheMiddleFrame()
+    {
+        int[] delays = { 120, 120, 120 };
+        Assert.AreEqual(0, Idle.PingPongAt(delays, 0));
+        Assert.AreEqual(0, Idle.PingPongAt(delays, 119));
+        Assert.AreEqual(1, Idle.PingPongAt(delays, 120));
+        Assert.AreEqual(2, Idle.PingPongAt(delays, 240));
+        Assert.AreEqual(1, Idle.PingPongAt(delays, 360));
+        Assert.AreEqual(0, Idle.PingPongAt(delays, 480));
+    }
+
+    [TestMethod]
+    public void PingPongAt_TwoFramesLoops()
+    {
+        int[] delays = { 100, 100 };
+        Assert.AreEqual(0, Idle.PingPongAt(delays, 200));
+        Assert.AreEqual(0, Idle.PingPongAt(delays, 400));
+    }
+
+    [TestMethod]
+    public void Frame_PingPongsOnlyStand1()
+    {
+        int[] delays = { 100, 100, 100 };
+        Assert.AreEqual(0, Idle.Frame("stand1", delays, 0));
+        Assert.AreEqual(1, Idle.Frame("stand1", delays, 100));
+        Assert.AreEqual(2, Idle.Frame("stand1", delays, 200));
+        Assert.AreEqual(1, Idle.Frame("stand1", delays, 300));
+        Assert.AreEqual(0, Idle.Frame("stand1", delays, 400));
+
+        Assert.AreEqual(0, Idle.Frame("walk1", delays, 0));
+        Assert.AreEqual(1, Idle.Frame("walk1", delays, 100));
+        Assert.AreEqual(2, Idle.Frame("walk1", delays, 200));
+        Assert.AreEqual(0, Idle.Frame("walk1", delays, 300));
+        Assert.AreEqual(1, Idle.Frame("walk1", delays, 400));
+        Assert.AreEqual(2, Idle.Frame("walk1", delays, 500));
+    }
+
     // A stand with a single picture cannot animate: the mob crawls with move
     // instead (the snail). Two or more stand frames play as stand.
     [TestMethod]

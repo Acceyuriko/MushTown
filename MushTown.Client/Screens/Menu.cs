@@ -151,7 +151,7 @@ public partial class MushTownGame
             _rollLog ??= new RollLog(NetLogPath());
             _screen = Screen.Saves; // every launch starts at saves (no session skip)
         }
-        if (shotScreen != null || _shotSkin != null) // menu screenshots and skin shots ride on a demo save
+        if (_shotPath != null) // every shot rides on the demo save: the HUD, the name plate and the panels read it
         {
             _store = DemoStore(_shotSkin ?? 0);
             _saveSlot = 0;
@@ -164,13 +164,14 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "equipui" or "decorations" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "equipui" or "decorations" or "dec" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
             if (shotScreen == "chars2") _slot = PageSlots; // empty slot: no start/delete on the empty-page shot
-            if (shotScreen is "inv" or "use" or "cashuserename" or "cashusereset" or "hud") _showInv = true;
+            if (shotScreen is "inv" or "use" or "cashuserename" or "cashusereset" or "dec" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
+            if (shotScreen == "dec") _invTab = 5; // the DEC bag only: no equipment window
             if (shotScreen is "cashuserename" or "cashusereset")
                 PoseCashUse(shotScreen == "cashuserename" ? 5400000 : 5051001);
             if (shotScreen == "invscroll") { _showInv = true; _invTab = 1; FillInvScrollShot(); }
@@ -617,10 +618,17 @@ public partial class MushTownGame
     private void SyncCursorState(float dtMs)
     {
         bool pressed = Mouse.GetState().LeftButton == ButtonState.Pressed;
-        int want = CursorAnim.Select(_hoverId, _hoverGrab, _hand.Empty && !Holding, pressed, _hoverNpc);
-        CursorAnimData? data = want == 1 ? _hoverSet.Data : want == 2 ? _clickSet.Data : want == 3 ? _itemSet.Data : null;
-        if (_cursor.Tick(want, data, dtMs)) ApplyCursor();
+        int want = CursorAnim.Select(_hoverId, _hoverGrab, _hand.Empty && !Holding && !WornHeld, pressed, _hoverNpc);
+        if (_cursor.Tick(want, CursorData(want), dtMs)) ApplyCursor();
     }
+
+    private CursorAnimData? CursorData(int state) => state switch
+    {
+        1 => _hoverSet.Data,
+        2 => _clickSet.Data,
+        3 => _itemSet.Data,
+        _ => null,
+    };
 
     private CursorSet CurSet() => _cursor.State == 1 ? _hoverSet : _cursor.State == 2 ? _clickSet : _itemSet;
 

@@ -241,6 +241,7 @@ public partial class MushTownGame
         {
             case 0:
                 if (!_hand.Empty) _hand.Return(); // the hidden panel cannot drop the preview back
+                ClearWornHand();
                 _showInv = false; _dragInv = null;
                 break;
             case 1: _showStat = false; _dragStat = null; break;
@@ -251,22 +252,31 @@ public partial class MushTownGame
         }
     }
 
-    // One "over" per frame (clicks live in UpdateHudClick below): the tree
-    // answers with its topmost object, so a covered panel stays dark.
-    // Sets the grab cursor: the bag slots and the things a click can pick up.
-    private void UpdateHudHover(int gx, int gy)
+    // One hover answer for the live cursor and the shots: the legacy id, the
+    // grab flag, and the world-NPC flag.
+    private (string Id, bool Grab, bool Npc) HudHover(int gx, int gy)
     {
         string id = _uiScene.Hover(gx, gy); // one tree: the topmost object by Z takes the hover (the modal blanks the rest)
-        _hoverNpc = id == "" && _uiScene.Hovered == null && !_uiScene.ModalOpen && _talkNpc == 0 && NpcAt(gx, gy) != null;
+        bool npc = id == "" && _uiScene.Hovered == null && !_uiScene.ModalOpen && _talkNpc == 0 && NpcAt(gx, gy) != null;
+        bool grab = _uiScene.HoverButton is Slot || Grabbable(_uiScene.Hovered);
+        return (id, grab, npc);
+    }
+
+    // One "over" per frame (clicks live in UpdateHudClick below): the tree
+    // answers with its topmost object, so a covered panel stays dark.
+    private void UpdateHudHover(int gx, int gy)
+    {
+        var (id, grab, npc) = HudHover(gx, gy);
+        _hoverNpc = npc;
         SfxOnHover(id);
-        _hoverGrab = _uiScene.HoverButton is Slot || Grabbable(_uiScene.Hovered);
+        _hoverGrab = grab;
     }
 
     // The object under the mouse can be picked up by a click, and the inventory
     // hand is empty (a full hand refuses the pick).
     private bool Grabbable(GameObject? o)
     {
-        if (!_hand.Empty) return false;
+        if (!_hand.Empty || WornHeld || Holding) return false;
         for (; o != null; o = o.Parent)
             if (o.Get<Grab>() is { Can: true }) return true;
         return false;
@@ -277,9 +287,13 @@ public partial class MushTownGame
         if (_save?.Slots[_slot] is { } heldChara && !_hand.Empty && !_hand.StillThere(heldChara))
             _hand.Return(); // an external bag change invalidated the preview
         // A click while something is in hand is a drop: a key of the key
-        // window, a quick slot cell or the action pool. The inventory hand
-        // drops potions at the same three spots. Anywhere else puts the piece
-        // back and the click runs as usual.
+        // window, a quick slot cell or the action pool. A bag equip dropped
+        // on its equipment slot goes on; a worn piece dropped on the bag comes
+        // off. A worn piece dropped anywhere else goes back and swallows this
+        // click; other held pieces go back and the click runs as usual.
+        if (DropBagOnEquip(gx, gy)) { PlaySfx("click"); return; }
+        if (DropWornHeld(gx, gy)) return;
+        if (WornHeld) { ClearWornHand(); return; } // the click put the worn piece back
         if (DropBagHeld(gx, gy)) { PlaySfx("click"); return; } // a bag item dropped on a key or slot
         if (Holding && DropHeld(gx, gy)) { PlaySfx("click"); return; } // a drop is a click too
         // What the click is about to hit, read before any button runs: a
@@ -398,7 +412,7 @@ public partial class MushTownGame
         _uiScene.Add(held);
         var tips = new GameObject { NoHit = true, Z = TipZ }; // the last thing drawn: no layer can cover a tip
         tips.Add(new TipAnchor());
-        tips.Add(new Tips(this, () => _hand.Empty && !Holding, _items, _invLay, _statLay));
+        tips.Add(new Tips(this, () => _hand.Empty && !Holding && !WornHeld, _items, _invLay, _statLay));
         _uiScene.Add(tips);
         SyncLayers(); // shots skip Update: without this the panels and windows draw empty there (first Update no-ops)
     }
@@ -594,6 +608,7 @@ public partial class MushTownGame
     // skill a click picked up (one thing at a time, so only one is set).
     private string HeldArt()
     {
+        if (WornHeld) return _items.TryGetValue(_wornHeldId, out var worn) ? worn.Image : "";
         if (!_hand.Empty)
         {
             var chara = _save?.Slots[_slot];

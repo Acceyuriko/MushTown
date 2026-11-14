@@ -561,7 +561,7 @@ public partial class MushTownGame
             _mover.OnTravel();
             _mover.FacingRight = spawn.X > x;
             _mover.Action = "stand1";
-            _frame = 0; _timerMs = 0; _shownAction = "stand1";
+            _frame = 0; _frameMs = 0; _shownAction = "stand1";
             _fighter.AttackLock = 0;
             ReseedPortalState();
             SnapCamera();
