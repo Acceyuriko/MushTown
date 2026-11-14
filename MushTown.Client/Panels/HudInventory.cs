@@ -138,12 +138,34 @@ public partial class MushTownGame
         if (window.SlotAt(gx, gy) is not { } slot
             || !EquipSlots.Accepts(slot, _hand.Id, _items)) return false;
         if (Hero is not { } chara || !Progression.WearEquip(chara, _hand.Id, _items)) return false;
+        FinishWornDrop(window);
+        return true;
+    }
+
+    // A DEC coupon or fashion dropped on its deco box goes on. The box must
+    // be the front window and the item must fill that box.
+    private bool DropBagOnCashSlot(int gx, int gy)
+    {
+        if (_hand.Empty || _hand.Kind != "dec") return false;
+        if (WindowFor(HotkeyAction.Equip) is not EquipWindow window
+            || !window.Show || !window.CashPage) return false;
+        if (RootOf(_uiScene.TopAt(gx, gy)) != window.Host) return false;
+        if (window.SlotAt(gx, gy) is not { } slot
+            || EquipSlots.CashBox(_hand.Id, _items) != slot) return false;
+        if (Hero is not { } chara || !Progression.WearCash(chara, _hand.Id, _items)) return false;
+        FinishWornDrop(window);
+        return true;
+    }
+
+    // The five steps both bag drops end with: empty the hand, repaint the equip
+    // window, save, and refresh the world and the name tag.
+    private void FinishWornDrop(EquipWindow window)
+    {
         _hand.Return();
         window.Dirty = true;
         SaveChara();
         PushBuild();
         PushName();
-        return true;
     }
 
     // A worn item dropped on the bag grid comes off. The bag decides where it

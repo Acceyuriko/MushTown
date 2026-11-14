@@ -65,14 +65,13 @@ public partial class MushTownGame
     private Balloon MakeBalloon() => new(BubbleText, FeetOnScreen, _balloonLay, BalloonStyle);
 
     // The feet of the character on screen: the bubble hangs over the head.
-    // The balloon hangs on the body center line, not on the feet: the body is
-    // drawn off-center, so the tail would lean when the character turns.
+    // The balloon hangs on the standing body's center line, so it does not
+    // wobble with the action animation.
     private Point FeetOnScreen()
     {
         int skin = _save?.Slots[_slot]?.Skin ?? 0;
-        var parts = Body(_mover.Action, skin).Frames[_frame].Parts;
         return new(
-            AvatarCenterX((int)Math.Floor(_mover.X), parts, _mover.FacingRight, skin) - _camera.X,
+            AvatarCenterX((int)Math.Floor(_mover.X), _mover.FacingRight, skin) - _camera.X,
             (int)Math.Floor(_mover.Y) - _camera.Y);
     }
 

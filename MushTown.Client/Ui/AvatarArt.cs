@@ -77,9 +77,9 @@ public partial class MushTownGame
     private int DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null,
         float scale = 1f)
     {
+        int centerX = AvatarCenterX(feetX, facingRight, chara?.Skin ?? 0);
         var parts = MergeParts(action, frame, chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
             chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace);
-        int centerX = AvatarCenterX(feetX, parts, facingRight, chara?.Skin ?? 0);
         foreach (var part in parts)
         {
             int dx = (int)MathF.Round(part.X * scale);
@@ -98,15 +98,14 @@ public partial class MushTownGame
         return centerX;
     }
 
-    // The horizontal center of the drawn body, from parts the caller already
-    // merged. The parts are not symmetric around the feet, so a balloon hung
-    // on the feet leans when the character turns. Hair may be wider than the
-    // body, so pick the body by its img id.
-    private int AvatarCenterX(int feetX, List<CharaPart> parts, bool facingRight, int skin)
+    // The name tag's horizontal anchor: the standing body's center. The stand
+    // and walk frames shift the body art by a few pixels, and the tag must not
+    // follow that shift. Facing mirrors the offset around the feet.
+    private int AvatarCenterX(int feetX, bool facingRight, int skin)
     {
         string bodyImg = BodyImgId(skin);
-        CharaPart? body = parts.FirstOrDefault(p => p.Img == bodyImg);
-        if (body == null) return feetX;
+        CharaPart body = Body("stand1", skin).Frames[0].Parts
+            .First(p => p.Img == bodyImg && p.Image.EndsWith("_body.png"));
         int w = _textures[body.Image].Width;
         return facingRight ? SceneMath.FlipDrawX(feetX, body.X, w) + w / 2 : feetX + body.X + w / 2;
     }

@@ -29,6 +29,8 @@ public sealed class EquipSlotsTests
         [22] = new ItemData { ItemId = 22, Slot = "Ba" },
         [3] = new ItemData { ItemId = 3, Cosmetic = 30020 },
         [4] = new ItemData { ItemId = 4, Cosmetic = 20000 },
+        [ItemData.HairCoupon] = new ItemData { ItemId = ItemData.HairCoupon, Cosmetic = 30020 },
+        [ItemData.FaceCoupon] = new ItemData { ItemId = ItemData.FaceCoupon, Cosmetic = 20000 },
     };
 
     [TestMethod]
@@ -168,5 +170,15 @@ public sealed class EquipSlotsTests
         var chara = new CharaSlot { CashWorn = new List<int> { 6 } };
 
         CollectionAssert.AreEqual(new[] { ("weapon", 6) }, EquipSlots.Cash(chara, Defs));
+    }
+
+    [TestMethod]
+    public void CashBox_CouponAndFashionPickTheirBox()
+    {
+        Assert.AreEqual("hair", EquipSlots.CashBox(ItemData.HairCoupon, Defs));
+        Assert.AreEqual("face", EquipSlots.CashBox(ItemData.FaceCoupon, Defs));
+        Assert.AreEqual("top", EquipSlots.CashBox(2, Defs));
+        Assert.AreEqual("weapon", EquipSlots.CashBox(6, Defs));
+        Assert.IsNull(EquipSlots.CashBox(99, Defs));
     }
 }

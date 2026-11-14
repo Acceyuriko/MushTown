@@ -47,6 +47,16 @@ public static class EquipSlots
         && Boxes.TryGetValue(data.Slot, out var boxes)
         && Array.IndexOf(boxes, box) >= 0;
 
+    // The deco box an item from the bag fills: a coupon goes to its hair or
+    // face box, a fashion to the first box of its gear slot. Null when the
+    // item fits no deco box.
+    public static string? CashBox(int id, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        if (!defs.TryGetValue(id, out var data)) return null;
+        if (data.Cosmetic != 0) return Progression.CouponSlot(id);
+        return data.Slot != null && Boxes.TryGetValue(data.Slot, out var boxes) ? boxes[0] : null;
+    }
+
     // The worn gear: every known slot fills its box; an overall fills Top and
     // locks Bottom so no pants can be worn under it.
     public static List<(string Slot, int Id)> Worn(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs)

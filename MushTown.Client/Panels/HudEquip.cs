@@ -209,11 +209,8 @@ public sealed class EquipWindow : UiWindow
             var data = items[id];
             var o = new GameObject();
             o.Add(new Rect(box));
-            if (slot is not ("hair" or "face"))
-            {
-                o.Add(new Button { OnClick = () => ClickWorn(id) });
-                o.Add(new Grab(() => true));
-            }
+            o.Add(new Button { OnClick = () => ClickWorn(id) });
+            o.Add(new Grab(() => true));
             o.Add(new ItemTip(() => id));
             int cosmetic = _game.CouponBust(id);
             if (cosmetic != 0)
@@ -237,12 +234,14 @@ public sealed class EquipWindow : UiWindow
     // item belongs in that slot.
     internal string? SlotAt(int gx, int gy)
     {
-        foreach (var (slot, cell) in EquipBoxes)
+        if (_page is not (EquipPage.Equipment or EquipPage.Outfits)) return null;
+        foreach (var (slot, cell) in IsDeco ? DecoBoxes : EquipBoxes)
             if (OnScreen(SlotBox(cell)).Contains(gx, gy)) return slot;
         return null;
     }
 
     internal bool EquipmentPage => _page == EquipPage.Equipment;
+    internal bool CashPage => IsDeco;
 
     // The box of one window slot: the page's table names its grid cell.
     private Rectangle SlotBox(string slot) => SlotBox((IsDeco ? DecoBoxes : EquipBoxes)[slot]);

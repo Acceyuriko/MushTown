@@ -385,16 +385,20 @@ public sealed class CashShopWindow : UiWindow
         AddPreview(1040015);
     }
 
+    // The ladder shot poses the character on the top platform: the same
+    // foothold the climb steps onto, not a hand-picked height.
     public void PoseLadder()
     {
         _page = CashShopPage.Fashion;
         _tab = 0;
         _selectedId = 0;
+        var ground = PlayerMover.LadderTopPlatform(_previewMap!, _previewMap!.Ladders[0])!;
         _preview.X = L("ladderX");
-        _preview.Y = L("ladderPoseY");
-        _preview.Climb = _previewMap!.Ladders[0];
-        _preview.Ground = null;
-        _preview.Action = "ladder";
+        _preview.Y = SceneMath.FootholdY(ground, (int)_preview.X);
+        _preview.Climb = null;
+        _preview.Ground = ground;
+        _preview.ClimbMoving = false;
+        _preview.Action = "stand1";
         Dirty = true;
     }
 

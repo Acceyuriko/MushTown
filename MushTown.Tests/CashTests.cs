@@ -139,13 +139,24 @@ public sealed class CashTests
     }
 
     [TestMethod]
-    public void TakeOffCashFashion_CouponReturnsFalse()
+    public void TakeOffCashFashion_CouponReturnsItAndResetsLook()
     {
+        var defs = Defs();
         var chara = Chara();
+        Assert.IsTrue(Progression.WearCash(chara, HairCouponNonDefault, defs));
 
-        Assert.IsFalse(Progression.TakeOffCashFashion(chara, ItemData.HairCoupon, Defs()));
-        CollectionAssert.Contains(chara.CashWorn, ItemData.HairCoupon);
-        Assert.AreEqual(0, Inventory.Count(chara, "dec", ItemData.HairCoupon));
+        Assert.IsTrue(Progression.TakeOffCashFashion(chara, HairCouponNonDefault, defs));
+        CollectionAssert.DoesNotContain(chara.CashWorn, HairCouponNonDefault);
+        Assert.AreEqual(1, Inventory.Count(chara, "dec", HairCouponNonDefault));
+        Assert.AreEqual(ItemData.DefaultHair, chara.Hair);
+
+        Assert.IsTrue(Progression.WearCash(chara, FaceCouponNonDefault, defs));
+        Assert.AreEqual(20053, chara.Face);
+
+        Assert.IsTrue(Progression.TakeOffCashFashion(chara, FaceCouponNonDefault, defs));
+        CollectionAssert.DoesNotContain(chara.CashWorn, FaceCouponNonDefault);
+        Assert.AreEqual(1, Inventory.Count(chara, "dec", FaceCouponNonDefault));
+        Assert.AreEqual(ItemData.DefaultFace, chara.Face);
     }
 
     [TestMethod]

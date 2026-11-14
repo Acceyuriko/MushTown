@@ -151,9 +151,10 @@ public static class Progression
         chara.CashWorn ??= new List<int>();
         if (data.Slot != null) return WearCashFashion(chara, chara.CashWorn, id, data, defs);
         if (data.Cosmetic == 0) return false;
-        bool hair = IsHairCoupon(id);
-        bool face = IsFaceCoupon(id);
-        if (!hair && !face) return false;
+        string? coupon = CouponSlot(id);
+        if (coupon == null) return false;
+        bool hair = coupon == "hair";
+        bool face = coupon == "face";
 
         int old = 0;
         foreach (int worn in chara.CashWorn)
@@ -200,18 +201,22 @@ public static class Progression
     }
 
     // Coupon ids split by kind: 5157xxx is hair, 5158xxx is face.
-    private static bool IsHairCoupon(int id) => id / 1000 == 5157;
-    private static bool IsFaceCoupon(int id) => id / 1000 == 5158;
+    public static string? CouponSlot(int id) =>
+        id / 1000 == 5157 ? "hair" : id / 1000 == 5158 ? "face" : null;
 
-    // Takes one fashion off, back to DEC. Coupons stay on through this path:
-    // a new coupon is worn by double-clicking the one in the bag.
+    // Takes one fashion off, back to DEC. A hair or face coupon comes off
+    // too: the look falls back to the default one.
     public static bool TakeOffCashFashion(CharaSlot chara, int id, IReadOnlyDictionary<int, ItemData> defs)
     {
         if (chara.CashWorn == null || !chara.CashWorn.Contains(id)) return false;
-        if (!defs.TryGetValue(id, out var data) || data.Slot == null) return false;
+        if (!defs.TryGetValue(id, out var data)) return false;
+        string? coupon = CouponSlot(id);
+        if (data.Slot == null && coupon == null) return false;
         if (!Inventory.CanAdd(chara, "dec", id, 1)) return false; // bag full: stay worn
         chara.CashWorn.Remove(id);
         Inventory.Add(chara, "dec", id, 1);
+        if (coupon == "hair") chara.Hair = ItemData.DefaultHair;
+        else if (coupon == "face") chara.Face = ItemData.DefaultFace;
         return true;
     }
 

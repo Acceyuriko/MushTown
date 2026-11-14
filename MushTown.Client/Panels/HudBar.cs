@@ -292,6 +292,7 @@ public partial class MushTownGame
         // off. A worn piece dropped anywhere else goes back and swallows this
         // click; other held pieces go back and the click runs as usual.
         if (DropBagOnEquip(gx, gy)) { PlaySfx("click"); return; }
+        if (DropBagOnCashSlot(gx, gy)) { PlaySfx("click"); return; }
         if (DropWornHeld(gx, gy)) return;
         if (WornHeld) { ClearWornHand(); return; } // the click put the worn piece back
         if (DropBagHeld(gx, gy)) { PlaySfx("click"); return; } // a bag item dropped on a key or slot
@@ -408,7 +409,7 @@ public partial class MushTownGame
         foreach (var w in UiWindow.List) { w.Scene = _uiScene; _uiScene.Add(w.Host); } // the windows too: one tree, one Z order
         _uiScene.Add(_talkHost); // the modal: clicks outside it blank in Scene.Hit
         var held = new GameObject { NoHit = true, Z = HeldZ }; // the piece on the cursor: above the modal, under the tips
-        held.Add(new HeldItem(HeldArt)); // the piece in the inventory hand, or the action or skill a click picked up
+        held.Add(new HeldItem(HeldArt, HeldBust, _invLay.Get("cellSize", 42), (gfx, rect, c) => DrawLookBust(gfx, rect, c))); // the piece in the inventory hand, or the action or skill a click picked up
         _uiScene.Add(held);
         var tips = new GameObject { NoHit = true, Z = TipZ }; // the last thing drawn: no layer can cover a tip
         tips.Add(new TipAnchor());
@@ -608,15 +609,25 @@ public partial class MushTownGame
     // skill a click picked up (one thing at a time, so only one is set).
     private string HeldArt()
     {
-        if (WornHeld) return _items.TryGetValue(_wornHeldId, out var worn) ? worn.Image : "";
-        if (!_hand.Empty)
-        {
-            var chara = _save?.Slots[_slot];
-            if (chara == null || !_hand.StillThere(chara)) return "";
-            return _items.TryGetValue(_hand.Id, out var item) ? item.Image : "";
-        }
+        int id = HeldItemId();
+        if (id != 0 && _items.TryGetValue(id, out var item)) return item.Image;
         return Held is { } target ? TargetArt(target) : "";
     }
+
+    // The item the cursor carries: a worn piece, or the bag item in hand while
+    // it is still in the bag. 0 means no item; the action or skill target is
+    // not an item and stays with HeldArt / HeldBust.
+    private int HeldItemId()
+    {
+        if (WornHeld) return _wornHeldId;
+        if (_hand.Empty) return 0;
+        var chara = _save?.Slots[_slot];
+        return chara != null && _hand.StillThere(chara) ? _hand.Id : 0;
+    }
+
+    // The bust on the cursor: a hair or face coupon shows its look instead of
+    // the gift-box icon. Everything else answers 0.
+    private int HeldBust() => CouponBust(HeldItemId());
 
     // The EXP tip has the numbers: the official writes them as
     // "EXP : 116 / 19,112 [0.61%]".
