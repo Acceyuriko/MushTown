@@ -13,8 +13,7 @@ public class DropTableTests
         return new DropTable(table);
     }
 
-    // Meso always pays exactly once, in range, at -7 with count 1.
-    // A flat range pays exactly.
+    // Meso always pays exactly once, in range, with count 1.
     [TestMethod]
     public void Roll_MesoAlwaysPaysInRange()
     {
@@ -26,7 +25,6 @@ public class DropTableTests
             Assert.IsTrue(first.amount >= 10 && first.amount <= 30);
             Assert.AreEqual(0, first.id);
             Assert.AreEqual(1, first.count);
-            Assert.AreEqual(-7f, first.dx);
         }
         Assert.AreEqual(150, Table(150, 150).Roll(new Random(0))[0].amount);
     }
@@ -40,24 +38,23 @@ public class DropTableTests
         Assert.AreEqual(DropKind.Mesos, payouts[0].kind);
     }
 
-    // Chance 1 always pays, in file order, compacting into 14px slots
-    // from +7 (NextDouble never reaches 1).
+    // Chance 1 always pays, in file order.
     [TestMethod]
-    public void Roll_ChanceOne_PaysAllInSlotOrder()
+    public void Roll_ChanceOne_PaysAllInOrder()
     {
         var payouts = Table(10, 30, (2000000, 1, 2), (2000003, 1, 1)).Roll(new Random(0));
         Assert.AreEqual(3, payouts.Count);
-        Assert.AreEqual((DropKind.Item, 2000000, 2, 0L, 7f), payouts[1]);
-        Assert.AreEqual((DropKind.Item, 2000003, 1, 0L, 21f), payouts[2]);
+        Assert.AreEqual((DropKind.Item, 2000000, 2, 0L), payouts[1]);
+        Assert.AreEqual((DropKind.Item, 2000003, 1, 0L), payouts[2]);
     }
 
-    // Chance 0 never pays (NextDouble starts at 0), and the miss compacts:
-    // the paying entry behind it still lands at +7.
+    // Chance 0 never pays (NextDouble starts at 0); the paying entry behind
+    // it still follows the meso.
     [TestMethod]
-    public void Roll_ChanceZero_SkipsAndCompacts()
+    public void Roll_ChanceZero_Skips()
     {
         var payouts = Table(10, 30, (2000000, 0, 1), (1442004, 1, 1)).Roll(new Random(0));
         Assert.AreEqual(2, payouts.Count);
-        Assert.AreEqual((DropKind.Item, 1442004, 1, 0L, 7f), payouts[1]);
+        Assert.AreEqual((DropKind.Item, 1442004, 1, 0L), payouts[1]);
     }
 }

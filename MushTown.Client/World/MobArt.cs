@@ -5,8 +5,9 @@ namespace MushTown.Client;
 // Mob and drop art state, one per live view (moved to tree children in
 // S6). The mob plays its own anim on Update: a flinch returns to the
 // idle, the death anim marks the Owner dead and the game collects it
-// after the tree step. Drops never tick, and both still draw through the
-// y-sorted list (the tree never y-sorts; S8 verdict: the list stays).
+// after the tree step. Drops also tick and draw by state, and both still
+// draw through the y-sorted list (the tree never y-sorts; S8 verdict: the
+// list stays).
 public sealed class MobArt : Component
 {
     public int Mob;
@@ -118,13 +119,67 @@ public static class Idle
         action == "stand1" ? PingPongAt(delays, timeMs) : At(delays, timeMs);
 }
 
-// One ground drop: a meso pile (Amount) or a potion (Id + Count).
+// One ground drop: a meso pile (Amount) or a potion/equip (Id + Count). The
+// icon pops from FromX/FromY, lands at X/Y, then bobs; a take flies it to the
+// taker for 200ms. SpawnMs is the age of the current state in ms.
+public enum DropState { Falling, Resting, Taken }
+
 public sealed class DropArt : Component
 {
+    public const float FallMs = 400f;
+    public const float TakeMs = 200f;
+
+    public float FromX;
+    public float FromY;
     public float X;
     public float Y;
+    public float SpawnMs;
+    public DropState State;
+    public float Rotation;
+    public float BobPhase;
+    public int Taker; // the player the take flies to; 0 = expired
+    public string Tab = ""; // bag the item returns to
     public int Kind;
     public int Id;
     public int Count;
     public long Amount;
+
+    public override void Update(float dt)
+    {
+        SpawnMs += dt * 1000f;
+        if (State == DropState.Falling)
+        {
+            float t = Math.Min(1f, SpawnMs / FallMs);
+            Rotation = t * MathF.PI * 4f; // two turns while it falls
+            if (t >= 1f)
+            {
+                State = DropState.Resting;
+                SpawnMs = 0;
+                Rotation = 0;
+            }
+        }
+        else if (State == DropState.Resting)
+        {
+            Rotation = 0;
+        }
+        else if (SpawnMs >= TakeMs)
+        {
+            Owner.Dead = true;
+        }
+    }
+
+    // The drops that finished their take animation: the tree skipped them
+    // already, so this only drops the view and the dict entry.
+    public static void CollectDead(Dictionary<int, DropArt> drops, GameObject world)
+    {
+        List<int>? gone = null;
+        foreach (var (uid, d) in drops)
+            if (d.Owner.Dead) (gone ??= new()).Add(uid);
+        if (gone == null) return;
+        foreach (int uid in gone)
+        {
+            world.RemoveChild(drops[uid].Owner);
+            drops.Remove(uid);
+        }
+    }
 }

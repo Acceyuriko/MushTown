@@ -105,7 +105,13 @@ public static partial class Export
                     id is ItemData.HairCoupon or ItemData.HairCouponAlt ? "hair" : "face"),
                 Cash = true,
                 Cosmetic = cosmetic,
+                IconW = UiPng.Width(item, "Item", $"Cash/0515.img/{iconId.ToString("D8")}/info/icon"),
             };
+            if (data.IconW <= 0)
+            {
+                Console.WriteLine($"cash coupon {id} has no icon width");
+                return false;
+            }
             if (!UiPng.Save(item, "Item", $"Cash/0515.img/{iconId.ToString("D8")}/info/icon", Path.Combine(outDir, "cashitem", $"{id}.png")))
                 return false;
             WriteJson(Path.Combine(outDir, "cashitem", $"{id}.json"), data);
@@ -162,10 +168,16 @@ public static partial class Export
                 Mp = Int(spec, "mp"),
                 Price = Int(pinfo, "price"),
                 Desc = (str.Find($@"Consume.img\{id}\desc")?.GetValueEx<string>("") ?? "").Replace("\\n", "\n"),
+                IconW = UiPng.Width(item, "Item", $"Consume/0200.img/{key}/info/icon"),
             };
             if (data.Price <= 0)
             {
                 Console.WriteLine($"potion {id} has a bad price {data.Price}");
+                return false;
+            }
+            if (data.IconW <= 0)
+            {
+                Console.WriteLine($"potion {id} has no icon width");
                 return false;
             }
             // A potion that restores no flat hp and no flat mp is not a
@@ -267,10 +279,16 @@ public static partial class Export
                 ChatBalloon = Int(info, "chatBalloon"),
                 HasArt = row.art,
                 Cash = Int(info, "cash") != 0,
+                IconW = UiPng.Width(chara, "Character", $@"{row.gear}\info/icon"),
             };
             if (data.Price <= 0 && !data.Cash && !ItemData.StarterEquips.Contains(id) && !ItemData.DemoSlotGear.Contains(id)) // cash gear and demo samples are free
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
+                return null;
+            }
+            if (data.IconW <= 0)
+            {
+                Console.WriteLine($"equip {id} has no icon width");
                 return null;
             }
             if (data.ChatBalloon != 0 && !Export.BalloonStyles.Contains(data.ChatBalloon))

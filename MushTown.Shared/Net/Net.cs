@@ -17,7 +17,7 @@ public static class Net
     public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing
     public const byte MobMove = 11;  // server -> client: int uid, int map, float x, float y, byte facing (10Hz, occupied maps only)
     public const byte Hurt = 12;     // server -> client: int uid, int mob, int map, long damage (sent to the victim only, so no victim id rides along)
-    public const byte DropSpawn = 13; // server -> client: int uid, int map, float x, float y, int kind, int id, int count, long amount
+    public const byte DropSpawn = 13; // server -> client: int uid, int map, float x, float y, float fromX, float fromY, int kind, int id, int count, long amount, byte fresh, byte tab
     public const byte DropTake = 14; // server -> client: int uid, int map, int taker, int kind, int id, int count, long amount (taker 0 = expired)
     public const byte Pickup = 15;   // client -> server: int uid (the drop to grab; server checks map + reach)
     public const byte Name = 16;     // client -> server: string name, int plate; relay adds int id first
@@ -43,6 +43,7 @@ public static class Net
     public const byte QuestGone = 34; // server -> client: int quest (the forfeit landed on the server's copy)
     public const byte PartyHp = 35; // client -> server: byte HP percent (0..100)
     public const byte CashShop = 36; // client -> server: no body (the player stepped out of the map; the next State returns)
+    public const byte DropItem = 37; // client -> server: int itemId, int count, byte tab (drop at the last State's map/x/y)
 
     public const byte ActStand = 0;
     public const byte ActWalk = 1;
@@ -154,10 +155,12 @@ public readonly record struct MoveEvent(int Uid, int Map, float X, float Y, bool
 // the victim only, so no victim id rides along.
 public readonly record struct HurtEvent(int Uid, int Mob, int Map, long Damage);
 
-// One drop event: a spawn (Spawn true, Kind/Id/Count/Amount set) or a take
-// (Spawn false). The taker's client claims the loot; taker 0 means expired.
+// One drop event: a spawn (Spawn true, Kind/Id/Count/Amount, From, and the
+// return bag Tab set; Fresh false is a map-entry snapshot) or a take (Spawn
+// false, Tab empty: the client reads the tab from its own drop view). The
+// taker's client claims the loot; taker 0 means expired.
 public readonly record struct DropEvent(
-    bool Spawn, int Uid, int Map, float X, float Y, int Kind, int Id, int Count, long Amount, int Taker);
+    bool Spawn, int Uid, int Map, float X, float Y, float FromX, float FromY, int Kind, int Id, int Count, long Amount, int Taker, bool Fresh, string Tab = "");
 
 // One quest event from the server: a confirmed intent (Kill false, Quest +
 // Completed set) or an authoritative kill counter (Kill true, Quest/Index/Count).

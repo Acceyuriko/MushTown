@@ -136,7 +136,13 @@ public static partial class Export
                     Image = $"cashitem/{entry.Id}.png",
                     Desc = CleanDesc(str.Find($@"Cash.img\{entry.Id}\desc")?.GetValueEx<string>("") ?? "", "").Replace("\\r", ""),
                     Cash = true,
+                    IconW = UiPng.Width(item, "Item", $"{nodePath}/info/icon"),
                 };
+                if (data.IconW <= 0)
+                {
+                    Console.WriteLine($"cashshop item {entry.Id} has no icon width");
+                    return false;
+                }
                 if (!UiPng.Save(item, "Item", $"{nodePath}/info/icon", Path.Combine(outDir, "cashitem", $"{entry.Id}.png")))
                     return false;
                 WriteJson(Path.Combine(outDir, "cashitem", $"{entry.Id}.json"), data);
@@ -173,7 +179,13 @@ public static partial class Export
                     Desc = CleanDesc(str.Find($@"Cash.img\{look.ItemId}\desc")?.GetValueEx<string>("") ?? "", kind).Replace("\\r", ""),
                     Cash = true,
                     Cosmetic = look.Cosmetic,
+                    IconW = UiPng.Width(item, "Item", $"Cash/0515.img/{iconId:D8}/info/icon"),
                 };
+                if (data.IconW <= 0)
+                {
+                    Console.WriteLine($"cashshop look {look.ItemId} has no icon width");
+                    return false;
+                }
                 if (!UiPng.Save(item, "Item", $"Cash/0515.img/{iconId:D8}/info/icon", Path.Combine(outDir, "cashitem", $"{look.ItemId}.png")))
                     return false;
                 WriteJson(Path.Combine(outDir, "cashitem", $"{look.ItemId}.json"), data);

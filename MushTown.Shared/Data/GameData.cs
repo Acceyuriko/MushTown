@@ -374,6 +374,7 @@ public sealed class ItemData
     public string Name { get; set; } = ""; // String.wz name (Consume/Eqp): the exporter fails loud when missing
     public string Desc { get; set; } = ""; // the flavour text of String.wz: potions, cash coupons and cash rings have one
     public string Image { get; set; } = "";
+    public int IconW { get; set; } // width of the info/icon PNG, px (the drop row layout uses it)
     public long Hp { get; set; }
     public long Mp { get; set; }
     public long Price { get; set; } // WZ info/price: what the shop charges (sell pays half, min 1)

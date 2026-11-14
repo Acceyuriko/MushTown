@@ -4,25 +4,25 @@ using MushTown.Shared;
 namespace MushTown.Tests;
 
 // The Loot act: the table rolls once, bonus lines append, the world places
-// every payout. The hook takes (mob, attacker) so quest-scripted drops can
-// pay the killer; v1 sets no hook (no quest items yet).
+// every payout as one row. The hook takes (mob, attacker) so quest-scripted
+// drops can pay the killer; v1 sets no hook (no quest items yet).
 [TestClass]
 public sealed class LootTests
 {
     private const string Flat = """[{"X1":0,"Y1":100,"X2":200,"Y2":100,"Layer":0}]""";
 
-    // Bonus lines land after the table rolls, placed like them (clamped +
-    // grounded at corpse + dx).
+    // Bonus lines land after the table rolls, in the same row.
     [TestMethod]
     public void Bonus_LinesLandAfterTableRolls()
     {
         using var assets = new TempAssets();
         assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Flat);
         assets.AddMob(100000, 1);
+        assets.AddDrops(100000, "[]");
         var world = new MobWorld(assets.Dir);
         world.EnterMap(7);
-        world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount, float dx)>
-            { (DropKind.Item, 2000000, 3, 0, 35) };
+        world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
+            { (DropKind.Item, 2000000, 3, 0) };
 
         var hits = world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner);
         Assert.AreEqual(0, hits[0].HpLeft);
@@ -32,7 +32,7 @@ public sealed class LootTests
         Assert.AreEqual(DropKind.Item, bonus.Kind);
         Assert.AreEqual(2000000, bonus.Id);
         Assert.AreEqual(3, bonus.Count);
-        Assert.AreEqual(135f, bonus.X);
+        Assert.AreEqual(112f, bonus.X); // 24px meso + 24px item, centred on 100
         Assert.AreEqual(100f, bonus.Y);
     }
 
@@ -49,7 +49,7 @@ public sealed class LootTests
         world.BonusDrops = (mob, attacker) =>
         {
             heard = (mob, attacker);
-            return new List<(int kind, int id, int count, long amount, float dx)>();
+            return new List<(int kind, int id, int count, long amount)>();
         };
 
         world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner, attacker: 7);
@@ -71,7 +71,7 @@ public sealed class LootTests
         world.BonusDrops = (mob, attacker) =>
         {
             heard = (mob, attacker);
-            return new List<(int kind, int id, int count, long amount, float dx)>();
+            return new List<(int kind, int id, int count, long amount)>();
         };
 
         var hits = world.SkillStrike(7, 100, 100, true, new Random(0), Progression.Beginner, SkillData.SlashBlast, 150, attacker: 7);
@@ -92,10 +92,119 @@ public sealed class LootTests
         world.BonusDrops = (_, attacker) =>
         {
             heard = attacker;
-            return new List<(int kind, int id, int count, long amount, float dx)>();
+            return new List<(int kind, int id, int count, long amount)>();
         };
 
         world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner);
         Assert.AreEqual(0, heard);
+    }
+
+    // A player drop uses the same ground path: one uid, one count, at the feet.
+    [TestMethod]
+    public void DropItem_CreatesOneGroundDropAtFeet()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        var drop = world.DropItem(7, 100, 120, "use", DropKind.Item, 2000002, 5);
+        Assert.AreEqual(100f, drop.X);
+        Assert.AreEqual(120f, drop.Y); // no foothold: lands at the feet height
+        Assert.AreEqual(100f, drop.FromX);
+        Assert.AreEqual(120f, drop.FromY);
+        Assert.AreEqual("use", drop.Tab);
+        Assert.AreEqual(5, drop.Count);
+        Assert.AreEqual(1, world.DropsOn(7).Count);
+        Assert.AreEqual(drop.Uid, world.TakeDrops()[0].Uid);
+    }
+
+    // This only pins Inventory.Remove + MobWorld.DropItem together; it does not
+    // claim to run the client's quantity popup or DropFromBag UI wiring.
+    [TestMethod]
+    public void DropItem_FiveToThreeLeavesTwoAndOnePile()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        var chara = new CharaSlot { Use = new Dictionary<int, int> { [2000002] = 5 } };
+        Inventory.Ensure(chara);
+
+        Assert.IsTrue(Inventory.Remove(chara, "use", 2000002, 3));
+        var drop = world.DropItem(7, 100, 120, "use", DropKind.Item, 2000002, 3);
+
+        Assert.AreEqual(2, Inventory.Count(chara, "use", 2000002));
+        var drops = world.DropsOn(7);
+        Assert.AreEqual(1, drops.Count);
+        Assert.AreEqual(drop.Uid, drops[0].Uid);
+        Assert.AreEqual(3, drops[0].Count);
+    }
+
+    // The row is centred on the monster and every icon keeps its own width.
+    [TestMethod]
+    public void DropLayout_SpreadsByIconWidth()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Flat);
+        assets.AddMob(100000, 1);
+        assets.AddDrops(100000, "[]");
+        assets.AddItem(2000002, 20);
+        assets.AddItem(2000006, 30);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
+            { (DropKind.Item, 2000002, 1, 0), (DropKind.Item, 2000006, 1, 0) };
+
+        world.Strike(7, 60, 100, true, new Random(0), Progression.Beginner);
+        var fresh = world.TakeDrops();
+        var a = fresh.Find(d => d.Id == 2000002)!;
+        var b = fresh.Find(d => d.Id == 2000006)!;
+        Assert.AreEqual(97f, a.X); // row 74 wide: meso 24, then 20 and 30
+        Assert.AreEqual(122f, b.X); // second centre 97 + 10 + 15
+        Assert.AreEqual(100f, a.Y);
+    }
+
+    [TestMethod]
+    public void DropLayout_ClampsRowToLeftVrEdge()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":10,"Cy":100}]""", Flat, vrLeft: 0, vrRight: 1000);
+        assets.AddMob(100000, 1);
+        assets.AddDrops(100000, "[]");
+        assets.AddItem(2000002, 20);
+        assets.AddItem(2000006, 30);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
+            { (DropKind.Item, 2000002, 1, 0), (DropKind.Item, 2000006, 1, 0) };
+
+        world.Strike(7, 10, 100, true, new Random(0), Progression.Beginner);
+        var fresh = world.TakeDrops();
+        var a = fresh.Find(d => d.Id == 2000002)!;
+        var b = fresh.Find(d => d.Id == 2000006)!;
+        // The table always rolls a 24-wide meso first; the row is 74 wide.
+        Assert.AreEqual(12f, fresh[0].X); // meso centre at vrLeft + 12
+        Assert.AreEqual(34f, a.X); // 2000002 follows the 24-wide meso
+        Assert.AreEqual(59f, b.X);
+    }
+
+    [TestMethod]
+    public void DropLayout_WideRowStaysInsideVr()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":50,"Cy":100}]""", Flat, vrLeft: 0, vrRight: 100);
+        assets.AddMob(100000, 1);
+        assets.AddDrops(100000, "[]");
+        assets.AddItem(2000002, 60);
+        assets.AddItem(2000006, 60);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
+            { (DropKind.Item, 2000002, 1, 0), (DropKind.Item, 2000006, 1, 0) };
+
+        world.Strike(7, 50, 100, true, new Random(0), Progression.Beginner);
+        var fresh = world.TakeDrops();
+        Assert.AreEqual(3, fresh.Count); // meso + two items, none dropped
+        Assert.IsTrue(fresh.All(d => d.X >= 0f && d.X <= 100f));
     }
 }

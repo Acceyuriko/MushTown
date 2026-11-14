@@ -31,6 +31,10 @@ public static class UiPng
     // picture, like the delay of a frame, read here.
     public static Wz_Node? Node(WzRoot root, string nodePath) => WzNodeUtil.ResolveUol(root.Find(nodePath));
 
+    // The canvas width without writing the file (the drop row layout reads it).
+    public static int Width(WzRoot root, string category, string nodePath) =>
+        TryRead(root, category, nodePath, out Wz_Png? png, out _) ? png.Width : 0;
+
     // Same link walk without the save: exporters needing the origin read here.
     public static bool TryRead(WzRoot root, string category, string nodePath,
         [NotNullWhen(true)] out Wz_Png? png, out Wz_Vector? origin)

@@ -21,6 +21,7 @@ public sealed class Mob : Component
     public float Y;
     public float HomeX; // spawn feet: graves re-plant here, void falls land here
     public float HomeY;
+    public int BodyH; // standing frame height (drop source is the body centre)
     public bool FacingRight;
     public float TouchMs; // ms until this mob may touch again
     public int Level;

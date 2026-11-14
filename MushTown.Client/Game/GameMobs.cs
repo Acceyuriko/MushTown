@@ -180,6 +180,6 @@ public partial class MushTownGame
         foreach (var s in _localWorld.MobsOn(_mapId))
             ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);
         foreach (var d in _localWorld.DropsOn(_mapId))
-            ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount);
+            ApplyDropSpawn(d.Uid, d.X, d.Y, d.FromX, d.FromY, d.Tab, d.Kind, d.Id, d.Count, d.Amount, false);
     }
 }

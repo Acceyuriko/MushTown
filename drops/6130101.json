@@ -1,22 +1,12 @@
 {
   "MobId": 6130101,
-  "MesoMin": 150,
-  "MesoMax": 300,
+  "MesoMin": 29,
+  "MesoMax": 43,
   "Items": [
-    {
-      "Item": 2000000,
-      "Chance": 1.0,
-      "Count": 2
-    },
-    {
-      "Item": 2000003,
-      "Chance": 1.0,
-      "Count": 1
-    },
-    {
-      "Item": 1442004,
-      "Chance": 1.0,
-      "Count": 1
-    }
+    { "Item": 2000002, "Chance": 0.1, "Count": 1 },
+    { "Item": 2000006, "Chance": 0.1, "Count": 1 },
+    { "Item": 1040015, "Chance": 0.02, "Count": 1 },
+    { "Item": 1302007, "Chance": 0.02, "Count": 1 },
+    { "Item": 1040012, "Chance": 0.02, "Count": 1 }
   ]
 }

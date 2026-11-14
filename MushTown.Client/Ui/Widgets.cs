@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -843,6 +844,64 @@ public static class SysPopUi
         o.Add(new Rect(new Rectangle(x, y, lay.Get("popBtnW", 83), lay.Get("popBtnH", 26))));
         o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
         o.Add(new Image(stem)); // the official button art already carries its label
+        return o;
+    }
+
+    // The shared number-input popup: the NPC shop uses it for buy/sell, the
+    // inventory for dropping a stack. The caller wraps it in its own modal
+    // screen blocker when the popup must stop clicks behind it.
+    public static GameObject BuildQuantity(Rectangle box, Func<string> title, TextField field,
+        Func<int> max, Action confirm, Action cancel, PanelLayout lay)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(box));
+        o.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
+        var fieldBox = new GameObject();
+        fieldBox.Add(new Rect(new Rectangle(0, 47, box.Width, 44)));
+        fieldBox.Add(new Picture("ui/wm_pop_textbox.png"));
+        o.AddChild(fieldBox);
+        o.AddChild(TextAt(title, 0, lay.Get("qtyTextY", 34), box.Width, lay.Get("qtyTextH", 17)));
+        var input = new GameObject();
+        input.Add(new Rect(new Rectangle(lay.Get("qtyFieldX", 48), lay.Get("qtyFieldY", 62),
+            lay.Get("qtyFieldW", 200), lay.Get("qtyFieldH", 20))));
+        input.Add(field);
+        o.AddChild(input);
+        o.AddChild(ButtonAt("ui/shop_max",
+            lay.Get("qtyMaxX", 250), lay.Get("qtyMaxY", 61),
+            lay.Get("qtyMaxW", 41), lay.Get("qtyMaxH", 23), () =>
+            {
+                field.SetText(max().ToString());
+                field.ReplaceOnType = true;
+                field.Focus(Keyboard.GetState());
+            }));
+        o.AddChild(ButtonAt("ui/wm_pop_yes", lay.Get("qtyYesX", 73), lay.Get("qtyYesY", 105), confirm, lay));
+        o.AddChild(ButtonAt("ui/wm_pop_no", lay.Get("qtyNoX", 162), lay.Get("qtyNoY", 105), cancel, lay));
+        return o;
+    }
+
+    private static GameObject ButtonAt(string stem, int x, int y, int w, int h, Action onClick)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(x, y, w, h)));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+        o.Add(new Image(stem));
+        return o;
+    }
+
+    private static GameObject TextAt(Func<string> value, int x, int y, int w, int h)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(x, y, w, h)));
+        o.Add(new Text
+        {
+            Value = value,
+            X = 0,
+            W = w,
+            Ink = Color.White,
+            Line = TextLine.Middle,
+            Align = TextAlign.Center,
+            Font = LabelFont.Mid,
+        });
         return o;
     }
 }

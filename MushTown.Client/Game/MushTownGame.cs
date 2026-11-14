@@ -489,7 +489,7 @@ public partial class MushTownGame : Game
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "equipui" or "decorations" or "dec" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "equipui" or "decorations" or "dec" or "dropqty" or "dropqtymax" or "hud" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -543,7 +543,7 @@ public partial class MushTownGame : Game
         // Esc closes one layer. The chat keeps its own Esc (it leaves the input),
         // so the layer runs here, before the poll: a frame that closes a window
         // must not eat the click or the key the player pressed with it.
-        if (esc && _shopQtyId == 0 && !_chatWindow.Focused && !_worldMapWindow.SearchFocused)
+        if (esc && _shopQtyId == 0 && _dropQtyId == 0 && !_chatWindow.Focused && !_worldMapWindow.SearchFocused)
         {
             if (_worldMapWindow.EscLayer()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the world map closes its dialog and search board first
             if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
@@ -569,12 +569,18 @@ public partial class MushTownGame : Game
         if (_cashShopWindow.SearchFocused && click && !_cashShopWindow.SearchPanelAt(new Point(mx, my)))
             _cashShopWindow.UnfocusSearch();
         bool shopPopupOpen = _shopQtyId != 0;
-        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || _cashShopWindow.SearchFocused || shopPopupOpen || _cashUseId != 0; // typing must not fire the actions the same keys bind
+        bool dropPopupOpen = _dropQtyId != 0;
+        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || _cashShopWindow.SearchFocused || shopPopupOpen || dropPopupOpen || _cashUseId != 0; // typing must not fire the actions the same keys bind
         _input.Poll(kb, new Point(mx, my), click, held, ms.ScrollWheelValue);
         if (shopPopupOpen)
         {
             UpdateShopPopupKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
             UpdateShopPopupWheel();
+        }
+        if (dropPopupOpen)
+        {
+            UpdateDropPopupKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
+            UpdateDropPopupWheel();
         }
         // Enter starts a chat line: the input row only shows while one is typed.
         // The check sits before the chat block, so the Enter that sends a line
@@ -692,6 +698,7 @@ public partial class MushTownGame : Game
             float bestD2 = float.MaxValue;
             foreach (var kv in _drops)
             {
+                if (kv.Value.State != DropState.Resting) continue;
                 float dx = kv.Value.X - _mover.X, dy = kv.Value.Y - _mover.Y;
                 if (Math.Abs(dx) > MobWorld.PickDx || Math.Abs(dy) > MobWorld.PickDy) continue;
                 if (chara != null && !CanTakeDrop(kv.Value, chara)) continue; // full bag: leave it on the ground
@@ -704,7 +711,7 @@ public partial class MushTownGame : Game
                 else if (_localWorld != null)
                 {
                     var d = _localWorld.Pickup(best, _mapId, _mover.X, _mover.Y);
-                    if (d != null) ApplyDropTake(d.Uid, true, d.Kind, d.Id, d.Count, d.Amount);
+                    if (d != null) ApplyDropTake(d.Uid, -1, true, d.Kind, d.Id, d.Count, d.Amount);
                 }
             }
         }
@@ -747,6 +754,7 @@ public partial class MushTownGame : Game
         // Frame == Frames.Count, and the draw reads that frame. A number does
         // not crash, it just keeps drawing and ageing. All three belong here.
         MobArt.CollectDead(_mobs, _world);
+        DropArt.CollectDead(_drops, _world);
         PoolSweep.CollectDead(_numbers, _world, _numberPool);
         PoolSweep.CollectDead(_fx, _world, _fxPool);
         if (_mover.JumpSfx) PlaySfx("jump");
@@ -814,8 +822,8 @@ public partial class MushTownGame : Game
             while (_net.TryTakeDrop(out var d))
             {
                 if (d.Map != _mapId) continue; // another map's loot: not shown here
-                if (d.Spawn) ApplyDropSpawn(d.Uid, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount);
-                else ApplyDropTake(d.Uid, d.Taker == _net.PlayerId, d.Kind, d.Id, d.Count, d.Amount);
+                if (d.Spawn) ApplyDropSpawn(d.Uid, d.X, d.Y, d.FromX, d.FromY, d.Tab, d.Kind, d.Id, d.Count, d.Amount, d.Fresh);
+                else ApplyDropTake(d.Uid, d.Taker, d.Taker == _net.PlayerId, d.Kind, d.Id, d.Count, d.Amount);
             }
             while (_net.TryTakeFx(out var f))
             {
@@ -964,6 +972,7 @@ public partial class MushTownGame : Game
         if (name.Contains("hptip")) return (600, 720);
         if (name.Contains("itemtip")) return (1283, 376);
         if (name.Contains("npctip")) return (_minimap.Pos.X + _minimap.Rect().Width + 40, _minimap.Pos.Y + 39); // 41px into the panel (its left edge is 1px inside the window), the first row
+        if (name.Contains("dropqty")) return (1000, 300); // show the held potion beside the quantity popup
         return (-10, -10);
     }
 

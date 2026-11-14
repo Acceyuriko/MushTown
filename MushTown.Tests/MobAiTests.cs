@@ -382,7 +382,7 @@ public class MobAiTests
         world.Strike(7, -40, 100, true, new Random(0), Progression.Beginner);
         var fresh = world.TakeDrops();
         Assert.IsTrue(fresh.Count >= 1);
-        Assert.AreEqual(0f, fresh[0].X); // mesos at 5-7: clamped to the wall
+        Assert.AreEqual(12f, fresh[0].X); // row shifted to the wall: meso centre 12
         Assert.IsTrue(fresh.All(d => d.X >= 0));
     }
 

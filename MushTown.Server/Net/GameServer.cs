@@ -303,6 +303,11 @@ public sealed partial class GameServer : IDisposable
             OnPickup(id, BitConverter.ToInt32(payload, 1));
             return;
         }
+        if (payload[0] == Net.DropItem && payload.Length == 10)
+        {
+            OnDropItem(id, BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5), DropBagRule.Name(payload[9]));
+            return;
+        }
         if (payload[0] == Net.SkillCast && payload.Length == 9)
         {
             OnSkill(id, BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5));
@@ -581,6 +586,19 @@ public sealed partial class GameServer : IDisposable
             Broadcast(DropSpawnFrame(d));
     }
 
+    // A player drop: the item leaves the bag on that client, the server makes
+    // the ground drop from the sender's last State and broadcasts it.
+    private void OnDropItem(int id, int itemId, int count, string tab)
+    {
+        if (itemId <= 0 || count <= 0) return;
+        lock (_mobLock)
+        {
+            if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to drop from
+            _mobs.DropItem(p.map, p.x, p.y, tab, DropKind.Item, itemId, count);
+            BroadcastFreshDrops();
+        }
+    }
+
     // One drop gone: claimed (taker + loot) or expired (taker 0, no loot).
     private void BroadcastDropTake(int uid, int map, int taker, int kind, int id, int count, long amount) =>
         Broadcast(Net.Encode(Net.DropTake, w =>
@@ -651,10 +669,14 @@ public sealed partial class GameServer : IDisposable
             w.Write(d.Map);
             w.Write(d.X);
             w.Write(d.Y);
+            w.Write(d.FromX);
+            w.Write(d.FromY);
             w.Write(d.Kind);
             w.Write(d.Id);
             w.Write(d.Count);
             w.Write(d.Amount);
+            w.Write(d.Fresh);
+            w.Write(DropBagRule.Code(d.Tab));
         });
 
     private void Broadcast(byte[] frame, int exceptId = -1)

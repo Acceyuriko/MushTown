@@ -13,7 +13,16 @@ public sealed class TempAssets : IDisposable
         Dir = Path.Combine(Path.GetTempPath(), "mushtown-test-" + Guid.NewGuid(), "assets");
         Directory.CreateDirectory(Path.Combine(Dir, "maps"));
         Directory.CreateDirectory(Path.Combine(Dir, "mob"));
+        Directory.CreateDirectory(Path.Combine(Dir, "item"));
+        // The drop layout reads the icon width from the exported item def.
+        // Tests that place drops use these ids without a real export.
+        foreach (int id in new[] { 2000000, 2000002, 2000003, 2000006, 1040012, 1040015, 1302007, 1442004, 1040039 })
+            AddItem(id);
     }
+
+    public void AddItem(int id, int iconW = 24) =>
+        File.WriteAllText(Path.Combine(Dir, "item", $"{id}.json"),
+            $"{{\"ItemId\":{id},\"Name\":\"Item {id}\",\"Image\":\"item/{id}.png\",\"IconW\":{iconW}}}");
 
     public void AddMap(int map, string lifeJson = "[]", string fhJson = "[]",
         int vrLeft = -1000, int vrTop = -1000, int vrRight = 1000, int vrBottom = 1000) =>

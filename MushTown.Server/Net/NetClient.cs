@@ -158,6 +158,14 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.Pickup, w => w.Write(uid)));
     }
 
+    // Drop one bag stack at our feet. The server uses our last State for the
+    // map and position, then broadcasts the spawn. Tab is the bag it came from.
+    public bool SendDropItem(int itemId, int count, string tab)
+    {
+        if (!Connected) return false;
+        return SendFrame(Net.Encode(Net.DropItem, w => { w.Write(itemId); w.Write(count); w.Write(DropBagRule.Code(tab)); }));
+    }
+
     // Our name + plate, so peers draw our tag (sent on connect, re-sent on ring change).
     public void SendName(string name, int plate)
     {
@@ -260,17 +268,19 @@ public sealed class NetClient : IDisposable
         SendFrame(Net.Encode(Net.PartyHp, w => w.Write((byte)pct)));
     }
 
-    private void SendFrame(byte[] frame)
+    private bool SendFrame(byte[] frame)
     {
         try
         {
             lock (_sendLock)
                 _tcp!.GetStream().Write(frame);
+            return true;
         }
         catch (Exception ex)
         {
             _log($"send failed: {ex.Message}");
             Connected = false;
+            return false;
         }
     }
 
@@ -355,17 +365,18 @@ public sealed class NetClient : IDisposable
             _hurtEvents.Enqueue(new HurtEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
                 BitConverter.ToInt64(p, 13)));
-        else if (p[0] == Net.DropSpawn && p.Length == 37)
+        else if (p[0] == Net.DropSpawn && p.Length == 47)
             _dropEvents.Enqueue(new DropEvent(true,
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),
                 BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13),
-                BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21), BitConverter.ToInt32(p, 25),
-                BitConverter.ToInt64(p, 29), 0));
+                BitConverter.ToSingle(p, 17), BitConverter.ToSingle(p, 21),
+                BitConverter.ToInt32(p, 25), BitConverter.ToInt32(p, 29), BitConverter.ToInt32(p, 33),
+                BitConverter.ToInt64(p, 37), 0, p[45] != 0, DropBagRule.Name(p[46])));
         else if (p[0] == Net.DropTake && p.Length == 33)
             _dropEvents.Enqueue(new DropEvent(false,
-                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), 0, 0,
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), 0, 0, 0, 0,
                 BitConverter.ToInt32(p, 13), BitConverter.ToInt32(p, 17), BitConverter.ToInt32(p, 21),
-                BitConverter.ToInt64(p, 25), BitConverter.ToInt32(p, 9)));
+                BitConverter.ToInt64(p, 25), BitConverter.ToInt32(p, 9), false, ""));
         else if (p[0] == Net.QuestOk && p.Length == 6)
             _questEvents.Enqueue(new QuestEvent(false,
                 BitConverter.ToInt32(p, 1), 0, 0, p[5] != 0));

@@ -22,6 +22,13 @@ public partial class MushTownGame
     private int _cashUseId;
     private string _cashUseNotice = "";
 
+    // Player drop quantity: the hand's bag kind/id while the popup is open.
+    private readonly TextField _dropQtyField = new(_shopLay) { DigitsOnly = true, Limit = 10, Ink = Color.Black };
+    private int _dropQtyId;
+    private string _dropQtyKind = "";
+    private int _dropWheel;
+    private bool _showHeldDropCell; // staging only: keep the held stack visible in the bag
+
     private bool _invWide; // the wide window is open
     private bool _invPlaced; // the window took the spot from the layout file
 
@@ -168,6 +175,137 @@ public partial class MushTownGame
         PushName();
     }
 
+    // A bag item clicked into the world leaves the bag. One copy drops at
+    // once; a stack first asks how many through the shared NPC-shop box.
+    private bool DropBagOnWorld()
+    {
+        if (_hand.Empty) return false;
+        var chara = _save?.Slots[_slot];
+        if (chara == null) return false;
+        int count = Inventory.Count(chara, _hand.Kind!, _hand.Id);
+        if (count == 0) return false;
+        if (count == 1)
+        {
+            DropFromBag(chara, _hand.Kind!, _hand.Id, 1);
+            return true;
+        }
+        _dropQtyKind = _hand.Kind!;
+        _dropQtyId = _hand.Id;
+        _dropWheel = _input.Wheel;
+        _dropQtyField.SetText("1");
+        _dropQtyField.ReplaceOnType = true;
+        _dropQtyField.Focus(Keyboard.GetState());
+        BuildInvScene();
+        _invBuilt = true;
+        return true;
+    }
+
+    private void DropFromBag(CharaSlot chara, string kind, int id, int count)
+    {
+        bool online = _net != null && _net.Connected;
+        if (!online && _localWorld == null) return;
+        if (online && !_net!.SendDropItem(id, count, kind)) return; // send failed: bag stays
+        if (!Inventory.Remove(chara, kind, id, count)) return;
+        _hand.Return();
+        if (!online)
+        {
+            _localWorld!.DropItem(_mapId, _mover.X, _mover.Y, kind, DropKind.Item, id, count);
+            DrainDrops(_localWorld);
+        }
+        SaveChara();
+        LogEvent($"dropped {_items[id].Name} x{count}");
+    }
+
+    private int DropQuantityMax()
+    {
+        var chara = _save?.Slots[_slot];
+        return chara == null ? 1 : Math.Max(1, Inventory.Count(chara, _dropQtyKind, _dropQtyId));
+    }
+
+    private int DropQuantityCount() =>
+        Math.Clamp(int.TryParse(_dropQtyField.Text, out int n) ? n : 1, 1, DropQuantityMax());
+
+    private void ClampDropQuantity()
+    {
+        string text = DropQuantityCount().ToString();
+        if (_dropQtyField.Text == text) return;
+        _dropQtyField.SetText(text);
+        _dropQtyField.ReplaceOnType = true;
+    }
+
+    private void ConfirmDropQuantity()
+    {
+        string kind = _dropQtyKind;
+        int id = _dropQtyId;
+        int count = DropQuantityCount();
+        CloseDropQuantity();
+        var chara = _save?.Slots[_slot];
+        if (chara != null && kind != "") DropFromBag(chara, kind, id, count);
+    }
+
+    private void CloseDropQuantity()
+    {
+        _dropQtyId = 0;
+        _dropQtyKind = "";
+        _dropQtyField.Unfocus();
+        BuildInvScene();
+        _invBuilt = true;
+    }
+
+    private void UpdateDropPopupKeys(KeyboardState kb, float dtMs)
+    {
+        var key = _dropQtyField.Read(kb, dtMs);
+        ClampDropQuantity();
+        if (key == FieldKey.Leave) CloseDropQuantity();
+        else if (key == FieldKey.Submit) ConfirmDropQuantity();
+    }
+
+    private Rectangle DropPopupRect()
+    {
+        int w = _shopLay.Get("qtyW", 318), h = _shopLay.Get("qtyH", 150);
+        return new Rectangle((GameWidth - w) / 2 - _invPos.X, (GameHeight - h) / 2 - _invPos.Y, w, h);
+    }
+
+    private Rectangle DropQuantityFieldRect()
+    {
+        var popup = DropPopupRect();
+        return new Rectangle(_invPos.X + popup.X + _shopLay.Get("qtyFieldX", 48),
+            _invPos.Y + popup.Y + _shopLay.Get("qtyFieldY", 62),
+            _shopLay.Get("qtyFieldW", 200), _shopLay.Get("qtyFieldH", 20));
+    }
+
+    private void UpdateDropPopupWheel()
+    {
+        int delta = _input.Wheel - _dropWheel;
+        _dropWheel = _input.Wheel;
+        if (delta == 0 || _dropQtyId == 0) return;
+        if (!DropQuantityFieldRect().Contains(_input.Mouse)) return;
+        int step = delta / 120;
+        if (step == 0) step = Math.Sign(delta);
+        _dropQtyField.SetText(Math.Clamp((long)DropQuantityCount() + step, 1, DropQuantityMax()).ToString());
+        _dropQtyField.ReplaceOnType = true;
+    }
+
+    private GameObject DropQuantityPopup()
+    {
+        var root = new GameObject { Modal = true };
+        var block = new GameObject();
+        block.Add(new Rect(new Rectangle(-_invPos.X, -_invPos.Y, GameWidth, GameHeight)));
+        block.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => { } });
+        root.AddChild(block);
+        root.AddChild(SysPopUi.BuildQuantity(DropPopupRect(), () => "How many do you want to drop?",
+            _dropQtyField, DropQuantityMax, ConfirmDropQuantity, CloseDropQuantity, _shopLay));
+        return root;
+    }
+
+    private static GameObject PictureAt(string key, int x, int y, int w, int h)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(x, y, w, h)));
+        o.Add(new Picture(key));
+        return o;
+    }
+
     // A worn item dropped on the bag grid comes off. The bag decides where it
     // lands: a full bag refuses the drop and the item stays in hand.
     private bool DropWornHeld(int gx, int gy)
@@ -286,7 +424,7 @@ public partial class MushTownGame
             {
                 int i = index();
                 var chara = _save?.Slots[_slot];
-                return kind == "" || chara == null || (_hand.Kind == kind && _hand.Cell == i)
+                return kind == "" || chara == null || (!_showHeldDropCell && _hand.Kind == kind && _hand.Cell == i)
                     ? 0
                     : Inventory.Count(chara, kind, ItemId(kind, i));
             }));
@@ -326,6 +464,7 @@ public partial class MushTownGame
         body.AddChild(coin);
         _invHost.AddChild(body);
         if (_cashUseId != 0) _invHost.AddChild(CashUsePopup());
+        if (_dropQtyId != 0) _invHost.AddChild(DropQuantityPopup());
         _invBuiltTab = _invTab;
     }
 
@@ -365,7 +504,7 @@ public partial class MushTownGame
             LoadTexture($"ui/tip_{side}.png"); // the tooltip frame: the stat window loads it too, this one must not depend on that
         foreach (string pop in new[] { "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png", "wm_pop_textbox.png" })
             LoadTexture("ui/" + pop);
-        foreach (string b in new[] { "wm_pop_yes", "wm_pop_no" })
+        foreach (string b in new[] { "wm_pop_yes", "wm_pop_no", "shop_max" })
             foreach (string s in new[] { "n", "h", "p" })
                 LoadTexture($"ui/{b}_{s}.png");
     }
@@ -539,6 +678,27 @@ public partial class MushTownGame
     {
         _invTab = 4; // 0 Equip, 1 Use, 2 Etc, 3 Set-up, 4 Cash, 5 Dec
         OpenCashUse(id);
+    }
+
+    // --screen dropqty/dropqtymax: show five Red Potions in the bag and one held,
+    // then open the real drop quantity popup. dropqtymax also fills MAX.
+    internal void PoseDropQuantity(bool fillMax = false)
+    {
+        var chara = _save!.Slots[_slot]!;
+        const int id = ItemData.RedPotion;
+        chara.Use = new Dictionary<int, int> { [id] = 5 };
+        chara.UseOrder = new List<int>(new int[Inventory.Capacity]);
+        chara.UseOrder[1] = id; // the held stack sits at cell 1; cell 0 stays empty
+        _showHeldDropCell = true;
+        _invTab = 1;
+        _hand.Return();
+        _hand.Click(chara, "use", id, _items, MaxHpNow(), MaxMpNow(), _timeMs, 1);
+        if (!DropBagOnWorld()) throw new InvalidDataException("dropqty needs a held potion");
+        if (fillMax)
+        {
+            _dropQtyField.SetText(DropQuantityMax().ToString());
+            _dropQtyField.ReplaceOnType = true;
+        }
     }
 
     private void ConfirmCashName()

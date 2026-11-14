@@ -364,71 +364,19 @@ public partial class MushTownGame
         return o;
     }
 
-    // The shared number-input popup: the same sysPop frame the system dialogs
-    // use. One prompt line, the official input box and MAX button, then Yes/Cancel.
-    // Buying and selling both use it; only the prompt, max and confirm differ.
+    // The shared number-input popup: buying and selling both use it; only the
+    // prompt, max and confirm differ.
     private GameObject ShopQuantityPopup()
     {
-        var box = ShopPopupRect();
-        var popup = new GameObject();
-        popup.Add(new Rect(box));
-        popup.AddChild(PictureAt("ui/wm_pop_top.png", 0, 0, box.Width, 30));
-        popup.AddChild(PictureAt("ui/wm_pop_mid.png", 0, 30, box.Width, 17));
-        popup.AddChild(PictureAt("ui/wm_pop_textbox.png", 0, 47, box.Width, 44));
-        popup.AddChild(PictureAt("ui/wm_pop_bottom.png", 0, 91, box.Width, 59));
-        popup.AddChild(ShopPopupText(() => _shopQtySelling ? "How many do you want to sell?" : "How many do you want to buy?",
-            0, _shopLay.Get("qtyTextY", 34), box.Width, _shopLay.Get("qtyTextH", 17)));
-
-        var input = new GameObject();
-        input.Add(new Rect(new Rectangle(_shopLay.Get("qtyFieldX", 48), _shopLay.Get("qtyFieldY", 62),
-            _shopLay.Get("qtyFieldW", 200), _shopLay.Get("qtyFieldH", 20))));
-        input.Add(_shopQtyField);
-        popup.AddChild(input);
-
-        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("qtyMaxX", 250), _shopLay.Get("qtyMaxY", 61),
-            _shopLay.Get("qtyMaxW", 41), _shopLay.Get("qtyMaxH", 23)), "ui/shop_max", SetQuantityMax));
-        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("qtyYesX", 73), _shopLay.Get("qtyYesY", 105), 83, 26),
-            "ui/wm_pop_yes", () => { if (_shopQtySelling) ConfirmSell(); else ConfirmBuy(); }));
-        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("qtyNoX", 162), _shopLay.Get("qtyNoY", 105), 83, 26),
-            "ui/wm_pop_no", CloseQuantityPopup));
+        var popup = SysPopUi.BuildQuantity(ShopPopupRect(),
+            () => _shopQtySelling ? "How many do you want to sell?" : "How many do you want to buy?",
+            _shopQtyField, ShopQuantityMax, () => { if (_shopQtySelling) ConfirmSell(); else ConfirmBuy(); },
+            CloseQuantityPopup, _shopLay);
 
         var root = new GameObject { Modal = true };
         root.AddChild(PanelButton(ShopRect(), "shopquantityblock", () => { }, ButtonKind.Silent));
         root.AddChild(popup);
         return root;
-    }
-
-    private void SetQuantityMax()
-    {
-        int max = ShopQuantityMax();
-        _shopQtyField.SetText(max.ToString());
-        _shopQtyField.ReplaceOnType = true;
-        _shopQtyField.Focus(Keyboard.GetState());
-    }
-
-    private static GameObject PictureAt(string key, int x, int y, int w, int h)
-    {
-        var o = new GameObject();
-        o.Add(new Rect(new Rectangle(x, y, w, h)));
-        o.Add(new Picture(key));
-        return o;
-    }
-
-    private static GameObject ShopPopupText(Func<string> value, int x, int y, int w, int h)
-    {
-        var o = new GameObject();
-        o.Add(new Rect(new Rectangle(x, y, w, h)));
-        o.Add(new Text
-        {
-            Value = value,
-            X = 0,
-            W = w,
-            Ink = Color.White,
-            Line = TextLine.Middle,
-            Align = TextAlign.Center,
-            Font = LabelFont.Mid,
-        });
-        return o;
     }
 
     private GameObject ShopNoticeBox()

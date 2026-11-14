@@ -300,6 +300,7 @@ public partial class MushTownGame
         // What the click is about to hit, read before any button runs: a
         // button may rebuild its own layer and detach the hit object.
         var top = _uiScene.TopAt(gx, gy);
+        if (!_uiScene.ModalOpen && top == null && DropBagOnWorld()) { PlaySfx("click"); return; } // a bag item dropped on the world leaves the bag
         if (CancelSlotHoldOnWorldClick(gx, gy, top)) return; // a held quick slot dropped on the world: its key is cleared
         ClearHeld(); // nothing there: the piece goes back where it came from
         if (_talkNpc == 0)

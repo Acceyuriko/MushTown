@@ -89,11 +89,19 @@ public partial class MushTownGame
                     int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
                     foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, true, new Random(0), CurrentBuild(), _shotSkill, pct))
                         ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
-                    DrainDrops(world);
+                    DrainDrops(world, animate: false);
                 }
             }
             else if (_shotDrop)
             {
+                // Fixed extra payouts so the shot proves several icons lay out
+                // in one row; source data still comes from the exported defs.
+                world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
+                {
+                    (DropKind.Item, 2000002, 1, 0),
+                    (DropKind.Item, 2000006, 1, 0),
+                    (DropKind.Item, 1302007, 1, 0),
+                };
                 // swing until the first kill (one fixed seed: same corpse, same loot)
                 var rng = new Random(0);
                 bool killed = false;
@@ -104,13 +112,24 @@ public partial class MushTownGame
                         killed |= h.HpLeft == 0;
                     }
                 if (!killed) throw new InvalidDataException($"--drop killed nothing in 20 swings, map {_mapId}");
-                DrainDrops(world);
+                DrainDrops(world, animate: false);
+                // the corpse would cover the row: this shot only proves the drops
+                if (_mobs.Remove(first.Uid, out var corpse)) _world.RemoveChild(corpse.Owner);
+                // stand clear of the row, so every payout stays visible
+                _mover.X -= 200;
+                _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, (int)_mover.Y)
+                    ?? throw new InvalidDataException($"--drop found no ground 200px left of mob {first.Mob}");
+                _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
+                ResetMotion();
+                _mover.FacingRight = true;
+                _mover.Action = "stand1";
+                _frame = 0;
             }
             else
             {
                 foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, new Random(0), CurrentBuild()))
                     ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
-                DrainDrops(world);
+                DrainDrops(world, animate: false);
             }
         }
         RunShotAi();

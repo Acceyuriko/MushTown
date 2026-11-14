@@ -25,8 +25,12 @@ public sealed class MobWorld
     // client folds DEF and drains HP (death respawns at the map spawn).
     public sealed record Hurt(int Victim, int Uid, int Mob, int Map, long Damage);
 
-    // One ground drop: Kind is Mesos (Amount) or Item (Id + Count).
-    public sealed record Drop(int Uid, int Map, float X, float Y, int Kind, int Id, int Count, long Amount);
+    // One ground drop: Kind is Mesos (Amount) or Item (Id + Count). Tab is the
+    // bag a taken item returns to ("" for mesos). FromX/FromY is where the icon
+    // pops from (monster centre or player feet); X/Y is the landing spot.
+    // Fresh false is an entry snapshot: the client shows it at rest.
+    public sealed record Drop(int Uid, int Map, float X, float Y, int Kind, int Id, int Count, long Amount,
+        float FromX = 0, float FromY = 0, bool Fresh = true, string Tab = "");
 
     // One tick's events, in wire order: moves snap poses, hurts drain HP,
     // spawns re-plant the respawned, takes clear expired drops. Kill drops
@@ -65,14 +69,18 @@ public sealed class MobWorld
         public int Id;
         public int Count;
         public long Amount;
+        public string Tab = "";
+        public float FromX;
+        public float FromY;
         public float MsLeft;
     }
 
     private readonly string _assetsDir;
     private readonly Dictionary<int, MapData> _maps = new();
-    private readonly Dictionary<int, (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr)> _stats = new();
+    private readonly Dictionary<int, (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr, int bodyH)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
     private readonly Dictionary<int, DropTable> _dropTables = new();
+    private readonly Dictionary<int, ItemData> _itemDefs = new();
     private readonly List<Mob> _lives = new();
     private readonly List<Grave> _graves = new();
     private readonly List<GroundDrop> _drops = new();
@@ -117,7 +125,8 @@ public sealed class MobWorld
                     throw new InvalidDataException($"mob {life.MobId} has bad stats (hp {mob.MaxHp}, def {mob.Def}, exp {mob.Exp})");
                 if (mob.Touch < 0 || mob.Speed <= 0 || mob.Aggro < 0)
                     throw new InvalidDataException($"mob {life.MobId} has bad ai stats (touch {mob.Touch}, speed {mob.Speed}, aggro {mob.Aggro})");
-                st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss, mob.Level, mob.ElemAttr);
+                int bodyH = mob.Actions.FirstOrDefault(a => a.Name == "stand")?.Frames.FirstOrDefault()?.OriginY ?? 0;
+                st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss, mob.Level, mob.ElemAttr, bodyH);
                 _stats[life.MobId] = st;
                 _dropTables[life.MobId] = new DropTable(LoadDropTable(life.MobId));
             }
@@ -130,7 +139,7 @@ public sealed class MobWorld
     // One fresh body at the spawn feet (first plant and respawns share it).
     // Mobs face left until the AI turns them.
     private static Mob Plant(int uid, int mob, int map, float x, float y,
-        (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr) st) => new()
+        (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr, int bodyH) st) => new()
         {
             Uid = uid,
             MobId = mob,
@@ -139,6 +148,7 @@ public sealed class MobWorld
             Y = y,
             HomeX = x,
             HomeY = y,
+            BodyH = st.bodyH,
             Level = st.level,
             ElemAttr = st.elemAttr,
             Hp = st.hp,
@@ -168,7 +178,7 @@ public sealed class MobWorld
         var list = new List<Drop>();
         foreach (var d in _drops)
             if (d.Map == map)
-                list.Add(new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount));
+                list.Add(new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount, d.X, d.Y, false, d.Tab));
         return list;
     }
 
@@ -239,16 +249,26 @@ public sealed class MobWorld
             if (d.Map != map || Math.Abs(x - d.X) > PickDx || Math.Abs(y - d.Y) > PickDy)
                 return null;
             _drops.RemoveAt(i);
-            return new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount);
+            return new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount, d.FromX, d.FromY, true, d.Tab);
         }
         return null;
     }
 
+    // One player-dropped item at the player's feet. The map must already be
+    // loaded (a State entered it); tab is the bag it came from, the icon pops
+    // from the feet and lands on the ground below. The caller broadcasts the
+    // returned Drop.
+    public Drop DropItem(int map, float x, float y, string tab, int kind, int id, int count)
+    {
+        var data = _maps[map];
+        return AddDrop(data, map, x, y, x, y, tab, kind, id, count, 0);
+    }
+
     // Quest-scripted bonus lines per kill: (mob, attacker) -> extra payouts
-    // (kind/id/count/amount/dx, placed like table rolls). Null in v1 (the bag
-    // holds no quest items yet); the hook stays so the first scripted
-    // drop needs no rewire. attacker 0 is the local player.
-    public Func<int, int, List<(int kind, int id, int count, long amount, float dx)>>? BonusDrops { get; set; }
+    // (kind/id/count/amount, placed in the same row as table rolls). Null in
+    // v1 (the bag holds no quest items yet); the hook stays so the first
+    // scripted drop needs no rewire. attacker 0 is the local player.
+    public Func<int, int, List<(int kind, int id, int count, long amount)>>? BonusDrops { get; set; }
 
     // One basic-attack swing at (x, y): every mob in reach takes one damage
     // roll, and the dead are removed. rng comes from the caller (tests pass a seed).
@@ -376,37 +396,92 @@ public sealed class MobWorld
     }
 
     // One kill's loot (the Loot act): the table rolls once, bonus lines
-    // append, the world places every payout (EnterMap loads every spawned
-    // mob's table; lives only exist after EnterMap loaded it).
+    // append, then the whole payout lays out as one row around the corpse
+    // (EnterMap loads every spawned mob's table; lives only exist after it).
     private void DropKill(Mob m, Random rng, int attacker)
     {
-        var data = _maps[m.Map];
-        var table = _dropTables[m.MobId];
-        foreach (var p in table.Roll(rng))
-            DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count, p.amount);
-        if (BonusDrops != null)
-            foreach (var p in BonusDrops(m.MobId, attacker))
-                DropOne(data, m, m.X + p.dx, p.kind, p.id, p.count, p.amount);
+        var payouts = _dropTables[m.MobId].Roll(rng);
+        if (BonusDrops != null) payouts.AddRange(BonusDrops(m.MobId, attacker));
+        PlacePayouts(m, payouts, rng);
     }
 
-    // One loot drop: clamped inside the VR, lands on the ground below.
-    private void DropOne(MapData data, Mob m, float x, int kind, int id, int count, long amount)
+    // One kill's payouts: icons left-to-right with no gap, the row centred on
+    // the corpse. A row wider than the map VR puts every icon at a random x
+    // inside the VR (overlap allowed). Each icon lands on the ground below.
+    private void PlacePayouts(Mob m, List<(int kind, int id, int count, long amount)> payouts, Random rng)
+    {
+        var data = _maps[m.Map];
+        float width = 0;
+        foreach (var p in payouts) width += DropWidth(p.kind, p.id);
+        float vrLeft = data.Info.VrLeft, vrRight = data.Info.VrRight;
+        if (width > vrRight - vrLeft)
+        {
+            foreach (var p in payouts)
+            {
+                float x = vrLeft + (float)rng.NextDouble() * (vrRight - vrLeft);
+                AddDrop(data, m.Map, x, m.Y, m.X, m.Y - m.BodyH / 2f, DropBag(p.kind, p.id), p.kind, p.id, p.count, p.amount);
+            }
+            return;
+        }
+        float left = m.X - width / 2f;
+        if (left < vrLeft) left = vrLeft;
+        else if (left + width > vrRight) left = vrRight - width;
+        float cursor = left;
+        foreach (var p in payouts)
+        {
+            float w = DropWidth(p.kind, p.id);
+            AddDrop(data, m.Map, cursor + w / 2f, m.Y, m.X, m.Y - m.BodyH / 2f, DropBag(p.kind, p.id), p.kind, p.id, p.count, p.amount);
+            cursor += w;
+        }
+    }
+
+    private float DropWidth(int kind, int id) => kind == DropKind.Mesos ? 24f : IconWidth(id);
+
+    private string DropBag(int kind, int id) =>
+        kind == DropKind.Mesos ? "" : DropBagRule.ForMonster(ItemDef(id));
+
+    // The item def and its info/icon width, cached per id. Item defs are repo
+    // data; a missing or old def fails loud so the row never guesses.
+    private ItemData ItemDef(int id)
+    {
+        if (_itemDefs.TryGetValue(id, out var data)) return data;
+        string path = Path.Combine(_assetsDir, "item", $"{id}.json");
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"missing item def for drop {id}: {Path.GetFullPath(path)}", path);
+        data = LoadJson<ItemData>(path);
+        if (data.IconW <= 0)
+            throw new InvalidDataException($"item {id} has no icon width (rerun the exporter)");
+        _itemDefs[id] = data;
+        return data;
+    }
+
+    private int IconWidth(int id) => ItemDef(id).IconW;
+
+    // One loot drop at (x, y): clamped inside the VR, lands on the ground
+    // below. FromX/FromY is the pop-out source; tab is the bag it returns to.
+    private Drop AddDrop(MapData data, int map, float x, float y, float fromX, float fromY, string tab,
+        int kind, int id, int count, long amount)
     {
         float cx = Math.Clamp(x, data.Info.VrLeft, data.Info.VrRight);
         var d = new GroundDrop
         {
             Uid = _nextDrop++,
-            Map = m.Map,
+            Map = map,
             X = cx,
-            Y = LandY(data.Footholds, cx, m.Y),
+            Y = LandY(data.Footholds, cx, y),
             Kind = kind,
             Id = id,
             Count = count,
             Amount = amount,
+            Tab = tab,
+            FromX = fromX,
+            FromY = fromY,
             MsLeft = DropMs
         };
         _drops.Add(d);
-        _fresh.Add(new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount));
+        var drop = new Drop(d.Uid, d.Map, d.X, d.Y, d.Kind, d.Id, d.Count, d.Amount, d.FromX, d.FromY, true, d.Tab);
+        _fresh.Add(drop);
+        return drop;
     }
 
     // Drop landing height: the first ground at or below the kill, else the
