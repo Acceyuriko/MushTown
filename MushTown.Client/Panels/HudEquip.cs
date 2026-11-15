@@ -329,6 +329,7 @@ public partial class MushTownGame
             PushBuild(); // gear stats changed
             PushName(); // the name plate reads the worn gear too
         }
+        PushAppearance(); // both gear and cash fashion change the doll
         return true;
     }
 }

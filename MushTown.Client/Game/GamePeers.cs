@@ -9,6 +9,7 @@ public partial class MushTownGame
     {
         foreach (var r in _remotes.Values) _world.RemoveChild(r.Owner);
         _remotes.Clear();
+        _appearances.Clear();
     }
 
     // One peer gone (left or walked to another map): the Owner leaves with
@@ -25,7 +26,7 @@ public partial class MushTownGame
         if (!_remotes.TryGetValue(e.Id, out var p))
         {
             var o = new GameObject();
-            p = o.Add(new PeerArt { Id = e.Id });
+            p = o.Add(new PeerArt(e.Id, _appearances));
             var plate = o.Add(new PlateArt());
             _world.AddChild(o);
             _remotes[e.Id] = p;
@@ -36,6 +37,17 @@ public partial class MushTownGame
         p.Action = e.Action;
         p.Frame = e.Frame;
         p.FacingRight = e.FacingRight;
+    }
+
+    // Looks can beat the first State: store by player id, and repaint a peer
+    // that already exists. A later State then spawns with the stored look.
+    private void DrainAppearances()
+    {
+        while (_net!.TryTakeAppearance(out var look))
+        {
+            _appearances[look.Id] = look;
+            if (_remotes.TryGetValue(look.Id, out var p)) p.SetAppearance(look);
+        }
     }
 
     // The hero's plate follows the live chara (name + worn ring). Update

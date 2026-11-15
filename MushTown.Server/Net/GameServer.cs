@@ -30,6 +30,7 @@ public sealed partial class GameServer : IDisposable
     private readonly HashSet<int> _away = new(); // in the cash shop: out of _pos, no attacks/pickups/party invites
     private readonly Dictionary<int, Build> _builds = new(); // combat stats per client (missing = beginner default)
     private readonly Dictionary<int, (string name, int plate)> _names = new(); // name tags per client (missing = CLI session)
+    private readonly Dictionary<int, AppearanceEvent> _appearances = new(); // latest look per client (missing = plain beginner)
     private readonly Dictionary<int, QuestData> _questDefs = new(); // quest defs (shared ref: one log per client over these)
     private readonly Dictionary<int, (QuestLog log, CharaSlot chara)> _questLogs = new(); // quest copies per client (missing = CLI or pre-Sync)
     private readonly Dictionary<int, HashSet<int>> _questDropped = new(); // quests whose complete/forfeit already landed: a trailing Sync must not restore them
@@ -197,6 +198,7 @@ public sealed partial class GameServer : IDisposable
             _away.Remove(id);
             _builds.Remove(id);
             _names.Remove(id);
+            _appearances.Remove(id);
             _questLogs.Remove(id);
             _questDropped.Remove(id);
         }
@@ -227,9 +229,9 @@ public sealed partial class GameServer : IDisposable
         if (had) Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
     }
 
-    // Clients send State, Attack, Build, SkillCast, Pickup, Name, Chat, CashShop,
-    // the quest trio (Sync/Accept/Complete) and the party messages; anything
-    // else means a foreign client.
+    // Clients send State, Attack, Build, SkillCast, Pickup, Name, Appearance,
+    // Chat, CashShop, the quest trio (Sync/Accept/Complete) and the party
+    // messages; anything else means a foreign client.
     // The map id only detects switches (each client filters by its own map).
     private void OnMessage(int id, byte[] payload)
     {
@@ -276,6 +278,11 @@ public sealed partial class GameServer : IDisposable
         if (payload[0] == Net.Name)
         {
             OnName(id, payload);
+            return;
+        }
+        if (payload[0] == Net.Appearance)
+        {
+            OnAppearance(id, payload);
             return;
         }
         if (payload[0] == Net.Chat)
@@ -348,8 +355,60 @@ public sealed partial class GameServer : IDisposable
         }
         if (switched)
             Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
-        if (first || switched) PushMobs(id, map);
+        if (first || switched)
+        {
+            PushMobs(id, map);
+            SyncAppearances(id, map);
+        }
         Broadcast(Net.Frame(payload), id);
+    }
+
+    // A client's look: stored so a map entry can replay it, and relayed to the
+    // same map when the client is already there. It can beat the first State
+    // (the client sends it on connect); the map sync then carries it.
+    private void OnAppearance(int id, byte[] payload)
+    {
+        AppearanceEvent look;
+        try
+        {
+            using var ms = new MemoryStream(payload, 1, payload.Length - 1);
+            using var r = new BinaryReader(ms);
+            look = Net.ReadAppearance(r, id);
+        }
+        catch (Exception ex) when (ex is IOException or FormatException)
+        {
+            throw new InvalidDataException($"bad appearance from {id} ({ex.Message})");
+        }
+        byte[] frame = Net.AppearanceFrame(look);
+        lock (_mobLock)
+        {
+            _appearances[id] = look;
+            if (_pos.TryGetValue(id, out var p)) SendToMap(p.map, frame, id);
+        }
+    }
+
+    // A player entering a map: send it every look on that map, and send its
+    // own look to them. The client stores a look before the matching State,
+    // so either order is safe.
+    private void SyncAppearances(int id, int map)
+    {
+        var client = _clients[id]; // our own read loop: this id is always present
+        lock (_mobLock)
+        {
+            foreach (var kv in _appearances)
+                if (kv.Key != id && _pos.TryGetValue(kv.Key, out var p) && p.map == map)
+                    Send(client, Net.AppearanceFrame(kv.Value));
+            if (_appearances.TryGetValue(id, out var mine))
+                SendToMap(map, Net.AppearanceFrame(mine), id);
+        }
+    }
+
+    // One frame to every client on a map except the sender. Caller holds _mobLock.
+    private void SendToMap(int map, byte[] frame, int exceptId)
+    {
+        foreach (var kv in _pos)
+            if (kv.Key != exceptId && kv.Value.map == map && _clients.TryGetValue(kv.Key, out var client))
+                Send(client, frame);
     }
 
     // A client's name + plate: stored and relayed to every other client (a

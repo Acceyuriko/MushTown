@@ -29,13 +29,14 @@ public partial class MushTownGame
                 DrawName(centerX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
         }
         ));
-        foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers draw the plain body until appearance sync (week 13)
+        foreach (var r in _remotes.Values.OrderBy(r => r.Id)) // peers draw their synced look, or the plain body until it arrives
         {
             int rx = (int)Math.Floor(r.X), ry = (int)Math.Floor(r.Y);
             var plate = r.Owner.Get<PlateArt>()!; // spawn always hangs one
             draws.Add((ry, () =>
             {
-                int centerX = DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight);
+                int centerX = DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight,
+                    r.Skin, r.Equips, r.CashWorn, r.Hair, r.Face);
                 int hpPct = PartyHpOf(r.Id);
                 if (hpPct >= 0)
                     DrawPartyHeadHp(centerX - _camera.X, ry - _camera.Y, hpPct);

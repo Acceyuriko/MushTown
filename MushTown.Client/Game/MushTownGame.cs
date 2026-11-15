@@ -89,6 +89,7 @@ public partial class MushTownGame : Game
     private MinimapWindow _minimap = null!; // the minimap window
     private WorldMapWindow _worldMapWindow = null!; // the world map window
     private readonly Dictionary<int, PeerArt> _remotes = new();
+    private readonly Dictionary<int, AppearanceEvent> _appearances = new(); // latest look per peer id, before or after its State
     private readonly PlateArt _heroPlate = new(); // the hero's tag rides the player object (SyncHeroPlate fills it)
 
     // Mobs, keyed by server uid. Shot mode and dropped links drive a local
@@ -800,6 +801,7 @@ public partial class MushTownGame : Game
         {
             if (_net.Connected)
                 _net.SendState(_mapId, _mover.X, _mover.Y, Net.ActionCode(_mover.Action), (byte)_frame, _mover.FacingRight);
+            DrainAppearances(); // before states: a new PeerArt takes its look from the table
             while (_net.TryTake(out var e))
                 if (e.Gone)
                     RemovePeer(e.Id); // the name stays: ids never repeat, and a map-switch Gone is not a goodbye

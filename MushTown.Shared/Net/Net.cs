@@ -1,6 +1,6 @@
 namespace MushTown.Shared;
 
-// W5 net protocol (extended in W8): TCP, one 4-byte little-endian length header, then a payload
+// W5 net protocol (extended through W13): TCP, one 4-byte little-endian length header, then a payload
 // of type byte + body. Both ends run the same build, so no versioning yet.
 public static class Net
 {
@@ -44,6 +44,7 @@ public static class Net
     public const byte PartyHp = 35; // client -> server: byte HP percent (0..100)
     public const byte CashShop = 36; // client -> server: no body (the player stepped out of the map; the next State returns)
     public const byte DropItem = 37; // client -> server: int itemId, int count, byte tab (drop at the last State's map/x/y; tab 4 = mesos, the two ints are a long amount)
+    public const byte Appearance = 38; // client -> server: appearance body; the server relays int id + body to the same map
 
     // A meso drop rides DropItem with tab 4: itemId holds the high 32 bits and
     // count the low 32, so the amount stays one long without a new command.
@@ -128,6 +129,51 @@ public static class Net
         payload.CopyTo(frame, 4);
         return frame;
     }
+
+    // The appearance body, without a player id: the sender writes it, the
+    // server reads it, prepends the id, and relays it.
+    public static void WriteAppearance(BinaryWriter w, int skin, int hair, int face,
+        IReadOnlyList<int> cashWorn, IReadOnlyList<int> equips)
+    {
+        w.Write((byte)skin);
+        w.Write(hair);
+        w.Write(face);
+        w.Write(cashWorn.Count);
+        foreach (int id in cashWorn) w.Write(id);
+        w.Write(equips.Count);
+        foreach (int id in equips) w.Write(id);
+    }
+
+    public static AppearanceEvent ReadAppearance(BinaryReader r, int id)
+    {
+        int skin = r.ReadByte();
+        int hair = r.ReadInt32();
+        int face = r.ReadInt32();
+        int cashCount = ReadCount(r, "cash worn");
+        var cashWorn = new int[cashCount];
+        for (int i = 0; i < cashCount; i++) cashWorn[i] = r.ReadInt32();
+        int equipCount = ReadCount(r, "equips");
+        var equips = new int[equipCount];
+        for (int i = 0; i < equipCount; i++) equips[i] = r.ReadInt32();
+        return new AppearanceEvent(id, skin, hair, face, cashWorn, equips);
+    }
+
+    // A bad count must fail before anything allocates: a 1KB frame can hold
+    // hundreds of ids, but a doll has at most two dozen pieces.
+    private static int ReadCount(BinaryReader r, string name)
+    {
+        int count = r.ReadInt32();
+        if (count is < 0 or > 64) throw new FormatException($"bad appearance {name} count {count}");
+        return count;
+    }
+
+    // The relayed frame: the sender id, then the same body.
+    public static byte[] AppearanceFrame(AppearanceEvent a) =>
+        Encode(Appearance, w =>
+        {
+            w.Write(a.Id);
+            WriteAppearance(w, a.Skin, a.Hair, a.Face, a.CashWorn, a.Equips);
+        });
 }
 
 // One event from the network for the game loop: a peer's fresh state,
@@ -138,6 +184,11 @@ public readonly record struct RemoteEvent(
 // One peer's name for the game loop: sent on connect and re-sent when the
 // plate changes (ring worn or taken off). Plate is the NameTag node (0 = plain).
 public readonly record struct NameEvent(int Id, string Name, int Plate);
+
+// One peer's look: skin, hair, face and the two worn lists. The client sends
+// it on connect and after every look change; the server relays it with the
+// sender id. Missing lists are empty, never null.
+public readonly record struct AppearanceEvent(int Id, int Skin, int Hair, int Face, int[] CashWorn, int[] Equips);
 
 // One mob event from the server: a spawn (Spawn true, Mob/MaxHp set, HpLeft
 // is the live HP) or a hit (Spawn false, Damage/HpLeft set, HpLeft 0 means dead).

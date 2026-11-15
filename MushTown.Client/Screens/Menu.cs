@@ -700,7 +700,7 @@ public partial class MushTownGame
         _net = new NetClient(GameLog);
         _net.Connect(host ? "127.0.0.1" : joinHost!);
         var chara = _save?.Slots[_slot];
-        if (chara != null) { PushBuild(); PushName(); PushQuestSync(); } // CLI sessions skip: the server defaults them to beginner
+        if (chara != null) { PushBuild(); PushName(); PushAppearance(); PushQuestSync(); } // CLI sessions skip: the server defaults them to beginner
     }
 
     // One hit test for clicks and hovers (the menu Update keeps a short closure over this).

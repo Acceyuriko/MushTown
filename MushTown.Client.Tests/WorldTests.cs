@@ -253,4 +253,26 @@ public class WorldTests
         p.Update(0.1f); // the second frame wraps back to the first
         Assert.AreEqual(0, p.Frame);
     }
+
+    [TestMethod]
+    public void PeerArt_NewFromLookTable_KeepsLookBeforeState()
+    {
+        var look = new AppearanceEvent(7, 4, 30020, 20000,
+            new[] { 1701000, 1040001 }, new[] { 1302007, 1040015 });
+        var p = new PeerArt(7, new Dictionary<int, AppearanceEvent> { [7] = look });
+        Assert.AreEqual(7, p.Id);
+        Assert.AreEqual(4, p.Skin);
+        Assert.AreEqual(30020, p.Hair);
+        Assert.AreEqual(20000, p.Face);
+        CollectionAssert.AreEqual(new[] { 1701000, 1040001 }, p.CashWorn);
+        CollectionAssert.AreEqual(new[] { 1302007, 1040015 }, p.Equips);
+    }
+
+    [TestMethod]
+    public void AddGearParts_UnknownId_AddsNothing()
+    {
+        var parts = new List<CharaPart>();
+        MushTownGame.AddGearParts(parts, 999999, "stand1", 0, new Dictionary<(string, string), CharaData>());
+        Assert.AreEqual(0, parts.Count);
+    }
 }

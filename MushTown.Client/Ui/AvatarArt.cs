@@ -70,16 +70,31 @@ public partial class MushTownGame
     {
         // The back-facing ladder/rope frames must not draw face or eye gear on the skull.
         if (action is "ladder" or "rope" && _items.TryGetValue(id, out var data) && data.Slot is "Af" or "Ay") return;
-        if (!_gear.TryGetValue((id.ToString("D8"), action), out var gear)) return; // art-less gear (rings): nothing to draw
-        parts.AddRange(gear.Frames[frame].Parts); // boot load guarantees art for art gear
+        AddGearParts(parts, id, action, frame, _gear);
+    }
+
+    // A peer can wear an id this build has no art for (another version's
+    // item): the lookup misses and the body keeps its beginner part.
+    internal static void AddGearParts(List<CharaPart> parts, int id, string action, int frame,
+        IReadOnlyDictionary<(string, string), CharaData> gear)
+    {
+        if (!gear.TryGetValue((id.ToString("D8"), action), out var art)) return;
+        parts.AddRange(art.Frames[frame].Parts);
     }
 
     private int DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null,
         float scale = 1f)
+        => DrawAvatar(feetX, feetY, action, frame, facingRight,
+            chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
+            chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace, scale);
+
+    // Remote peers have no CharaSlot: their five look fields come straight
+    // from PeerArt, and a missing id just draws no part for it.
+    private int DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight,
+        int skin, List<int>? worn, List<int>? cashWorn, int hair, int face, float scale = 1f)
     {
-        int centerX = AvatarCenterX(feetX, facingRight, chara?.Skin ?? 0);
-        var parts = MergeParts(action, frame, chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
-            chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace);
+        int centerX = AvatarCenterX(feetX, facingRight, skin);
+        var parts = MergeParts(action, frame, skin, worn, cashWorn, hair, face);
         foreach (var part in parts)
         {
             int dx = (int)MathF.Round(part.X * scale);

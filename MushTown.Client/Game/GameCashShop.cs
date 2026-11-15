@@ -78,6 +78,7 @@ public partial class MushTownGame
     // The social half of the net drain, shared by the world and the shop.
     private void DrainSocialNet()
     {
+        DrainAppearances();
         while (_net!.TryTakeName(out var n))
         {
             _names[n.Id] = n;

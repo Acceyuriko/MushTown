@@ -176,6 +176,7 @@ public partial class MushTownGame
         SaveChara();
         PushBuild();
         PushName();
+        PushAppearance();
     }
 
     // A bag item clicked into the world leaves the bag. One copy drops at
@@ -655,6 +656,7 @@ public partial class MushTownGame
             if (WindowFor(HotkeyAction.Equip) is { } equipWindow) equipWindow.Dirty = true;
             PushBuild();
             PushName();
+            PushAppearance();
             PlaySfx("click");
         }
         else if (act == HandAct.Moved)

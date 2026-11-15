@@ -34,6 +34,27 @@ public sealed class NetTests
     }
 
     [TestMethod]
+    public void Appearance_RoundtripsAllFields()
+    {
+        var look = new AppearanceEvent(7, 4, 30020, 20000,
+            new[] { 1701000, 1040001 }, new[] { 1302007, 1040015 });
+        byte[] frame = Net.AppearanceFrame(look);
+        var payload = new NetReader().Feed(frame, frame.Length).Single();
+        Assert.AreEqual(Net.Appearance, payload[0]);
+
+        using var ms = new MemoryStream(payload, 1, payload.Length - 1);
+        using var r = new BinaryReader(ms);
+        int id = r.ReadInt32();
+        var got = Net.ReadAppearance(r, id);
+        Assert.AreEqual(look.Id, got.Id);
+        Assert.AreEqual(look.Skin, got.Skin);
+        Assert.AreEqual(look.Hair, got.Hair);
+        Assert.AreEqual(look.Face, got.Face);
+        CollectionAssert.AreEqual(look.CashWorn, got.CashWorn);
+        CollectionAssert.AreEqual(look.Equips, got.Equips);
+    }
+
+    [TestMethod]
     public void Reader_SplitHeader_WaitsForRest()
     {
         var reader = new NetReader();
@@ -309,6 +330,63 @@ public sealed class NetTests
         Assert.AreEqual(0, atB2.Plate);
     }
 
+    // Looks beat the first State on the wire; a map entry replays every look
+    // on that map, and a later look change relays to the peers already there.
+    [TestMethod]
+    public void Loopback_Appearance_ReplaysToNewcomerAndRelaysChanges()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(1);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 63);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 63);
+        b.Connect("127.0.0.1", Net.Port + 63);
+
+        a.SendAppearance(Look(4, 30020, 20000, new[] { 1701000, 1040001 }, new[] { 1302007, 1040015 }));
+        a.SendState(1, 10, 20, Net.ActStand, 0, true);
+        b.SendAppearance(Look(2, 33580, 20053, new[] { 1040027 }, new[] { 1040015 }));
+        b.SendState(1, 30, 40, Net.ActStand, 0, false);
+
+        var atB = WaitTakeAppearance(b);
+        Assert.AreEqual(a.PlayerId, atB.Id);
+        Assert.AreEqual(4, atB.Skin);
+        Assert.AreEqual(30020, atB.Hair);
+        Assert.AreEqual(20000, atB.Face);
+        CollectionAssert.AreEqual(new[] { 1701000, 1040001 }, atB.CashWorn);
+        CollectionAssert.AreEqual(new[] { 1302007, 1040015 }, atB.Equips);
+
+        var atA = WaitTakeAppearance(a);
+        Assert.AreEqual(b.PlayerId, atA.Id);
+        Assert.AreEqual(2, atA.Skin);
+        Assert.AreEqual(33580, atA.Hair);
+        CollectionAssert.AreEqual(new[] { 1040027 }, atA.CashWorn);
+
+        var stateAtB = WaitTake(b);
+        Assert.AreEqual(a.PlayerId, stateAtB.Id);
+        var stateAtA = WaitTake(a);
+        Assert.AreEqual(b.PlayerId, stateAtA.Id);
+
+        using var c = new NetClient(_ => { });
+        c.Connect("127.0.0.1", Net.Port + 63);
+        c.SendState(1, 50, 60, Net.ActStand, 0, true);
+        var seen = new Dictionary<int, AppearanceEvent>();
+        for (int i = 0; i < 2; i++)
+        {
+            var look = WaitTakeAppearance(c);
+            seen[look.Id] = look;
+        }
+        Assert.AreEqual(4, seen[a.PlayerId].Skin);
+        Assert.AreEqual(2, seen[b.PlayerId].Skin);
+
+        a.SendAppearance(Look(5, 36680, 23017, new[] { 1702522 }, new[] { 1040015, 1302015 }));
+        var changed = WaitTakeAppearance(b);
+        Assert.AreEqual(a.PlayerId, changed.Id);
+        Assert.AreEqual(5, changed.Skin);
+        Assert.AreEqual(36680, changed.Hair);
+    }
+
     // A dropped meso pile uses the last State for map/x/y and its long amount
     // crosses the wire through the two DropItem ints.
     [TestMethod]
@@ -386,4 +464,24 @@ public sealed class NetTests
         Assert.Fail("timed out waiting for a name event");
         throw new InvalidOperationException("unreachable");
     }
+
+    private static AppearanceEvent WaitTakeAppearance(NetClient client)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            if (client.TryTakeAppearance(out var e)) return e;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for an appearance event");
+        throw new InvalidOperationException("unreachable");
+    }
+
+    private static CharaSlot Look(int skin, int hair, int face, int[] cashWorn, int[] equips) => new()
+    {
+        Skin = skin,
+        Hair = hair,
+        Face = face,
+        CashWorn = cashWorn.ToList(),
+        Equips = equips.ToList(),
+    };
 }

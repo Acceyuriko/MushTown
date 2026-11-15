@@ -17,6 +17,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<HurtEvent> _hurtEvents = new();
     private readonly ConcurrentQueue<DropEvent> _dropEvents = new();
     private readonly ConcurrentQueue<NameEvent> _nameEvents = new();
+    private readonly ConcurrentQueue<AppearanceEvent> _appearanceEvents = new();
     private readonly ConcurrentQueue<QuestEvent> _questEvents = new();
     private readonly ConcurrentQueue<ChatEvent> _chatEvents = new();
     private readonly ConcurrentQueue<PartyEvent> _partyEvents = new();
@@ -175,6 +176,16 @@ public sealed class NetClient : IDisposable
         return SendFrame(Net.Encode(Net.DropItem, w => { w.Write(high); w.Write(low); w.Write(DropBagRule.Code("")); }));
     }
 
+    // Our look, so peers draw our skin, hair, face and worn pieces (sent on
+    // connect, re-sent after every look change).
+    public void SendAppearance(CharaSlot chara)
+    {
+        if (!Connected) return;
+        SendFrame(Net.Encode(Net.Appearance, w =>
+            Net.WriteAppearance(w, chara.Skin, chara.Hair, chara.Face,
+                chara.CashWorn ?? new List<int>(), chara.Equips ?? new List<int>())));
+    }
+
     // Our name + plate, so peers draw our tag (sent on connect, re-sent on ring change).
     public void SendName(string name, int plate)
     {
@@ -307,6 +318,8 @@ public sealed class NetClient : IDisposable
 
     public bool TryTakeName(out NameEvent e) => _nameEvents.TryDequeue(out e);
 
+    public bool TryTakeAppearance(out AppearanceEvent e) => _appearanceEvents.TryDequeue(out e);
+
     public bool TryTakeQuest(out QuestEvent e) => _questEvents.TryDequeue(out e);
 
     public bool TryTakeChat(out ChatEvent e) => _chatEvents.TryDequeue(out e);
@@ -401,6 +414,20 @@ public sealed class NetClient : IDisposable
                 using var ms = new MemoryStream(p, 1, p.Length - 1);
                 using var r = new BinaryReader(ms);
                 _nameEvents.Enqueue(new NameEvent(r.ReadInt32(), r.ReadString(), r.ReadInt32()));
+            }
+            catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
+            {
+                _log($"bad message (type {p[0]}, {p.Length} bytes), ignored");
+            }
+        }
+        else if (p[0] == Net.Appearance)
+        {
+            try
+            {
+                using var ms = new MemoryStream(p, 1, p.Length - 1);
+                using var r = new BinaryReader(ms);
+                int id = r.ReadInt32();
+                _appearanceEvents.Enqueue(Net.ReadAppearance(r, id));
             }
             catch (Exception ex) when (ex is IOException or FormatException) // malformed frames are ignored, never fatal
             {

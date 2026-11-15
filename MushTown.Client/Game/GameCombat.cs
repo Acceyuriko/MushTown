@@ -324,6 +324,14 @@ public partial class MushTownGame
     // The attack art follows the appearance: cash weapon first, then gear.
     private string AttackAction() => Progression.AttackAction(Hero, _items);
 
+    // Our look, so peers draw our skin, hair, face and worn pieces (CLI
+    // sessions have no chara: skip).
+    private void PushAppearance()
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara != null) _net?.SendAppearance(chara);
+    }
+
     // Our name + plate, so peers draw our tag (CLI sessions have no chara: skip).
     private void PushName()
     {
