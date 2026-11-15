@@ -45,7 +45,9 @@ public static partial class Export
                 files.Add(($"UIInventory.img/Inventory/{build}/{button}/mouseOver/0", $"{prefix}_{stem}_h.png"));
                 files.Add(($"UIInventory.img/Inventory/{build}/{button}/pressed/0", $"{prefix}_{stem}_p.png"));
             }
-            files.Add(($"UIInventory.img/Inventory/{build}/button:meso/normal/0", $"{prefix}_coin.png"));
+            files.Add(($"UIInventory.img/Inventory/{build}/button:meso/normal/0", $"{prefix}_coin_n.png"));
+            files.Add(($"UIInventory.img/Inventory/{build}/button:meso/mouseOver/0", $"{prefix}_coin_h.png"));
+            files.Add(($"UIInventory.img/Inventory/{build}/button:meso/pressed/0", $"{prefix}_coin_p.png"));
             // The sort button: sorts the open tab.
             files.Add(($"UIInventory.img/Inventory/{build}/button:sort/normal/0", $"{prefix}_sort_n.png"));
             files.Add(($"UIInventory.img/Inventory/{build}/button:sort/mouseOver/0", $"{prefix}_sort_h.png"));

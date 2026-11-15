@@ -370,7 +370,7 @@ public partial class MushTownGame
     {
         var popup = SysPopUi.BuildQuantity(ShopPopupRect(),
             () => _shopQtySelling ? "How many do you want to sell?" : "How many do you want to buy?",
-            _shopQtyField, ShopQuantityMax, () => { if (_shopQtySelling) ConfirmSell(); else ConfirmBuy(); },
+            _shopQtyField, () => ShopQuantityMax(), () => { if (_shopQtySelling) ConfirmSell(); else ConfirmBuy(); },
             CloseQuantityPopup, _shopLay);
 
         var root = new GameObject { Modal = true };

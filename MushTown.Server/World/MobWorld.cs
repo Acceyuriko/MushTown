@@ -254,14 +254,14 @@ public sealed class MobWorld
         return null;
     }
 
-    // One player-dropped item at the player's feet. The map must already be
-    // loaded (a State entered it); tab is the bag it came from, the icon pops
-    // from the feet and lands on the ground below. The caller broadcasts the
-    // returned Drop.
-    public Drop DropItem(int map, float x, float y, string tab, int kind, int id, int count)
+    // One player-dropped item or meso pile at the player's feet. The map must
+    // already be loaded (a State entered it); tab is the bag it came from
+    // ("" for mesos), the icon pops from the feet and lands on the ground below.
+    // The caller broadcasts the returned Drop.
+    public Drop DropItem(int map, float x, float y, string tab, int kind, int id, int count, long amount = 0)
     {
         var data = _maps[map];
-        return AddDrop(data, map, x, y, x, y, tab, kind, id, count, 0);
+        return AddDrop(data, map, x, y, x, y, tab, kind, id, count, amount);
     }
 
     // Quest-scripted bonus lines per kill: (mob, attacker) -> extra payouts
@@ -412,9 +412,12 @@ public sealed class MobWorld
     {
         var data = _maps[m.Map];
         float width = 0;
-        foreach (var p in payouts) width += DropWidth(p.kind, p.id);
+        foreach (var p in payouts) width += DropWidth(p.kind, p.id, p.amount);
         float vrLeft = data.Info.VrLeft, vrRight = data.Info.VrRight;
-        if (width > vrRight - vrLeft)
+        // The first meso's art hangs left of its anchor by its WZ origin.
+        float overhang = payouts.Count > 0 && payouts[0].kind == DropKind.Mesos
+            ? -MesoOriginX(payouts[0].amount) : 0f;
+        if (width + overhang > vrRight - vrLeft)
         {
             foreach (var p in payouts)
             {
@@ -423,19 +426,26 @@ public sealed class MobWorld
             }
             return;
         }
-        float left = m.X - width / 2f;
-        if (left < vrLeft) left = vrLeft;
-        else if (left + width > vrRight) left = vrRight - width;
+        float left = Math.Clamp(m.X - width / 2f, vrLeft + overhang, vrRight - width);
         float cursor = left;
         foreach (var p in payouts)
         {
-            float w = DropWidth(p.kind, p.id);
-            AddDrop(data, m.Map, cursor + w / 2f, m.Y, m.X, m.Y - m.BodyH / 2f, DropBag(p.kind, p.id), p.kind, p.id, p.count, p.amount);
+            float w = DropWidth(p.kind, p.id, p.amount);
+            // Meso art is placed by its WZ origin; shift its anchor so the art
+            // fills its slot and the next item starts after the picture.
+            float x = p.kind == DropKind.Mesos ? cursor + MesoOriginX(p.amount) : cursor + w / 2f;
+            AddDrop(data, m.Map, x, m.Y, m.X, m.Y - m.BodyH / 2f, DropBag(p.kind, p.id), p.kind, p.id, p.count, p.amount);
             cursor += w;
         }
     }
 
-    private float DropWidth(int kind, int id) => kind == DropKind.Mesos ? 24f : IconWidth(id);
+    private float DropWidth(int kind, int id, long amount) => kind == DropKind.Mesos
+        ? amount >= 1000 ? 32f : amount >= 100 ? 31f : 23f
+        : IconWidth(id);
+
+    // The WZ origin x of the four meso pictures; keep in step with the client.
+    private static int MesoOriginX(long amount) =>
+        amount >= 1000 ? 0 : amount >= 100 ? -1 : -5;
 
     private string DropBag(int kind, int id) =>
         kind == DropKind.Mesos ? "" : DropBagRule.ForMonster(ItemDef(id));
@@ -458,11 +468,25 @@ public sealed class MobWorld
     private int IconWidth(int id) => ItemDef(id).IconW;
 
     // One loot drop at (x, y): clamped inside the VR, lands on the ground
-    // below. FromX/FromY is the pop-out source; tab is the bag it returns to.
+    // below. Meso art hangs right of its anchor by the WZ origin, so its
+    // picture edge is clamped too. FromX/FromY is the pop-out source; tab is
+    // the bag it returns to.
     private Drop AddDrop(MapData data, int map, float x, float y, float fromX, float fromY, string tab,
         int kind, int id, int count, long amount)
     {
-        float cx = Math.Clamp(x, data.Info.VrLeft, data.Info.VrRight);
+        float cx;
+        if (kind == DropKind.Mesos)
+        {
+            float w = DropWidth(kind, id, amount);
+            float ox = MesoOriginX(amount);
+            float maxLeft = Math.Max(data.Info.VrLeft, data.Info.VrRight - w);
+            float artLeft = Math.Clamp(x - ox, data.Info.VrLeft, maxLeft);
+            cx = Math.Clamp(artLeft + ox, data.Info.VrLeft, data.Info.VrRight);
+        }
+        else
+        {
+            cx = Math.Clamp(x, data.Info.VrLeft, data.Info.VrRight);
+        }
         var d = new GroundDrop
         {
             Uid = _nextDrop++,

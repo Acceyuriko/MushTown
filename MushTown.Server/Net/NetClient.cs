@@ -166,6 +166,15 @@ public sealed class NetClient : IDisposable
         return SendFrame(Net.Encode(Net.DropItem, w => { w.Write(itemId); w.Write(count); w.Write(DropBagRule.Code(tab)); }));
     }
 
+    // Drop mesos at our feet: the empty bag tab tells the server the two ints
+    // are the amount's high and low halves.
+    public bool SendDropMesos(long amount)
+    {
+        if (!Connected) return false;
+        var (high, low) = Net.SplitDropAmount(amount);
+        return SendFrame(Net.Encode(Net.DropItem, w => { w.Write(high); w.Write(low); w.Write(DropBagRule.Code("")); }));
+    }
+
     // Our name + plate, so peers draw our tag (sent on connect, re-sent on ring change).
     public void SendName(string name, int plate)
     {

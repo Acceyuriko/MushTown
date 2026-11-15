@@ -106,6 +106,16 @@ public sealed class NetTests
     }
 
     [TestMethod]
+    public void DropAmount_SplitsAndJoinsLong()
+    {
+        foreach (long amount in new[] { 1L, 10_000_000_000L, long.MaxValue })
+        {
+            var (high, low) = Net.SplitDropAmount(amount);
+            Assert.AreEqual(amount, Net.JoinDropAmount(high, low));
+        }
+    }
+
+    [TestMethod]
     public void ActionCode_RoundtripsAll()
     {
         foreach (string name in Net.Actions)
@@ -299,6 +309,34 @@ public sealed class NetTests
         Assert.AreEqual(0, atB2.Plate);
     }
 
+    // A dropped meso pile uses the last State for map/x/y and its long amount
+    // crosses the wire through the two DropItem ints.
+    [TestMethod]
+    public void Loopback_DropMesos_ReachesPeersWithAmount()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(1);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 61);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 61);
+        b.Connect("127.0.0.1", Net.Port + 61);
+
+        a.SendState(1, 10, 20, Net.ActStand, 0, false);
+        Assert.AreEqual(a.PlayerId, WaitTake(b).Id);
+
+        Assert.IsTrue(a.SendDropMesos(10_000_000_000L));
+        var drop = WaitDrop(b);
+        Assert.IsTrue(drop.Spawn);
+        Assert.AreEqual(1, drop.Map);
+        Assert.AreEqual(10f, drop.X);
+        Assert.AreEqual(20f, drop.Y);
+        Assert.AreEqual(DropKind.Mesos, drop.Kind);
+        Assert.AreEqual(10_000_000_000L, drop.Amount);
+        Assert.AreEqual("", drop.Tab);
+    }
+
     private static RemoteEvent WaitTake(NetClient client)
     {
         for (int i = 0; i < 500; i++)
@@ -325,6 +363,17 @@ public sealed class NetTests
     {
         Thread.Sleep(300);
         Assert.IsFalse(came(), "an event arrived that should not have");
+    }
+
+    private static DropEvent WaitDrop(NetClient client)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            if (client.TryTakeDrop(out var e)) return e;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for a drop event");
+        throw new InvalidOperationException("unreachable");
     }
 
     private static NameEvent WaitTakeName(NetClient client)

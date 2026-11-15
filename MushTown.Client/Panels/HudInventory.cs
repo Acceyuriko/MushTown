@@ -22,10 +22,11 @@ public partial class MushTownGame
     private int _cashUseId;
     private string _cashUseNotice = "";
 
-    // Player drop quantity: the hand's bag kind/id while the popup is open.
-    private readonly TextField _dropQtyField = new(_shopLay) { DigitsOnly = true, Limit = 10, Ink = Color.Black };
+    // Player drop quantity: the hand's bag kind/id, or mesos, while the popup is open.
+    private readonly TextField _dropQtyField = new(_shopLay) { DigitsOnly = true, Limit = 11, Ink = Color.Black };
     private int _dropQtyId;
-    private bool DropQtyOpen => _dropQtyId != 0;
+    private bool _dropQtyMeso;
+    private bool DropQtyOpen => _dropQtyMeso || _dropQtyId != 0;
     private bool CursorFree => (DropQtyOpen || _hand.Empty) && !Holding && !WornHeld;
     private string _dropQtyKind = "";
     private int _dropWheel;
@@ -191,6 +192,7 @@ public partial class MushTownGame
             DropFromBag(chara, _hand.Kind!, _hand.Id, 1);
             return true;
         }
+        _dropQtyMeso = false;
         _dropQtyKind = _hand.Kind!;
         _dropQtyId = _hand.Id;
         _dropWheel = _input.Wheel;
@@ -200,6 +202,23 @@ public partial class MushTownGame
         BuildInvScene();
         _invBuilt = true;
         return true;
+    }
+
+    // The bag's coin button: the same popup as a held stack, with the meso
+    // balance as its max.
+    private void OpenMesoDrop()
+    {
+        if (Meso <= 0) return;
+        if (!_hand.Empty) _hand.Return();
+        _dropQtyMeso = true;
+        _dropQtyId = 0;
+        _dropQtyKind = "";
+        _dropWheel = _input.Wheel;
+        _dropQtyField.SetText("1");
+        _dropQtyField.ReplaceOnType = true;
+        _dropQtyField.Focus(Keyboard.GetState());
+        BuildInvScene();
+        _invBuilt = true;
     }
 
     private void DropFromBag(CharaSlot chara, string kind, int id, int count)
@@ -218,14 +237,33 @@ public partial class MushTownGame
         LogEvent($"dropped {_items[id].Name} x{count}");
     }
 
-    private int DropQuantityMax()
+    // Mesos leave the purse only after the drop goes out; the account itself
+    // is client-owned, so the ground pile is the copy everyone can see.
+    private void DropMesos(CharaSlot chara, long amount)
+    {
+        bool online = _net != null && _net.Connected;
+        if (!online && _localWorld == null) return;
+        if (chara.Mesos < amount) return;
+        if (online && !_net!.SendDropMesos(amount)) return; // send failed: purse stays
+        chara.Mesos -= amount;
+        if (!online)
+        {
+            _localWorld!.DropItem(_mapId, _mover.X, _mover.Y, "", DropKind.Mesos, 0, 0, amount);
+            DrainDrops(_localWorld);
+        }
+        SaveChara();
+        LogEvent($"dropped {amount} mesos");
+    }
+
+    private long DropQuantityMax()
     {
         var chara = _save?.Slots[_slot];
+        if (_dropQtyMeso) return chara == null ? 1 : Math.Max(1, chara.Mesos);
         return chara == null ? 1 : Math.Max(1, Inventory.Count(chara, _dropQtyKind, _dropQtyId));
     }
 
-    private int DropQuantityCount() =>
-        Math.Clamp(int.TryParse(_dropQtyField.Text, out int n) ? n : 1, 1, DropQuantityMax());
+    private long DropQuantityCount() =>
+        Math.Clamp(long.TryParse(_dropQtyField.Text, out long n) ? n : 1, 1, DropQuantityMax());
 
     private void ClampDropQuantity()
     {
@@ -239,14 +277,18 @@ public partial class MushTownGame
     {
         string kind = _dropQtyKind;
         int id = _dropQtyId;
-        int count = DropQuantityCount();
+        long count = DropQuantityCount();
+        bool mesos = _dropQtyMeso;
         CloseDropQuantity();
         var chara = _save?.Slots[_slot];
-        if (chara != null && kind != "") DropFromBag(chara, kind, id, count);
+        if (chara == null) return;
+        if (mesos) DropMesos(chara, count);
+        else if (kind != "") DropFromBag(chara, kind, id, (int)count);
     }
 
     private void CloseDropQuantity()
     {
+        _dropQtyMeso = false;
         _dropQtyId = 0;
         _dropQtyKind = "";
         _dropQtyField.Unfocus();
@@ -280,11 +322,11 @@ public partial class MushTownGame
     {
         int delta = _input.Wheel - _dropWheel;
         _dropWheel = _input.Wheel;
-        if (delta == 0 || _dropQtyId == 0) return;
+        if (delta == 0 || !DropQtyOpen) return;
         if (!DropQuantityFieldRect().Contains(_input.Mouse)) return;
         int step = delta / 120;
         if (step == 0) step = Math.Sign(delta);
-        _dropQtyField.SetText(Math.Clamp((long)DropQuantityCount() + step, 1, DropQuantityMax()).ToString());
+        _dropQtyField.SetText(Math.Clamp(DropQuantityCount() + step, 1, DropQuantityMax()).ToString());
         _dropQtyField.ReplaceOnType = true;
     }
 
@@ -455,18 +497,24 @@ public partial class MushTownGame
         body.AddChild(InvExpandButton()); // the "+" (small) or the "-" (wide)
         body.AddChild(InvSortButton());
         body.AddChild(InvCloseButton());
-        var coin = new GameObject { NoHit = true }; // purse draws last (bag rows can reach it when the roster grows)
-        coin.Add(new Rect(InvRect()));
-        coin.Add(new Picture($"ui/{InvArtPrefix()}_coin.png", _invLay.Get("coinX", 25), _invLay.Get("coinY", 485)));
-        coin.Add(new RightLabel((ui, s) => ui.GetMeso(s),
+        var coin = new GameObject(); // purse draws last (bag rows can reach it when the roster grows)
+        var coinButton = new GameObject();
+        coinButton.Add(new Rect(new Rectangle(_invLay.Get("coinX", 25), _invLay.Get("coinY", 485), 12, 13)));
+        coinButton.Add(new Button { Kind = ButtonKind.Click, OnClick = OpenMesoDrop });
+        coinButton.Add(new Image($"ui/{InvArtPrefix()}_coin"));
+        coin.AddChild(coinButton);
+        var meso = new GameObject { NoHit = true };
+        meso.Add(new Rect(InvRect()));
+        meso.Add(new RightLabel((ui, s) => ui.GetMeso(s),
             () => (_save?.Slots[_slot]?.Mesos ?? 0).ToString("#,##0"),
             _invWide ? _invLay.Get("mesoWideX", 185) : _invLay.Get("mesoX", 213),
             _invWide ? _invLay.Get("mesoWideY", 484) : _invLay.Get("mesoY", 484),
             new Color(96, 104, 113)));
+        coin.AddChild(meso);
         body.AddChild(coin);
         _invHost.AddChild(body);
         if (_cashUseId != 0) _invHost.AddChild(CashUsePopup());
-        if (_dropQtyId != 0) _invHost.AddChild(DropQuantityPopup());
+        if (DropQtyOpen) _invHost.AddChild(DropQuantityPopup());
         _invBuiltTab = _invTab;
     }
 
@@ -480,7 +528,8 @@ public partial class MushTownGame
         LoadTexture("ui/invw_backgrnd.png");
         foreach (string p in new[] { "inv", "invw" })
         {
-            LoadTexture($"ui/{p}_coin.png");
+            foreach (string s in new[] { "n", "h", "p" })
+                LoadTexture($"ui/{p}_coin_{s}.png");
             // The X, and the expand button: the "+" in the small window, the "-" in the wide one.
             foreach (string b in new[] { "close", p == "inv" ? "plus" : "minus" })
                 foreach (string s in new[] { "n", "h", "p" })

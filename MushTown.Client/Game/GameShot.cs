@@ -98,6 +98,11 @@ public partial class MushTownGame
                 // in one row; source data still comes from the exported defs.
                 world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
                 {
+                    // The table already pays the copper pile on this map; these
+                    // three complete the four tiers in the evidence shot.
+                    (DropKind.Mesos, 0, 0, 60),
+                    (DropKind.Mesos, 0, 0, 500),
+                    (DropKind.Mesos, 0, 0, 5000),
                     (DropKind.Item, 2000002, 1, 0),
                     (DropKind.Item, 2000006, 1, 0),
                     (DropKind.Item, 1302007, 1, 0),

@@ -151,7 +151,7 @@ public static partial class Export
             return;
         }
         var item = WzRoot.LoadCategory(dataDir, "Item");
-        if (!ExportPotions(item, str, outDir))
+        if (!ExportPotions(item, str, outDir) || !ExportMesoIcons(item, outDir))
         {
             Environment.ExitCode = 1;
             return;

@@ -510,6 +510,7 @@ public partial class MushTownGame
         foreach (var job in _jobs) { LoadTexture(job.Card); LoadTexture(job.Name); LoadTexture(job.Mark); } // big art loads on pick
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
         foreach (var item in _items.Values) LoadTexture(item.Image); // icons for the scanned defs
+        foreach (string f in MesoImages) LoadTexture(f); // the four ground meso tiers
         LoadNameTags(); // ring plates ride the defs above
         foreach (var skill in _skills.Values) // art for the scanned defs (frames ride the json)
         {

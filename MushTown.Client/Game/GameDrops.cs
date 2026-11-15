@@ -8,6 +8,18 @@ namespace MushTown.Client;
 // Drops: ground loot views, spawn/take application.
 public partial class MushTownGame
 {
+    // Ground meso art: the four official tiers in amount order (1-49, 50-99,
+    // 100-999, 1000+), and the WZ origin each picture is drawn by.
+    private static readonly string[] MesoImages =
+    {
+        "item/meso_09000000.png", "item/meso_09000001.png",
+        "item/meso_09000002.png", "item/meso_09000003.png",
+    };
+    private static readonly (int X, int Y)[] MesoOrigins = { (-5, 28), (-5, 28), (-1, 32), (0, 32) };
+
+    private static int MesoTier(long amount) =>
+        amount >= 1000 ? 3 : amount >= 100 ? 2 : amount >= 50 ? 1 : 0;
+
     private void ClearDrops()
     {
         foreach (var d in _drops.Values) _world.RemoveChild(d.Owner);
@@ -15,11 +27,13 @@ public partial class MushTownGame
         _pickupSent.Clear();
     }
 
-    // One ground drop: the icon is centred on its point, spins while falling,
-    // bobs at rest, and flies to the taker during a pickup.
+    // One ground drop: items stand on their texture centre, mesos on their WZ
+    // origin. Both spin while falling, bob at rest, and fly to the taker.
     private void DrawDrop(DropArt d)
     {
-        string image = d.Kind == DropKind.Mesos ? "ui/hud_coin.png" : _items[d.Id].Image;
+        bool mesos = d.Kind == DropKind.Mesos;
+        int tier = mesos ? MesoTier(d.Amount) : 0;
+        string image = mesos ? MesoImages[tier] : _items[d.Id].Image;
         var tex = _textures[image];
         float x = d.X, y = d.Y;
         if (d.State == DropState.Falling)
@@ -36,9 +50,20 @@ public partial class MushTownGame
             y = MathHelper.Lerp(d.Y, ty - 30f, t) - 20f * MathF.Sin(MathF.PI * t);
         }
         float bob = d.State == DropState.Resting ? MathF.Sin(d.SpawnMs / 250f + d.BobPhase) * 2f : 0f;
-        _spriteBatch.Draw(tex,
-            new Vector2(x - _camera.X, y - _camera.Y - tex.Height / 2f + bob), null, Color.White,
-            d.Rotation, new Vector2(tex.Width / 2f, tex.Height / 2f), 1f, SpriteEffects.None, 0f);
+        var centre = new Vector2(tex.Width / 2f, tex.Height / 2f);
+        if (mesos)
+        {
+            var origin = new Vector2(MesoOrigins[tier].X, MesoOrigins[tier].Y);
+            var topLeft = new Vector2(x - _camera.X - origin.X, y - _camera.Y - origin.Y + bob);
+            _spriteBatch.Draw(tex, topLeft + centre, null, Color.White,
+                d.Rotation, centre, 1f, SpriteEffects.None, 0f);
+        }
+        else
+        {
+            _spriteBatch.Draw(tex,
+                new Vector2(x - _camera.X, y - _camera.Y - tex.Height / 2f + bob), null, Color.White,
+                d.Rotation, centre, 1f, SpriteEffects.None, 0f);
+        }
     }
 
     // The live feet of the player a take flies to. Our own takes fly to us;
@@ -50,7 +75,7 @@ public partial class MushTownGame
         return (_mover.X, _mover.Y);
     }
 
-    // One drop landed: mesos draw the HUD coin, items their own icon. Fresh
+    // One drop landed: mesos draw their amount tier, items their own icon. Fresh
     // kill drops land in view: every local judge drains right after striking
     // (net play gets them pushed instead).
     private void DrainDrops(MobWorld world, bool animate = true)

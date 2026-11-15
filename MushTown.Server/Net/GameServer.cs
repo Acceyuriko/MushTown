@@ -586,15 +586,21 @@ public sealed partial class GameServer : IDisposable
             Broadcast(DropSpawnFrame(d));
     }
 
-    // A player drop: the item leaves the bag on that client, the server makes
-    // the ground drop from the sender's last State and broadcasts it.
+    // A player drop: the mesos or item leave that client, the server makes the
+    // ground drop from the sender's last State and broadcasts it.
     private void OnDropItem(int id, int itemId, int count, string tab)
     {
-        if (itemId <= 0 || count <= 0) return;
+        long amount = tab == "" ? Net.JoinDropAmount(itemId, count) : 0;
+        if (tab == "")
+        {
+            if (amount <= 0) return;
+        }
+        else if (itemId <= 0 || count <= 0) return;
         lock (_mobLock)
         {
             if (!_pos.TryGetValue(id, out var p)) return; // no State yet: nothing to drop from
-            _mobs.DropItem(p.map, p.x, p.y, tab, DropKind.Item, itemId, count);
+            if (tab == "") _mobs.DropItem(p.map, p.x, p.y, "", DropKind.Mesos, 0, 0, amount);
+            else _mobs.DropItem(p.map, p.x, p.y, tab, DropKind.Item, itemId, count);
             BroadcastFreshDrops();
         }
     }

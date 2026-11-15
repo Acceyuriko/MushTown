@@ -544,7 +544,7 @@ public partial class MushTownGame : Game
         // Esc closes one layer. The chat keeps its own Esc (it leaves the input),
         // so the layer runs here, before the poll: a frame that closes a window
         // must not eat the click or the key the player pressed with it.
-        if (esc && _shopQtyId == 0 && _dropQtyId == 0 && !_chatWindow.Focused && !_worldMapWindow.SearchFocused)
+        if (esc && _shopQtyId == 0 && !DropQtyOpen && !_chatWindow.Focused && !_worldMapWindow.SearchFocused)
         {
             if (_worldMapWindow.EscLayer()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the world map closes its dialog and search board first
             if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
@@ -570,7 +570,7 @@ public partial class MushTownGame : Game
         if (_cashShopWindow.SearchFocused && click && !_cashShopWindow.SearchPanelAt(new Point(mx, my)))
             _cashShopWindow.UnfocusSearch();
         bool shopPopupOpen = _shopQtyId != 0;
-        bool dropPopupOpen = _dropQtyId != 0;
+        bool dropPopupOpen = DropQtyOpen;
         _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || _cashShopWindow.SearchFocused || shopPopupOpen || dropPopupOpen || _cashUseId != 0; // typing must not fire the actions the same keys bind
         _input.Poll(kb, new Point(mx, my), click, held, ms.ScrollWheelValue);
         if (shopPopupOpen)

@@ -851,7 +851,7 @@ public static class SysPopUi
     // inventory for dropping a stack. The caller wraps it in its own modal
     // screen blocker when the popup must stop clicks behind it.
     public static GameObject BuildQuantity(Rectangle box, Func<string> title, TextField field,
-        Func<int> max, Action confirm, Action cancel, PanelLayout lay)
+        Func<long> max, Action confirm, Action cancel, PanelLayout lay)
     {
         var o = new GameObject();
         o.Add(new Rect(box));

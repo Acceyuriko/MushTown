@@ -32,7 +32,7 @@ public sealed class LootTests
         Assert.AreEqual(DropKind.Item, bonus.Kind);
         Assert.AreEqual(2000000, bonus.Id);
         Assert.AreEqual(3, bonus.Count);
-        Assert.AreEqual(112f, bonus.X); // 24px meso + 24px item, centred on 100
+        Assert.AreEqual(111.5f, bonus.X); // 23px copper meso + 24px item, centred on 100
         Assert.AreEqual(100f, bonus.Y);
     }
 
@@ -118,6 +118,43 @@ public sealed class LootTests
         Assert.AreEqual(drop.Uid, world.TakeDrops()[0].Uid);
     }
 
+    // A dropped meso pile keeps its long amount and has no bag to return to.
+    [TestMethod]
+    public void DropMesos_CreatesOneGroundDropWithAmount()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        var drop = world.DropItem(7, 100, 120, "", DropKind.Mesos, 0, 0, 10_000_000_000L);
+        Assert.AreEqual(DropKind.Mesos, drop.Kind);
+        Assert.AreEqual(10_000_000_000L, drop.Amount);
+        Assert.AreEqual("", drop.Tab);
+        Assert.AreEqual(1, world.DropsOn(7).Count);
+        Assert.AreEqual(drop.Uid, world.TakeDrops()[0].Uid);
+    }
+
+    // Meso art hangs right of its anchor by the WZ origin; at the right wall
+    // the picture edge is clamped too, not just the anchor.
+    [TestMethod]
+    public void DropMesos_AtRightVrEdge_KeepsPictureInside()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, vrLeft: 0, vrRight: 100);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+
+        var bag = world.DropItem(7, 100, 120, "", DropKind.Mesos, 0, 0, 1000);
+        var paper = world.DropItem(7, 100, 120, "", DropKind.Mesos, 0, 0, 100);
+        var gold = world.DropItem(7, 100, 120, "", DropKind.Mesos, 0, 0, 50);
+        var copper = world.DropItem(7, 100, 120, "", DropKind.Mesos, 0, 0, 10);
+
+        Assert.AreEqual(68f, bag.X); // 32-wide picture: 68..100
+        Assert.AreEqual(68f, paper.X); // 31-wide picture at x + 1: 69..100
+        Assert.AreEqual(72f, gold.X); // 23-wide picture at x + 5: 77..100
+        Assert.AreEqual(72f, copper.X);
+    }
+
     // This only pins Inventory.Remove + MobWorld.DropItem together; it does not
     // claim to run the client's quantity popup or DropFromBag UI wiring.
     [TestMethod]
@@ -159,8 +196,8 @@ public sealed class LootTests
         var fresh = world.TakeDrops();
         var a = fresh.Find(d => d.Id == 2000002)!;
         var b = fresh.Find(d => d.Id == 2000006)!;
-        Assert.AreEqual(97f, a.X); // row 74 wide: meso 24, then 20 and 30
-        Assert.AreEqual(122f, b.X); // second centre 97 + 10 + 15
+        Assert.AreEqual(96.5f, a.X); // row 73 wide: meso 23, then 20 and 30
+        Assert.AreEqual(121.5f, b.X); // second centre 96.5 + 10 + 15
         Assert.AreEqual(100f, a.Y);
     }
 
@@ -182,10 +219,39 @@ public sealed class LootTests
         var fresh = world.TakeDrops();
         var a = fresh.Find(d => d.Id == 2000002)!;
         var b = fresh.Find(d => d.Id == 2000006)!;
-        // The table always rolls a 24-wide meso first; the row is 74 wide.
-        Assert.AreEqual(12f, fresh[0].X); // meso centre at vrLeft + 12
-        Assert.AreEqual(34f, a.X); // 2000002 follows the 24-wide meso
-        Assert.AreEqual(59f, b.X);
+        // The table rolls a 23-wide meso first. Its art hangs 5px left of the
+        // anchor, so the row starts at vrLeft + 5 and the anchor lands at 0.
+        Assert.AreEqual(0f, fresh[0].X); // the meso anchor clamps at vrLeft
+        Assert.AreEqual(38f, a.X); // 2000002 follows the 23-wide meso
+        Assert.AreEqual(63f, b.X);
+    }
+
+    [TestMethod]
+    public void DropLayout_ClampsRowToRightVrEdge()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":1000,"Cy":100}]""", vrLeft: 0, vrRight: 1000);
+        assets.AddMob(100000, 1);
+        assets.AddDrops(100000, "[]");
+        assets.AddItem(2000002, 20);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
+            { (DropKind.Mesos, 0, 1, 100), (DropKind.Mesos, 0, 1, 1000), (DropKind.Item, 2000002, 1, 0) };
+
+        world.Strike(7, 1000, 100, true, new Random(0), Progression.Beginner);
+        var fresh = world.TakeDrops();
+        Assert.AreEqual(4, fresh.Count); // table copper + paper, bag, item
+        Assert.AreEqual(889f, fresh[0].X); // copper art 894..917
+        Assert.AreEqual(916f, fresh[1].X); // paper art 917..948
+        Assert.AreEqual(948f, fresh[2].X); // bag art 948..980
+        Assert.AreEqual(990f, fresh[3].X); // item art 980..1000
+        foreach (var d in fresh)
+        {
+            if (d.Kind != DropKind.Mesos) continue;
+            var (left, right) = MesoArt(d);
+            Assert.IsTrue(left >= 0f && right <= 1000f);
+        }
     }
 
     [TestMethod]
@@ -202,9 +268,26 @@ public sealed class LootTests
         world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
             { (DropKind.Item, 2000002, 1, 0), (DropKind.Item, 2000006, 1, 0) };
 
-        world.Strike(7, 50, 100, true, new Random(0), Progression.Beginner);
+        world.Strike(7, 50, 100, true, new RightEdgeRandom(), Progression.Beginner);
         var fresh = world.TakeDrops();
         Assert.AreEqual(3, fresh.Count); // meso + two items, none dropped
         Assert.IsTrue(fresh.All(d => d.X >= 0f && d.X <= 100f));
+        var meso = fresh.Find(d => d.Kind == DropKind.Mesos)!;
+        var (left, right) = MesoArt(meso);
+        Assert.IsTrue(left >= 0f && right <= 100f);
+    }
+
+    private static (float left, float right) MesoArt(MobWorld.Drop d)
+    {
+        float w = d.Amount >= 1000 ? 32f : d.Amount >= 100 ? 31f : 23f;
+        float ox = d.Amount >= 1000 ? 0f : d.Amount >= 100 ? -1f : -5f;
+        return (d.X - ox, d.X - ox + w);
+    }
+
+    // Every NextDouble lands at the right edge, so the wide-row test always
+    // exercises the picture clamp instead of depending on a lucky seed.
+    private sealed class RightEdgeRandom : Random
+    {
+        public override double NextDouble() => 0.99;
     }
 }

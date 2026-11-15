@@ -128,6 +128,23 @@ public static partial class Export
         return s.Replace("#", "");
     }
 
+    // The four ground meso tiers: Item/Special/0900.img, iconRaw frame 0.
+    // The client picks the tier from the amount and draws by the WZ origin.
+    private static readonly int[] MesoIconIds = { 9000000, 9000001, 9000002, 9000003 };
+
+    private static bool ExportMesoIcons(WzRoot item, string outDir)
+    {
+        foreach (int id in MesoIconIds)
+        {
+            string key = id.ToString("D8");
+            if (!UiPng.Save(item, "Item", $"Special/0900.img/{key}/iconRaw/0",
+                    Path.Combine(outDir, "item", $"meso_{key}.png")))
+                return false;
+        }
+        Console.WriteLine($"meso icons: {string.Join(" ", MesoIconIds)}");
+        return true;
+    }
+
     // The potions of lists/potions.json. Heals come from the WZ spec node;
     // icons are the info/icon canvases (_outlink to _Canvas).
     private static bool ExportPotions(WzRoot item, WzRoot str, string outDir)
