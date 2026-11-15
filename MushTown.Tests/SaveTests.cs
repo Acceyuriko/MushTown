@@ -430,6 +430,28 @@ public class SaveTests
     }
 
     [TestMethod]
+    public void Save_Load_RoundtripsCashFashion()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-cashfashion-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            var hero = store.CreateHero(0, 0, "hero", 110);
+            hero.CashWorn = new List<int> { 1701000, 1040001 };
+
+            store.Save(path);
+            var loaded = SaveStore.Load(path).Saves[0]!.Slots[0]!;
+
+            CollectionAssert.AreEqual(new[] { 1701000, 1040001 }, loaded.CashWorn);
+            CollectionAssert.AreEqual(hero.Equips, loaded.Equips);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void Load_ShortFile_PadsWithSaves()
     {
         string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");

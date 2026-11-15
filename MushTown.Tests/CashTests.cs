@@ -77,6 +77,19 @@ public sealed class CashTests
     }
 
     [TestMethod]
+    public void CashFashion_Wear_LeavesEquipsAlone()
+    {
+        var defs = Defs();
+        var chara = Chara();
+        chara.Equips = new List<int> { GearSword };
+
+        Assert.IsTrue(Progression.WearCash(chara, CashSword, defs));
+
+        CollectionAssert.AreEqual(new[] { GearSword }, chara.Equips);
+        CollectionAssert.Contains(chara.CashWorn, CashSword);
+    }
+
+    [TestMethod]
     public void CashFashion_SameArea_ReplacesOldAndReturnsIt()
     {
         var defs = Defs();

@@ -56,6 +56,25 @@ public class CashShopCatalogTests
     }
 
     [TestMethod]
+    public void Validate_RejectsNonCashFashionItem()
+    {
+        var items = new Dictionary<int, ItemData> { [1] = new ItemData { ItemId = 1, Name = "x", Slot = "Wp" } };
+        var catalog = new CashShopCatalog
+        {
+            Items =
+            {
+                new CashShopItem { Id = 1, Price = 1, Count = 1, Group = "Fashion", Tab = "Weapons" },
+            },
+        };
+        Assert.IsFalse(catalog.Validate(items, out string error));
+        StringAssert.Contains(error, "not a cash item");
+
+        items[1].Cash = true;
+        items[1].Slot = null;
+        Assert.IsTrue(catalog.Validate(items, out error), error);
+    }
+
+    [TestMethod]
     public void Validate_RequiresOneFreeDefaultPerLookList()
     {
         var items = new Dictionary<int, ItemData>

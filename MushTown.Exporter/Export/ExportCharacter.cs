@@ -38,9 +38,10 @@ public static partial class Export
     };
 
     // img/action/frame with a uol resolved at both levels (AvatarCanvas.cs:1203-1226)
-    private static Wz_Node? FindImgFrame(WzRoot looseRoot, string img, string action, int frameIdx)
+    private static Wz_Node? FindImgFrame(WzRoot looseRoot, string img, string action, int frameIdx, string? group = null)
     {
-        var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{img}\{action}"));
+        string path = group == null ? $@"{img}\{action}" : $@"{img}\{group}\{action}";
+        var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find(path));
         return WzNodeUtil.ResolveUol(actionNode?.Nodes[frameIdx.ToString()]);
     }
 
@@ -49,11 +50,12 @@ public static partial class Export
     // The equip's stand pose frame for a frame it has no art of (a polearm on
     // a sword body): stand1 first, then stand2; a pose with fewer frames
     // repeats its last one. The frame is picked by number like FindImgFrame.
-    private static (Wz_Node? node, string pose) FindStandFrame(WzRoot looseRoot, string img, int frameIdx)
+    private static (Wz_Node? node, string pose) FindStandFrame(WzRoot looseRoot, string img, int frameIdx, string? group = null)
     {
         foreach (string action in new[] { "stand1", "stand2" })
         {
-            var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{img}\{action}"));
+            string path = group == null ? $@"{img}\{action}" : $@"{img}\{group}\{action}";
+            var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find(path));
             if (actionNode == null) continue;
             var frames = actionNode.Nodes.Where(n => int.TryParse(n.Text, out _)).OrderBy(n => int.Parse(n.Text)).ToList();
             if (frames.Count == 0) continue;
@@ -64,7 +66,7 @@ public static partial class Export
     }
 
     private static bool ExportCharacter(WzRoot baseRoot, WzRoot looseRoot, string outDir, string action,
-        int skin = 0, string? gear = null, string? gearBeginner = null, string? hair = null)
+        int skin = 0, string? gear = null, string? gearBeginner = null, string? hair = null, string? gearGroup = null)
     {
         string bodyImg = BodyImg(skin);
         string headImg = HeadImg(skin);
@@ -155,14 +157,15 @@ public static partial class Export
                 if (gear == null && img != BeginnerBoxers) continue; // the plain body is underwear only
                 bool isTarget = img == gearBeginner;
                 string path = isTarget ? gear! : img;
-                var equipFrame = FindImgFrame(looseRoot, path, action, frameIdx);
+                string? group = isTarget ? gearGroup : null;
+                var equipFrame = FindImgFrame(looseRoot, path, action, frameIdx, group);
                 bool fallback = false;
                 if (equipFrame == null)
                 {
                     // equips without this art (weapon/glove climb frames) reuse
                     // their stand pose; body/head/hair stay strict above
                     fallback = true;
-                    var (standFrame, pose) = FindStandFrame(looseRoot, path, frameIdx);
+                    var (standFrame, pose) = FindStandFrame(looseRoot, path, frameIdx, group);
                     equipFrame = standFrame;
                     if (equipFrame == null)
                     {

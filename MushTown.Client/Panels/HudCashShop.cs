@@ -131,7 +131,7 @@ public sealed class CashShopWindow : UiWindow
         _page = CashShopPage.Fashion;
         _tab = 0;
         _selectedId = 0;
-        AddPreview(1302007);
+        AddPreview(1701000);
         PoseBeauty();
         PreviewBeauty(_game.CashShop.Hairs.First(hair => hair.ItemId == 5157000), false);
     }
@@ -381,8 +381,8 @@ public sealed class CashShopWindow : UiWindow
         _page = CashShopPage.Fashion;
         _tab = 0;
         _selectedId = 0;
-        AddPreview(1302007);
-        AddPreview(1040015);
+        AddPreview(1701000);
+        AddPreview(1040001);
     }
 
     // The ladder shot poses the character on the top platform: the same

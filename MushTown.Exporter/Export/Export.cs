@@ -121,7 +121,7 @@ public static partial class Export
             if (!row.art) continue; // rings and icon-only accessories carry no doll art
             foreach (string action in Net.Actions)
             {
-                if (!ExportCharacter(baseRoot, chara, outDir, action, gear: row.gear, gearBeginner: row.beginner))
+                if (!ExportCharacter(baseRoot, chara, outDir, action, gear: row.gear, gearBeginner: row.beginner, gearGroup: row.group))
                 {
                     Environment.ExitCode = 1;
                     return;

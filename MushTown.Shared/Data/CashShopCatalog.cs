@@ -99,11 +99,18 @@ public sealed class CashShopCatalog
     {
         if (!ValidateShape(out error)) return false;
         foreach (var item in Items)
+        {
             if (!items.ContainsKey(item.Id))
             {
                 error = $"cashshop item {item.Id} has no exported ItemData";
                 return false;
             }
+            if (item.Group == "Fashion" && !items[item.Id].Cash)
+            {
+                error = $"cashshop fashion item {item.Id} is not a cash item";
+                return false;
+            }
+        }
         foreach (var look in Hairs.Concat(Faces))
             if (!items.ContainsKey(look.ItemId))
             {

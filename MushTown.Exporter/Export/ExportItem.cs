@@ -13,7 +13,7 @@ public static partial class Export
     // no beginner part), and whether the exporter writes doll frames. A row
     // with art but no beginner is an extra slot (hat, cape, ...). A row with
     // no art is still an item def: its icon shows in the equipment window.
-    private readonly record struct GearRow(string gear, string? beginner, bool art);
+    private readonly record struct GearRow(string gear, string? beginner, bool art, string? group = null);
 
     private static readonly GearRow[] Gears = new[]
     {
@@ -30,6 +30,17 @@ public static partial class Export
         // The chat rings: they change the speech balloon (info/chatBalloon), not the plate.
         new GearRow(@"Ring\01112200.img", null, false),
         new GearRow(@"Ring\01112205.img", null, false),
+        // Cash fashion sold by the cash shop. These are real cash gear from
+        // the WZ (info/cash = 1), not the ordinary shop gear below. Cash
+        // weapons keep their doll frames under the 30 action group.
+        new GearRow(@"Weapon\01701000.img", BeginnerSword, true, "30"),
+        new GearRow(@"Weapon\01702153.img", BeginnerSword, true, "30"),
+        new GearRow(@"Weapon\01702172.img", BeginnerSword, true, "30"),
+        new GearRow(@"Weapon\01702522.img", BeginnerSword, true, "30"),
+        new GearRow(@"Coat\01040001.img", BeginnerLongcoat, true),
+        new GearRow(@"Coat\01040027.img", BeginnerLongcoat, true),
+        new GearRow(@"Coat\01040045.img", BeginnerLongcoat, true),
+        new GearRow(@"Coat\01040051.img", BeginnerLongcoat, true),
         // The gear of the two shops (Sid 11000, Pan 21000).
         new GearRow(@"Weapon\01302007.img", BeginnerSword, true),
         new GearRow(@"Weapon\01302005.img", BeginnerSword, true),
@@ -221,9 +232,9 @@ public static partial class Export
     // ReadEquips checks every row before the doll bake (a bad pairing must
     // not bake wrong art); WriteEquips writes the defs after it (a failed
     // bake must not leave a def whose art is missing).
-    private static List<(string Gear, ItemData Data)>? ReadEquips(WzRoot chara, WzRoot str)
+    private static List<(string Gear, ItemData Data, string Icon)>? ReadEquips(WzRoot chara, WzRoot str)
     {
-        var defs = new List<(string, ItemData)>();
+        var defs = new List<(string, ItemData, string)>();
         foreach (GearRow row in Gears)
         {
             int id = int.Parse(ImgId(row.gear));
@@ -257,6 +268,8 @@ public static partial class Export
                 Console.WriteLine($"equip {id} has no slot");
                 return null;
             }
+            // Cash gear often ships only iconRaw; the ordinary gear has icon.
+            string icon = info.Nodes["icon"] != null ? "info/icon" : "info/iconRaw";
             int tag = Int(info, "nameTag");
             if (!EquipSlots.KnownSlots.Contains(slot))
             {
@@ -296,7 +309,7 @@ public static partial class Export
                 ChatBalloon = Int(info, "chatBalloon"),
                 HasArt = row.art,
                 Cash = Int(info, "cash") != 0,
-                IconW = UiPng.Width(chara, "Character", $@"{row.gear}\info/icon"),
+                IconW = UiPng.Width(chara, "Character", $@"{row.gear}\{icon}"),
             };
             if (data.Price <= 0 && !data.Cash && !ItemData.StarterEquips.Contains(id) && !ItemData.DemoSlotGear.Contains(id)) // cash gear and demo samples are free
             {
@@ -313,16 +326,16 @@ public static partial class Export
                 Console.WriteLine($"equip {id} wants balloon style {data.ChatBalloon}, which the chat export does not write");
                 return null;
             }
-            defs.Add((row.gear, data));
+            defs.Add((row.gear, data, icon));
         }
         return defs;
     }
 
-    private static bool WriteEquips(List<(string Gear, ItemData Data)> defs, WzRoot chara, string outDir)
+    private static bool WriteEquips(List<(string Gear, ItemData Data, string Icon)> defs, WzRoot chara, string outDir)
     {
-        foreach (var (gear, data) in defs)
+        foreach (var (gear, data, icon) in defs)
         {
-            if (!UiPng.Save(chara, "Character", $@"{gear}\info/icon", Path.Combine(outDir, data.Image)))
+            if (!UiPng.Save(chara, "Character", $@"{gear}\{icon}", Path.Combine(outDir, data.Image)))
                 return false;
             WriteJson(Path.Combine(outDir, "item", $"{data.ItemId}.json"), data);
         }
