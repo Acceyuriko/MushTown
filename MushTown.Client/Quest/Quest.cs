@@ -203,7 +203,7 @@ public partial class MushTownGame
     // and opens the menu. Missing quest/NPC/ground fails loud, like other poses.
     private void SetupShotQuests()
     {
-        if (_shotScreen is not ("quest" or "questask" or "questforfeit" or "questpick" or "talk" or "shop")) return;
+        if (_shotScreen is not ("quest" or "questask" or "questforfeit" or "questpick" or "talk" or "shop" or "shopscroll")) return;
         _save ??= new SaveData();
         var chara = _save.Slots[_slot] ??= DemoChara();
         if (_shotScreen is "quest" or "questask" or "questforfeit" or "questpick")
@@ -272,12 +272,22 @@ public partial class MushTownGame
             _talkQuest = 90002;
             CompleteQuest(90002);
         }
-        if (_shotScreen == "shop") // the same call the talk entry makes (non-keepers fail loud)
+        if (_shotScreen is "shop" or "shopscroll") // the same call the talk entry makes (non-keepers fail loud)
         {
             if (!NpcHasShop(npc.NpcId))
                 throw new InvalidDataException($"NPC {_shotTalk} keeps no shop");
             OpenShop(npc.NpcId);
-            if (shotName.Contains("invuse"))
+            if (_shotScreen == "shopscroll")
+            {
+                foreach (int id in _potions.Concat(_equips).Distinct())
+                    if (_shopStock.Count < 12 && !_shopStock.Contains(id)) _shopStock.Add(id);
+                if (_shopStock.Count < 12)
+                    throw new InvalidDataException("shopscroll shot needs 12 stock items");
+                _shopInvTab = 5;
+                _shopScroll.SetLeft(0, _shopScroll.LeftMax(_shopStock.Count));
+                _shopSelId = _shopStock[_shopScroll.Left(0)];
+            }
+            else if (shotName.Contains("invuse"))
             {
                 _shopInvTab = 1;
                 var rows = ShopBagRows(1);
@@ -288,7 +298,7 @@ public partial class MushTownGame
                 var rows = ShopBagRows(1);
                 if (rows.Count == 0)
                     throw new InvalidDataException("shopbuyback shot needs a potion in the bag");
-                SellToShop(rows[0].id, 1);
+                SellToShop(rows[0].id, 1, TabKind(1));
                 _shopTab = 1;
             }
             else if (shotName.Contains("sell"))
@@ -297,7 +307,7 @@ public partial class MushTownGame
                 var rows = ShopBagRows(1);
                 if (rows.Count == 0)
                     throw new InvalidDataException("shopsell shot needs a potion in the bag");
-                OpenQuantityPopup(true, rows[0].id);
+                OpenQuantityPopup(true, rows[0].id, TabKind(1));
                 _shopQtyField.SetText(Math.Min(3, rows[0].count).ToString());
             }
             else if (shotName.Contains("buy") && _shopStock.Count > 0)
@@ -320,12 +330,16 @@ public partial class MushTownGame
         _shopStock = _shops[npc].Stock;
         _shopTab = 0; // the shop opens on its stock tab
         _shopInvTab = 0;
+        _shopScroll.Reset();
         _shopSelId = _shopStock.Count > 0 ? _shopStock[0] : 0;
+        _shopSelTab = "";
         _shopInvSelId = 0;
         _shopLastId = 0;
+        _shopLastTab = "";
         _shopLastAt = 0;
         _shopNotice = "";
         _shopQtyId = 0;
+        _shopWheel = _input.Wheel;
         _shopBuilt = false;
         _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
         _showShop = true;

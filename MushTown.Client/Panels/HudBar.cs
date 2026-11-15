@@ -164,6 +164,9 @@ public partial class MushTownGame
         foreach (var slider in _sliders) slider.Drag(held, gx);
         UpdateInvWheel(gx, gy); // the wheel scrolls the open inventory under the mouse
         if (_showInv) _invBar?.Drag(held, gy); else _invBar?.Release();
+        UpdateShopWheel(gx, gy);
+        if (_showShop) { _shopBar?.Drag(held, gy); _shopInvBar?.Drag(held, gy); }
+        else { _shopBar?.Release(); _shopInvBar?.Release(); }
         if (_dragShop.HasValue)
         {
             if (!held) _dragShop = null;
@@ -516,6 +519,7 @@ public partial class MushTownGame
         if (!_settingsBuilt) { BuildSettingsScene(); _settingsBuilt = true; }
         if (_showShop && _shopStock != null)
         {
+            ShopClampScroll(); // a sold row can shorten the list
             string key = ShopSceneKey();
             if (!_shopBuilt || key != _shopBuiltKey)
             {

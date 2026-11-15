@@ -7,8 +7,7 @@ namespace MushTown.Exporter;
 // match the ones the client loads (MushTown.Client/Panels/HudShop.cs).
 //
 // Both frames have the ten item rows baked in. The left bar has two tabs
-// (Sell / Buy Back); the right bar has the four inventory tabs, drawn with
-// the left tab art and our own labels.
+// (Sell / Buy Back); the right bar has the six official inventory tabs.
 public static partial class Export
 {
     public static bool ExportShopUi(WzRoot ui, string outDir)
@@ -31,6 +30,14 @@ public static partial class Export
         // The close button: the same X the other windows use.
         foreach (var (state, suffix) in new[] { ("normal", "n"), ("mouseOver", "h"), ("pressed", "p") })
             files.Add(($"UINpcShop.img/Inventory/Normal/button:close/{state}/0", $"shop_x_{suffix}.png"));
+        // The two list scroll bars: one track and three thumb states each.
+        files.Add(("UINpcShop.img/Shop/scroll:shop/enabled/base", "shop_scroll_base.png"));
+        files.Add(("UINpcShop.img/Inventory/Normal/scroll:inventory/enabled/base", "shop_inv_scroll_base.png"));
+        for (int d = 0; d < 3; d++)
+        {
+            files.Add(($"UINpcShop.img/Shop/scroll:shop/enabled/thumb{d}", $"shop_scroll_thumb{d}.png"));
+            files.Add(($"UINpcShop.img/Inventory/Normal/scroll:inventory/enabled/thumb{d}", $"shop_inv_scroll_thumb{d}.png"));
+        }
         foreach ((string node, string file) in files)
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))
                 return false;

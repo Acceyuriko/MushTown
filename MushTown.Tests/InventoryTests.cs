@@ -287,9 +287,8 @@ public sealed class InventoryTests
     public void ShopBuy_AddsToOrder()
     {
         var c = new CharaSlot { Mesos = 100 };
-        var def = new ItemData { ItemId = Red, Price = 10 };
 
-        Assert.IsTrue(Shop.Buy(c, Red, 10, def, 2));
+        Assert.IsTrue(Shop.Buy(c, Red, 10, "use", 2));
         Assert.AreEqual(Red, c.UseOrder![0]);
         Assert.AreEqual(2, c.Use![Red]);
     }
@@ -299,9 +298,8 @@ public sealed class InventoryTests
     {
         var c = new CharaSlot { Use = new Dictionary<int, int> { [Red] = 1 } };
         Inventory.Ensure(c);
-        var def = new ItemData { ItemId = Red, Price = 10 };
 
-        Assert.IsTrue(Shop.Sell(c, Red, def));
+        Assert.IsTrue(Shop.Sell(c, Red, 10, "use"));
         Assert.AreEqual(0, c.UseOrder![0]);
     }
 
