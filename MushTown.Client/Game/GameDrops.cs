@@ -12,6 +12,7 @@ public partial class MushTownGame
     {
         foreach (var d in _drops.Values) _world.RemoveChild(d.Owner);
         _drops.Clear();
+        _pickupSent.Clear();
     }
 
     // One ground drop: the icon is centred on its point, spins while falling,

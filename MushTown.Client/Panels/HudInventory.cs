@@ -25,6 +25,8 @@ public partial class MushTownGame
     // Player drop quantity: the hand's bag kind/id while the popup is open.
     private readonly TextField _dropQtyField = new(_shopLay) { DigitsOnly = true, Limit = 10, Ink = Color.Black };
     private int _dropQtyId;
+    private bool DropQtyOpen => _dropQtyId != 0;
+    private bool CursorFree => (DropQtyOpen || _hand.Empty) && !Holding && !WornHeld;
     private string _dropQtyKind = "";
     private int _dropWheel;
     private bool _showHeldDropCell; // staging only: keep the held stack visible in the bag

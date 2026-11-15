@@ -157,7 +157,7 @@ public partial class MushTownGame
 
     // One skill, whatever its shape: the binding table only says which skill
     // fired; the conditions stay here (the old per-key branches, id-keyed).
-    private void CastSkill(int id)
+    private void CastSkill(int id, bool fresh)
     {
         switch (id)
         {
@@ -182,11 +182,15 @@ public partial class MushTownGame
                 return;
             case SkillData.IronBody:
             case SkillData.SpiritBlade:
+                if (_fighter.Buffs.ContainsKey(id)) return;
                 if (_mover.Climb == null && _fighter.AttackLock <= 0 && TryPaySkill(id)) CastBuff(id);
                 return;
             case SkillData.ComboAttack:
                 if (_mover.Climb != null || _fighter.AttackLock > 0) return;
-                if (_fighter.Buffs.ContainsKey(id)) EndBuff(id);
+                if (_fighter.Buffs.ContainsKey(id))
+                {
+                    if (fresh) EndBuff(id);
+                }
                 else if (TryPaySkill(id)) CastBuff(id);
                 return;
             case SkillData.FlashBlade:
@@ -205,6 +209,7 @@ public partial class MushTownGame
                 if (data.Kind == SkillData.KindPassive) return;
                 if (data.Kind == SkillData.KindBuff)
                 {
+                    if (_fighter.Buffs.ContainsKey(id)) return;
                     if (_mover.Climb == null && _fighter.AttackLock <= 0 && TryPaySkill(id)) CastBuff(id);
                     return;
                 }

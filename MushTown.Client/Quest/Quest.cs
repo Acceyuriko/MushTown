@@ -22,7 +22,6 @@ public partial class MushTownGame
     private int _questConfirmQuest; // the quest the popup asks about
     private string _talkKey = "", _questKey = "";
     private List<string> _talkLines = new(), _questLines = new();
-    private bool _talkSpaceWasDown;
 
     // The popup under the quest window: the start travel and the forfeit ask.
     private enum QuestConfirmKind { None, Start, Forfeit }

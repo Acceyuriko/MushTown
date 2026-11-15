@@ -4,7 +4,7 @@ using MushTown.Shared;
 
 namespace MushTown.Client.Tests;
 
-// The one input entry: key edges, aliases and target parsing.
+// The one input entry: held actions, throttles, aliases and target parsing.
 [TestClass]
 public class InputTests
 {
@@ -18,18 +18,54 @@ public class InputTests
     }
 
     [TestMethod]
-    public void Poll_FreshOnThePressFrameOnly()
+    public void Poll_HeldSwitchFiresEvery60Frames()
     {
         var c = Installed(("I", "Inventory"));
         var target = BindTarget.Ui(HotkeyAction.Inventory);
         c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
-        Assert.IsTrue(c.Fresh(target));
+        Assert.IsTrue(c.Fire(target));
         Assert.IsTrue(c.Down(target));
+        for (int i = 0; i < 59; i++)
+        {
+            c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+            Assert.IsFalse(c.Fire(target));
+        }
         c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
-        Assert.IsFalse(c.Fresh(target));
-        Assert.IsTrue(c.Down(target));
+        Assert.IsTrue(c.Fire(target));
         c.Poll(new KeyboardState(), default, false, false, 0);
         Assert.IsFalse(c.Down(target));
+    }
+
+    [TestMethod]
+    public void Poll_PickupFiresEvery6Frames()
+    {
+        var c = Installed(("Z", "Pickup"));
+        var target = BindTarget.Ui(HotkeyAction.Pickup);
+        c.Poll(new KeyboardState(Keys.Z), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
+        for (int i = 0; i < 5; i++)
+        {
+            c.Poll(new KeyboardState(Keys.Z), default, false, false, 0);
+            Assert.IsFalse(c.Fire(target));
+        }
+        c.Poll(new KeyboardState(Keys.Z), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
+    }
+
+    [TestMethod]
+    public void Poll_ItemFiresEvery30Frames()
+    {
+        var c = Installed(("D1", "Item:2000000"));
+        var target = new BindTarget(BindKind.Item, 2000000);
+        c.Poll(new KeyboardState(Keys.D1), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
+        for (int i = 0; i < 29; i++)
+        {
+            c.Poll(new KeyboardState(Keys.D1), default, false, false, 0);
+            Assert.IsFalse(c.Fire(target));
+        }
+        c.Poll(new KeyboardState(Keys.D1), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
     }
 
     // While the chat has the input, typing must not fire the actions the same
@@ -40,16 +76,19 @@ public class InputTests
         var c = Installed(("I", "Inventory"));
         var target = BindTarget.Ui(HotkeyAction.Inventory);
         c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
-        Assert.IsTrue(c.Fresh(target)); // a normal frame fires the action
+        Assert.IsTrue(c.Fire(target)); // a normal frame fires the action
         c.Poll(new KeyboardState(), default, false, false, 0);
         c.Capture = true;
         c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
-        Assert.IsFalse(c.Fresh(target)); // the chat types the I instead
+        Assert.IsFalse(c.Fire(target)); // the chat types the I instead
         Assert.IsFalse(c.Down(target));
         Assert.IsTrue(c.Fresh(Keys.I)); // the key edge itself is still there
         c.Capture = false;
         c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
-        Assert.IsFalse(c.Fresh(target)); // I was down while captured: not a new press
+        Assert.IsFalse(c.Fire(target)); // I was down while captured: wait for release
+        c.Poll(new KeyboardState(), default, false, false, 0);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
     }
 
     [TestMethod]
@@ -57,7 +96,7 @@ public class InputTests
     {
         var c = Installed(("I+K", "Inventory"));
         c.Poll(new KeyboardState(Keys.K), default, false, false, 0);
-        Assert.IsTrue(c.Fresh(BindTarget.Ui(HotkeyAction.Inventory)));
+        Assert.IsTrue(c.Fire(BindTarget.Ui(HotkeyAction.Inventory)));
     }
 
     [TestMethod]
@@ -65,17 +104,17 @@ public class InputTests
     {
         var c = Installed(("I", "Inventory"), ("K", "Skill"));
         c.Poll(new KeyboardState(Keys.I, Keys.K), default, false, false, 0);
-        Assert.IsTrue(c.Fresh(BindTarget.Ui(HotkeyAction.Inventory)));
-        Assert.IsTrue(c.Fresh(BindTarget.Ui(HotkeyAction.Skill)));
+        Assert.IsTrue(c.Fire(BindTarget.Ui(HotkeyAction.Inventory)));
+        Assert.IsTrue(c.Fire(BindTarget.Ui(HotkeyAction.Skill)));
     }
 
     [TestMethod]
-    public void Fresh_ASkillTargetFiresFromItsKey()
+    public void Fire_ASkillTargetFiresFromItsKey()
     {
         var c = Installed(("D1", "Skill:1001005"));
         c.Poll(new KeyboardState(Keys.D1), default, false, false, 0);
-        Assert.IsTrue(c.Fresh(new BindTarget(BindKind.Skill, 1001005)));
-        Assert.IsFalse(c.Fresh(new BindTarget(BindKind.Skill, 1001006))); // the other skill has no key
+        Assert.IsTrue(c.Fire(new BindTarget(BindKind.Skill, 1001005)));
+        Assert.IsFalse(c.Fire(new BindTarget(BindKind.Skill, 1001006))); // the other skill has no key
     }
 
     [TestMethod]
@@ -88,14 +127,130 @@ public class InputTests
     }
 
     [TestMethod]
-    public void Seed_HeldKeysAreNotFresh()
+    public void Seed_HeldKeysWaitForRelease()
     {
         var c = Installed(("I", "Inventory"));
         var target = BindTarget.Ui(HotkeyAction.Inventory);
         c.Seed(new KeyboardState(Keys.I));
+        for (int i = 0; i < 60; i++)
+        {
+            c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+            Assert.IsFalse(c.Fire(target));
+        }
+        Assert.IsTrue(c.Down(target));
+        c.Poll(new KeyboardState(), default, false, false, 0);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
+    }
+
+    [TestMethod]
+    public void Fresh_BindTarget_PressHoldReleasePress()
+    {
+        var c = Installed(("I", "Inventory"));
+        var target = BindTarget.Ui(HotkeyAction.Inventory);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fresh(target));
         c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
         Assert.IsFalse(c.Fresh(target));
-        Assert.IsTrue(c.Down(target));
+        c.Poll(new KeyboardState(), default, false, false, 0);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fresh(target));
+    }
+
+    [TestMethod]
+    public void Fresh_Enter_PressOnlyAndSeedHeld()
+    {
+        var c = new InputController();
+        c.Poll(new KeyboardState(Keys.Enter), default, false, false, 0);
+        Assert.IsTrue(c.Fresh(Keys.Enter));
+        c.Poll(new KeyboardState(Keys.Enter), default, false, false, 0);
+        Assert.IsFalse(c.Fresh(Keys.Enter));
+        c.Poll(new KeyboardState(), default, false, false, 0);
+        c.Poll(new KeyboardState(Keys.Enter), default, false, false, 0);
+        Assert.IsTrue(c.Fresh(Keys.Enter));
+        c.Seed(new KeyboardState(Keys.Enter));
+        c.Poll(new KeyboardState(Keys.Enter), default, false, false, 0);
+        Assert.IsFalse(c.Fresh(Keys.Enter));
+    }
+
+    [TestMethod]
+    public void Fire_RawKey_FiresEvery30Frames()
+    {
+        var c = new InputController();
+        c.Poll(new KeyboardState(Keys.Space), default, false, false, 0);
+        Assert.IsTrue(c.Fire(Keys.Space, 30));
+        for (int i = 0; i < 29; i++)
+        {
+            c.Poll(new KeyboardState(Keys.Space), default, false, false, 0);
+            Assert.IsFalse(c.Fire(Keys.Space, 30));
+        }
+        c.Poll(new KeyboardState(Keys.Space), default, false, false, 0);
+        Assert.IsTrue(c.Fire(Keys.Space, 30));
+        c.Poll(new KeyboardState(), default, false, false, 0);
+        Assert.IsFalse(c.Fire(Keys.Space, 30));
+        c.Poll(new KeyboardState(Keys.Space), default, false, false, 0);
+        Assert.IsTrue(c.Fire(Keys.Space, 30));
+    }
+
+    [TestMethod]
+    public void Seed_ClearsAStartedWait()
+    {
+        var c = Installed(("I", "Inventory"));
+        var target = BindTarget.Ui(HotkeyAction.Inventory);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
+        c.Seed(new KeyboardState());
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
+    }
+
+    [TestMethod]
+    public void Capture_ReleasedKeyDoesNotEatTheNextPress()
+    {
+        var c = Installed(("I", "Inventory"));
+        var target = BindTarget.Ui(HotkeyAction.Inventory);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target)); // _wait now has 59 frames left
+        c.Capture = true;
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        c.Poll(new KeyboardState(), default, false, false, 0);
+        c.Capture = false;
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
+    }
+
+    [TestMethod]
+    public void Capture_BlocksFreshAndRawFire()
+    {
+        var c = Installed(("I", "Inventory"));
+        var target = BindTarget.Ui(HotkeyAction.Inventory);
+        c.Capture = true;
+        c.Poll(new KeyboardState(Keys.I, Keys.Space), default, false, false, 0);
+        Assert.IsFalse(c.Fresh(target));
+        Assert.IsFalse(c.Fire(Keys.Space, 30));
+        c.Capture = false;
+        c.Poll(new KeyboardState(Keys.I, Keys.Space), default, false, false, 0); // Suppress waits for release
+        Assert.IsFalse(c.Fire(target));
+        c.Poll(new KeyboardState(), default, false, false, 0);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
+    }
+
+    [TestMethod]
+    public void Suppress_ReleaseClearsTheStartedWait()
+    {
+        var c = Installed(("I", "Inventory"));
+        var target = BindTarget.Ui(HotkeyAction.Inventory);
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target)); // _wait now has 59 frames left
+        c.Capture = true;
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0); // Suppress, Reset
+        c.Capture = false;
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0); // still suppressed
+        Assert.IsFalse(c.Fire(target));
+        c.Poll(new KeyboardState(), default, false, false, 0); // release resets
+        c.Poll(new KeyboardState(Keys.I), default, false, false, 0);
+        Assert.IsTrue(c.Fire(target));
     }
 
     [TestMethod]

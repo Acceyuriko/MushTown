@@ -152,7 +152,12 @@ public partial class MushTownGame
     private void DrawShotCursor(int mx, int my)
     {
         var (id, grab, npc) = HudHover(mx, my);
-        int want = CursorAnim.Select(id, grab, _hand.Empty && !Holding && !WornHeld, false, npc);
+        int want = CursorAnim.Select(id, grab, CursorFree, false, npc);
+        if (want == 0)
+        {
+            _spriteBatch.Draw(_textures["ui/cursor.png"], new Vector2(mx - _cursorHot.X, my - _cursorHot.Y), Color.White);
+            return;
+        }
         var set = CursorData(want);
         if (set == null) return;
         var f = set.Frames[0];

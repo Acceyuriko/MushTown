@@ -172,13 +172,12 @@ public partial class MushTownGame
     private int ItemOn(int cell) =>
         SlotTarget(cell) is { Kind: BindKind.Item } target && _items.ContainsKey(target.Id) ? target.Id : 0;
 
-    // An Item target drinks its potion on a fresh key. The edges stay fresh
-    // every frame; the drink waits for a screen that can take it.
-    private void ItemEdges(bool canDrink)
+    // An Item target drinks its potion while the key is held.
+    private void ItemHeld(bool canDrink)
     {
         if (!canDrink) return;
         foreach (var action in _input.Actions)
-            if (action.Target.Kind == BindKind.Item && action.Fresh) DrinkItem(action.Target.Id);
+            if (action.Target.Kind == BindKind.Item && action.Fire) DrinkItem(action.Target.Id);
     }
 
     private void DrinkItem(int id)

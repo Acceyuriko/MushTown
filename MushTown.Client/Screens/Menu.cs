@@ -619,7 +619,7 @@ public partial class MushTownGame
     private void SyncCursorState(float dtMs)
     {
         bool pressed = Mouse.GetState().LeftButton == ButtonState.Pressed;
-        int want = CursorAnim.Select(_hoverId, _hoverGrab, _hand.Empty && !Holding && !WornHeld, pressed, _hoverNpc);
+        int want = CursorAnim.Select(_hoverId, _hoverGrab, CursorFree, pressed, _hoverNpc);
         if (_cursor.Tick(want, CursorData(want), dtMs)) ApplyCursor();
     }
 

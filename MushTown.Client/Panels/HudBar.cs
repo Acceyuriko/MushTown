@@ -120,13 +120,13 @@ public partial class MushTownGame
         // and fighting on the saved preset, the item keys keep drinking, and
         // every panel key stays alive, so a skill can be dropped onto a key.
         // The draft only reaches the live keys on Save.
-        ItemEdges(_talkNpc == 0 && !_menuWindow.Show && !modal); // the item keys drink their potion
+        ItemHeld(_talkNpc == 0 && !_menuWindow.Show && !modal); // the item keys drink their potion
         if (_talkNpc == 0 && !modal)
         {
             bool any = false;
             foreach (var action in UiHotkeyOrder)
             {
-                if (!_input.Fresh(action)) continue;
+                if (!_input.Fire(action)) continue;
                 HandleHotkey(action, kb);
                 any = true;
                 if (action != HotkeyAction.Menu) _menuWindow.Close();
@@ -620,6 +620,7 @@ public partial class MushTownGame
     // not an item and stays with HeldArt / HeldBust.
     private int HeldItemId()
     {
+        if (DropQtyOpen) return 0; // the popup owns the screen: the hand stays in data only
         if (WornHeld) return _wornHeldId;
         if (_hand.Empty) return 0;
         var chara = _save?.Slots[_slot];

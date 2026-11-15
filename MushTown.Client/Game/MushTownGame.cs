@@ -103,6 +103,7 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, DmgData> _dmg = new(); // damage skins by key, loaded once each
 
     private readonly Dictionary<int, DropArt> _drops = new();
+    private readonly HashSet<int> _pickupSent = new(); // drops already asked for while Z is held
 
     private readonly string _layoutPath;
     private readonly string _menuLayoutPath;
@@ -610,9 +611,10 @@ public partial class MushTownGame : Game
             _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0;
             _talkHost.Enabled = false; // the one early layer write: this frame's hover and click run later and would still see the modal
         }
-        // Space is the Next key of the dialogue. Read the edge every frame:
-        // the Space that opens a talk must not also flip its first page.
-        bool talkSpace = FreshKey(kb, Keys.Space, ref _talkSpaceWasDown);
+        // Space is the Next key of the dialogue; holding it turns pages every
+        // 30 frames (~500ms). The Space that opens a talk cannot also flip
+        // its first page: talkSpace is read before TalkNearest runs.
+        bool talkSpace = _input.Fire(Keys.Space, 30);
         if (_talkNpc != 0 && talkSpace && TalkButtons().Contains("Next"))
         {
             _talkPage++;
@@ -655,16 +657,18 @@ public partial class MushTownGame : Game
             c.Hp = Math.Min(c.Hp, MaxHpNow());
         SendPartyHpIfChanged();
 
-        // fresh edges: portal tap, drop and ladder leap fire once per tap
-        // (portal also fires on walking in with Up held; grab and jump use held keys)
+        // Held keys repeat; the portal and the ladder leap/drop-through are
+        // one-shot presses.
         bool alt = !blocked && _input.Down(HotkeyAction.Jump);
         bool freshAlt = alt && _input.Fresh(HotkeyAction.Jump);
         bool up = kb.IsKeyDown(Keys.Up);
-        bool freshUp = up && _input.Fresh(Keys.Up);
+        bool freshUp = up && _input.Fresh(Keys.Up); // a portal is entered once, not every frame
         bool down = kb.IsKeyDown(Keys.Down);
         // The pickup is a bindable action like the attack; a modal window
-        // takes the keys, so Z does not pick a drop up there.
-        bool freshZ = !blocked && _input.Fresh(HotkeyAction.Pickup);
+        // takes the keys, so Z does not pick a drop up there. Releasing Z
+        // lets the next press retry a drop the server missed.
+        if (!_input.Down(HotkeyAction.Pickup)) _pickupSent.Clear();
+        bool pickupFire = !blocked && _input.Fire(HotkeyAction.Pickup);
 
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
@@ -674,7 +678,7 @@ public partial class MushTownGame : Game
         // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (!blocked && _input.Fresh(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
+        if (!blocked && _input.Fire(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
             string attackAction = AttackAction();
             _fighter.AttackLock = Delays(attackAction, Hero?.Skin ?? 0).Sum();
@@ -691,14 +695,16 @@ public partial class MushTownGame : Game
         // Z grabs the nearest drop in reach: net play asks the server (a miss
         // answers nothing), the local world judges it right here. The client
         // pre-filters the judge box, so a nearer-but-out drop never blocks one.
-        if (freshZ && HasJudge())
+        if (pickupFire && HasJudge())
         {
+            _pickupSent.RemoveWhere(uid => !_drops.ContainsKey(uid));
             var chara = _save?.Slots[_slot];
             int best = 0;
             float bestD2 = float.MaxValue;
             foreach (var kv in _drops)
             {
                 if (kv.Value.State != DropState.Resting) continue;
+                if (_pickupSent.Contains(kv.Key)) continue; // one request per drop
                 float dx = kv.Value.X - _mover.X, dy = kv.Value.Y - _mover.Y;
                 if (Math.Abs(dx) > MobWorld.PickDx || Math.Abs(dy) > MobWorld.PickDy) continue;
                 if (chara != null && !CanTakeDrop(kv.Value, chara)) continue; // full bag: leave it on the ground
@@ -707,6 +713,7 @@ public partial class MushTownGame : Game
             }
             if (best != 0)
             {
+                _pickupSent.Add(best);
                 if (_net != null && _net.Connected) _net.SendPickup(best);
                 else if (_localWorld != null)
                 {
@@ -722,13 +729,13 @@ public partial class MushTownGame : Game
         // order, not in the table's insertion order.
         if (!blocked)
         {
-            List<int>? fresh = null;
+            List<BoundAction>? casts = null;
             foreach (var action in _input.Actions)
-                if (action.Target.Kind == BindKind.Skill && action.Fresh) (fresh ??= new()).Add(action.Target.Id);
-            if (fresh != null)
+                if (action.Target.Kind == BindKind.Skill && action.Fire) (casts ??= new()).Add(action);
+            if (casts != null)
             {
-                fresh.Sort();
-                foreach (int id in fresh) CastSkill(id);
+                casts.Sort((a, b) => a.Target.Id.CompareTo(b.Target.Id));
+                foreach (var action in casts) CastSkill(action.Target.Id, _input.Fresh(action.Target));
             }
         }
 
@@ -972,7 +979,7 @@ public partial class MushTownGame : Game
         if (name.Contains("hptip")) return (600, 720);
         if (name.Contains("itemtip")) return (1283, 376);
         if (name.Contains("npctip")) return (_minimap.Pos.X + _minimap.Rect().Width + 40, _minimap.Pos.Y + 39); // 41px into the panel (its left edge is 1px inside the window), the first row
-        if (name.Contains("dropqty")) return (1000, 300); // show the held potion beside the quantity popup
+        if (name.Contains("dropqty")) return (707, 330); // 数量框截图：显示默认指针
         return (-10, -10);
     }
 

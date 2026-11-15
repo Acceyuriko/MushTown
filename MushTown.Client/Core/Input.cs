@@ -45,13 +45,31 @@ public sealed class BoundAction
 {
     public BindTarget Target { get; }
     public Keys[] Keys { get; }
-    public bool Fresh { get; internal set; }
+    public bool Fire { get; internal set; }
     public bool Down { get; internal set; }
+    internal bool Suppress { get; set; }
+    private int _wait;
 
     public BoundAction(BindTarget target, Keys[] keys)
     {
         Target = target;
         Keys = keys;
+    }
+
+    // Held keys fire again after their throttling interval. A release clears
+    // the wait, so the next press starts at once.
+    internal void Tick(bool down, int frames)
+    {
+        if (!down) { _wait = 0; Fire = false; return; }
+        if (_wait > 0) { _wait--; Fire = false; return; }
+        Fire = true;
+        _wait = Math.Max(0, frames - 1);
+    }
+
+    internal void Reset()
+    {
+        _wait = 0;
+        Fire = false;
     }
 }
 
@@ -62,6 +80,7 @@ public sealed class InputController
     private readonly List<BoundAction> _actions = new();
     private readonly HashSet<Keys> _down = new();
     private readonly HashSet<Keys> _last = new();
+    private readonly Dictionary<Keys, int> _keyWait = new();
 
     public IReadOnlyList<BoundAction> Actions => _actions;
     // While a text input has the keys, no action fires: the raw keyboard still
@@ -92,40 +111,94 @@ public sealed class InputController
         Click = click;
         Held = held;
         Wheel = wheel;
+        foreach (var key in _keyWait.Keys)
+            if (_keyWait[key] > 0) _keyWait[key]--;
         _last.Clear();
         foreach (var key in _down) _last.Add(key);
         _down.Clear();
         foreach (var key in keyboard.GetPressedKeys()) _down.Add(key);
         foreach (var action in _actions)
         {
-            bool fresh = false, down = false;
-            if (Capture) { action.Fresh = false; action.Down = false; continue; }
+            bool down = false;
             foreach (var key in action.Keys)
+                if (_down.Contains(key)) { down = true; break; }
+            if (Capture)
             {
-                if (!_down.Contains(key)) continue;
-                down = true;
-                if (!_last.Contains(key)) fresh = true;
+                action.Reset();
+                action.Down = false;
+                action.Suppress = down; // a key held into the field waits for release
+                continue;
             }
-            action.Fresh = fresh;
             action.Down = down;
+            if (action.Suppress)
+            {
+                action.Fire = false;
+                if (!down)
+                {
+                    action.Reset();
+                    action.Suppress = false;
+                }
+                continue;
+            }
+            action.Tick(down, FireFrames(action.Target));
         }
     }
+
+    // Per-target throttling: UI switches 60 frames (~1s), pickup 6 (~100ms),
+    // items 30 (~500ms). Attack and skills use AttackLock / their own
+    // cooldowns, so the input layer does not gate them.
+    private static int FireFrames(BindTarget target) => target.Kind switch
+    {
+        BindKind.Item => 30,
+        BindKind.Skill => 0,
+        _ => (HotkeyAction)target.Id switch
+        {
+            HotkeyAction.Pickup => 6,
+            HotkeyAction.Attack => 0,
+            _ => 60,
+        },
+    };
 
     // Keys held while the menu was open must not fire on the first frame.
     public void Seed(KeyboardState keyboard)
     {
+        _keyWait.Clear();
         _down.Clear();
         foreach (var key in keyboard.GetPressedKeys()) _down.Add(key);
         _last.Clear();
         foreach (var key in _down) _last.Add(key);
         foreach (var action in _actions)
         {
-            action.Fresh = false;
+            action.Reset();
             action.Down = _down.Overlaps(action.Keys);
+            action.Suppress = action.Down; // wait for release, then the next press fires
         }
     }
 
     public bool Fresh(Keys key) => _down.Contains(key) && !_last.Contains(key);
+
+    // Any key of the target pressed this frame that was not pressed last frame.
+    public bool Fresh(BindTarget target)
+    {
+        if (Capture) return false;
+        foreach (var action in _actions)
+        {
+            if (action.Target != target) continue;
+            foreach (var key in action.Keys)
+                if (_down.Contains(key) && !_last.Contains(key)) return true;
+        }
+        return false;
+    }
+
+    // A raw key (not in the binding table) on the same held/throttle rule.
+    public bool Fire(Keys key, int frames)
+    {
+        if (Capture) { _keyWait.Remove(key); return false; }
+        if (!_down.Contains(key)) { _keyWait.Remove(key); return false; }
+        if (_keyWait.TryGetValue(key, out int wait) && wait > 0) return false;
+        _keyWait[key] = Math.Max(0, frames);
+        return true;
+    }
 
     public BoundAction? Action(BindTarget target)
     {
@@ -134,9 +207,10 @@ public sealed class InputController
         return null;
     }
 
-    public bool Fresh(BindTarget target) => Action(target)?.Fresh ?? false;
+    public bool Fire(BindTarget target) => Action(target)?.Fire ?? false;
     public bool Down(BindTarget target) => Action(target)?.Down ?? false;
     public bool Fresh(HotkeyAction action) => Fresh(BindTarget.Ui(action));
+    public bool Fire(HotkeyAction action) => Fire(BindTarget.Ui(action));
     public bool Down(HotkeyAction action) => Down(BindTarget.Ui(action));
 
     // The target on one key; a combo part counts (either Ctrl side shows
