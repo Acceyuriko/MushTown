@@ -105,6 +105,24 @@ public partial class MushTownGame
             o.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(index), row.Vx - row.X, row.Vy - row.Y, Color.White));
             body.AddChild(o);
         }
+        // The official page 1 has three utility rows. The extra row sits in
+        // its six-pixel bottom margin and gives the knockback stat a visible
+        // home without hiding it behind the page-2 flip.
+        var kb = new GameObject();
+        int kbX = bx + _statLay.Get("utilLeftX", 5);
+        int kbY = by + _statLay.Get("utilExtraY", 390);
+        kb.Add(new Rect(new Rectangle(kbX, kbY, _statLay.Get("utilLeftW", 215), 16)));
+        kb.Add(new Button { Kind = ButtonKind.Silent });
+        kb.Add(new StatHighlight("ui/stat_hl_long.png"));
+        kb.Add(new Invoke(gfx =>
+        {
+            var r = kb.Get<Rect>()!.Screen;
+            var t = gfx.Ui.GetSmall("KNOCKBACK RESISTANCE");
+            gfx.Sb.Draw(t, new Vector2(r.X + 2, r.Y + (r.Height - t.Height) / 2f), Color.White);
+        }));
+        kb.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(28),
+            _statLay.Get("utilExtraVx", 217) - _statLay.Get("utilLeftX", 5), 1, Color.White));
+        body.AddChild(kb);
     }
 
     // One stat column: the hover box (x, w), the number spot (vx) and the
@@ -151,8 +169,9 @@ public partial class MushTownGame
     // The live value of one row, read when the row draws so the numbers
     // follow the game. The index follows the row order of StatRows: the main
     // area (HP, MP, STR, DEX, INT, LUK), the attack area (damage range, final
-    // damage, attack power, critical rate), the utility area (mesos, exp).
-    // The stats the game has no value for show 0.
+    // damage, attack power, critical rate), the utility area (mesos, exp),
+    // and 28 = the extra knockback-resistance row. The stats the game has no
+    // value for show 0.
     private string StatValue(int index)
     {
         var c = _save?.Slots[_slot];
@@ -178,6 +197,7 @@ public partial class MushTownGame
             case 13: return $"{_stats.IntValue(StatKey.CRIT_RATE)}%"; // critical rate
             case 22: return $"{(c?.Mesos ?? 0).ToString("#,##0")}";
             case 26: return $"{(c?.Exp ?? 0):#,##0} / {Progression.ExpNext(c?.Level ?? 1):#,##0}";
+            case 28: return $"{_stats.IntValue(StatKey.KNOCKBACK_RESISTANCE)}%";
             default: return "0";
         }
     }

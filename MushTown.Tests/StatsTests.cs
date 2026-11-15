@@ -60,9 +60,9 @@ public class StatsTests
     }
 
     [TestMethod]
-    public void AllKeys_AreTheTwentySevenContractKeys()
+    public void AllKeys_AreTheTwentyEightContractKeys()
     {
-        Assert.AreEqual(27, StatSnapshot.AllKeys.Length);
+        Assert.AreEqual(28, StatSnapshot.AllKeys.Length);
         Assert.AreEqual(StatKey.STR, StatSnapshot.AllKeys[0]);
         Assert.AreEqual(StatKey.JUMP, StatSnapshot.AllKeys[^1]);
     }

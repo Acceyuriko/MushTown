@@ -213,6 +213,39 @@ public sealed class MoverTests
     }
 
     [TestMethod]
+    public void Locked_PortalUpTap_DoesNotTravel()
+    {
+        var map = TestMap();
+        var m = Mover(map, 100, 300);
+        var up = Input();
+        up.Up = true;
+        up.UpPressed = true;
+        up.Locked = true;
+        m.Input = up;
+        m.Update(Dt);
+        Assert.IsNull(m.Travel);
+    }
+
+    [TestMethod]
+    public void Locked_OnLadder_DoesNotClimb()
+    {
+        var map = TestMap();
+        var m = Mover(map, 500, 300);
+        var up = Input();
+        up.Up = true;
+        m.Input = up;
+        m.Update(Dt); // grab on
+        Assert.AreEqual(map.Ladders[0], m.Climb);
+        float y = m.Y;
+        var locked = Input();
+        locked.Up = true;
+        locked.Locked = true;
+        m.Input = locked;
+        m.Update(Dt);
+        Assert.AreEqual(y, m.Y);
+    }
+
+    [TestMethod]
     public void VoidFall_BelowVrBottom_SetsFellOut()
     {
         var map = TestMap();

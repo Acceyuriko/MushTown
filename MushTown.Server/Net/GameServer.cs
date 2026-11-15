@@ -346,19 +346,22 @@ public sealed partial class GameServer : IDisposable
         float y = BitConverter.ToSingle(payload, 13);
         bool facing = payload[19] != 0;
         bool first, switched;
+        // The map sync must finish before the next entrant writes _pos:
+        // otherwise that entrant's State can see the first player and replay
+        // its look twice, once in the sync and once when the look changes.
         lock (_mobLock)
         {
             _away.Remove(id); // a State after the shop returns to the saved map
             first = !_pos.TryGetValue(id, out var old);
             switched = !first && old.map != map;
             _pos[id] = (map, x, y, facing);
-        }
-        if (switched)
-            Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
-        if (first || switched)
-        {
-            PushMobs(id, map);
-            SyncAppearances(id, map);
+            if (switched)
+                Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
+            if (first || switched)
+            {
+                PushMobs(id, map);
+                SyncAppearances(id, map);
+            }
         }
         Broadcast(Net.Frame(payload), id);
     }

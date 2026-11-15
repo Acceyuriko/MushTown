@@ -44,6 +44,10 @@ public partial class MushTownGame : Game
     private readonly bool _shotBalloonRing; // *balloonring*: the balloon is posed with the chat ring's style
     private readonly int _shotAiticks; // --aiticks <n>: n 100ms AI steps at the posed feet
     private readonly long _shotDmg; // --dmg <n>: one posed floating damage number
+    private readonly bool _shotHurt; // --hurt: the player takes one posed hit
+    private readonly bool _shotHurtBlink; // --hurtblink: the same pose in the invisible blink half
+    private readonly bool _shotHurtPre; // --hurtpre: the same stage before the hit
+    private readonly bool _shotHurtLadder; // --hurtladder: the hit lands while on a ladder
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
@@ -78,6 +82,7 @@ public partial class MushTownGame : Game
     private int _frame;
     private float _frameMs; // the shown action's clock: Idle.Frame reads it
     private readonly Fighter _fighter = new(); // combat clocks, ticked at frame-top (never in the world step)
+    private readonly HurtGuard _hurt = new(); // player hurt window: 1080ms from the WZ invincible action
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
     // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
@@ -118,7 +123,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, bool shotHurtLadder = false)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -141,6 +146,10 @@ public partial class MushTownGame : Game
         _shotWear = shotWear;
         _shotWearOnly = shotWearOnly;
         _shotDmg = shotDmg;
+        _shotHurt = shotHurt;
+        _shotHurtBlink = shotHurtBlink;
+        _shotHurtPre = shotHurtPre;
+        _shotHurtLadder = shotHurtLadder;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
         _panelHosts = new[] { _invHost, _statHost, _skillHost, _questHost, _settingsHost, _shopHost }; // the panel-id order the Z row and the hit lookups use
         _assetsDir = FindAssetsDir();
@@ -652,6 +661,7 @@ public partial class MushTownGame : Game
             return;
         }
         _fighter.Tick(dtMs);
+        _hurt.Tick(dtMs);
         foreach (int id in _fighter.ExpiredBuffs) EndBuff(id); // same spot, same order (ticks run first now, ends after)
         if (_fighter.RegenDue) PayoutRegen();
         if (_save?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
@@ -674,12 +684,12 @@ public partial class MushTownGame : Game
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
         int dirNow = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
-        if (_fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
+        if (!_hurt.Invincible && _fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
 
         // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (!blocked && _input.Fire(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
+        if (!blocked && !_hurt.Invincible && _input.Fire(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
             string attackAction = AttackAction();
             _fighter.AttackLock = Delays(attackAction, Hero?.Skin ?? 0).Sum();
@@ -728,7 +738,7 @@ public partial class MushTownGame : Game
         // skills have no default bindings, so this loop is idle until a key
         // is bound to one. Two skills on the same frame cast in ascending id
         // order, not in the table's insertion order.
-        if (!blocked)
+        if (!blocked && !_hurt.Invincible)
         {
             List<BoundAction>? casts = null;
             foreach (var action in _input.Actions)
@@ -752,7 +762,7 @@ public partial class MushTownGame : Game
             JumpHeld = alt,
             JumpPressed = freshAlt,
             UpPressed = freshUp,
-            Locked = _fighter.AttackLock > 0,
+            Locked = _fighter.AttackLock > 0 || _hurt.Invincible,
             Walk = OwnWalk(),
             Jump = OwnJump(),
         };
@@ -779,14 +789,21 @@ public partial class MushTownGame : Game
         }
         if (_mover.Ground != null || _mover.Climb != null) _canLeap = true; // grounded or held: the next airtime gets its leap back
 
-        if (_mover.Action != _shownAction)
+        if (_hurt.Invincible)
+        {
+            _mover.Action = HurtAction();
+            _shownAction = _mover.Action;
+            _frame = HurtFrame();
+            _frameMs = 0;
+        }
+        else if (_mover.Action != _shownAction)
         {
             _shownAction = _mover.Action;
             _frame = 0;
             _frameMs = 0;
         }
         // A moving pose advances; a still ladder holds its frame.
-        if (_mover.Climb == null || _mover.ClimbMoving)
+        if (!_hurt.Invincible && (_mover.Climb == null || _mover.ClimbMoving))
         {
             _frameMs += dtMs;
             _frame = Idle.Frame(_shownAction, Delays(_shownAction, Hero?.Skin ?? 0), _frameMs);

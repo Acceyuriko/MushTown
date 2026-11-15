@@ -849,7 +849,7 @@ public partial class MushTownGame
             throw;
         }
         GameLog($"{chara.Name} entered the game ({mode})");
-        _localWorld = null; ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); _fighter.Cooldowns.Clear(); _fighter.Buffs.Clear(); _fighter.Orbs = 0; // net: the server pushes mobs
+        _localWorld = null; ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); _fighter.Cooldowns.Clear(); _fighter.Buffs.Clear(); _fighter.Orbs = 0; _hurt.Clear(); // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         _input.Seed(kb);
         ReseedPortalState(); // the arrival spot, not the old one

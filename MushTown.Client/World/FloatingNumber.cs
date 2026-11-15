@@ -4,14 +4,15 @@ namespace MushTown.Client;
 
 // One damage number in flight: the digits rise and fade over LifeMs, then
 // the node ends its own life and the game pools it. The skin key picks the
-// digit set (0 = the basic NoRed0 set, the only one exported so far).
+// digit set (0 = NoRed0 for monster damage, -1 = NoViolet0 for player hurt).
 public sealed class FloatingNumber : Component
 {
     public const float LifeMs = 800; // rise and fade over this long
     public const int RisePx = 60;    // px the number floats up
+    public const int HurtSkin = -1;  // NoViolet0, kept apart from monster damage
 
     public string Text = "";
-    public int Skin; // the digit set: 0 is the basic one, a new skin is dmg{key}.json
+    public int Skin; // 0 = dmg.json, -1 = hurtdmg.json, other = dmg{key}.json
     public float X; // head position when the hit landed
     public float Y;
     public float Age;

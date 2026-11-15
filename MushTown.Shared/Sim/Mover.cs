@@ -91,7 +91,7 @@ public sealed class PlayerMover : Component
         var portal = SceneMath.FindPortal(Map.Portals, X, Y);
         bool wantPortal = Input.UpPressed || (Input.Up && !WasInPortal);
         bool traveled = false;
-        if (Climb == null && portal != null && wantPortal && _portalCooldown == 0)
+        if (Climb == null && portal != null && wantPortal && _portalCooldown == 0 && !Input.Locked)
         {
             Travel = portal; // the Client switches maps after the step, then re-seeds WasInPortal
             traveled = true;
@@ -113,7 +113,7 @@ public sealed class PlayerMover : Component
             Ground = null;
             _grabCooldown = GrabCooldown;
         }
-        if (Climb != null) ClimbMove(Input.Up, Input.Down, dt);
+        if (Climb != null && !Input.Locked) ClimbMove(Input.Up, Input.Down, dt);
 
         // held Alt jumps (landings chain into the next jump); down+jump instead
         // drops through the platform, one floor per tap, and only over a floor

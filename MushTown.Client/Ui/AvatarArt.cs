@@ -78,7 +78,15 @@ public partial class MushTownGame
     internal static void AddGearParts(List<CharaPart> parts, int id, string action, int frame,
         IReadOnlyDictionary<(string, string), CharaData> gear)
     {
-        if (!gear.TryGetValue((id.ToString("D8"), action), out var art)) return;
+        string imgId = id.ToString("D8");
+        if (!gear.TryGetValue((imgId, action), out var art))
+        {
+            // Older gear exports have no alert/swingO2 frames: keep the
+            // standing gear on during the hurt pose instead of dropping it.
+            if (action is not ("alert" or "swingO2")) return;
+            if (!gear.TryGetValue((imgId, "stand1"), out art)) return;
+        }
+        if (frame >= art.Frames.Count) return;
         parts.AddRange(art.Frames[frame].Parts);
     }
 

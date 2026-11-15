@@ -25,7 +25,11 @@ public partial class MushTownGame
             foreach (int id in artGears) // wearable art: same frames as the body (delays ride the body file)
             {
                 string imgId = id.ToString("D8");
-                var gear = LoadJson<CharaData>(Path.Combine(_assetsDir, "chara", "gear", imgId, $"{action}.json"));
+                string file = Path.Combine(_assetsDir, "chara", "gear", imgId, $"{action}.json");
+                // Old gear exports may predate the two hurt actions. They
+                // fall back to stand1 in AddGearParts instead of hiding gear.
+                if (!File.Exists(file) && action is "alert" or "swingO2") continue;
+                var gear = LoadJson<CharaData>(file);
                 if (gear.Frames.Count != first.Frames.Count)
                     throw new InvalidDataException($"gear {imgId} {action} has {gear.Frames.Count} frames, want {first.Frames.Count}");
                 if (gear.Frames.Any(f => f.Parts.Count == 0))

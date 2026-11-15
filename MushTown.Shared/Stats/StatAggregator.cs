@@ -1,6 +1,6 @@
 namespace MushTown.Shared;
 
-// The 27 keys every character-stat source can modify. The order is the
+// The 28 keys every character-stat source can modify. The order is the
 // canonical order used by snapshots and the stat panel.
 public enum StatKey
 {
@@ -23,6 +23,7 @@ public enum StatKey
     CRIT_DAMAGE,
     IED_PCT,
     STATUS_RESISTANCE,
+    KNOCKBACK_RESISTANCE,
     BUFF_DURATION_PCT,
     CDR_PCT,
     COOLDOWN_SKIP_PCT,

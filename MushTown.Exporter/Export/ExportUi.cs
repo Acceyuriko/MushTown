@@ -381,6 +381,24 @@ public static partial class Export
         }
         WriteJson(Path.Combine(outDir, "effect", "dmg.json"), data);
         Console.WriteLine("damage skin: NoRed0 0-9");
+
+        var hurt = new DmgData();
+        for (int d = 0; d <= 9; d++)
+        {
+            string node = $"BasicEff.img/NoViolet0/{d}";
+            var origin = WzNodeUtil.ResolveUol(effect.Find(node))?.Nodes["origin"]?.Value as Wz_Vector;
+            if (origin == null)
+            {
+                Console.WriteLine($"{node}: no origin");
+                return false;
+            }
+            string path = $"effect/hurtdmg/{d}.png";
+            if (!UiPng.Save(effect, "Effect", node, Path.Combine(outDir, path)))
+                return false;
+            hurt.Digits.Add(new DmgDigit { Image = path, Oy = origin.Y });
+        }
+        WriteJson(Path.Combine(outDir, "effect", "hurtdmg.json"), hurt);
+        Console.WriteLine("hurt damage skin: NoViolet0 0-9");
         return true;
     }
 }

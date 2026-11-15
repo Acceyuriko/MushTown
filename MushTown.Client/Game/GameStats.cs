@@ -143,6 +143,7 @@ public partial class MushTownGame
     private long MaxHpNow() => _stats.IntValue(StatKey.MAX_HP);
     private long MaxMpNow() => _stats.IntValue(StatKey.MAX_MP);
     private int OwnDef() => (int)_stats.IntValue(StatKey.DEF);
+    private int OwnKnockbackResistance() => (int)_stats.IntValue(StatKey.KNOCKBACK_RESISTANCE);
     private float OwnWalk() => (float)_stats.DoubleValue(StatKey.SPEED);
     private float OwnJump() => (float)_stats.DoubleValue(StatKey.JUMP);
     private bool HasWeapon() => _stats.IntValue(StatKey.ATT) > 0;

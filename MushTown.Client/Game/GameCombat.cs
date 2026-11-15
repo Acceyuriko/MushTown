@@ -11,6 +11,7 @@ public partial class MushTownGame
     private const int DashPx = 220; // Rush/Flash Blade carry the caster this far along facing
     private const float DiveV = 900f; // Leap Attack slams down this fast (past MaxFall on purpose)
     private const int LeapRange = 400; // Leap Attack needs a platform within this far below
+    private const int HurtPushPx = 60; // backward shove on a hit; WZ has no player distance
 
     // Pooled spawn: a number is a node now, so a pop puts it back in the tree
     // and a fresh one gets its node once. Tree and list move together here,
@@ -85,7 +86,7 @@ public partial class MushTownGame
     private DmgData LoadDmg(int skin)
     {
         if (_dmg.TryGetValue(skin, out var data)) return data;
-        string file = skin == 0 ? "dmg.json" : $"dmg{skin}.json";
+        string file = skin == FloatingNumber.HurtSkin ? "hurtdmg.json" : skin == 0 ? "dmg.json" : $"dmg{skin}.json";
         data = LoadJson<DmgData>(Path.Combine(_assetsDir, "effect", file));
         if (data.Digits.Count != 10)
             throw new InvalidDataException($"damage skin {skin} has {data.Digits.Count} digits, want 10");
@@ -102,18 +103,58 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return false; // CLI sessions have no one to hurt
-        long dealt = Progression.ApplyHurt(chara, damage, OwnDef());
-        if (dealt == 0) return false; // harmless touch: no number, no death
+        long dealt = _hurt.Apply(chara, damage, OwnDef());
+        if (dealt == 0) return false; // invincible or harmless touch: no number, no death
         var num = TakeNumber();
-        num.Text = dealt.ToString(); num.X = _mover.X; num.Y = _mover.Y - 90;
-        if (chara.Hp != 0) return false;
-        Die(chara);
-        return true;
+        num.Text = dealt.ToString(); num.Skin = FloatingNumber.HurtSkin;
+        num.X = _mover.X; num.Y = _mover.Y - 90;
+        if (chara.Hp == 0)
+        {
+            Die(chara);
+            return true;
+        }
+        if (_mover.Climb == null && _mover.Ground != null
+            && HurtGuard.KnocksBack(100 - OwnKnockbackResistance(), Random.Shared.Next(100)))
+            PushBack();
+        return false;
+    }
+
+    // The WZ 00002000.img/invincible references alert frames 1/0 and
+    // swingO2 frames 1/0. Both source actions are exported, then this clock
+    // plays the same 90 + 360 + 90 + 540ms sequence.
+    private string HurtAction()
+    {
+        float elapsed = HurtGuard.InvincibleMs - _hurt.LeftMs;
+        return elapsed < 450 ? "alert" : "swingO2";
+    }
+
+    private int HurtFrame()
+    {
+        float elapsed = HurtGuard.InvincibleMs - _hurt.LeftMs;
+        if (elapsed < 90) return 1;
+        if (elapsed < 450) return 0;
+        if (elapsed < 540) return 1;
+        return 0;
+    }
+
+    private bool HurtBlinkHidden =>
+        _hurt.Invincible && ((int)(_hurt.LeftMs / HurtGuard.BlinkMs) & 1) == 1;
+
+    private void PushBack()
+    {
+        float nx = Math.Clamp(_mover.X + (_mover.FacingRight ? -HurtPushPx : HurtPushPx),
+            _map.Info.VrLeft, _map.Info.VrRight);
+        var ground = SceneMath.ArrivalGround(_map.Footholds, (int)nx, (int)_mover.Y);
+        if (ground == null) return;
+        _mover.X = nx;
+        _mover.Ground = ground;
+        _mover.Y = SceneMath.FootholdY(ground, (int)nx);
     }
 
     // Death: full pools, feet back on the spawn ground, motion cleared.
     private void Die(CharaSlot chara)
     {
+        _hurt.Clear();
         chara.Hp = MaxHpNow();
         chara.Mp = MaxMpNow();
         _mover.X = _map.Info.SpawnX;

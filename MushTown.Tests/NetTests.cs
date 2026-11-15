@@ -141,7 +141,7 @@ public sealed class NetTests
     {
         foreach (string name in Net.Actions)
             Assert.AreEqual(name, Net.ActionName(Net.ActionCode(name)));
-        for (byte code = 0; code <= Net.ActShoot; code++)
+        for (byte code = 0; code <= Net.ActSwingO2; code++)
             Assert.AreEqual(code, Net.ActionCode(Net.ActionName(code)));
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionCode("xxx"));
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionName(99));
