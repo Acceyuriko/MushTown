@@ -44,6 +44,7 @@ public partial class MushTownGame : Game
     private readonly bool _shotBalloonRing; // *balloonring*: the balloon is posed with the chat ring's style
     private readonly int _shotAiticks; // --aiticks <n>: n 100ms AI steps at the posed feet
     private readonly long _shotDmg; // --dmg <n>: one posed floating damage number
+    private readonly int? _shotDmgSkin; // --dmgskin <id>: that number's skin
     private readonly bool _shotHurt; // --hurt: the player takes one posed hit
     private readonly bool _shotHurtBlink; // --hurtblink: the same arc in the purple flash step
     private readonly bool _shotHurtPre; // --hurtpre: the same stage before the hit
@@ -123,7 +124,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 0, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -146,6 +147,7 @@ public partial class MushTownGame : Game
         _shotWear = shotWear;
         _shotWearOnly = shotWearOnly;
         _shotDmg = shotDmg;
+        _shotDmgSkin = shotDmgSkin;
         _shotHurt = shotHurt;
         _shotHurtBlink = shotHurtBlink;
         _shotHurtPre = shotHurtPre;

@@ -55,7 +55,8 @@ public partial class MushTownGame
     }
 
     // Damage numbers: the digits of the number's skin, rising and fading
-    // over FloatingNumber.LifeMs.
+    // over FloatingNumber.LifeMs. Skin 0 and the hurt skin keep the original
+    // left-to-right layout; collected skins use their origins and spacing.
     private void DrawNumbers()
     {
         if (_numbers.Count == 0) return;
@@ -65,18 +66,79 @@ public partial class MushTownGame
             float k = n.Age / FloatingNumber.LifeMs;
             int alpha = k < 0.7f ? 255 : (int)(255 * (1 - (k - 0.7f) / 0.3f));
             var tint = new Color(255, 255, 255, alpha);
-            int totalW = 0;
-            foreach (char c in n.Text) totalW += _textures[dmg.Digits[c - '0'].Image].Width;
-            float x = n.X - totalW / 2f - _camera.X;
             float baseY = n.Y - FloatingNumber.RisePx * k - _camera.Y;
-            foreach (char c in n.Text)
+            if (n.Skin <= 0)
+            {
+                DrawBasicNumbers(n.Text, dmg, n.X, baseY, tint);
+                continue;
+            }
+            if (dmg.Words.FirstOrDefault(w => w.Name == n.Text) is { } word)
+            {
+                var wordTex = _textures[word.Image];
+                _spriteBatch.Draw(wordTex, new Vector2(n.X - word.Ox - _camera.X, baseY - word.Oy),
+                    null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+                continue;
+            }
+            if (!long.TryParse(n.Text, out long damage)) continue;
+            DrawSkinNumbers(dmg.Unit != null ? DmgUnit.Format(damage) : n.Text, dmg, n.X, baseY, tint);
+        }
+    }
+
+    // The original base-skin layout: pack the raw picture widths from the
+    // left edge; Ox stays 0 in dmg.json, so it would shift these digits.
+    private void DrawBasicNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint)
+    {
+        int totalW = 0;
+        foreach (char c in text) totalW += _textures[dmg.Digits[c - '0'].Image].Width;
+        float x = centerX - totalW / 2f - _camera.X;
+        foreach (char c in text)
+        {
+            var d = dmg.Digits[c - '0'];
+            var tex = _textures[d.Image];
+            _spriteBatch.Draw(tex, new Vector2(x, baseY - d.Oy), null, tint,
+                0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+            x += tex.Width;
+        }
+    }
+
+    // Collected skins: each picture's origin lands in the middle of its
+    // advance box (left = pen + width / 2 - Ox); NumberSpace widens digits.
+    // A unit skin's "." and K/M/B come from DmgUnit, with DotSpace after the
+    // dot and NumberSpace before the unit letter.
+    private void DrawSkinNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint)
+    {
+        var glyphs = new List<(Texture2D Tex, int Ox, int Oy, int SpaceBefore, int SpaceAfter)>();
+        foreach (char c in text)
+        {
+            if (c is >= '0' and <= '9')
             {
                 var d = dmg.Digits[c - '0'];
-                var tex = _textures[d.Image];
-                _spriteBatch.Draw(tex, new Vector2(x, baseY - d.Oy), null, tint,
-                    0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
-                x += tex.Width;
+                glyphs.Add((_textures[d.Image], d.Ox, d.Oy, 0, dmg.NumberSpace));
             }
+            else if (c == '.' && dmg.Unit != null)
+            {
+                var d = dmg.Unit.Images[0];
+                glyphs.Add((_textures[d.Image], d.Ox, d.Oy, 0, dmg.Unit.DotSpace));
+            }
+            else if (dmg.Unit != null)
+            {
+                int unit = c switch { 'K' => 1, 'M' => 2, 'B' => 3, _ => -1 };
+                if (unit < 0) continue;
+                var d = dmg.Unit.Images[unit];
+                glyphs.Add((_textures[d.Image], d.Ox, d.Oy, dmg.Unit.NumberSpace, 0));
+            }
+        }
+        float totalW = 0;
+        for (int i = 0; i < glyphs.Count; i++)
+            totalW += glyphs[i].SpaceBefore + glyphs[i].Tex.Width
+                + (i < glyphs.Count - 1 ? glyphs[i].SpaceAfter : 0);
+        float x = centerX - totalW / 2f - _camera.X;
+        foreach (var g in glyphs)
+        {
+            x += g.SpaceBefore;
+            _spriteBatch.Draw(g.Tex, new Vector2(x + g.Tex.Width / 2f - g.Ox, baseY - g.Oy),
+                null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+            x += g.Tex.Width + g.SpaceAfter;
         }
     }
 
@@ -91,6 +153,9 @@ public partial class MushTownGame
         if (data.Digits.Count != 10)
             throw new InvalidDataException($"damage skin {skin} has {data.Digits.Count} digits, want 10");
         foreach (var d in data.Digits) LoadTexture(d.Image);
+        foreach (var w in data.Words) LoadTexture(w.Image);
+        if (data.Unit != null)
+            foreach (var u in data.Unit.Images) LoadTexture(u.Image);
         _dmg[skin] = data;
         return data;
     }

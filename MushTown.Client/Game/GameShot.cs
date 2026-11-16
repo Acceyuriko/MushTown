@@ -14,10 +14,12 @@ public partial class MushTownGame
     {
         StartLocalWorld();
         RefreshStats();
+        if (_shotHit && _shotDmgSkin is { } hitSkin) Hero!.DamageSkin = hitSkin; // --dmgskin: the --hit number reads the demo's own skin
         if (_shotDmg > 0)
         {
             var num = TakeNumber();
             num.Text = _shotDmg.ToString();
+            num.Skin = _shotDmgSkin ?? 0;
             num.X = _mover.X;
             num.Y = _mover.Y - 90;
         }

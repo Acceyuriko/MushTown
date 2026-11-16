@@ -441,6 +441,23 @@ public sealed class DmgUnit
     public List<DmgDigit> Images { get; set; } = new();
     public int DotSpace { get; set; }
     public int NumberSpace { get; set; }
+
+    // 1234567890 -> "1.2B": K/M/B, one decimal only when it is not zero.
+    public static string Format(long damage)
+    {
+        if (damage < 1000) return damage.ToString();
+        long scale = 1000;
+        int unit = 0;
+        while (unit < 2 && damage >= scale * 1000)
+        {
+            scale *= 1000;
+            unit++;
+        }
+        long whole = damage / scale;
+        long tenth = damage / (scale / 10) % 10;
+        char suffix = unit == 0 ? 'K' : unit == 1 ? 'M' : 'B';
+        return tenth == 0 ? $"{whole}{suffix}" : $"{whole}.{tenth}{suffix}";
+    }
 }
 
 // Animated char-select overlay: assets/ui/{stem}.json (ghost, portal,

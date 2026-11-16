@@ -18,6 +18,18 @@ public class DamageSkinDataTests
     }
 
     [TestMethod]
+    public void UnitFormat_UsesKMBWithOneDecimal()
+    {
+        Assert.AreEqual("999", DmgUnit.Format(999));
+        Assert.AreEqual("1K", DmgUnit.Format(1_000));
+        Assert.AreEqual("1.2K", DmgUnit.Format(1_234));
+        Assert.AreEqual("12.3M", DmgUnit.Format(12_345_678));
+        Assert.AreEqual("999.9M", DmgUnit.Format(999_900_000));
+        Assert.AreEqual("1B", DmgUnit.Format(1_000_000_000));
+        Assert.AreEqual("1.2B", DmgUnit.Format(1_234_567_890));
+    }
+
+    [TestMethod]
     public void Manifest_ListsDamageSkinsAndAnOldManifestHasNone()
     {
         var manifest = JsonSerializer.Deserialize<ManifestData>("{\"DamageSkins\":[1332,1426]}")!;
