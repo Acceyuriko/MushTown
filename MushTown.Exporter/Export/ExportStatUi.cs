@@ -27,6 +27,7 @@ public static partial class Export
             ("UICharacterInfo.img/common/detailStat/Stat/1/titleImage", "stat_label_mp.png"),
             ("UICharacterInfo.img/common/detailStat/canvas:attackFont", "stat_label_attack.png"),
             ("UICharacterInfo.img/common/detailStat/canvas:utilityFont", "stat_label_utility.png"),
+            ("UICharacterInfo.img/common/detailStat/canvas:defenseFont", "stat_label_defense.png"), // page 2: defense, speed, knockback resistance
             // The row highlight the official page puts under the hovered row.
             ("UICharacterInfo.img/common/detailStat/canvas:highlightLong", "stat_hl_long.png"),
             ("UICharacterInfo.img/common/detailStat/canvas:highlightShort", "stat_hl_short.png"),

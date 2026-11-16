@@ -69,6 +69,18 @@ public sealed class PlayerMover : Component
         _dropFrames = 0;
     }
 
+    // A hit shoves the feet away from the source (dir -1 left, 1 right): a
+    // small hop that leaves any ladder, flies the arc under the usual gravity
+    // and ends on the next landing. Vx is held in the air, so the Client's
+    // lock (dir 0) keeps the shove going.
+    public void Knock(int dir)
+    {
+        Reset();
+        Ground = null;
+        Vx = dir * WalkSpeed;
+        Vy = JumpV0 * 0.7f;
+    }
+
     // Travel epilogue: still plus the re-travel block.
     public void OnTravel()
     {

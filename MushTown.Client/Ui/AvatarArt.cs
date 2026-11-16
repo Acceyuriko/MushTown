@@ -91,15 +91,15 @@ public partial class MushTownGame
     }
 
     private int DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight, CharaSlot? chara = null,
-        float scale = 1f)
+        float scale = 1f, Color? tint = null)
         => DrawAvatar(feetX, feetY, action, frame, facingRight,
             chara?.Skin ?? 0, chara?.Equips, chara?.CashWorn,
-            chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace, scale);
+            chara?.Hair ?? ItemData.DefaultHair, chara?.Face ?? ItemData.DefaultFace, scale, tint);
 
     // Remote peers have no CharaSlot: their five look fields come straight
     // from PeerArt, and a missing id just draws no part for it.
     private int DrawAvatar(int feetX, int feetY, string action, int frame, bool facingRight,
-        int skin, List<int>? worn, List<int>? cashWorn, int hair, int face, float scale = 1f)
+        int skin, List<int>? worn, List<int>? cashWorn, int hair, int face, float scale = 1f, Color? tint = null)
     {
         int centerX = AvatarCenterX(feetX, facingRight, skin);
         var parts = MergeParts(action, frame, skin, worn, cashWorn, hair, face);
@@ -111,11 +111,11 @@ public partial class MushTownGame
             {
                 var tex = _textures[part.Image];
                 int x = (int)MathF.Round(feetX - (part.X + tex.Width) * scale);
-                DrawTexture(part.Image, x, feetY + dy, true, scale);
+                DrawTexture(part.Image, x, feetY + dy, true, scale, tint);
             }
             else
             {
-                DrawTexture(part.Image, feetX + dx, feetY + dy, false, scale);
+                DrawTexture(part.Image, feetX + dx, feetY + dy, false, scale, tint);
             }
         }
         return centerX;

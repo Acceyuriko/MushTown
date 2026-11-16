@@ -245,6 +245,70 @@ public sealed class MoverTests
         Assert.AreEqual(y, m.Y);
     }
 
+    // Step with the swing/hurt lock on, like the Client does for the whole hit.
+    private static int StepLocked(PlayerMover m, out float topY)
+    {
+        var locked = Input();
+        locked.Locked = true;
+        m.Input = locked;
+        topY = m.Y;
+        int frames = 0;
+        do
+        {
+            m.Update(Dt);
+            topY = Math.Min(topY, m.Y);
+            frames++;
+        } while (m.Ground == null && frames < 120);
+        return frames;
+    }
+
+    [TestMethod]
+    public void Knock_FliesAnArcAwayFromTheSourceAndLands()
+    {
+        var map = TestMap();
+        var m = Mover(map, 300, 300);
+        m.FacingRight = true; // facing right, pushed right: the direction is the caller's, not the facing
+        m.Knock(1);
+        Assert.IsNull(m.Ground);
+        int frames = StepLocked(m, out float topY);
+        Assert.IsTrue(frames > 10 && frames < 120, "the arc takes a while, then lands");
+        Assert.IsTrue(topY < 300 - 20, "it leaves the ground, not a teleport");
+        Assert.AreEqual(300f, m.Y);
+        Assert.IsNotNull(m.Ground);
+        Assert.IsTrue(m.X > 330 && m.X < 400, $"landed {m.X - 300}px away");
+        float landed = m.X;
+        m.Update(Dt);
+        Assert.AreEqual(landed, m.X, "it stops after landing");
+    }
+
+    [TestMethod]
+    public void Knock_LeftGoesLeft()
+    {
+        var map = TestMap();
+        var m = Mover(map, 300, 300);
+        m.Knock(-1);
+        StepLocked(m, out _);
+        Assert.IsTrue(m.X < 270);
+    }
+
+    [TestMethod]
+    public void Knock_OnLadder_LeavesTheLadder()
+    {
+        var map = TestMap();
+        var m = Mover(map, 500, 300);
+        var up = Input();
+        up.Up = true;
+        m.Input = up;
+        m.Update(Dt); // grab on
+        Assert.AreEqual(map.Ladders[0], m.Climb);
+        m.Knock(1);
+        Assert.IsNull(m.Climb);
+        StepLocked(m, out _);
+        Assert.IsNull(m.Climb);
+        Assert.IsNotNull(m.Ground);
+        Assert.IsTrue(m.X > 500);
+    }
+
     [TestMethod]
     public void VoidFall_BelowVrBottom_SetsFellOut()
     {

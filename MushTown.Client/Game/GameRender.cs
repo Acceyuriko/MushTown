@@ -25,8 +25,7 @@ public partial class MushTownGame
         draws.Add((feetY, () =>
         {
             int centerX = hero != null ? AvatarCenterX(feetX, _mover.FacingRight, hero.Skin) : feetX;
-            if (!HurtBlinkHidden)
-                DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero);
+            DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero, tint: HurtTint);
             if (hero != null)
                 DrawName(centerX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
         }
@@ -143,9 +142,9 @@ public partial class MushTownGame
                 DrawTexture(b.Image, x + i * cx, y + j * cy, b.Flip);
     }
 
-    private void DrawTexture(string image, int worldX, int worldY, bool flip, float scale = 1f)
+    private void DrawTexture(string image, int worldX, int worldY, bool flip, float scale = 1f, Color? tint = null)
     {
-        _spriteBatch.Draw(_textures[image], new Vector2(worldX - _camera.X, worldY - _camera.Y), null, Color.White,
+        _spriteBatch.Draw(_textures[image], new Vector2(worldX - _camera.X, worldY - _camera.Y), null, tint ?? Color.White,
             0f, Vector2.Zero, scale, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
     }
 

@@ -6,7 +6,6 @@ namespace MushTown.Shared;
 public sealed class HurtGuard : Component
 {
     public const float InvincibleMs = 1080f;
-    public const float BlinkMs = 100f; // fallback blink cadence: 100ms on/off
 
     public float LeftMs { get; private set; }
     public bool Invincible => LeftMs > 0;
@@ -24,6 +23,10 @@ public sealed class HurtGuard : Component
         if (dealt > 0) LeftMs = InvincibleMs;
         return dealt;
     }
+
+    // The shove goes away from the source, whichever way the victim faces:
+    // -1 = left (source on the right), 1 = right.
+    public static int KnockDir(float victimX, float sourceX) => sourceX > victimX ? -1 : 1;
 
     // roll is 0..99. The panel stores Knockback Resistance; the chance to
     // be pushed is its complement, so this takes the push chance.

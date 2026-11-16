@@ -2,7 +2,7 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Shot staging: frozen local worlds for --hit/--skill/--drop/--dmg/--hurt/--hurtpre/--hurtladder/--aiticks.
+// Shot staging: frozen local worlds for --hit/--skill/--drop/--dmg/--hurt/--hurtblink/--hurtpre/--aiticks.
 public partial class MushTownGame
 {
     // Shot mode: a frozen local world. --hit plants the player mid-swing next
@@ -64,40 +64,26 @@ public partial class MushTownGame
             _save.Slots[_slot] ??= DemoChara();
             RefreshStats();
 
-            if (_shotHurtLadder)
-            {
-                var ladder = _map.Ladders.FirstOrDefault(l => l.Ladder) ?? _map.Ladders.FirstOrDefault()
-                    ?? throw new InvalidDataException($"--hurtladder needs a ladder, map {_mapId} has none");
-                _mover.X = ladder.X;
-                _mover.Y = (ladder.Y1 + ladder.Y2) / 2f;
-                _mover.Climb = ladder;
-                _mover.Ground = null;
-                _mover.ClimbMoving = false;
-                _mover.FacingRight = true;
-                _mover.Action = "ladder";
-                _frame = 0;
-                SnapCamera();
-                ApplyHurt(10); // Climb != null: the number shows, knockback is skipped
-                _mover.Action = HurtAction();
-                _shownAction = _mover.Action;
-                _frame = HurtFrame();
-                return;
-            }
-
-            float hurtX = first != null ? first.X - 180 : _map.Info.SpawnX;
-            float hurtY = first?.Y ?? _map.Info.SpawnY;
-            _mover.X = hurtX;
-            _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, (int)hurtY)
-                ?? throw new InvalidDataException($"--hurt found no ground at ({hurtX},{hurtY})");
+            if (first == null) throw new InvalidDataException($"--hurt needs a mob, map {_mapId} has none");
+            _mover.X = first.X - 180; // the mob stands to the right
+            _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, (int)first.Y)
+                ?? throw new InvalidDataException($"--hurt found no ground at ({_mover.X},{first.Y})");
             _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
             ResetMotion();
-            _mover.FacingRight = true;
+            _mover.FacingRight = false; // faces away from the mob: the shove still goes away from it
             _mover.Action = "stand1";
             _frame = 0;
-            SnapCamera(); // --hurtpre and --hurt share this camera; the push must not move it
+            SnapCamera(); // --hurtpre and --hurt share this camera; the arc must not move it
             if (_shotHurtPre) return;
-            ApplyHurt(10);
-            if (_shotHurtBlink) _hurt.Tick(130); // 950ms left: the odd 100ms bucket is the dark blink
+            ApplyHurt(10, first.Uid);
+            // Real physics, 60 steps a second: 5 steps = 83ms (purple flash step),
+            // 11 steps = 183ms (normal step, near the top of the arc).
+            _mover.Input = new PlayerInput { Locked = true, Walk = OwnWalk(), Jump = OwnJump() };
+            for (int i = _shotHurtBlink ? 5 : 11; i > 0; i--)
+            {
+                _mover.Update(1f / 60);
+                _hurt.Tick(1000f / 60);
+            }
             _mover.Action = HurtAction();
             _shownAction = _mover.Action;
             _frame = HurtFrame();

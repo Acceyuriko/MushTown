@@ -11,7 +11,8 @@ public partial class MushTownGame
     private const int DashPx = 220; // Rush/Flash Blade carry the caster this far along facing
     private const float DiveV = 900f; // Leap Attack slams down this fast (past MaxFall on purpose)
     private const int LeapRange = 400; // Leap Attack needs a platform within this far below
-    private const int HurtPushPx = 60; // backward shove on a hit; WZ has no player distance
+    private const float HurtFlashMs = 100f; // purple / normal swap cadence; WZ has no field for it
+    private static readonly Color HurtPurple = new(200, 130, 255);
 
     // Pooled spawn: a number is a node now, so a pop puts it back in the tree
     // and a fresh one gets its node once. Tree and list move together here,
@@ -99,7 +100,7 @@ public partial class MushTownGame
     // through, death respawns at the map spawn with full pools (buffs stay).
     // Returns true on death: the caller drops the rest of the frame's touches
     // (judged at the corpse, not the spawn).
-    private bool ApplyHurt(long damage)
+    private bool ApplyHurt(long damage, int mobUid)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return false; // CLI sessions have no one to hurt
@@ -113,9 +114,9 @@ public partial class MushTownGame
             Die(chara);
             return true;
         }
-        if (_mover.Climb == null && _mover.Ground != null
+        if (_mobs.TryGetValue(mobUid, out var source)
             && HurtGuard.KnocksBack(100 - OwnKnockbackResistance(), Random.Shared.Next(100)))
-            PushBack();
+            _mover.Knock(HurtGuard.KnockDir(_mover.X, source.X));
         return false;
     }
 
@@ -137,19 +138,9 @@ public partial class MushTownGame
         return 0;
     }
 
-    private bool HurtBlinkHidden =>
-        _hurt.Invincible && ((int)(_hurt.LeftMs / HurtGuard.BlinkMs) & 1) == 1;
-
-    private void PushBack()
-    {
-        float nx = Math.Clamp(_mover.X + (_mover.FacingRight ? -HurtPushPx : HurtPushPx),
-            _map.Info.VrLeft, _map.Info.VrRight);
-        var ground = SceneMath.ArrivalGround(_map.Footholds, (int)nx, (int)_mover.Y);
-        if (ground == null) return;
-        _mover.X = nx;
-        _mover.Ground = ground;
-        _mover.Y = SceneMath.FootholdY(ground, (int)nx);
-    }
+    // Purple on the first flash step, normal on the next, for the whole hit.
+    private Color? HurtTint =>
+        _hurt.Invincible && ((int)((HurtGuard.InvincibleMs - _hurt.LeftMs) / HurtFlashMs) & 1) == 0 ? HurtPurple : null;
 
     // Death: full pools, feet back on the spawn ground, motion cleared.
     private void Die(CharaSlot chara)

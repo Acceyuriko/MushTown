@@ -11,6 +11,8 @@ public partial class MushTownGame
 {
     private static readonly PanelLayout _statLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-stat.json"));
 
+    private const int UtilityFirstRow = 22; // the bottom block's rows: page 2 shows the next six values in the same boxes
+    private int _statPage; // 0 = mesos / exp page, 1 = defense / knockback page
     private bool _statPlaced; // the window took the spot from the layout file
 
     private int StatW => _statLay.Get("w", 472);
@@ -34,7 +36,7 @@ public partial class MushTownGame
         foreach (string f in new[]
         {
             "charinfo_main.png", "stat_win.png", "stat_statbar.png", "stat_name.png", "stat_x.png", "stat_page.png",
-            "stat_label_main.png", "stat_label_mp.png", "stat_label_attack.png", "stat_label_utility.png",
+            "stat_label_main.png", "stat_label_mp.png", "stat_label_attack.png", "stat_label_utility.png", "stat_label_defense.png",
             "stat_hl_long.png", "stat_hl_short.png",
             "tip_nw.png", "tip_ne.png", "tip_sw.png", "tip_se.png", "tip_n.png", "tip_s.png",
             "tip_w.png", "tip_e.png", "tip_c.png",
@@ -91,7 +93,8 @@ public partial class MushTownGame
         body.Add(new Picture("ui/stat_label_main.png", bx + 12, by + 52)); // HP, STR, INT
         body.Add(new Picture("ui/stat_label_mp.png", bx + 231, by + 52)); // MP
         body.Add(new Picture("ui/stat_label_attack.png", bx + 11, by + 136)); // the attack stats
-        body.Add(new Picture("ui/stat_label_utility.png", bx + 12, by + 329)); // mesos and exp
+        // Page 1 is mesos / drop / exp, page 2 is defense / speed / knockback resistance; the art carries the dots.
+        body.Add(new Picture(_statPage == 0 ? "ui/stat_label_utility.png" : "ui/stat_label_defense.png", bx + 12, by + 329));
         body.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => CombatPower().ToString("#,##0"), bx + _statLay.Get("cpX", 437), by + _statLay.Get("cpY", 9), Color.White)); // combat power, at the right end of the bar
         var rows = StatRows();
         for (int i = 0; i < rows.Count; i++)
@@ -102,27 +105,12 @@ public partial class MushTownGame
             o.Add(new Rect(new Rectangle(bx + row.X, by + row.Y, row.W, 16)));
             o.Add(new Button { Kind = ButtonKind.Silent }); // the row only takes the hover
             o.Add(new StatHighlight(row.Long ? "ui/stat_hl_long.png" : "ui/stat_hl_short.png"));
-            o.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(index), row.Vx - row.X, row.Vy - row.Y, Color.White));
+            o.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(index >= UtilityFirstRow ? index + _statPage * 6 : index), row.Vx - row.X, row.Vy - row.Y, Color.White));
             body.AddChild(o);
         }
-        // The official page 1 has three utility rows. The extra row sits in
-        // its six-pixel bottom margin and gives the knockback stat a visible
-        // home without hiding it behind the page-2 flip.
-        var kb = new GameObject();
-        int kbX = bx + _statLay.Get("utilLeftX", 5);
-        int kbY = by + _statLay.Get("utilExtraY", 390);
-        kb.Add(new Rect(new Rectangle(kbX, kbY, _statLay.Get("utilLeftW", 215), 16)));
-        kb.Add(new Button { Kind = ButtonKind.Silent });
-        kb.Add(new StatHighlight("ui/stat_hl_long.png"));
-        kb.Add(new Invoke(gfx =>
-        {
-            var r = kb.Get<Rect>()!.Screen;
-            var t = gfx.Ui.GetSmall("KNOCKBACK RESISTANCE");
-            gfx.Sb.Draw(t, new Vector2(r.X + 2, r.Y + (r.Height - t.Height) / 2f), Color.White);
-        }));
-        kb.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(28),
-            _statLay.Get("utilExtraVx", 217) - _statLay.Get("utilLeftX", 5), 1, Color.White));
-        body.AddChild(kb);
+        // The page dots flip the bottom block between its two pages.
+        body.AddChild(PanelButton(new Rectangle(bx + _statLay.Get("pageX", 204), by + _statLay.Get("pageY", 388),
+            _statLay.Get("pageW", 37), _statLay.Get("pageH", 11)), "", () => { _statPage ^= 1; _statBuilt = false; }, ButtonKind.Click));
     }
 
     // One stat column: the hover box (x, w), the number spot (vx) and the
@@ -170,8 +158,9 @@ public partial class MushTownGame
     // follow the game. The index follows the row order of StatRows: the main
     // area (HP, MP, STR, DEX, INT, LUK), the attack area (damage range, final
     // damage, attack power, critical rate), the utility area (mesos, exp),
-    // and 28 = the extra knockback-resistance row. The stats the game has no
-    // value for show 0.
+    // and 28..33 = page 2 of the bottom block (defense, status resistance,
+    // speed, jump, knockback resistance, attack speed). The stats the game has
+    // no value for show 0.
     private string StatValue(int index)
     {
         var c = _save?.Slots[_slot];
@@ -197,7 +186,7 @@ public partial class MushTownGame
             case 13: return $"{_stats.IntValue(StatKey.CRIT_RATE)}%"; // critical rate
             case 22: return $"{(c?.Mesos ?? 0).ToString("#,##0")}";
             case 26: return $"{(c?.Exp ?? 0):#,##0} / {Progression.ExpNext(c?.Level ?? 1):#,##0}";
-            case 28: return $"{_stats.IntValue(StatKey.KNOCKBACK_RESISTANCE)}%";
+            case 32: return $"{_stats.IntValue(StatKey.KNOCKBACK_RESISTANCE)}%";
             default: return "0";
         }
     }
