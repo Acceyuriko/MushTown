@@ -291,16 +291,59 @@ public sealed class MoverTests
     }
 
     [TestMethod]
-    public void Knock_AirRulesStillTakeTheKeys()
+    public void Knock_ArcIgnoresTheDirectionKeys()
     {
         var map = TestMap();
         var plain = Mover(map, 300, 300);
         plain.Knock(1);
         StepUntilLanded(plain, out _);
-        var steered = Mover(map, 300, 300);
-        steered.Knock(1);
-        StepUntilLanded(steered, out _, -1); // holding the other way in the air
-        Assert.IsTrue(steered.X < plain.X, "the held key still drifts the shove");
+        var held = Mover(map, 300, 300);
+        held.Knock(1);
+        StepUntilLanded(held, out _, -1); // holding the other way in the air
+        Assert.AreEqual(plain.X, held.X, "the held key does not steer the arc");
+        Assert.IsTrue(held.FacingRight == plain.FacingRight, "and does not turn the character");
+    }
+
+    [TestMethod]
+    public void Knock_AttackLockStillPlaysTheSwingPose()
+    {
+        var map = TestMap();
+        var m = Mover(map, 300, 300);
+        m.Knock(1);
+        var swing = Input();
+        swing.Locked = true; // the Client sets this for the swing, not for the hit
+        m.Input = swing;
+        m.Update(Dt);
+        Assert.IsTrue(m.Knocked, "the arc goes on under a swing");
+        Assert.AreEqual("swingO1", m.Action);
+    }
+
+    [TestMethod]
+    public void Knock_LandingEndsItAndTheKeysWork()
+    {
+        var map = TestMap();
+        var m = Mover(map, 300, 300);
+        m.Knock(1);
+        StepUntilLanded(m, out _);
+        Assert.IsFalse(m.Knocked);
+        m.Input = Input(1);
+        m.Update(Dt);
+        Assert.AreEqual("walk1", m.Action);
+    }
+
+    [TestMethod]
+    public void Knock_TimeoutEndsItInTheAirAndTheNormalJumpPoseReturns()
+    {
+        var map = TestMap();
+        var m = new PlayerMover { Map = map, X = 300, Y = -400 }; // a long fall: the landing is far away
+        m.Knock(1);
+        m.Input = Input();
+        for (int i = 0; i < 20; i++) m.Update(Dt); // 333ms
+        Assert.IsTrue(m.Knocked);
+        for (int i = 0; i < 20; i++) m.Update(Dt); // 667ms
+        Assert.IsNull(m.Ground);
+        Assert.IsFalse(m.Knocked);
+        Assert.AreEqual("jump", m.Action);
     }
 
     [TestMethod]

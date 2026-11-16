@@ -33,6 +33,7 @@ public sealed class PlayerMover : Component
     private const int DropFrames = 3; // down+jump ignores landings for ~3 frames: just enough to clear the dropped line
     private const int PortalCooldown = 30; // frames after travel during which Up cannot travel again (~0.5s)
     private const int GrabCooldown = 20; // frames after leaving a ladder during which Up/Down cannot re-grab (~0.33s)
+    public const float KnockMaxMs = 500f; // the knocked state ends on landing or after this long, whichever comes first
     public const int LadderTopDrop = 120; // a ladder may end above its platform: step onto a top platform within this drop
 
     // Feet position, horizontal/vertical speed, and the foothold stood on
@@ -42,6 +43,8 @@ public sealed class PlayerMover : Component
     public LadderItem? Climb; // set while on a ladder or rope
     public bool ClimbMoving; // climb pose only animates while sliding
     public bool FacingRight; // raw sprites face left; the Client mirrors when this is set
+    public bool Knocked; // in the knock arc: the direction, ladder and portal keys are ignored
+    private float _knockLeftMs;
     public bool WasInPortal; // Up held across frames only travels on walk-in, never standing still
     public string Action = "stand1"; // art key the Client draws (and the net maps to a code)
     public string AttackAction = "swingO1"; // the weapon attack art the Client picks for this swing
@@ -67,13 +70,18 @@ public sealed class PlayerMover : Component
         Climb = null;
         ClimbMoving = false;
         _dropFrames = 0;
+        Knocked = false;
     }
 
     // A hit shoves the feet away from the source (dir -1 left, 1 right): a
-    // small hop that leaves any ladder, then the usual air rules take over.
+    // small hop that leaves any ladder. The arc ignores the direction, ladder
+    // and portal keys until the landing (or KnockMaxMs); attacks and skills
+    // are not the mover's business and stay live.
     public void Knock(int dir)
     {
         Reset();
+        Knocked = true;
+        _knockLeftMs = KnockMaxMs;
         Ground = null;
         _grabCooldown = GrabCooldown; // a held Up must not grab the ladder straight back
         Vx = dir * WalkSpeed;
@@ -92,8 +100,14 @@ public sealed class PlayerMover : Component
         if (_portalCooldown > 0) _portalCooldown--;
         if (_grabCooldown > 0) _grabCooldown--;
         JumpSfx = false; Travel = null; FellOut = false; // fresh outputs per step
-        int dir = Input.Locked ? 0 : Input.Dir; // mid-swing: feet planted, facing kept
-        if (!Input.Locked && Input.Dir != 0 && Climb == null) FacingRight = Input.Dir > 0;
+        if (Knocked)
+        {
+            _knockLeftMs -= dt * 1000f;
+            if (_knockLeftMs <= 0) Knocked = false;
+        }
+        bool frozen = Input.Locked || Knocked; // mid-swing or mid-knock: the movement keys are off
+        int dir = frozen ? 0 : Input.Dir; // mid-swing: feet planted, facing kept
+        if (!frozen && Input.Dir != 0 && Climb == null) FacingRight = Input.Dir > 0;
 
         // Up at a portal travels: tap anywhere in range, or hold Up and walk
         // in (portal wins over ladder). Travel cools down for ~0.5s, and
@@ -102,12 +116,12 @@ public sealed class PlayerMover : Component
         var portal = SceneMath.FindPortal(Map.Portals, X, Y);
         bool wantPortal = Input.UpPressed || (Input.Up && !WasInPortal);
         bool traveled = false;
-        if (Climb == null && portal != null && wantPortal && _portalCooldown == 0 && !Input.Locked)
+        if (Climb == null && portal != null && wantPortal && _portalCooldown == 0 && !frozen)
         {
             Travel = portal; // the Client switches maps after the step, then re-seeds WasInPortal
             traveled = true;
         }
-        if (Climb == null && !traveled && _grabCooldown == 0 && (Input.Up || Input.Down) && !Input.Locked)
+        if (Climb == null && !traveled && _grabCooldown == 0 && (Input.Up || Input.Down) && !frozen)
             GrabLadder(Input.Up, Input.Down);
         if (!traveled) WasInPortal = portal != null;
 
@@ -214,6 +228,7 @@ public sealed class PlayerMover : Component
                 FellOut = true;
         }
 
+        if (Ground != null) Knocked = false; // landed: the keys are back next frame
         Action = Input.Locked ? AttackAction
             : Climb != null ? (Climb.Ladder ? "ladder" : "rope")
             : Ground == null ? "jump" : Input.Down ? "prone" : dir != 0 && moved ? "walk1" : "stand1";

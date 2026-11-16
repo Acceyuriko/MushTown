@@ -75,7 +75,20 @@ public partial class MushTownGame
             _frame = 0;
             SnapCamera(); // --hurtpre and --hurt share this camera; the arc must not move it
             if (_shotHurtPre) return;
+            var standGround = _mover.Ground;
+            float standY = _mover.Y;
             ApplyHurt(10, first.Uid);
+            if (_shotAction != "stand1") // --action: the pose a moving or swinging player keeps while hurt, on the ground
+            {
+                _mover.Reset();
+                _mover.Ground = standGround;
+                _mover.Y = standY;
+                _hurt.Tick(_shotHurtBlink ? 83 : 183); // 83ms = purple step, 183ms = normal step
+                _mover.Action = _shotAction;
+                _shownAction = _shotAction;
+                _frame = _shotFrame;
+                return;
+            }
             // Real physics, 60 steps a second: 5 steps = 83ms (purple flash step),
             // 8 steps = 133ms (normal step, near the top of the arc).
             _mover.Input = new PlayerInput { Walk = OwnWalk(), Jump = OwnJump() };

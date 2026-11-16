@@ -682,7 +682,7 @@ public partial class MushTownGame : Game
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
         int dirNow = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
-        if (_fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
+        if (_fighter.AttackLock <= 0 && !_mover.Knocked && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
 
         // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
@@ -787,7 +787,9 @@ public partial class MushTownGame : Game
         }
         if (_mover.Ground != null || _mover.Climb != null) _canLeap = true; // grounded or held: the next airtime gets its leap back
 
-        bool hurtPose = _hurt.Invincible && _fighter.AttackLock <= 0; // a swing keeps its own pose
+        // Pose priority while invincible: a swing, then the knock arc (alert),
+        // then the normal pose, where standing still is alert.
+        bool hurtPose = _hurt.Invincible && _fighter.AttackLock <= 0 && (_mover.Knocked || _mover.Action == "stand1");
         if (hurtPose)
         {
             _mover.Action = "alert";
