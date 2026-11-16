@@ -394,6 +394,7 @@ public sealed class ItemData
     public bool HasArt { get; set; } // the exporter wrote doll frames for this equip (rings carry none)
     public bool Cash { get; set; } // WZ info/cash: cash-shop cosmetic or utility, not normal gear or a consumable
     public int Cosmetic { get; set; } // WZ spec/cosmetic: the hair/face look a coupon gives (0 = not a coupon)
+    public int DamageSkin { get; set; } // the damage skin a coupon gives (Etc/DamageSkin.img id; 0 = not a damage skin coupon)
 }
 
 // Basic damage skin digits: assets/effect/dmg.json (BasicEff.img NoRed0,
@@ -402,12 +403,44 @@ public sealed class ItemData
 public sealed class DmgData
 {
     public List<DmgDigit> Digits { get; set; } = new();
+
+    // The other WZ sets of a collected skin (assets/effect/dmg<id>.json):
+    // Digits is NoRed0, then the big normal, the small and the big critical
+    // digits. The base skin file has none of these.
+    public List<DmgDigit> Red1 { get; set; } = new(); // NoRed1
+    public List<DmgDigit> Cri0 { get; set; } = new(); // NoCri0
+    public List<DmgDigit> Cri1 { get; set; } = new(); // NoCri1
+    public List<DmgWord> Words { get; set; } = new(); // NoRed0 Miss/guard/resist/shot/counter (a skin may lack some)
+    public DmgDigit? Effect3 { get; set; } // NoCri1/effect3: the picture a critical hit adds
+    public DmgDigit? Sample { get; set; } // the preview picture; Ox/Oy are 0 when the WZ node has no origin
+    public int NumberSpace { get; set; } // extra pixels between two digits (WZ numberSpace; 0 = none)
+    public DmgUnit? Unit { get; set; } // NoCustom/NoRed0 of a unit skin ("1.2B"); null = plain digits
 }
 
+// One digit or picture: Ox/Oy is the WZ origin, the pixel that lands on the anchor.
 public sealed class DmgDigit
 {
     public string Image { get; set; } = "";
+    public int Ox { get; set; }
     public int Oy { get; set; }
+}
+
+// A word picture of NoRed0 (Miss, guard, ...), drawn centered on its origin.
+public sealed class DmgWord
+{
+    public string Name { get; set; } = "";
+    public string Image { get; set; } = "";
+    public int Ox { get; set; }
+    public int Oy { get; set; }
+}
+
+// The unit skin data: the four unit pictures (WZ NoCustom 0..3), the
+// gap before the dot and the gap between number and unit.
+public sealed class DmgUnit
+{
+    public List<DmgDigit> Images { get; set; } = new();
+    public int DotSpace { get; set; }
+    public int NumberSpace { get; set; }
 }
 
 // Animated char-select overlay: assets/ui/{stem}.json (ghost, portal,

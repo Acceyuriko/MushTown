@@ -395,11 +395,18 @@ public partial class MushTownGame
             var item = LoadJson<ItemData>(f);
             _items[item.ItemId] = item;
         }
-        _potions = _items.Values.Where(d => d.Slot == null && !d.Cash).Select(d => d.ItemId).OrderBy(id => id).ToList();
+        _potions = _items.Values.Where(d => d.Slot == null && !d.Cash && d.DamageSkin == 0).Select(d => d.ItemId).OrderBy(id => id).ToList();
         _equips = _items.Values.Where(d => d.Slot != null && !d.Cash).Select(d => d.ItemId).OrderBy(id => id).ToList();
         foreach (int id in _manifest.Potions.Concat(_manifest.Equips).Concat(_manifest.CashItems)) // the ship list proves complete: listed but unscanned fails here
             if (!_items.ContainsKey(id))
                 throw new InvalidDataException($"manifest lists item {id} with no exported def");
+        foreach (int skin in _manifest.DamageSkins) // a listed skin needs its numbers and a coupon that gives it
+        {
+            if (!File.Exists(Path.Combine(_assetsDir, "effect", $"dmg{skin}.json")))
+                throw new InvalidDataException($"manifest lists damage skin {skin} with no effect/dmg{skin}.json");
+            if (!_items.Values.Any(d => d.DamageSkin == skin))
+                throw new InvalidDataException($"manifest lists damage skin {skin} with no coupon def");
+        }
         foreach (var (id, item) in _items)
         {
             if (item.Slot != null) // equips: every known slot has a box; rings name a plate

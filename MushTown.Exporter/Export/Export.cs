@@ -27,6 +27,9 @@ public static partial class Export
             var str = WzRoot.LoadCategory(ExporterPaths.DataDir, "String");
             return ExportMapUi(ui, map, str, outDir) && ExportWorldMap(ui, map, str, outDir);
         }
+        if (name == "damageskin")
+            return ExportDamageSkins(WzRoot.LoadCategory(ExporterPaths.DataDir, "Etc"), WzRoot.LoadCategory(ExporterPaths.DataDir, "Item"),
+                WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir);
         if (name == "death")
             return ExportDeath(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"), outDir);
         if (name == "cashshop")
@@ -157,7 +160,13 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
+        var etc = WzRoot.LoadCategory(dataDir, "Etc");
         var item = WzRoot.LoadCategory(dataDir, "Item");
+        if (!ExportDamageSkins(etc, item, str, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         if (!ExportPotions(item, str, outDir) || !ExportMesoIcons(item, outDir))
         {
             Environment.ExitCode = 1;
@@ -240,6 +249,7 @@ public static partial class Export
             Equips = GearIds.OrderBy(x => x).ToList(),
             CashItems = CashCoupons.Select(c => c.Id).OrderBy(x => x).ToList(),
             Skills = Skills.Keys.OrderBy(x => x).ToList(),
+            DamageSkins = DamageSkinList.Select(r => r.Skin).OrderBy(x => x).ToList(),
         });
         // Tracked art/fonts (official free Nexon fonts, see art/fonts/README.md)
         // ride into every export: the game reads only assets/fonts/.
