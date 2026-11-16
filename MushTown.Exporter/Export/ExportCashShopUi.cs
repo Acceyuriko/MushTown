@@ -115,7 +115,17 @@ public static partial class Export
 
         foreach (var entry in catalog.Items)
         {
-            if (entry.Group == "Utility")
+            if (entry.Group == "Utility" && DamageSkinList.Any(r => r.Item == entry.Id))
+            {
+                // A damage skin coupon is a USE item (Consume): its def and icon
+                // came from ExportDamageSkins, the shop only lists it.
+                if (!File.Exists(Path.Combine(outDir, "item", $"{entry.Id}.json")))
+                {
+                    Console.WriteLine($"cashshop damage skin coupon {entry.Id} has no exported item json");
+                    return false;
+                }
+            }
+            else if (entry.Group == "Utility")
             {
                 string nodePath = $"Cash/{entry.Id / 10000:D4}.img/{entry.Id:D8}";
                 string name = str.Find($@"Cash.img\{entry.Id}\name")?.GetValueEx<string>("") ?? "";

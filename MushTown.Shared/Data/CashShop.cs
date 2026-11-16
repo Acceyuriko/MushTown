@@ -7,7 +7,7 @@ public static class CashShop
     public static bool Buy(CharaSlot chara, int id, long price, ItemData def, int count, bool decorative)
     {
         long total = price * count;
-        string tab = decorative ? "dec" : "cash";
+        string tab = def.DamageSkin != 0 ? "use" : decorative ? "dec" : "cash"; // a damage skin coupon is a consumable, never a cash item
         if (count <= 0 || total > chara.Mesos || !Inventory.CanAdd(chara, tab, id, count)) return false;
         chara.Mesos -= total;
         return Inventory.Add(chara, tab, id, count);

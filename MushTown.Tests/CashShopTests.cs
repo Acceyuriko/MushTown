@@ -186,4 +186,26 @@ public class CashShopTests
         Assert.AreEqual(HandAct.Moved, hand.Click(hero, "cash", 5400000, defs, Progression.MaxHp(hero.Level), Progression.MaxMp(hero.Level), 1000, 0));
         Assert.AreEqual(HandAct.Used, hand.Click(hero, "cash", 5400000, defs, Progression.MaxHp(hero.Level), Progression.MaxMp(hero.Level), 1100, 0));
     }
+
+    [TestMethod]
+    public void Buy_DamageSkinCoupon_GoesToUseNotCash_AndChargesFivethousand()
+    {
+        var hero = Hero(12000);
+        var coupon = new ItemData { ItemId = 2438864, Price = 5000, DamageSkin = 1332 };
+        Assert.IsTrue(CashShop.Buy(hero, 2438864, 5000, coupon, 1, false));
+        Assert.AreEqual(7000, hero.Mesos);
+        Assert.AreEqual(1, hero.Use![2438864]);
+        Assert.IsNull(hero.CashBag);
+        Assert.IsNull(hero.DecBag);
+    }
+
+    [TestMethod]
+    public void Buy_DamageSkinCoupon_TooPoorChangesNothing()
+    {
+        var hero = Hero(4999);
+        var coupon = new ItemData { ItemId = 2438864, Price = 5000, DamageSkin = 1332 };
+        Assert.IsFalse(CashShop.Buy(hero, 2438864, 5000, coupon, 1, false));
+        Assert.AreEqual(4999, hero.Mesos);
+        Assert.IsNull(hero.Use);
+    }
 }
