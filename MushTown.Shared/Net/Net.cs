@@ -66,18 +66,16 @@ public static class Net
     public const byte ActStabT = 10;
     public const byte ActShoot = 11;
     public const byte ActAlert = 12;
-    public const byte ActSwingO2 = 13;
 
     // Every character action, in load order. Exporter and client init reuse
     // this so a new action needs one list edit (plus its code switch arms).
     // The names follow the weapon attack actions: stand1/walk1/swingO1,
-    // then the other five attack motions. alert/swingO2 are the two actions
-    // the WZ invincible hit animation references.
+    // then the other five attack motions. alert is the hit pose.
     public static readonly string[] Actions =
     {
         "stand1", "walk1", "jump", "ladder", "rope", "prone",
         "swingO1", "swingT1", "swingP1", "stabO1", "stabT1", "shoot1",
-        "alert", "swingO2",
+        "alert",
     };
 
     // Action name <-> code. Both throw on bad input (fail loud, never guess).
@@ -96,7 +94,6 @@ public static class Net
         "stabT1" => ActStabT,
         "shoot1" => ActShoot,
         "alert" => ActAlert,
-        "swingO2" => ActSwingO2,
         _ => throw new InvalidDataException($"bad action name {action}"),
     };
 
@@ -115,7 +112,6 @@ public static class Net
         ActStabT => "stabT1",
         ActShoot => "shoot1",
         ActAlert => "alert",
-        ActSwingO2 => "swingO2",
         _ => throw new InvalidDataException($"bad action code {action}"),
     };
 

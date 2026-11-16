@@ -54,7 +54,7 @@ public class HurtTests
         var m = new PlayerMover { Map = map, X = 500, Y = 300, FacingRight = true };
         m.Ground = map.Footholds[0];
         m.Knock(HurtGuard.KnockDir(m.X, 600)); // the mob is on the right, and so is the facing
-        m.Input = new PlayerInput { Locked = true, Walk = PlayerMover.WalkSpeed, Jump = PlayerMover.JumpV0 };
+        m.Input = new PlayerInput { Walk = PlayerMover.WalkSpeed, Jump = PlayerMover.JumpV0 };
         for (int i = 0; i < 120 && m.Ground == null; i++) m.Update(1f / 60f);
         Assert.IsTrue(m.X < 500, "moved away from the mob");
     }

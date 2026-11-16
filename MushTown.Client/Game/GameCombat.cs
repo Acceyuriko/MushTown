@@ -120,23 +120,9 @@ public partial class MushTownGame
         return false;
     }
 
-    // The WZ 00002000.img/invincible references alert frames 1/0 and
-    // swingO2 frames 1/0. Both source actions are exported, then this clock
-    // plays the same 90 + 360 + 90 + 540ms sequence.
-    private string HurtAction()
-    {
-        float elapsed = HurtGuard.InvincibleMs - _hurt.LeftMs;
-        return elapsed < 450 ? "alert" : "swingO2";
-    }
-
-    private int HurtFrame()
-    {
-        float elapsed = HurtGuard.InvincibleMs - _hurt.LeftMs;
-        if (elapsed < 90) return 1;
-        if (elapsed < 450) return 0;
-        if (elapsed < 540) return 1;
-        return 0;
-    }
+    // The hit pose loops the two alert frames of the WZ invincible action
+    // (frame 1 for 90ms, frame 0 for 360ms) for the whole invincible window.
+    private int HurtFrame() => (HurtGuard.InvincibleMs - _hurt.LeftMs) % 450 < 90 ? 1 : 0;
 
     // Purple on the first flash step, normal on the next, for the whole hit.
     private Color? HurtTint =>

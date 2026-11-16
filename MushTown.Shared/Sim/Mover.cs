@@ -58,8 +58,8 @@ public sealed class PlayerMover : Component
     private int _portalCooldown; // travel cooldown, ticks down alongside the beat
     private int _grabCooldown; // ladder re-grab block after jumping off or mounting the top
 
-    // Stop all motion: still speeds, no ladder, no drop-through. (In-mover
-    // callers run under !Locked; the Client zeroes its own lock separately.)
+    // Stop all motion: still speeds, no ladder, no drop-through. Called by a
+    // ladder grab, a travel and a knock; the Client zeroes its own lock separately.
     public void Reset()
     {
         Vx = 0;
@@ -70,15 +70,14 @@ public sealed class PlayerMover : Component
     }
 
     // A hit shoves the feet away from the source (dir -1 left, 1 right): a
-    // small hop that leaves any ladder, flies the arc under the usual gravity
-    // and ends on the next landing. Vx is held in the air, so the Client's
-    // lock (dir 0) keeps the shove going.
+    // small hop that leaves any ladder, then the usual air rules take over.
     public void Knock(int dir)
     {
         Reset();
         Ground = null;
+        _grabCooldown = GrabCooldown; // a held Up must not grab the ladder straight back
         Vx = dir * WalkSpeed;
-        Vy = JumpV0 * 0.7f;
+        Vy = JumpV0 * 0.5f;
     }
 
     // Travel epilogue: still plus the re-travel block.

@@ -682,12 +682,12 @@ public partial class MushTownGame : Game
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
         int dirNow = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
-        if (!_hurt.Invincible && _fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
+        if (_fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
 
         // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
         // No swing without a judge (the disconnect frame has neither yet).
-        if (!blocked && !_hurt.Invincible && _input.Fire(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
+        if (!blocked && _input.Fire(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
             string attackAction = AttackAction();
             _fighter.AttackLock = Delays(attackAction, Hero?.Skin ?? 0).Sum();
@@ -736,7 +736,7 @@ public partial class MushTownGame : Game
         // skills have no default bindings, so this loop is idle until a key
         // is bound to one. Two skills on the same frame cast in ascending id
         // order, not in the table's insertion order.
-        if (!blocked && !_hurt.Invincible)
+        if (!blocked)
         {
             List<BoundAction>? casts = null;
             foreach (var action in _input.Actions)
@@ -760,7 +760,7 @@ public partial class MushTownGame : Game
             JumpHeld = alt,
             JumpPressed = freshAlt,
             UpPressed = freshUp,
-            Locked = _fighter.AttackLock > 0 || _hurt.Invincible,
+            Locked = _fighter.AttackLock > 0,
             Walk = OwnWalk(),
             Jump = OwnJump(),
         };
@@ -787,9 +787,10 @@ public partial class MushTownGame : Game
         }
         if (_mover.Ground != null || _mover.Climb != null) _canLeap = true; // grounded or held: the next airtime gets its leap back
 
-        if (_hurt.Invincible)
+        bool hurtPose = _hurt.Invincible && _fighter.AttackLock <= 0; // a swing keeps its own pose
+        if (hurtPose)
         {
-            _mover.Action = HurtAction();
+            _mover.Action = "alert";
             _shownAction = _mover.Action;
             _frame = HurtFrame();
             _frameMs = 0;
@@ -801,7 +802,7 @@ public partial class MushTownGame : Game
             _frameMs = 0;
         }
         // A moving pose advances; a still ladder holds its frame.
-        if (!_hurt.Invincible && (_mover.Climb == null || _mover.ClimbMoving))
+        if (!hurtPose && (_mover.Climb == null || _mover.ClimbMoving))
         {
             _frameMs += dtMs;
             _frame = Idle.Frame(_shownAction, Delays(_shownAction, Hero?.Skin ?? 0), _frameMs);

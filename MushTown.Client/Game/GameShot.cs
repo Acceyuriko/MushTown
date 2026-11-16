@@ -77,14 +77,14 @@ public partial class MushTownGame
             if (_shotHurtPre) return;
             ApplyHurt(10, first.Uid);
             // Real physics, 60 steps a second: 5 steps = 83ms (purple flash step),
-            // 11 steps = 183ms (normal step, near the top of the arc).
-            _mover.Input = new PlayerInput { Locked = true, Walk = OwnWalk(), Jump = OwnJump() };
-            for (int i = _shotHurtBlink ? 5 : 11; i > 0; i--)
+            // 8 steps = 133ms (normal step, near the top of the arc).
+            _mover.Input = new PlayerInput { Walk = OwnWalk(), Jump = OwnJump() };
+            for (int i = _shotHurtBlink ? 5 : 8; i > 0; i--)
             {
                 _mover.Update(1f / 60);
                 _hurt.Tick(1000f / 60);
             }
-            _mover.Action = HurtAction();
+            _mover.Action = "alert";
             _shownAction = _mover.Action;
             _frame = HurtFrame();
             return;

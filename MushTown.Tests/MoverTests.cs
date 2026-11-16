@@ -245,12 +245,10 @@ public sealed class MoverTests
         Assert.AreEqual(y, m.Y);
     }
 
-    // Step with the swing/hurt lock on, like the Client does for the whole hit.
-    private static int StepLocked(PlayerMover m, out float topY)
+    // Step with no keys held until the knock lands. A hit does not lock the player.
+    private static int StepUntilLanded(PlayerMover m, out float topY, int dir = 0)
     {
-        var locked = Input();
-        locked.Locked = true;
-        m.Input = locked;
+        m.Input = Input(dir);
         topY = m.Y;
         int frames = 0;
         do
@@ -270,12 +268,13 @@ public sealed class MoverTests
         m.FacingRight = true; // facing right, pushed right: the direction is the caller's, not the facing
         m.Knock(1);
         Assert.IsNull(m.Ground);
-        int frames = StepLocked(m, out float topY);
+        int frames = StepUntilLanded(m, out float topY);
         Assert.IsTrue(frames > 10 && frames < 120, "the arc takes a while, then lands");
-        Assert.IsTrue(topY < 300 - 20, "it leaves the ground, not a teleport");
+        Assert.IsTrue(topY < 300 - 10, "it leaves the ground, not a teleport");
+        Assert.IsTrue(topY > 300 - 30, "a low hop");
         Assert.AreEqual(300f, m.Y);
         Assert.IsNotNull(m.Ground);
-        Assert.IsTrue(m.X > 330 && m.X < 400, $"landed {m.X - 300}px away");
+        Assert.IsTrue(m.X > 325 && m.X < 400, $"landed {m.X - 300}px away");
         float landed = m.X;
         m.Update(Dt);
         Assert.AreEqual(landed, m.X, "it stops after landing");
@@ -287,8 +286,35 @@ public sealed class MoverTests
         var map = TestMap();
         var m = Mover(map, 300, 300);
         m.Knock(-1);
-        StepLocked(m, out _);
+        StepUntilLanded(m, out _);
         Assert.IsTrue(m.X < 270);
+    }
+
+    [TestMethod]
+    public void Knock_AirRulesStillTakeTheKeys()
+    {
+        var map = TestMap();
+        var plain = Mover(map, 300, 300);
+        plain.Knock(1);
+        StepUntilLanded(plain, out _);
+        var steered = Mover(map, 300, 300);
+        steered.Knock(1);
+        StepUntilLanded(steered, out _, -1); // holding the other way in the air
+        Assert.IsTrue(steered.X < plain.X, "the held key still drifts the shove");
+    }
+
+    [TestMethod]
+    public void Knock_PlayerCanJumpRightAfterLanding()
+    {
+        var map = TestMap();
+        var m = Mover(map, 300, 300);
+        m.Knock(1);
+        StepUntilLanded(m, out _);
+        var jump = Input();
+        jump.JumpHeld = true;
+        m.Input = jump;
+        m.Update(Dt);
+        Assert.IsNull(m.Ground);
     }
 
     [TestMethod]
@@ -303,8 +329,8 @@ public sealed class MoverTests
         Assert.AreEqual(map.Ladders[0], m.Climb);
         m.Knock(1);
         Assert.IsNull(m.Climb);
-        StepLocked(m, out _);
-        Assert.IsNull(m.Climb);
+        for (int i = 0; i < 120 && (m.Ground == null || i == 0); i++) m.Update(Dt); // Up stays held
+        Assert.IsNull(m.Climb, "a held Up must not grab the ladder back");
         Assert.IsNotNull(m.Ground);
         Assert.IsTrue(m.X > 500);
     }
