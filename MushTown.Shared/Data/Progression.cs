@@ -118,6 +118,16 @@ public static class Progression
         return true;
     }
 
+    // Deletes one storage cell. The current skin is separate from the list,
+    // so deleting its saved copy leaves the effect in use. False for a bad
+    // cell (an old save has no list).
+    public static bool DeleteDamageSkin(CharaSlot chara, int index)
+    {
+        if (chara.DamageSkins is not { } skins || index < 0 || index >= skins.Count) return false;
+        skins.RemoveAt(index);
+        return true;
+    }
+
     // Uses one damage skin coupon: the old unsaved skin goes to the storage
     // first, then one coupon leaves the USE bag and the new skin takes over.
     // False when the bag has no coupon or the old skin cannot be saved.

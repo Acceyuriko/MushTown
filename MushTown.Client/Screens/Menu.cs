@@ -164,7 +164,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -192,19 +192,22 @@ public partial class MushTownGame
             }
             if (shotScreen is "stat" or "stat2" or "hud") _showStat = true;
             if (shotScreen == "stat2") _statPage = 1;
-            if (shotScreen is "equipui" or "decorations" or "damageskins" or "damageskinsempty")
+            if (shotScreen is "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask")
             {
                 var equip = (EquipWindow)WindowFor(HotkeyAction.Equip)!;
                 if (shotScreen == "decorations") equip.ShowOutfits();
-                if (shotScreen is "damageskins" or "damageskinsempty")
+                if (shotScreen is "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask")
                 {
-                    if (shotScreen == "damageskins")
+                    if (shotScreen != "damageskinsempty")
                     {
                         var chara = _save!.Slots[_slot]!;
-                        chara.DamageSkin = 1354;
+                        chara.DamageSkin = shotScreen == "damageskinsdeleted" ? 1332 : 1354;
                         chara.DamageSkins = new List<int> { 1332, 1354, 1426, 1606 };
+                        if (shotScreen == "damageskinsdeleted") Progression.DeleteDamageSkin(chara, 0);
                     }
                     equip.ShowDamageSkins();
+                    if (shotScreen == "damageskinsselect") equip.SelectDamageSkinForShot(2);
+                    if (shotScreen == "damageskinsask") equip.AskDeleteDamageSkinForShot(2);
                 }
                 ShowWindow(HotkeyAction.Equip);
             }

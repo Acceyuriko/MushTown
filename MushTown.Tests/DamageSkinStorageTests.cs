@@ -117,6 +117,76 @@ public class DamageSkinStorageTests
     }
 
     [TestMethod]
+    public void Delete_RemovesSelectedSkin()
+    {
+        var chara = Chara();
+        chara.DamageSkins = new List<int> { 1332, 1354, 1426 };
+
+        Assert.IsTrue(Progression.DeleteDamageSkin(chara, 1));
+
+        CollectionAssert.AreEqual(new[] { 1332, 1426 }, chara.DamageSkins);
+    }
+
+    [TestMethod]
+    public void Delete_OutOfRange_ChangesNothing()
+    {
+        var chara = Chara(1332);
+        chara.DamageSkins = new List<int> { 1332 };
+
+        Assert.IsFalse(Progression.DeleteDamageSkin(chara, -1));
+        Assert.IsFalse(Progression.DeleteDamageSkin(chara, 1));
+        CollectionAssert.AreEqual(new[] { 1332 }, chara.DamageSkins);
+        Assert.AreEqual(1332, chara.DamageSkin);
+    }
+
+    [TestMethod]
+    public void Delete_LastSkin_LeavesEmptyList()
+    {
+        var chara = Chara();
+        chara.DamageSkins = new List<int> { 1332 };
+
+        Assert.IsTrue(Progression.DeleteDamageSkin(chara, 0));
+
+        Assert.AreEqual(0, chara.DamageSkins.Count);
+    }
+
+    [TestMethod]
+    public void Delete_CurrentSkin_LeavesCurrentUnchanged()
+    {
+        var chara = Chara(1354);
+        chara.DamageSkins = new List<int> { 1332, 1354, 1426 };
+
+        Assert.IsTrue(Progression.DeleteDamageSkin(chara, 1));
+
+        Assert.AreEqual(1354, chara.DamageSkin);
+        CollectionAssert.AreEqual(new[] { 1332, 1426 }, chara.DamageSkins);
+    }
+
+    [TestMethod]
+    public void Delete_RoundTripsThroughSave()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-dmgdelete-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            var hero = store.CreateHero(0, 0, "hero", 110);
+            hero.DamageSkin = 1354;
+            hero.DamageSkins = new List<int> { 1332, 1354, 1426 };
+            Assert.IsTrue(Progression.DeleteDamageSkin(hero, 1));
+
+            store.Save(path);
+            var loaded = SaveStore.Load(path).Saves[0]!.Slots[0]!;
+
+            Assert.AreEqual(1354, loaded.DamageSkin);
+            CollectionAssert.AreEqual(new[] { 1332, 1426 }, loaded.DamageSkins);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public void SaveLoad_RoundTripsDamageSkins()
     {
         string path = Path.Combine(Path.GetTempPath(), $"saves-dmgskin-{Guid.NewGuid():N}.json");
@@ -146,6 +216,7 @@ public class DamageSkinStorageTests
 
         Assert.AreEqual(0, chara.DamageSkin);
         Assert.IsNull(chara.DamageSkins);
+        Assert.IsFalse(Progression.DeleteDamageSkin(chara, 0)); // no storage in an old save
         Assert.IsTrue(Progression.SaveCurrentDamageSkin(chara)); // the basic skin needs no cell
         Assert.IsNull(chara.DamageSkins);
     }

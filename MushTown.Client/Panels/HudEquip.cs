@@ -68,8 +68,12 @@ public sealed class EquipWindow : UiWindow
 
     private EquipPage _page = EquipPage.Equipment;
 
-    // Damage Skins page: the one-button notice and the double-click state.
+    // Damage Skins page: the notice, the selected storage cell (delete) and
+    // the double-click state. The selected cell is not the current skin.
     private string _dmgNotice = "";
+    private int _dmgSelCell = -1;
+    private int _dmgDeleteIndex = -1;
+    private bool _dmgDeleteAsk;
     private int _dmgLastCell = -1;
     private double _dmgLastMs;
 
@@ -77,6 +81,9 @@ public sealed class EquipWindow : UiWindow
     {
         _game.ClearWornHand();
         _dmgNotice = "";
+        _dmgSelCell = -1;
+        _dmgDeleteIndex = -1;
+        _dmgDeleteAsk = false;
         _dmgLastCell = -1;
     }
 
@@ -152,7 +159,8 @@ public sealed class EquipWindow : UiWindow
             new Rectangle(_lay.Get("closeX", 343), _lay.Get("closeY", 12),
                 _lay.Get("closeW", 11), _lay.Get("closeH", 11)),
             "ui/equip_close.png", CloseEquipWindow));
-        if (_dmgNotice != "") root.AddChild(DamageSkinNotice());
+        if (_dmgDeleteAsk) root.AddChild(DamageSkinDeleteAsk());
+        else if (_dmgNotice != "") root.AddChild(DamageSkinNotice());
         Host.AddChild(root);
     }
 
@@ -299,7 +307,10 @@ public sealed class EquipWindow : UiWindow
             int skin = skins != null && index < skins.Count ? skins[index] : 0;
             if (skin != 0 && saved.TryGetValue($"dmg{index}", out int couponId))
             {
-                if (skin == current) cell.Add(new Picture("ui/deco_dmg_activated.png", 0, 0));
+                // One highlight at a time: while a storage cell is selected,
+                // the cyan tile marks it instead of the current skin.
+                if ((skin == current && _dmgSelCell < 0) || index == _dmgSelCell)
+                    cell.Add(new Picture("ui/deco_dmg_activated.png", 0, 0));
                 var data = _game.Items[couponId];
                 _game.LoadTexture(data.Image);
                 cell.Add(new Picture(data.Image, _lay.Get("dmgIconX", 5), _lay.Get("dmgIconY", 6)));
@@ -402,10 +413,14 @@ public sealed class EquipWindow : UiWindow
         {
             _dmgLastCell = index;
             _dmgLastMs = now;
+            _dmgSelCell = index;
+            Dirty = true;
             return;
         }
         _dmgLastCell = -1;
+        _dmgSelCell = -1;
         SwitchDamageSkin(index);
+        Dirty = true;
     }
 
     private void SwitchDamageSkin(int index)
@@ -430,14 +445,8 @@ public sealed class EquipWindow : UiWindow
         Dirty = true;
     }
 
-    private GameObject DamageSkinNotice()
+    private GameObject ModalPopup(GameObject popup)
     {
-        int w = _lay.Get("noticeW", 318), h = _lay.Get("noticeH", 160);
-        var box = new Rectangle(_lay.Get("noticeX", 24), _lay.Get("noticeY", 142), w, h);
-        var popup = SysPopUi.BuildOk(box, _game.Ui.Wrap(_dmgNotice, _lay.Get("noticeTextW", 286)),
-            () => { _dmgNotice = ""; Dirty = true; },
-            _lay.Get("noticeTextY", 34), _lay.Get("noticeLineStep", 17), _lay.Get("noticeTextPad", 32),
-            _lay.Get("noticeOkY", 115), _lay.Get("noticeFontPx", 12), _lay);
         var root = new GameObject { Modal = true };
         var blocker = new GameObject();
         blocker.Add(new Rect(Rect()));
@@ -447,9 +456,90 @@ public sealed class EquipWindow : UiWindow
         return root;
     }
 
-    // Esc closes the notice before it closes the window.
+    private GameObject DamageSkinNotice()
+    {
+        int w = _lay.Get("noticeW", 318), h = _lay.Get("noticeH", 160);
+        var box = new Rectangle(_lay.Get("noticeX", 24), _lay.Get("noticeY", 142), w, h);
+        var popup = SysPopUi.BuildOk(box, _game.Ui.Wrap(_dmgNotice, _lay.Get("noticeTextW", 286)),
+            () => { _dmgNotice = ""; Dirty = true; },
+            _lay.Get("noticeTextY", 34), _lay.Get("noticeLineStep", 17), _lay.Get("noticeTextPad", 32),
+            _lay.Get("noticeOkY", 115), _lay.Get("noticeFontPx", 12), _lay);
+        return ModalPopup(popup);
+    }
+
+    // The original asks before deleting a stored skin; the selected cell stays
+    // highlighted behind this modal.
+    private GameObject DamageSkinDeleteAsk()
+    {
+        int w = _lay.Get("noticeW", 318), h = _lay.Get("noticeH", 160);
+        var box = new Rectangle(_lay.Get("noticeX", 24), _lay.Get("noticeY", 142), w, h);
+        var lines = _game.Ui.Wrap("Delete this saved damage skin?\nContinue?", _lay.Get("noticeTextW", 286));
+        var popup = SysPopUi.Build(box, lines, ConfirmDamageSkinDelete, CancelDamageSkinDelete, _lay,
+            _lay.Get("noticeTextY", 34));
+        return ModalPopup(popup);
+    }
+
+    private void ConfirmDamageSkinDelete()
+    {
+        var chara = _game.Hero;
+        if (chara == null || !Progression.DeleteDamageSkin(chara, _dmgDeleteIndex))
+        {
+            CancelDamageSkinDelete();
+            return;
+        }
+        _game.SaveEquipChange();
+        _dmgDeleteAsk = false;
+        _dmgDeleteIndex = -1;
+        _dmgSelCell = -1;
+        _dmgLastCell = -1;
+        Dirty = true;
+    }
+
+    private void CancelDamageSkinDelete()
+    {
+        _dmgDeleteAsk = false;
+        _dmgDeleteIndex = -1;
+        Dirty = true;
+    }
+
+    // Called from the shared HUD click path: a selected storage cell plus a
+    // click outside the equipment window asks to delete it.
+    internal bool ClickOutsideDamageSkins(int gx, int gy)
+    {
+        if (_page != EquipPage.DamageSkins || _dmgSelCell < 0 || ScreenBox().Contains(gx, gy)) return false;
+        _dmgDeleteIndex = _dmgSelCell;
+        _dmgDeleteAsk = true;
+        _dmgNotice = "";
+        _dmgLastCell = -1;
+        Dirty = true;
+        return true;
+    }
+
+    // The shot entries pose the delete selection and its question; production
+    // selection always starts from a click.
+    internal void SelectDamageSkinForShot(int index)
+    {
+        _dmgSelCell = index;
+        Dirty = true;
+    }
+
+    internal void AskDeleteDamageSkinForShot(int index)
+    {
+        _dmgSelCell = index;
+        _dmgDeleteIndex = index;
+        _dmgDeleteAsk = true;
+        _dmgNotice = "";
+        Dirty = true;
+    }
+
+    // Esc closes the delete question or the notice before it closes the window.
     internal bool EscNotice()
     {
+        if (_dmgDeleteAsk)
+        {
+            CancelDamageSkinDelete();
+            return true;
+        }
         if (_dmgNotice == "") return false;
         _dmgNotice = "";
         Dirty = true;
@@ -499,6 +589,10 @@ public sealed class EquipWindow : UiWindow
         if (_page == page) return;
         _game.ClearWornHand();
         _page = page;
+        _dmgSelCell = -1;
+        _dmgDeleteIndex = -1;
+        _dmgDeleteAsk = false;
+        _dmgLastCell = -1;
         Dirty = true; // the frame, tabs and canvas change together
     }
 
@@ -514,6 +608,7 @@ public sealed class EquipWindow : UiWindow
             "deco_dmg_regist_d.png", "deco_dmg_gather_d.png", "deco_dmg_faq_d.png",
             "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png",
             "wm_pop_yes_n.png", "wm_pop_yes_h.png", "wm_pop_yes_p.png",
+            "wm_pop_no_n.png", "wm_pop_no_h.png", "wm_pop_no_p.png",
         })
             _game.LoadTexture("ui/" + f);
         for (int t = 0; t < 2; t++)
