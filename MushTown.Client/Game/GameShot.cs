@@ -25,7 +25,13 @@ public partial class MushTownGame
         {
             _save ??= new SaveData();
             _save.Slots[_slot] ??= DemoChara();
-            _save.Slots[_slot]!.Hp = 0;
+            var dead = _save.Slots[_slot]!;
+            dead.Hp = 0;
+            if (_shotWear) // the demo bag has no hat: --wear also puts the Pilgrim Hat on, to prove the head gear stays on the ghost
+            {
+                Inventory.Add(dead, "equip", 1000025, 1);
+                Progression.WearEquip(dead, 1000025, _items);
+            }
             Die();
             for (int i = 0; i < 5; i++) _death.Tick(1000f); // lands, then rests
             SnapCamera();

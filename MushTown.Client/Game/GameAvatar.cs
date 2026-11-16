@@ -26,9 +26,9 @@ public partial class MushTownGame
             {
                 string imgId = id.ToString("D8");
                 string file = Path.Combine(_assetsDir, "chara", "gear", imgId, $"{action}.json");
-                // Old gear exports may predate the hurt action. They
+                // Old gear exports may predate the hurt and ghost poses. They
                 // fall back to stand1 in AddGearParts instead of hiding gear.
-                if (!File.Exists(file) && action == "alert") continue;
+                if (!File.Exists(file) && action is "alert" or "ghoststand") continue;
                 var gear = LoadJson<CharaData>(file);
                 if (gear.Frames.Count != first.Frames.Count)
                     throw new InvalidDataException($"gear {imgId} {action} has {gear.Frames.Count} frames, want {first.Frames.Count}");

@@ -70,6 +70,8 @@ public partial class MushTownGame
     {
         // The back-facing ladder/rope frames must not draw face or eye gear on the skull.
         if (action is "ladder" or "rope" && _items.TryGetValue(id, out var data) && data.Slot is "Af" or "Ay") return;
+        // A ghost is the ghost body and the head: only the head slots (hat, face and eye accessory, earrings) stay.
+        if (action == "ghoststand" && !(_items.TryGetValue(id, out var worn) && worn.Slot is "Cp" or "Af" or "Ay" or "Ae")) return;
         AddGearParts(parts, id, action, frame, _gear);
     }
 
@@ -81,9 +83,9 @@ public partial class MushTownGame
         string imgId = id.ToString("D8");
         if (!gear.TryGetValue((imgId, action), out var art))
         {
-            // Older gear exports have no alert frames: keep the
-            // standing gear on during the hurt pose instead of dropping it.
-            if (action != "alert") return;
+            // Older gear exports have no alert or ghoststand frames: keep the
+            // standing gear on during those poses instead of dropping it.
+            if (action is not ("alert" or "ghoststand")) return;
             if (!gear.TryGetValue((imgId, "stand1"), out art)) return;
         }
         if (frame >= art.Frames.Count) return;

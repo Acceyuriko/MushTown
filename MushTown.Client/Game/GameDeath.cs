@@ -3,9 +3,11 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Death: HP 0 starts it (Die), the popup's OK ends it (Revive). The dead
-// character is a ghost behind a falling tombstone; the keys, swings and
-// windows are blocked in Update while DeathState.Dead is set.
+// Death: HP 0 starts it (Die), the popup's button ends it (Revive). The dead
+// character is the same doll in the ghoststand pose (the ghost body, the head,
+// face, hair and gear on top) standing in front of a falling tombstone; the
+// name tag and the party bar stay as they are. The keys, swings and windows
+// are blocked in Update while DeathState.Dead is set.
 public partial class MushTownGame
 {
     private static readonly PanelLayout _deathLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-death.json"));
@@ -13,15 +15,13 @@ public partial class MushTownGame
     private const int TombRestFrame = 19;
 
     private UiFramesData _deathTomb = new();
-    private UiFramesData _deathGhost = new();
 
     private void LoadDeathArt()
     {
         _deathTomb = LoadJson<UiFramesData>(Path.Combine(_assetsDir, "effect", "tomb.json"));
-        _deathGhost = LoadJson<UiFramesData>(Path.Combine(_assetsDir, "effect", "ghost.json"));
-        if (_deathTomb.Frames.Count != TombRestFrame + 1 || _deathGhost.Frames.Count == 0)
-            throw new InvalidDataException("tomb.json / ghost.json have the wrong frame count: re-run the export");
-        foreach (var f in _deathTomb.Frames.Concat(_deathGhost.Frames)) LoadTexture(f.Image);
+        if (_deathTomb.Frames.Count != TombRestFrame + 1)
+            throw new InvalidDataException("tomb.json has the wrong frame count: re-run the export");
+        foreach (var f in _deathTomb.Frames) LoadTexture(f.Image);
         foreach (string f in new[] { "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png", "wm_pop_yes_n.png", "wm_pop_yes_h.png", "wm_pop_yes_p.png" })
             LoadTexture("ui/" + f);
     }
@@ -68,35 +68,22 @@ public partial class MushTownGame
         blocker.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => { } });
         _deathHost.AddChild(blocker);
         int w = _deathLay.Get("popW", 318), h = _deathLay.Get("popH", 160), pad = _deathLay.Get("textPad", 32);
+        int px = _deathLay.Get("fontPx", 16), step = _deathLay.Get("textStep", 22);
         var box = new Rectangle((GameWidth - w) / 2, (GameHeight - h) / 2, w, h);
-        _deathHost.AddChild(SysPopUi.BuildOk(box,
-            _ui!.Wrap("You have died. Return to the nearest town?", w - pad),
-            Revive, _deathLay.Get("textY", 38), _deathLay.Get("textStep", 17), pad, _deathLay.Get("okY", 115), _deathLay));
+        var lines = _ui!.Wrap("You have died. Return to the nearest town?", w - pad, px);
+        int textY = (_deathLay.Get("blueH", 104) - lines.Count * step) / 2 + _deathLay.Get("textDy", 0); // centered in the blue area
+        _deathHost.AddChild(SysPopUi.BuildOk(box, lines, Revive, textY, step, pad, _deathLay.Get("okY", 115), px, _deathLay));
     }
 
-    // The ghost first, the tombstone over it: the ghost floats behind it.
-    private void DrawDeath()
+    // The tombstone first, the ghost doll in front of it.
+    private void DrawDeath(CharaSlot? hero)
     {
         int x = (int)_death.X;
-        var g = _deathGhost.Frames[GhostFrame()];
-        float bob = MathF.Sin(TimeMs / 400f) * _deathLay.Get("ghostBob", 4);
-        int gy = (int)(_death.GroundY - _deathLay.Get("ghostLiftY", 26) + bob);
-        int gw = _textures[g.Image].Width;
-        DrawTexture(g.Image, _mover.FacingRight ? x - (gw - g.Ox) : x - g.Ox, gy - g.Oy, _mover.FacingRight);
         var t = _deathTomb.Frames[TombFrame()];
         DrawTexture(t.Image, x - t.Ox, (int)_death.TombY - t.Oy, false);
-    }
-
-    private int GhostFrame()
-    {
-        int total = _deathGhost.Frames.Sum(f => f.Delay);
-        int ms = (int)TimeMs % total;
-        for (int i = 0; i < _deathGhost.Frames.Count; i++)
-        {
-            ms -= _deathGhost.Frames[i].Delay;
-            if (ms < 0) return i;
-        }
-        return 0;
+        float bob = MathF.Sin(TimeMs / 400f) * _deathLay.Get("ghostBob", 4);
+        int gy = (int)(_death.GroundY - _deathLay.Get("ghostLiftY", 0) + bob);
+        DrawAvatar(x, gy, "ghoststand", IdleFrame("ghoststand", hero?.Skin ?? 0), _mover.FacingRight, hero);
     }
 
     // Falling: the first twelve frames loop. Landed: the dust frames play

@@ -1,11 +1,13 @@
 {
-  "_help": "The death popup and the ghost (game pixels in 1366x768). popW/popH = the system popup box, centered on the screen. textY = the first text line from the box top, textStep = the line distance, textPad = the width kept free at both sides. okY = the OK button top from the box top (it is centered across the box). ghostLiftY = how high the ghost sprite origin floats above the ground. ghostBob = how far the ghost drifts up and down, in pixels. DEBUG builds reload this file live on save.",
+  "_help": "The death popup and the ghost (game pixels in 1366x768). popW/popH = the system popup box, centered on the screen. fontPx = the popup text size, textStep = the line distance, textPad = the width kept free at both sides. blueH = the height of the blue area of the box (the text block is centered in it), textDy = a nudge of the block. okY = the OK button top from the box top (it is centered across the box). ghostLiftY = how high the ghost doll floats above the ground. ghostBob = how far the ghost drifts up and down, in pixels. DEBUG builds reload this file live on save.",
   "popW": 318,
   "popH": 160,
-  "textY": 38,
-  "textStep": 17,
+  "fontPx": 16,
+  "textStep": 22,
   "textPad": 32,
+  "blueH": 104,
+  "textDy": 0,
   "okY": 115,
-  "ghostLiftY": 40,
+  "ghostLiftY": 18,
   "ghostBob": 4
 }

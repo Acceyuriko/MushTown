@@ -66,6 +66,7 @@ public static class Net
     public const byte ActStabT = 10;
     public const byte ActShoot = 11;
     public const byte ActAlert = 12;
+    public const byte ActGhostStand = 13; // the dead character
 
     // Every character action, in load order. Exporter and client init reuse
     // this so a new action needs one list edit (plus its code switch arms).
@@ -75,7 +76,7 @@ public static class Net
     {
         "stand1", "walk1", "jump", "ladder", "rope", "prone",
         "swingO1", "swingT1", "swingP1", "stabO1", "stabT1", "shoot1",
-        "alert",
+        "alert", "ghoststand",
     };
 
     // Action name <-> code. Both throw on bad input (fail loud, never guess).
@@ -94,6 +95,7 @@ public static class Net
         "stabT1" => ActStabT,
         "shoot1" => ActShoot,
         "alert" => ActAlert,
+        "ghoststand" => ActGhostStand,
         _ => throw new InvalidDataException($"bad action name {action}"),
     };
 
@@ -112,6 +114,7 @@ public static class Net
         ActStabT => "stabT1",
         ActShoot => "shoot1",
         ActAlert => "alert",
+        ActGhostStand => "ghoststand",
         _ => throw new InvalidDataException($"bad action code {action}"),
     };
 

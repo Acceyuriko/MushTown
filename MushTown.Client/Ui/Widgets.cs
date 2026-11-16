@@ -840,12 +840,12 @@ public static class SysPopUi
 
     // The one-button notice: the same box, one centered OK. The button top is
     // given by the caller (okY), the box art carries the rest.
-    public static GameObject BuildOk(Rectangle box, IReadOnlyList<string> lines, Action ok, int textY, int textStep, int textPad, int okY, PanelLayout lay)
+    public static GameObject BuildOk(Rectangle box, IReadOnlyList<string> lines, Action ok, int textY, int textStep, int textPad, int okY, int fontPx, PanelLayout lay)
     {
         var o = new GameObject();
         o.Add(new Rect(box));
         o.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
-        o.Add(new SysPopText { Y = textY, Step = textStep, MaxWidth = box.Width - textPad, Lines = lines });
+        o.Add(new SysPopText { Y = textY, Step = textStep, MaxWidth = box.Width - textPad, Lines = lines, FontPx = fontPx });
         int buttonW = lay.Get("popBtnW", 83);
         o.AddChild(ButtonAt("ui/wm_pop_yes", (box.Width - buttonW) / 2, okY, ok, lay));
         return o;
@@ -927,6 +927,7 @@ public sealed class SysPopText : Component, IDrawable
     public required int Y { get; init; }
     public required int Step { get; init; }
     public required int MaxWidth { get; init; }
+    public int FontPx { get; init; } // 0 = the small 12px text; a bigger size comes wrapped by the caller
 
     public void Draw(UiGfx gfx)
     {
@@ -934,7 +935,7 @@ public sealed class SysPopText : Component, IDrawable
         int y = r.Y + Y;
         foreach (string line in Lines)
         {
-            var t = Text.Fit(gfx, line, MaxWidth);
+            var t = FontPx > 0 ? gfx.Ui.GetSized(line, FontPx) : Text.Fit(gfx, line, MaxWidth);
             gfx.Sb.Draw(t, new Vector2(r.X + (r.Width - t.Width) / 2, y), Color.White);
             y += Step;
         }

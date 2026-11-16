@@ -36,7 +36,7 @@ public static partial class Export
     // action frames of an img: numbered children 0,1,2..., stop at the first gap
     private static int ActionFrameCount(WzRoot looseRoot, string img, string action)
     {
-        var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{img}\{action}"));
+        var actionNode = WzNodeUtil.ResolveUol(looseRoot.Find($@"{img}\{BodyAction(action)}"));
         if (actionNode == null) return 0;
         int n = 0;
         while (actionNode.Nodes[n.ToString()] != null) n++;
@@ -61,7 +61,7 @@ public static partial class Export
             Console.WriteLine($"{tag}: body has no {action} frames");
             return false;
         }
-        if (category == "hair")
+        if (category == "hair" && !IsGhost(action)) // the ghost pose has no hair art: the stand pose repeats
         {
             int partFrames = ActionFrameCount(looseRoot, img, action);
             if (partFrames != bodyFrames)
@@ -95,20 +95,20 @@ public static partial class Export
 
         for (int frameIdx = 0; frameIdx < bodyFrames; frameIdx++)
         {
-            var bodyFrame = FindImgFrame(looseRoot, BodyImgDefault, action, frameIdx);
+            var bodyFrame = FindImgFrame(looseRoot, BodyImgDefault, BodyAction(action), frameIdx);
             if (bodyFrame == null)
             {
                 Console.WriteLine($"{tag} frame {frameIdx}: {BodyImgDefault} frame uol is broken");
                 return false;
             }
             if (!BodyFrameStatic(BodyImgDefault, action, frameIdx, bodyFrame)) return false;
-            var headFrame = FindImgFrame(looseRoot, HeadImgDefault, action, frameIdx);
+            var headFrame = PartFrame(looseRoot, HeadImgDefault, action, frameIdx);
             if (headFrame == null)
             {
                 Console.WriteLine($"{tag} frame {frameIdx}: {HeadImgDefault} node not found");
                 return false;
             }
-            var hairFrame = FindImgFrame(looseRoot, HairImgDefault, action, frameIdx);
+            var hairFrame = PartFrame(looseRoot, HairImgDefault, action, frameIdx);
             if (hairFrame == null)
             {
                 Console.WriteLine($"{tag} frame {frameIdx}: {HairImgDefault} node not found");
@@ -129,7 +129,7 @@ public static partial class Export
             // the target parts: a hair uses its action frame, a face its one default node
             if (category == "hair")
             {
-                var targetFrame = FindImgFrame(looseRoot, img, action, frameIdx);
+                var targetFrame = PartFrame(looseRoot, img, action, frameIdx);
                 if (targetFrame == null)
                 {
                     Console.WriteLine($"{tag} frame {frameIdx}: target frame missing");

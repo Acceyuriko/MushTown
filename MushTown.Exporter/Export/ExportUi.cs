@@ -362,42 +362,33 @@ public static partial class Export
         return true;
     }
 
-    // The death look: the tombstone (Effect Tomb.img/fall: frames 0-11 fall,
-    // 12-18 land, 19 rests) and the ghost (Character 00002000.img/ghoststand,
-    // variant 1: one body sprite per frame). Both are frame lists with origins.
-    internal static bool ExportDeath(WzRoot effect, WzRoot chara, string outDir)
+    // The tombstone (Effect Tomb.img/fall: frames 0-11 fall, 12-18 land,
+    // 19 rests) as a frame list with origins. The ghost is the character's
+    // own doll in the ghoststand pose (Net.Actions), not an effect.
+    internal static bool ExportDeath(WzRoot effect, string outDir)
     {
         var tomb = new UiFramesData();
         for (int f = 0; f < 20; f++)
             if (!AddDeathFrame(tomb, effect, "Effect", $"Tomb.img/fall/{f}", $"effect/tomb/{f}.png", outDir))
                 return false;
         WriteJson(Path.Combine(outDir, "effect", "tomb.json"), tomb);
-        var ghost = new UiFramesData();
-        for (int f = 0; f < 3; f++)
-            if (!AddDeathFrame(ghost, chara, "Character", $"00002000.img/ghoststand/1/{f}/body", $"effect/ghost/{f}.png", outDir,
-                    $"00002000.img/ghoststand/1/{f}"))
-                return false;
-        WriteJson(Path.Combine(outDir, "effect", "ghost.json"), ghost);
-        Console.WriteLine("death: tomb 20 frames, ghost 3 frames");
+        Console.WriteLine("death: tomb 20 frames");
         return true;
     }
 
-    // One frame: the png, the WZ origin and the delay (read from the frame
-    // node when the sprite sits one level below it).
-    private static bool AddDeathFrame(UiFramesData data, WzRoot root, string category, string node, string path, string outDir,
-        string? frameNode = null)
+    // One frame: the png, the WZ origin and the delay.
+    private static bool AddDeathFrame(UiFramesData data, WzRoot root, string category, string node, string path, string outDir)
     {
         var png = WzNodeUtil.ResolveUol(root.Find(node));
         var origin = png?.Nodes["origin"]?.Value as Wz_Vector;
-        var frame = WzNodeUtil.ResolveUol(root.Find(frameNode ?? node));
-        if (origin == null || frame == null || frame.Nodes["delay"] == null)
+        if (origin == null || png!.Nodes["delay"] == null)
         {
             Console.WriteLine($"{category} {node}: no origin or delay");
             return false;
         }
         if (!UiPng.Save(root, category, node, Path.Combine(outDir, path)))
             return false;
-        data.Frames.Add(new UiFrame { Image = path, Ox = origin.X, Oy = origin.Y, Delay = Int(frame, "delay", 0), A0 = 255, A1 = 255 });
+        data.Frames.Add(new UiFrame { Image = path, Ox = origin.X, Oy = origin.Y, Delay = Int(png, "delay", 0), A0 = 255, A1 = 255 });
         return true;
     }
 

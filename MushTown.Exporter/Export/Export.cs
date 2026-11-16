@@ -28,8 +28,7 @@ public static partial class Export
             return ExportMapUi(ui, map, str, outDir) && ExportWorldMap(ui, map, str, outDir);
         }
         if (name == "death")
-            return ExportDeath(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"),
-                WzRoot.LoadCategory(ExporterPaths.DataDir, "Character"), outDir);
+            return ExportDeath(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"), outDir);
         if (name == "cashshop")
         {
             var item = WzRoot.LoadCategory(ExporterPaths.DataDir, "Item");
@@ -153,7 +152,7 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
-        if (!ExportDeath(effect, chara, outDir))
+        if (!ExportDeath(effect, outDir))
         {
             Environment.ExitCode = 1;
             return;

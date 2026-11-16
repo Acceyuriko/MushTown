@@ -45,6 +45,18 @@ public static partial class Export
         return WzNodeUtil.ResolveUol(actionNode?.Nodes[frameIdx.ToString()]);
     }
 
+    // The ghost pose (dead character). The body is the ghost sprite, WZ keeps
+    // it one level down (ghoststand/1/<frame>); the head, hair and gear have no
+    // ghost art and hang on their stand pose, like the face (face = 1).
+    internal const string GhostAction = "ghoststand";
+    private static bool IsGhost(string action) => action == GhostAction;
+    private static string BodyAction(string action) => IsGhost(action) ? $@"{action}\1" : action;
+
+    // A part's frame for an action: its own, or for the ghost pose the stand
+    // pose (every other action stays strict).
+    private static Wz_Node? PartFrame(WzRoot looseRoot, string img, string action, int frameIdx) =>
+        FindImgFrame(looseRoot, img, action, frameIdx) ?? (IsGhost(action) ? FindStandFrame(looseRoot, img, frameIdx).node : null);
+
     private static string ImgId(string img) => Path.GetFileNameWithoutExtension(img);
 
     // The equip's stand pose frame for a frame it has no art of (a polearm on
@@ -106,11 +118,11 @@ public static partial class Export
         // frames run 0,1,2... and stop at the first gap (AvatarCanvas.cs:511-522)
         for (int frameIdx = 0; ; frameIdx++)
         {
-            var bodyFrame = FindImgFrame(looseRoot, bodyImg, action, frameIdx);
+            var bodyFrame = FindImgFrame(looseRoot, bodyImg, BodyAction(action), frameIdx);
             if (bodyFrame == null)
             {
                 // a real gap ends the action; a dangling frame uol is loud
-                var bodyAction = WzNodeUtil.ResolveUol(looseRoot.Find($@"{bodyImg}\{action}"));
+                var bodyAction = WzNodeUtil.ResolveUol(looseRoot.Find($@"{bodyImg}\{BodyAction(action)}"));
                 if (bodyAction?.Nodes[frameIdx.ToString()] != null)
                 {
                     Console.WriteLine($"{tag} frame {frameIdx}: {bodyImg} frame uol is broken");
@@ -120,13 +132,13 @@ public static partial class Export
             }
             if (!BodyFrameStatic(bodyImg, action, frameIdx, bodyFrame)) return false;
 
-            var headFrame = FindImgFrame(looseRoot, headImg, action, frameIdx);
+            var headFrame = PartFrame(looseRoot, headImg, action, frameIdx);
             if (headFrame == null)
             {
                 Console.WriteLine($"{tag} frame {frameIdx}: {headImg} node not found");
                 return false;
             }
-            var hairFrame = FindImgFrame(looseRoot, hairImg, action, frameIdx);
+            var hairFrame = PartFrame(looseRoot, hairImg, action, frameIdx);
             if (hairFrame == null)
             {
                 Console.WriteLine($"{tag} frame {frameIdx}: {hairImg} node not found");
@@ -154,7 +166,7 @@ public static partial class Export
                 allHair: true);
             foreach (string img in CharaEquips)
             {
-                if (gear == null && img != BeginnerBoxers) continue; // the plain body is underwear only
+                if (gear == null && (img != BeginnerBoxers || IsGhost(action))) continue; // the plain body is underwear only; a ghost wears none
                 bool isTarget = img == gearBeginner;
                 string path = isTarget ? gear! : img;
                 string? group = isTarget ? gearGroup : null;
