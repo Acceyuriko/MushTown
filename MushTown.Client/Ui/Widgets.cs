@@ -819,6 +819,7 @@ public static class SysPopUi
         var o = new GameObject();
         o.Add(new Rect(box));
         o.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
+        o.Add(new DragHandle()); // a click on the body (no button or input over it) grabs the popup
         o.Add(new SysPopText
         {
             Y = textY ?? lay.Get("popTextY", 38),
@@ -845,6 +846,7 @@ public static class SysPopUi
         var o = new GameObject();
         o.Add(new Rect(box));
         o.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
+        o.Add(new DragHandle()); // a click on the body (no button or input over it) grabs the popup
         o.Add(new SysPopText { Y = textY, Step = textStep, MaxWidth = box.Width - textPad, Lines = lines, FontPx = fontPx });
         int buttonW = lay.Get("popBtnW", 83);
         o.AddChild(ButtonAt("ui/wm_pop_yes", (box.Width - buttonW) / 2, okY, ok, lay));
@@ -869,6 +871,7 @@ public static class SysPopUi
         var o = new GameObject();
         o.Add(new Rect(box));
         o.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
+        o.Add(new DragHandle()); // a click on the body (no button or input over it) grabs the popup
         var fieldBox = new GameObject();
         fieldBox.Add(new Rect(new Rectangle(0, 47, box.Width, 44)));
         fieldBox.Add(new Picture("ui/wm_pop_textbox.png"));

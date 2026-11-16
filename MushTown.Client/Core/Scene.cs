@@ -45,9 +45,18 @@ public static class TreeDraw
     }
 }
 
+// Marks a popup the mouse can carry: a click that lands on this object
+// itself (not on a button or an input over it) grabs it, and the Scene moves
+// it while the mouse is held.
+public sealed class DragHandle : Component
+{
+}
+
 public sealed class Scene
 {
     private readonly List<GameObject> _roots = new();
+    private GameObject? _dragged; // the popup that was grabbed
+    private Point _grab; // where inside the popup the mouse took it
     public GameObject? Hovered { get; private set; }
     public Button? HoverButton { get; private set; }
     public Point LastClick { get; private set; } // title drags anchor their offset here (first user: W4)
@@ -77,8 +86,31 @@ public sealed class Scene
         var hit = TopAt(gx, gy);
         ClickButton = hit == null ? null : FindButton(hit);
         if (hit == null) return null;
+        if (hit.Get<DragHandle>() != null)
+        {
+            _dragged = hit;
+            _grab = new Point(gx - hit.Get<Rect>()!.Screen.X, gy - hit.Get<Rect>()!.Screen.Y);
+        }
         ClickButton?.Press();
         return hit;
+    }
+
+    // Moves the grabbed popup with the mouse and keeps its whole box on the
+    // screen. The Rect offset is parent-relative, so the parent's origin is
+    // the difference between the popup's screen spot and its offset.
+    public void Drag(bool held, int gx, int gy)
+    {
+        if (_dragged == null) return;
+        if (!held || _dragged.Dead)
+        {
+            _dragged = null;
+            return;
+        }
+        var r = _dragged.Get<Rect>()!;
+        int x = Math.Clamp(gx - _grab.X, 0, MushTownGame.GameWidth - r.Size.X);
+        int y = Math.Clamp(gy - _grab.Y, 0, MushTownGame.GameHeight - r.Size.Y);
+        r.Offset = new Point(x - (r.Screen.X - r.Offset.X), y - (r.Screen.Y - r.Offset.Y));
+        r.Screen = new Rectangle(x, y, r.Size.X, r.Size.Y); // the hit test of this frame reads the new spot
     }
 
     // The topmost object at the point, nothing pressed: a button may rebuild

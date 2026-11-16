@@ -113,9 +113,8 @@ public partial class MushTownGame
                 _mover.Update(1f / 60);
                 _hurt.Tick();
             }
-            _mover.Action = "alert";
-            _shownAction = _mover.Action;
-            _frame = HurtFrame();
+            _shownAction = _mover.Action; // "jump": in the air the hurt state keeps the jump pose
+            _frame = 0;
             return;
         }
         if (_shotHit || _shotSkill != 0 || _shotDrop)

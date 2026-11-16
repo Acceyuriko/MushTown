@@ -791,9 +791,9 @@ public partial class MushTownGame : Game
         }
         if (_mover.Ground != null || _mover.Climb != null) _canLeap = true; // grounded or held: the next airtime gets its leap back
 
-        // The hurt state swaps the default stand and jump for alert; any other
+        // The hurt state swaps the default stand for alert; any other
         // action (walk, climb, prone, a swing) keeps its own pose.
-        bool hurtPose = _hurt.Invincible && _mover.Action is "stand1" or "jump";
+        bool hurtPose = _hurt.Invincible && _mover.Action == "stand1"; // in the air the jump pose stays
         if (hurtPose)
         {
             _mover.Action = "alert";

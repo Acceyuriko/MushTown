@@ -187,6 +187,7 @@ public partial class MushTownGame
             }
         }
         SyncPanels(); // tab flips and new rows rebuild (a drag only moves the host; hover ran first, so it lags one frame, like legacy)
+        _uiScene.Drag(held, gx, gy); // a system popup follows the mouse while it is held
         DragWindows(held, gx, gy); // the new windows move by their title
         _worldMapWindow.UpdateWheel(); // the wheel scrolls the search results: after the drag, so it uses this frame position
         SyncWindows(); // a window rebuilds when its state changed (a drag only moves the root)

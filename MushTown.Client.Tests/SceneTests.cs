@@ -272,4 +272,59 @@ public class SceneTests
             UiWindow.List.Remove(w); // the constructor registers: the game walks this list
         }
     }
+
+    // A popup box inside a root that sits at (100, 50), with a button on it.
+    private static (Scene scene, GameObject popup, GameObject button) PopupScene()
+    {
+        var scene = new Scene();
+        var root = new GameObject();
+        root.Add(new Rect(new Rectangle(100, 50, 1000, 600)));
+        var popup = new GameObject();
+        popup.Add(new Rect(new Rectangle(200, 100, 300, 160))); // screen (300,150)
+        popup.Add(new DragHandle());
+        var button = new GameObject();
+        button.Add(new Rect(new Rectangle(10, 10, 50, 20)));
+        button.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => { } });
+        popup.AddChild(button); // a child wins its own area
+        root.AddChild(popup);
+        scene.Add(root);
+        return (scene, popup, button);
+    }
+
+    [TestMethod]
+    public void Popup_FollowsTheMouseWhileHeldAndStaysWhereItWasLeft()
+    {
+        var (scene, popup, _) = PopupScene();
+        scene.Click(400, 200); // the body, 100 right and 50 down of the popup corner
+        scene.Drag(true, 500, 300);
+        scene.Layout();
+        Assert.AreEqual(new Point(400, 250), popup.Get<Rect>()!.Screen.Location);
+        scene.Drag(false, 600, 400); // let go
+        scene.Drag(true, 700, 500); // a later move must not drag it
+        scene.Layout();
+        Assert.AreEqual(new Point(400, 250), popup.Get<Rect>()!.Screen.Location);
+    }
+
+    [TestMethod]
+    public void Popup_CannotBeDraggedOffTheScreen()
+    {
+        var (scene, popup, _) = PopupScene();
+        scene.Click(400, 200);
+        scene.Drag(true, -500, -500);
+        scene.Layout();
+        Assert.AreEqual(new Point(0, 0), popup.Get<Rect>()!.Screen.Location);
+        scene.Drag(true, 5000, 5000);
+        scene.Layout();
+        Assert.AreEqual(new Point(1366 - 300, 768 - 160), popup.Get<Rect>()!.Screen.Location);
+    }
+
+    [TestMethod]
+    public void Popup_ButtonOnThePopupIsNotADrag()
+    {
+        var (scene, popup, _) = PopupScene();
+        scene.Click(320, 170); // the button
+        scene.Drag(true, 900, 700);
+        scene.Layout();
+        Assert.AreEqual(new Point(300, 150), popup.Get<Rect>()!.Screen.Location);
+    }
 }
