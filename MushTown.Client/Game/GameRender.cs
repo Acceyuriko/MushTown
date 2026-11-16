@@ -25,7 +25,8 @@ public partial class MushTownGame
         draws.Add((feetY, () =>
         {
             int centerX = hero != null ? AvatarCenterX(feetX, _mover.FacingRight, hero.Skin) : feetX;
-            DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero, tint: HurtTint);
+            if (_death.Dead) DrawDeath();
+            else DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero, tint: HurtTint);
             if (hero != null)
                 DrawName(centerX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
         }

@@ -22,6 +22,12 @@ public static partial class Export
     private static bool VerifyLinks(Dictionary<int, MapData> maps)
     {
         foreach (var map in maps.Values)
+        {
+            if (!maps.ContainsKey(map.Info.ReturnMap))
+            {
+                Console.WriteLine($"map {map.MapId}: return map {map.Info.ReturnMap} not exported");
+                return false;
+            }
             foreach (var p in map.Portals)
             {
                 if (p.Tm == PortalRules.NoTarget) continue;
@@ -44,6 +50,7 @@ public static partial class Export
                     return false;
                 }
             }
+        }
         return true;
     }
 
@@ -208,6 +215,12 @@ public static partial class Export
         // info
         map.Info.Bgm = MapBgm(info, mapId);
         if (map.Info.Bgm == "") return null;
+        map.Info.ReturnMap = Int(info, "returnMap", 0);
+        if (map.Info.ReturnMap == 0 || map.Info.ReturnMap == 999999999)
+        {
+            Console.WriteLine($"map {mapId}: info/returnMap is {map.Info.ReturnMap}, no town to revive in");
+            return null;
+        }
 
         // miniMap: the canvas plus the world rect it covers
         var mm = scene.Nodes["miniMap"];

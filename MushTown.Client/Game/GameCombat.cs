@@ -102,7 +102,7 @@ public partial class MushTownGame
     private bool ApplyHurt(long damage, int mobUid)
     {
         var chara = _save?.Slots[_slot];
-        if (chara == null) return false; // CLI sessions have no one to hurt
+        if (chara == null || _death.Dead) return false; // CLI sessions have no one to hurt, and a tombstone cannot be hit
         long dealt = _hurt.Apply(chara, damage, OwnDef());
         if (dealt == 0) return false; // invincible or harmless touch: no number, no death
         var num = TakeNumber();
@@ -110,7 +110,7 @@ public partial class MushTownGame
         num.X = _mover.X; num.Y = _mover.Y - 90;
         if (chara.Hp == 0)
         {
-            Die(chara);
+            Die();
             return true;
         }
         if (_mobs.TryGetValue(mobUid, out var source)
@@ -126,23 +126,6 @@ public partial class MushTownGame
     // Purple on the first flash step, normal on the next, for the whole hurt state.
     private Color? HurtTint =>
         _hurt.Invincible && (_hurt.ElapsedFrames / HurtGuard.FlashFrames & 1) == 0 ? HurtPurple : null;
-
-    // Death: full pools, feet back on the spawn ground, motion cleared.
-    private void Die(CharaSlot chara)
-    {
-        _hurt.Clear();
-        chara.Hp = MaxHpNow();
-        chara.Mp = MaxMpNow();
-        _mover.X = _map.Info.SpawnX;
-        _mover.Ground = SceneMath.GroundBelow(_map.Footholds, _map.Info.SpawnX, _map.Info.SpawnY)
-            ?? throw new InvalidDataException($"map {_mapId} has no ground under spawn");
-        _mover.Y = SceneMath.FootholdY(_mover.Ground, _map.Info.SpawnX);
-        ResetMotion();
-        SnapCamera();
-        _talkNpc = 0; _talkQuest = 0; _talkReward = 0; _talkPage = 0; // death teleports: no reload on the same map, so end talk here
-        _showShop = false; _shopQtyId = 0; _shopNotice = ""; _shopQtyField.Unfocus(); // and the NPC-bound shop
-        LogEvent("you died");
-    }
 
     // Swings and damaging casts need a judge: net play sends, the local
     // world strikes right here. The disconnect frame has neither yet.

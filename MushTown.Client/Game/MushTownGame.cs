@@ -81,7 +81,8 @@ public partial class MushTownGame : Game
     private int _frame;
     private float _frameMs; // the shown action's clock: Idle.Frame reads it
     private readonly Fighter _fighter = new(); // combat clocks, ticked at frame-top (never in the world step)
-    private readonly HurtGuard _hurt = new(); // player hurt window: 1080ms from the WZ invincible action
+    private readonly DeathState _death = new(); // dead from HP 0 to the revive click
+    private readonly HurtGuard _hurt = new(); // player hurt state: 60 frames, one timer with the invincibility
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
     // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
@@ -149,6 +150,7 @@ public partial class MushTownGame : Game
         _shotHurtBlink = shotHurtBlink;
         _shotHurtPre = shotHurtPre;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
+        _deathHost.Add(new Rect(new Rectangle(0, 0, GameWidth, GameHeight))); // the popup root covers the screen; BuildDeathScene only refills its children
         _panelHosts = new[] { _invHost, _statHost, _skillHost, _questHost, _settingsHost, _shopHost }; // the panel-id order the Z row and the hit lookups use
         _assetsDir = FindAssetsDir();
         _bgm = new BgmPlayer(Path.Combine(_assetsDir, "sound"), _shotPath != null);
@@ -497,8 +499,9 @@ public partial class MushTownGame : Game
             foreach (var frame in gear.Frames)
                 foreach (var part in frame.Parts) LoadTexture(part.Image);
         LoadMenuContent();
+        LoadDeathArt();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "equipui" or "decorations" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -637,11 +640,11 @@ public partial class MushTownGame : Game
         // character keeps acting (MapleStory does the same), and Save swaps
         // the table at the next Update. The draft never reaches the live table
         // before Save.
-        bool blocked = _menuWindow.Show || _uiScene.ModalOpen || _shopQtyId != 0;
+        bool blocked = _menuWindow.Show || _uiScene.ModalOpen || _shopQtyId != 0 || _death.Dead; // the dead stand still: no keys, no swings
         // A talk dialog is modal for the mouse but not for the feet: Space-opened
         // talk must close when the player walks out of reach. Only the other
         // modals take the movement keys.
-        bool movementBlocked = _menuWindow.Show || _shopQtyId != 0 || (_uiScene.ModalOpen && _talkNpc == 0);
+        bool movementBlocked = _menuWindow.Show || _shopQtyId != 0 || (_uiScene.ModalOpen && _talkNpc == 0) || _death.Dead;
         // Talk runs after the HUD: a same-frame panel key and Talk both fire
         // (the HUD's guards see _talkNpc still 0; a modal window blocks Talk).
         if (_talkNpc == 0 && !blocked && !Holding && !_uiScene.ModalOpen && _input.Fresh(HotkeyAction.Talk)) TalkNearest(); // a piece in hand would float over the dialog; a confirmation box owns the screen
@@ -660,8 +663,9 @@ public partial class MushTownGame : Game
         }
         _fighter.Tick(dtMs);
         _hurt.Tick();
+        _death.Tick(dtMs);
         foreach (int id in _fighter.ExpiredBuffs) EndBuff(id); // same spot, same order (ticks run first now, ends after)
-        if (_fighter.RegenDue) PayoutRegen();
+        if (_fighter.RegenDue && !_death.Dead) PayoutRegen(); // the dead do not heal
         if (_save?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
             c.Hp = Math.Min(c.Hp, MaxHpNow());
         SendPartyHpIfChanged();

@@ -55,6 +55,10 @@ public sealed class MapInfo
     // Raw WZ info/bgm ("Bgm58/The Beginnig of The Adventure"): the client
     // turns it into a file key with SoundKey.FromBgm.
     public string Bgm { get; set; } = "";
+
+    // WZ info/returnMap: the map a dead player revives on (the town the map
+    // belongs to). A town points at itself.
+    public int ReturnMap { get; set; }
 }
 
 // WZ miniMap node: the canvas plus the world rect it covers. The rect's

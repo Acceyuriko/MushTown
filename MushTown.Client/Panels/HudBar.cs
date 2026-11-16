@@ -45,6 +45,7 @@ public partial class MushTownGame
     private readonly GameObject _npcSayLayer = new() { NoHit = true, Z = BalloonZ }; // one object per NPC, refilled by LoadMap
     private readonly GameObject _invHost = new(), _statHost = new(), _skillHost = new();
     private readonly GameObject _questHost = new(), _settingsHost = new(), _shopHost = new();
+    private readonly GameObject _deathHost = new() { Modal = true, Z = DeathZ, Enabled = false }; // the revive popup: one modal root
     private readonly GameObject[] _panelHosts; // panel-id order: 0 inventory .. 5 shop (filled by the constructor)
     private readonly CarryHand _hand = new(); // game-level: a panel rebuilds its content, the held piece survives
     private readonly GameObject _talkHost = new() { Modal = true, Z = TalkZ }; // the NPC dialog: one root carries the modal flag
@@ -76,6 +77,7 @@ public partial class MushTownGame
     private const int HudTopZ = 100; // above the HUD roots, under the raise row
     private const int RaiseZ = 200; // panels and windows share one row: the last raised draws last
     private const int TalkZ = 500; // the NPC dialog: above every window, under the hand and the tips
+    private const int DeathZ = 550; // the death popup: over the dialog, under the hand and the tips
     private const int HeldZ = 600;
     private const int TipZ = 700; // the last thing drawn: no layer can cover a tip
 
@@ -412,6 +414,8 @@ public partial class MushTownGame
         foreach (var host in _panelHosts) _uiScene.Add(host); // the panels ride the same tree: their Z is the whole order
         foreach (var w in UiWindow.List) { w.Scene = _uiScene; _uiScene.Add(w.Host); } // the windows too: one tree, one Z order
         _uiScene.Add(_talkHost); // the modal: clicks outside it blank in Scene.Hit
+        BuildDeathScene();
+        _uiScene.Add(_deathHost);
         var held = new GameObject { NoHit = true, Z = HeldZ }; // the piece on the cursor: above the modal, under the tips
         held.Add(new HeldItem(HeldArt, HeldBust, _invLay.Get("cellSize", 42), (gfx, rect, c) => DrawLookBust(gfx, rect, c))); // the piece in the inventory hand, or the action or skill a click picked up
         _uiScene.Add(held);
@@ -503,6 +507,7 @@ public partial class MushTownGame
         _questHost.Enabled = _showQuest; _settingsHost.Enabled = _showSettings; _shopHost.Enabled = _showShop;
         if (!_showQuest && _questConfirm != QuestConfirmKind.None) CloseQuestConfirm(); // a hidden window never keeps its question
         _talkHost.Enabled = _talkNpc != 0; // the dialog root is in the tree: showing it is all it takes
+        _deathHost.Enabled = _death.Dead;
         InvClampScroll(); // a count change can make the remembered row too far
         if (!_invBuilt || _invTab != _invBuiltTab)
         {

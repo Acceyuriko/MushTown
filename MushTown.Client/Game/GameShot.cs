@@ -21,6 +21,16 @@ public partial class MushTownGame
             num.X = _mover.X;
             num.Y = _mover.Y - 90;
         }
+        if (_shotScreen == "death")
+        {
+            _save ??= new SaveData();
+            _save.Slots[_slot] ??= DemoChara();
+            _save.Slots[_slot]!.Hp = 0;
+            Die();
+            for (int i = 0; i < 5; i++) _death.Tick(1000f); // lands, then rests
+            SnapCamera();
+            return;
+        }
         SetupShotQuests(); // quest/talk screens run the real accept/open path (other shots no-op)
         if (_shotWear) // --wear runs the real WearEquip path on the demo (plain shots grow one, like --skill buffs)
         {

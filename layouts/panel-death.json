@@ -1,0 +1,11 @@
+{
+  "_help": "The death popup and the ghost (game pixels in 1366x768). popW/popH = the system popup box, centered on the screen. textY = the first text line from the box top, textStep = the line distance, textPad = the width kept free at both sides. okY = the OK button top from the box top (it is centered across the box). ghostLiftY = how high the ghost sprite origin floats above the ground. ghostBob = how far the ghost drifts up and down, in pixels. DEBUG builds reload this file live on save.",
+  "popW": 318,
+  "popH": 160,
+  "textY": 38,
+  "textStep": 17,
+  "textPad": 32,
+  "okY": 115,
+  "ghostLiftY": 40,
+  "ghostBob": 4
+}

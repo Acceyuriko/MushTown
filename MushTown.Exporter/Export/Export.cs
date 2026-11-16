@@ -27,6 +27,9 @@ public static partial class Export
             var str = WzRoot.LoadCategory(ExporterPaths.DataDir, "String");
             return ExportMapUi(ui, map, str, outDir) && ExportWorldMap(ui, map, str, outDir);
         }
+        if (name == "death")
+            return ExportDeath(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"),
+                WzRoot.LoadCategory(ExporterPaths.DataDir, "Character"), outDir);
         if (name == "cashshop")
         {
             var item = WzRoot.LoadCategory(ExporterPaths.DataDir, "Item");
@@ -146,6 +149,11 @@ public static partial class Export
         }
         var effect = WzRoot.LoadCategory(dataDir, "Effect");
         if (!ExportDamageSkin(effect, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
+        if (!ExportDeath(effect, chara, outDir))
         {
             Environment.ExitCode = 1;
             return;
