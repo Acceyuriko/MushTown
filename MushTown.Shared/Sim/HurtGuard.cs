@@ -1,18 +1,21 @@
 namespace MushTown.Shared;
 
-// One character's hurt cooldown: a landed touch starts the invincibility
-// window, and every touch inside it is ignored. The window is the WZ
-// 00002000.img/invincible animation: 90 + 360 + 90 + 540 = 1080ms.
+// One character's hurt state: a landed touch starts it and it runs 60 game
+// frames (1/60 s each, the MonoGame default step, so one second). Invincibility
+// is what the state grants: every touch inside it is ignored, so there is one
+// timer for both.
 public sealed class HurtGuard : Component
 {
-    public const float InvincibleMs = 1080f;
+    public const int HurtFrames = 60;
+    public const int FlashFrames = 6; // purple / normal swap: 100ms
 
-    public float LeftMs { get; private set; }
-    public bool Invincible => LeftMs > 0;
+    public int LeftFrames { get; private set; }
+    public bool Invincible => LeftFrames > 0;
+    public int ElapsedFrames => HurtFrames - LeftFrames;
 
-    public void Tick(float dtMs) => LeftMs = Math.Max(0, LeftMs - dtMs);
+    public void Tick() => LeftFrames = Math.Max(0, LeftFrames - 1);
 
-    public void Clear() => LeftMs = 0;
+    public void Clear() => LeftFrames = 0;
 
     // Returns the damage actually dealt. A blocked touch returns 0 and does
     // not change HP or restart the window.
@@ -20,7 +23,7 @@ public sealed class HurtGuard : Component
     {
         if (Invincible) return 0;
         long dealt = Progression.ApplyHurt(chara, damage, defPct);
-        if (dealt > 0) LeftMs = InvincibleMs;
+        if (dealt > 0) LeftFrames = HurtFrames;
         return dealt;
     }
 

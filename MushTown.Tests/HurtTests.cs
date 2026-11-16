@@ -17,7 +17,8 @@ public class HurtTests
         Assert.AreEqual(0L, guard.Apply(chara, 10, 0));
         Assert.AreEqual(90L, chara.Hp, "the second touch inside the window must not change HP");
 
-        guard.Tick(HurtGuard.InvincibleMs);
+        for (int i = 0; i < HurtGuard.HurtFrames; i++) guard.Tick();
+        Assert.IsFalse(guard.Invincible);
         Assert.AreEqual(10L, guard.Apply(chara, 10, 0));
         Assert.AreEqual(80L, chara.Hp);
     }
@@ -57,5 +58,22 @@ public class HurtTests
         m.Input = new PlayerInput { Walk = PlayerMover.WalkSpeed, Jump = PlayerMover.JumpV0 };
         for (int i = 0; i < 120 && m.Ground == null; i++) m.Update(1f / 60f);
         Assert.IsTrue(m.X < 500, "moved away from the mob");
+    }
+
+    [TestMethod]
+    public void HurtStateAndInvincibilityShareOneSixtyFrameTimer()
+    {
+        var chara = new CharaSlot { Hp = 100 };
+        var guard = new HurtGuard();
+        Assert.IsFalse(guard.Invincible);
+        guard.Apply(chara, 10, 0);
+        Assert.AreEqual(60, HurtGuard.HurtFrames);
+        Assert.AreEqual(60, guard.LeftFrames);
+        for (int i = 0; i < 59; i++) guard.Tick();
+        Assert.IsTrue(guard.Invincible, "frame 59: still hurt");
+        Assert.AreEqual(0L, guard.Apply(chara, 10, 0));
+        Assert.AreEqual(1, guard.LeftFrames, "a blocked touch does not restart the state");
+        guard.Tick();
+        Assert.IsFalse(guard.Invincible, "frame 60: over");
     }
 }

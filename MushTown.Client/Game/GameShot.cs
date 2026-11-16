@@ -83,7 +83,7 @@ public partial class MushTownGame
                 _mover.Reset();
                 _mover.Ground = standGround;
                 _mover.Y = standY;
-                _hurt.Tick(_shotHurtBlink ? 83 : 183); // 83ms = purple step, 183ms = normal step
+                for (int i = _shotHurtBlink ? 5 : 11; i > 0; i--) _hurt.Tick(); // 5 frames = purple step, 11 frames = normal step
                 _mover.Action = _shotAction;
                 _shownAction = _shotAction;
                 _frame = _shotFrame;
@@ -95,7 +95,7 @@ public partial class MushTownGame
             for (int i = _shotHurtBlink ? 5 : 8; i > 0; i--)
             {
                 _mover.Update(1f / 60);
-                _hurt.Tick(1000f / 60);
+                _hurt.Tick();
             }
             _mover.Action = "alert";
             _shownAction = _mover.Action;

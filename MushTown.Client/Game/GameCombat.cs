@@ -11,7 +11,6 @@ public partial class MushTownGame
     private const int DashPx = 220; // Rush/Flash Blade carry the caster this far along facing
     private const float DiveV = 900f; // Leap Attack slams down this fast (past MaxFall on purpose)
     private const int LeapRange = 400; // Leap Attack needs a platform within this far below
-    private const float HurtFlashMs = 100f; // purple / normal swap cadence; WZ has no field for it
     private static readonly Color HurtPurple = new(200, 130, 255);
 
     // Pooled spawn: a number is a node now, so a pop puts it back in the tree
@@ -121,12 +120,12 @@ public partial class MushTownGame
     }
 
     // The hit pose loops the two alert frames of the WZ invincible action
-    // (frame 1 for 90ms, frame 0 for 360ms) for the whole invincible window.
-    private int HurtFrame() => (HurtGuard.InvincibleMs - _hurt.LeftMs) % 450 < 90 ? 1 : 0;
+    // (frame 1 for 90ms, frame 0 for 360ms), counted in game frames: 5 + 22.
+    private int HurtFrame() => _hurt.ElapsedFrames % 27 < 5 ? 1 : 0;
 
-    // Purple on the first flash step, normal on the next, for the whole hit.
+    // Purple on the first flash step, normal on the next, for the whole hurt state.
     private Color? HurtTint =>
-        _hurt.Invincible && ((int)((HurtGuard.InvincibleMs - _hurt.LeftMs) / HurtFlashMs) & 1) == 0 ? HurtPurple : null;
+        _hurt.Invincible && (_hurt.ElapsedFrames / HurtGuard.FlashFrames & 1) == 0 ? HurtPurple : null;
 
     // Death: full pools, feet back on the spawn ground, motion cleared.
     private void Die(CharaSlot chara)

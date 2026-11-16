@@ -659,7 +659,7 @@ public partial class MushTownGame : Game
             return;
         }
         _fighter.Tick(dtMs);
-        _hurt.Tick(dtMs);
+        _hurt.Tick();
         foreach (int id in _fighter.ExpiredBuffs) EndBuff(id); // same spot, same order (ticks run first now, ends after)
         if (_fighter.RegenDue) PayoutRegen();
         if (_save?.Slots[_slot] is CharaSlot c) // learn/expire shrinks the pool: clamp, never heal
@@ -682,7 +682,7 @@ public partial class MushTownGame : Game
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
         int dirNow = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
-        if (_fighter.AttackLock <= 0 && !_mover.Knocked && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
+        if (_fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
 
         // Ctrl swings the weapon (not on a ladder): the swing locks movement
         // for one playthrough; net play sends it, the local world judges it right here.
@@ -787,9 +787,9 @@ public partial class MushTownGame : Game
         }
         if (_mover.Ground != null || _mover.Climb != null) _canLeap = true; // grounded or held: the next airtime gets its leap back
 
-        // Pose priority while invincible: a swing, then the knock arc (alert),
-        // then the normal pose, where standing still is alert.
-        bool hurtPose = _hurt.Invincible && _fighter.AttackLock <= 0 && (_mover.Knocked || _mover.Action == "stand1");
+        // The hurt state swaps the default stand and jump for alert; any other
+        // action (walk, climb, prone, a swing) keeps its own pose.
+        bool hurtPose = _hurt.Invincible && _mover.Action is "stand1" or "jump";
         if (hurtPose)
         {
             _mover.Action = "alert";
