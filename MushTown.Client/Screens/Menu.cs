@@ -169,6 +169,8 @@ public partial class MushTownGame
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
             if (shotScreen == "chars2") _slot = PageSlots; // empty slot: no start/delete on the empty-page shot
+            if (shotScreen == "use") // the coupon tooltip shot: one damage skin coupon in the USE tab
+                Inventory.Add(_save!.Slots[_slot]!, "use", _items.Values.First(d => d.DamageSkin == 1426).ItemId, 1);
             if (shotScreen is "inv" or "use" or "dropqty" or "dropqtymax" or "cashuserename" or "cashusereset" or "dec" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
             if (shotScreen == "dec") _invTab = 5; // the DEC bag only: no equipment window

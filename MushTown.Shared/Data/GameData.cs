@@ -434,13 +434,13 @@ public sealed class DmgWord
     public int Oy { get; set; }
 }
 
-// The unit skin data: the four unit pictures (WZ NoCustom 0..3), the
-// gap before the dot and the gap between number and unit.
+// The unit skin data: the four unit pictures (WZ NoCustom 0..3: dot, K, M, B)
+// and the dot gap. NumberSpace is exported but not used by the 1.2B layout.
 public sealed class DmgUnit
 {
     public List<DmgDigit> Images { get; set; } = new();
-    public int DotSpace { get; set; }
-    public int NumberSpace { get; set; }
+    public int DotSpace { get; set; } // gap after the decimal point
+    public int NumberSpace { get; set; } // WZ value; the 1.2B layout keeps the unit letter tight
 
     // 1234567890 -> "1.2B": K/M/B, one decimal only when it is not zero.
     public static string Format(long damage)

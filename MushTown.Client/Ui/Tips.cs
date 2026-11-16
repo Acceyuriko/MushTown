@@ -46,6 +46,7 @@ public sealed class Tips : Component, IDrawable
         var desc = new List<Texture2D>();
         if (item.Desc.Length != 0)
             foreach (string text in gfx.Ui.Wrap(item.Desc, _invLay.Get("tipTextW", 180))) desc.Add(gfx.Ui.GetSmall(text));
+        var sample = item.DamageSkin != 0 ? _game.DamageSample(item.DamageSkin) : null;
 
         int iconX = _statLay.Get("detailIconX", 8), iconY = _statLay.Get("detailIconY", 8);
         // a hair or face coupon shows the doll's bust instead of the coupon art
@@ -63,6 +64,12 @@ public sealed class Tips : Component, IDrawable
         int rows = lines.Count + desc.Count; // the blank row between the two blocks
         if (lines.Count > 0 && desc.Count > 0) rows++;
         int h = Math.Max(lineY + rows * lineGap, iconY + iconSize) + iconX;
+        int sampleGap = _statLay.Get("detailSampleGap", 8);
+        if (sample != null) // the preview sits under the text, full size, never cut
+        {
+            w = Math.Max(w, sample.Width + iconX * 2);
+            h = Math.Max(h, lineY + rows * lineGap + sampleGap + sample.Height + iconX);
+        }
         var box = anchor.At(gfx, w, h);
 
         NineSlice.Draw(gfx, "tip", box);
@@ -87,5 +94,8 @@ public sealed class Tips : Component, IDrawable
             gfx.Sb.Draw(line, new Vector2(box.X + lineX, y), new Color(214, 216, 222));
             y += lineGap;
         }
+        if (sample != null)
+            gfx.Sb.Draw(sample, new Vector2(box.X + (w - sample.Width) / 2,
+                box.Y + lineY + rows * lineGap + sampleGap), Color.White);
     }
 }

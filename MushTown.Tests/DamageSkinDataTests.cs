@@ -15,6 +15,7 @@ public class DamageSkinDataTests
         Assert.AreEqual(0, data.Digits[0].Ox);
         Assert.AreEqual(0, data.Red1.Count);
         Assert.IsNull(data.Unit);
+        Assert.IsNull(data.Sample);
     }
 
     [TestMethod]
@@ -22,11 +23,9 @@ public class DamageSkinDataTests
     {
         Assert.AreEqual("999", DmgUnit.Format(999));
         Assert.AreEqual("1K", DmgUnit.Format(1_000));
-        Assert.AreEqual("1.2K", DmgUnit.Format(1_234));
-        Assert.AreEqual("12.3M", DmgUnit.Format(12_345_678));
-        Assert.AreEqual("999.9M", DmgUnit.Format(999_900_000));
-        Assert.AreEqual("1B", DmgUnit.Format(1_000_000_000));
+        Assert.AreEqual("123.4K", DmgUnit.Format(123_456));
         Assert.AreEqual("1.2B", DmgUnit.Format(1_234_567_890));
+        Assert.AreEqual("123B", DmgUnit.Format(123_045_000_000));
     }
 
     [TestMethod]

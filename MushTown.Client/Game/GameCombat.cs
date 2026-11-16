@@ -103,8 +103,8 @@ public partial class MushTownGame
 
     // Collected skins: each picture's origin lands in the middle of its
     // advance box (left = pen + width / 2 - Ox); NumberSpace widens digits.
-    // A unit skin's "." and K/M/B come from DmgUnit, with DotSpace after the
-    // dot and NumberSpace before the unit letter.
+    // A unit skin's "." and K/M/B come from DmgUnit: DotSpace after the dot,
+    // and the unit letter follows its number with no extra gap.
     private void DrawSkinNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint)
     {
         var glyphs = new List<(Texture2D Tex, int Ox, int Oy, int SpaceBefore, int SpaceAfter)>();
@@ -125,7 +125,7 @@ public partial class MushTownGame
                 int unit = c switch { 'K' => 1, 'M' => 2, 'B' => 3, _ => -1 };
                 if (unit < 0) continue;
                 var d = dmg.Unit.Images[unit];
-                glyphs.Add((_textures[d.Image], d.Ox, d.Oy, dmg.Unit.NumberSpace, 0));
+                glyphs.Add((_textures[d.Image], d.Ox, d.Oy, 0, 0));
             }
         }
         float totalW = 0;
@@ -156,8 +156,15 @@ public partial class MushTownGame
         foreach (var w in data.Words) LoadTexture(w.Image);
         if (data.Unit != null)
             foreach (var u in data.Unit.Images) LoadTexture(u.Image);
+        if (data.Sample != null) LoadTexture(data.Sample.Image);
         _dmg[skin] = data;
         return data;
+    }
+
+    // The coupon tooltip's preview picture; a skin without one has no preview.
+    internal Texture2D? DamageSample(int skin)
+    {
+        return LoadDmg(skin).Sample is { } sample ? _textures[sample.Image] : null;
     }
 
     // One touch that landed on us: DEF folds in, the number shows what got
