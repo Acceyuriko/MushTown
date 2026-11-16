@@ -6,7 +6,7 @@ namespace MushTown.Client;
 // The equipment window (UIEquip.img): the Equipment/Pet pages share one
 // 366x444 frame, the Outfits/Android/Damage Skin pages share the other.
 // The Equipment page shows the worn gear, the Outfits page the worn cash
-// items; the other three pages only show their empty canvases.
+// items, the Damage Skins page its saved skins; Pet and Android stay empty.
 public sealed class EquipWindow : UiWindow
 {
     private readonly MushTownGame _game;
@@ -68,7 +68,17 @@ public sealed class EquipWindow : UiWindow
 
     private EquipPage _page = EquipPage.Equipment;
 
-    public override void OnClosed() => _game.ClearWornHand();
+    // Damage Skins page: the one-button notice and the double-click state.
+    private string _dmgNotice = "";
+    private int _dmgLastCell = -1;
+    private double _dmgLastMs;
+
+    public override void OnClosed()
+    {
+        _game.ClearWornHand();
+        _dmgNotice = "";
+        _dmgLastCell = -1;
+    }
 
     private void CloseEquipWindow()
     {
@@ -84,6 +94,7 @@ public sealed class EquipWindow : UiWindow
 
     // The screenshot opens the decoration page directly.
     public void ShowOutfits() => SetPage(EquipPage.Outfits);
+    public void ShowDamageSkins() => SetPage(EquipPage.DamageSkins);
 
     public override void Build()
     {
@@ -101,13 +112,20 @@ public sealed class EquipWindow : UiWindow
             doll.Add(new AvatarPreview(_game, "stand1", false, chara: () => _game.Hero));
             root.AddChild(doll);
         }
-        var slots = SlotsForPage();
-        var occupied = slots.Select(s => s.Slot).ToHashSet();
-        bool bottomLocked = BottomLocked();
-        if (bottomLocked) occupied.Add("bottom");
-        AddSlotNames(root, occupied);
-        AddWorn(root, slots);
-        if (bottomLocked) AddLockedBottom(root);
+        if (_page == EquipPage.DamageSkins)
+        {
+            AddDamageSkins(root);
+        }
+        else
+        {
+            var slots = SlotsForPage();
+            var occupied = slots.Select(s => s.Slot).ToHashSet();
+            bool bottomLocked = BottomLocked();
+            if (bottomLocked) occupied.Add("bottom");
+            AddSlotNames(root, occupied);
+            AddWorn(root, slots);
+            if (bottomLocked) AddLockedBottom(root);
+        }
         if (IsDeco)
         {
             AddTab(root, _lay.Get("decoTab0X", 12), _lay.Get("decoTabW0", 113), "deco_tab", 0, EquipPage.Outfits);
@@ -134,6 +152,7 @@ public sealed class EquipWindow : UiWindow
             new Rectangle(_lay.Get("closeX", 343), _lay.Get("closeY", 12),
                 _lay.Get("closeW", 11), _lay.Get("closeH", 11)),
             "ui/equip_close.png", CloseEquipWindow));
+        if (_dmgNotice != "") root.AddChild(DamageSkinNotice());
         Host.AddChild(root);
     }
 
@@ -173,12 +192,24 @@ public sealed class EquipWindow : UiWindow
         }
     }
 
-    // The items of the open page. Pet / Android / Damage Skins show no items.
+    // The items of the open page. Pet / Android show no items; Damage Skins
+    // maps each saved skin to its coupon (the coupon carries the icon).
     private List<(string Slot, int Id)> SlotsForPage()
     {
+        if (_page == EquipPage.DamageSkins) return DamageSkinSlots();
         if (_page is not (EquipPage.Equipment or EquipPage.Outfits)) return new();
         if (_game.Hero is not { } chara) return new();
         return IsDeco ? EquipSlots.Cash(chara, _game.Items) : EquipSlots.Worn(chara, _game.Items);
+    }
+
+    private List<(string Slot, int Id)> DamageSkinSlots()
+    {
+        var list = new List<(string Slot, int Id)>();
+        if (_game.Hero?.DamageSkins is not { } skins) return list;
+        for (int i = 0; i < skins.Count && i < Progression.DamageSkinSlots; i++)
+            if (CouponForSkin(skins[i]) is { } coupon)
+                list.Add(($"dmg{i}", coupon.ItemId));
+        return list;
     }
 
     private bool BottomLocked()
@@ -199,7 +230,7 @@ public sealed class EquipWindow : UiWindow
     }
 
     // The worn items: the Equipment page shows the gear, the Outfits page the
-    // cash items. Pet / Android / Damage Skins stay empty.
+    // cash items. Pet / Android stay empty.
     private void AddWorn(GameObject root, List<(string Slot, int Id)> slots)
     {
         var items = _game.Items;
@@ -230,10 +261,211 @@ public sealed class EquipWindow : UiWindow
         _game.PickUpWorn(id, IsDeco);
     }
 
+    // The Damage Skins page: the current skin at the top, then the 7x5
+    // storage grid. Empty cells and saved ids without exported art use the
+    // official disabled cover.
+    private void AddDamageSkins(GameObject root)
+    {
+        var chara = _game.Hero;
+        var skins = chara?.DamageSkins;
+        int current = chara?.DamageSkin ?? 0;
+        var saved = SlotsForPage().ToDictionary(s => s.Slot, s => s.Id);
+
+        var currentCoupon = CouponForSkin(current);
+        if (currentCoupon != null)
+        {
+            _game.LoadTexture(currentCoupon.Image);
+            int size = _lay.Get("dmgCurrentIconSize", 48);
+            var icon = new GameObject { NoHit = true };
+            icon.Add(new Rect(new Rectangle(
+                _lay.Get("contentX", 12) + _lay.Get("dmgCurrentIconX", 17),
+                _lay.Get("contentY", 61) + _lay.Get("dmgCurrentIconY", 18), size, size)));
+            icon.Add(new InvItem(() => currentCoupon.Image));
+            root.AddChild(icon);
+        }
+        var name = new GameObject { NoHit = true };
+        name.Add(new Rect(new Rectangle(
+            _lay.Get("contentX", 12) + _lay.Get("dmgNameX", 74),
+            _lay.Get("contentY", 61) + _lay.Get("dmgNameY", 45),
+            _lay.Get("dmgNameW", 251), _lay.Get("dmgNameH", 26))));
+        name.Add(new Text { Value = () => DamageSkinName(), Ink = Color.White, Align = TextAlign.Center });
+        root.AddChild(name);
+
+        for (int i = 0; i < Progression.DamageSkinSlots; i++)
+        {
+            int index = i;
+            var cell = new GameObject();
+            cell.Add(new Rect(DamageSlotBox(index)));
+            int skin = skins != null && index < skins.Count ? skins[index] : 0;
+            if (skin != 0 && saved.TryGetValue($"dmg{index}", out int couponId))
+            {
+                if (skin == current) cell.Add(new Picture("ui/deco_dmg_activated.png", 0, 0));
+                var data = _game.Items[couponId];
+                _game.LoadTexture(data.Image);
+                cell.Add(new Picture(data.Image, _lay.Get("dmgIconX", 5), _lay.Get("dmgIconY", 6)));
+                cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => ClickDamageSkinCell(index) });
+                cell.Add(new ItemTip(() => couponId));
+            }
+            else
+            {
+                cell.Add(new Picture("ui/deco_dmg_disabled.png", 0, 0));
+            }
+            root.AddChild(cell);
+        }
+
+        AddCountText(root, _lay.Get("dmgCountX", 69), AlignRight: true,
+            () => Math.Min(skins?.Count ?? 0, Progression.DamageSkinSlots).ToString());
+        AddCountText(root, _lay.Get("dmgCount2X", 84), AlignRight: false,
+            () => Progression.DamageSkinSlots.ToString());
+
+        bool canRegist = chara is { DamageSkin: not 0 } &&
+            (chara.DamageSkins?.Count ?? 0) < Progression.DamageSkinSlots;
+        AddDamageSkinButton(root, "deco_dmg_regist", _lay.Get("dmgRegistX", 272),
+            _lay.Get("dmgRegistY", 18), _lay.Get("dmgRegistW", 54), _lay.Get("dmgRegistH", 22),
+            canRegist ? RegistDamageSkin : null);
+        AddDamageSkinButton(root, "deco_dmg_gather", _lay.Get("dmgGatherX", 242),
+            _lay.Get("dmgGatherY", 318), _lay.Get("dmgGatherW", 92), _lay.Get("dmgGatherH", 22),
+            null);
+        AddDamageSkinButton(root, "deco_dmg_faq", _lay.Get("dmgFaqX", -1),
+            _lay.Get("dmgFaqY", 353), _lay.Get("dmgFaqW", 37), _lay.Get("dmgFaqH", 23),
+            null);
+    }
+
+    private Rectangle DamageSlotBox(int index)
+    {
+        int pitch = _lay.Get("dmgSlotPitch", 46);
+        int cols = _lay.Get("dmgSlotCols", 7);
+        int size = _lay.Get("dmgSlotSize", 42);
+        return new Rectangle(
+            _lay.Get("contentX", 12) + _lay.Get("dmgSlotStartX", 10) + index % cols * pitch,
+            _lay.Get("contentY", 61) + _lay.Get("dmgSlotStartY", 83) + index / cols * pitch,
+            size, size);
+    }
+
+    private void AddCountText(GameObject root, int x, bool AlignRight, Func<string> value)
+    {
+        int w = _lay.Get("dmgCountW", 30);
+        var o = new GameObject { NoHit = true };
+        o.Add(new Rect(new Rectangle(_lay.Get("contentX", 12) + x - (AlignRight ? w : 0),
+            _lay.Get("contentY", 61) + _lay.Get("dmgCountY", 321), w, _lay.Get("dmgCountH", 19))));
+        o.Add(new Text
+        {
+            Value = value,
+            Ink = Color.White,
+            Align = AlignRight ? TextAlign.Right : TextAlign.Left,
+        });
+        root.AddChild(o);
+    }
+
+    // A Damage Skins button: the real button when it has an action, the
+    // official disabled art when it does not (Consolidate and ? are not built).
+    private void AddDamageSkinButton(GameObject root, string stem, int x, int y, int w, int h,
+        Action? onClick)
+    {
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(_lay.Get("contentX", 12) + x, _lay.Get("contentY", 61) + y, w, h)));
+        if (onClick != null)
+        {
+            o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+            o.Add(new Image("ui/" + stem));
+        }
+        else
+        {
+            o.Add(new Picture($"ui/{stem}_d.png", 0, 0));
+        }
+        root.AddChild(o);
+    }
+
+    private ItemData? CouponForSkin(int skin) =>
+        skin == 0 ? null : _game.Items.Values.FirstOrDefault(d => d.DamageSkin == skin);
+
+    private string DamageSkinName()
+    {
+        int skin = _game.Hero?.DamageSkin ?? 0;
+        if (skin == 0) return "Basic Damage Skin";
+        return CouponForSkin(skin)?.Name ?? "";
+    }
+
+    private void RegistDamageSkin()
+    {
+        if (_game.Hero is not { } chara) return;
+        if (!Progression.SaveCurrentDamageSkin(chara)) return;
+        _game.SaveEquipChange();
+        Dirty = true;
+    }
+
+    // One click selects the cell, a second click inside the window switches.
+    private void ClickDamageSkinCell(int index)
+    {
+        double now = _game.TimeMs;
+        if (_dmgLastCell != index || now - _dmgLastMs > _lay.Get("doubleClickMs", 350))
+        {
+            _dmgLastCell = index;
+            _dmgLastMs = now;
+            return;
+        }
+        _dmgLastCell = -1;
+        SwitchDamageSkin(index);
+    }
+
+    private void SwitchDamageSkin(int index)
+    {
+        var chara = _game.Hero;
+        if (chara?.DamageSkins == null || index >= chara.DamageSkins.Count) return;
+        int skin = chara.DamageSkins[index];
+        if (skin == chara.DamageSkin) return;
+        if (chara.Mesos < Progression.DamageSkinChangeFee)
+        {
+            _dmgNotice = $"Not enough mesos.\nYou need {Progression.DamageSkinChangeFee:#,##0} mesos.";
+            Dirty = true;
+            return;
+        }
+        if (!Progression.SwitchDamageSkin(chara, skin))
+        {
+            _dmgNotice = "Your damage skin storage is full.";
+            Dirty = true;
+            return;
+        }
+        _game.SaveEquipChange();
+        Dirty = true;
+    }
+
+    private GameObject DamageSkinNotice()
+    {
+        int w = _lay.Get("noticeW", 318), h = _lay.Get("noticeH", 160);
+        var box = new Rectangle(_lay.Get("noticeX", 24), _lay.Get("noticeY", 142), w, h);
+        var popup = SysPopUi.BuildOk(box, _game.Ui.Wrap(_dmgNotice, _lay.Get("noticeTextW", 286)),
+            () => { _dmgNotice = ""; Dirty = true; },
+            _lay.Get("noticeTextY", 34), _lay.Get("noticeLineStep", 17), _lay.Get("noticeTextPad", 32),
+            _lay.Get("noticeOkY", 115), _lay.Get("noticeFontPx", 12), _lay);
+        var root = new GameObject { Modal = true };
+        var blocker = new GameObject();
+        blocker.Add(new Rect(Rect()));
+        blocker.Add(new Button { Kind = ButtonKind.Silent });
+        root.AddChild(blocker);
+        root.AddChild(popup);
+        return root;
+    }
+
+    // Esc closes the notice before it closes the window.
+    internal bool EscNotice()
+    {
+        if (_dmgNotice == "") return false;
+        _dmgNotice = "";
+        Dirty = true;
+        return true;
+    }
+
     // The box under a point, or null. The drop uses it to decide whether the
     // item belongs in that slot.
     internal string? SlotAt(int gx, int gy)
     {
+        if (_page == EquipPage.DamageSkins)
+        {
+            for (int i = 0; i < Progression.DamageSkinSlots; i++)
+                if (OnScreen(DamageSlotBox(i)).Contains(gx, gy)) return $"dmg{i}";
+            return null;
+        }
         if (_page is not (EquipPage.Equipment or EquipPage.Outfits)) return null;
         foreach (var (slot, cell) in IsDeco ? DecoBoxes : EquipBoxes)
             if (OnScreen(SlotBox(cell)).Contains(gx, gy)) return slot;
@@ -277,6 +509,11 @@ public sealed class EquipWindow : UiWindow
             "equip_bg.png", "deco_bg.png", "equip_panel.png", "equip_pet.png",
             "deco_panel.png", "deco_android.png", "deco_damage.png",
             "equip_deco.png", "deco_equip.png", "equip_close.png", "equip_disabled.png",
+            "deco_dmg_activated.png", "deco_dmg_disabled.png",
+            "deco_dmg_regist_n.png", "deco_dmg_regist_h.png", "deco_dmg_regist_p.png",
+            "deco_dmg_regist_d.png", "deco_dmg_gather_d.png", "deco_dmg_faq_d.png",
+            "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png",
+            "wm_pop_yes_n.png", "wm_pop_yes_h.png", "wm_pop_yes_p.png",
         })
             _game.LoadTexture("ui/" + f);
         for (int t = 0; t < 2; t++)
@@ -310,6 +547,9 @@ public partial class MushTownGame
         _wornHeldId = 0;
         _wornHeldCash = false;
     }
+
+    // The Damage Skins page changed a saved value: write it to the save file.
+    internal void SaveEquipChange() => SaveChara();
 
     // The bust a coupon draws, or 0 when this build has no exported look.
     internal int CouponBust(int id) =>

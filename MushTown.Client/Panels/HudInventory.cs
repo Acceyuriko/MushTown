@@ -668,6 +668,12 @@ public partial class MushTownGame
             PlaySfx("click");
             OpenCashUse(id);
         }
+        else if (act == HandAct.SkinChanged)
+        {
+            SaveChara();
+            if (WindowFor(HotkeyAction.Equip) is { } equipWindow) equipWindow.Dirty = true;
+            PlaySfx("click");
+        }
     }
 
     // CASH tab double-click: Character Name Change opens the input popup;

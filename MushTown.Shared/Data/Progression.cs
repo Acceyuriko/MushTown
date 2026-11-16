@@ -100,6 +100,49 @@ public static class Progression
         return true;
     }
 
+    // Damage skin storage: the WZ canvas has 7x5 cells; a switch costs
+    // 100,000 mesos (Etc/DamageSkinSaveInfo.img change_fee).
+    public const int DamageSkinSlots = 35;
+    public const long DamageSkinChangeFee = 100_000;
+
+    // Saves the current skin into the storage. False only when a saved cell
+    // is needed and all 35 are used; the basic skin and a duplicate need no
+    // cell and return true.
+    public static bool SaveCurrentDamageSkin(CharaSlot chara)
+    {
+        if (chara.DamageSkin == 0) return true;
+        var skins = chara.DamageSkins ??= new List<int>();
+        if (skins.Contains(chara.DamageSkin)) return true;
+        if (skins.Count >= DamageSkinSlots) return false;
+        skins.Add(chara.DamageSkin);
+        return true;
+    }
+
+    // Uses one damage skin coupon: the old unsaved skin goes to the storage
+    // first, then one coupon leaves the USE bag and the new skin takes over.
+    // False when the bag has no coupon or the old skin cannot be saved.
+    public static bool UseDamageSkinCoupon(CharaSlot chara, ItemData item)
+    {
+        if (item.DamageSkin == 0 || Inventory.Count(chara, "use", item.ItemId) <= 0) return false;
+        if (!SaveCurrentDamageSkin(chara)) return false;
+        Inventory.Remove(chara, "use", item.ItemId, 1);
+        chara.DamageSkin = item.DamageSkin;
+        return true;
+    }
+
+    // Switches to a saved skin for 100,000 mesos. The old unsaved skin goes
+    // to the storage first. False when the fee is short, the storage is full,
+    // or the skin is already current.
+    public static bool SwitchDamageSkin(CharaSlot chara, int skin)
+    {
+        if (skin == 0 || skin == chara.DamageSkin) return false;
+        if (chara.Mesos < DamageSkinChangeFee) return false;
+        if (!SaveCurrentDamageSkin(chara)) return false;
+        chara.Mesos -= DamageSkinChangeFee;
+        chara.DamageSkin = skin;
+        return true;
+    }
+
     // Wears one from the EQUIP bag. Same slot replaces same slot; an overall
     // occupies the top and bottom area, so it swaps out a top and pants, and a
     // top or pants swaps out an overall. True when worn.

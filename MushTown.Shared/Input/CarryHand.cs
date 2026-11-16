@@ -8,6 +8,7 @@ public enum HandAct
     Wore, // the worn set changed: click + doll rebuild
     Drank, // drank the held potion: silent (legacy drinks made no sound)
     Used, // cash-tab item: the client runs its Utility effect
+    SkinChanged, // a damage skin coupon was used: the client saves and repaints the equip window
 }
 
 // One item in the hand (MapleStory pick-up/drop, not press-drag).
@@ -81,7 +82,7 @@ public sealed class CarryHand
     {
         HandAct act = Kind switch
         {
-            "use" => DrinkHeld(chara, defs, maxHp, maxMp),
+            "use" => UseHeld(chara, defs, maxHp, maxMp),
             "equip" => WearHeld(chara, defs),
             "dec" => Progression.WearCash(chara, Id, defs) ? HandAct.Wore : HandAct.None,
             "cash" => HandAct.Used,
@@ -94,10 +95,15 @@ public sealed class CarryHand
         return act;
     }
 
-    private HandAct DrinkHeld(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs,
+    // A USE item is either a potion or a damage skin coupon. The coupon path
+    // leaves the hand empty only when it really applied (a full storage keeps
+    // the coupon in hand and in the bag).
+    private HandAct UseHeld(CharaSlot chara, IReadOnlyDictionary<int, ItemData> defs,
         long maxHp, long maxMp)
     {
         var item = defs[Id];
+        if (item.DamageSkin != 0)
+            return Progression.UseDamageSkinCoupon(chara, item) ? HandAct.SkinChanged : HandAct.None;
         Progression.UsePotion(chara, Id, item.Hp, item.Mp, maxHp, maxMp);
         return HandAct.Drank;
     }

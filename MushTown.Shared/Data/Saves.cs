@@ -202,6 +202,8 @@ public sealed class CharaSlot
     public int Skin { get; set; } // 0..5 (old saves have no field: 0)
     public int Hair { get; set; } // current hair cosmetic id; CreateHero sets the default
     public int Face { get; set; } // current face cosmetic id; CreateHero sets the default
+    public int DamageSkin { get; set; } // current damage skin id; 0 = the basic skin
+    public List<int>? DamageSkins { get; set; } // saved damage skin ids (null = empty)
     public List<int>? CashWorn { get; set; } // worn decorative cash item ids (Fashion, current hair/face coupons)
     public List<Dictionary<string, string>>? KeyPresets { get; set; } // three key -> target maps (null = defaults)
     public int ActivePreset { get; set; } // which of the three is live (0..2)

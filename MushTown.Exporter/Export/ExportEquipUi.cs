@@ -47,7 +47,28 @@ public static partial class Export
             ("UIEquip.img/Deco/CoordiTab/SlotName/hair", "equip_slot_hair.png"),
             ("UIEquip.img/Deco/CoordiTab/SlotName/face", "equip_slot_face.png"),
             ("UIEquip.img/Deco/CoordiTab/SlotName/skin", "equip_slot_skin.png"),
+            // Damage Skins page: the current-skin frame, the empty-cell cover
+            // and the three bottom/right buttons.
+            ("UIEquip.img/Deco/DamageSkinTab/Activated", "deco_dmg_activated.png"),
+            ("UIEquip.img/Deco/DamageSkinTab/disabled", "deco_dmg_disabled.png"),
         };
+        foreach ((string button, string file) in new[]
+        {
+            ("button:regist", "deco_dmg_regist"),
+            ("button:gather", "deco_dmg_gather"),
+            ("button:faq", "deco_dmg_faq"),
+        })
+        {
+            foreach ((string state, string suffix) in new[]
+            {
+                ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p"), ("disabled", "_d"),
+            })
+                files.Add(($"UIEquip.img/Deco/DamageSkinTab/{button}/{state}/0", $"{file}{suffix}.png"));
+        }
+        // DamageSkinTab/scroll:list only points at Basic.img/VScr22 (path node).
+        files.Add(("Basic.img/VScr22/enabled/base", "deco_dmg_scroll_base.png"));
+        for (int t = 0; t < 3; t++)
+            files.Add(($"Basic.img/VScr22/enabled/thumb{t}", $"deco_dmg_scroll_thumb{t}.png"));
         for (int t = 0; t < 2; t++)
         {
             files.Add(($"UIEquip.img/Equip/main/tab:detailTab/normal/{t}", $"equip_tab_n{t}.png"));
