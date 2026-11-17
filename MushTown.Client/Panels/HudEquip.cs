@@ -649,9 +649,13 @@ public partial class MushTownGame
 
     internal void ClearWornHand()
     {
+        // ClearHeld runs on every click that hit nothing else: only an actual drop
+        // may rebuild the window, or a click on the delete popup would replace
+        // the popup it just grabbed and the drag would end at once.
+        bool held = WornHeld;
         _wornHeldId = 0;
         _wornHeldCash = false;
-        if (WindowFor(HotkeyAction.Equip) is { } window) window.Dirty = true; // a picked-up skin cell loses its highlight
+        if (held && WindowFor(HotkeyAction.Equip) is { } window) window.Dirty = true; // a picked-up skin cell loses its highlight
     }
 
     // The Damage Skins page changed a saved value: write it to the save file.
