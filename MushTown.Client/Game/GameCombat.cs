@@ -104,7 +104,8 @@ public partial class MushTownGame
     // Collected skins: each picture's origin lands in the middle of its
     // advance box (left = pen + width / 2 - Ox); NumberSpace widens digits.
     // A unit skin's "." and K/M/B come from DmgUnit: DotSpace after the dot,
-    // and the unit letter follows its number with no extra gap.
+    // and the unit letter follows its number with no extra gap, bottom-aligned
+    // with the digits.
     private void DrawSkinNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint)
     {
         var glyphs = new List<(Texture2D Tex, int Ox, int Oy, int SpaceBefore, int SpaceAfter)>();
@@ -125,7 +126,11 @@ public partial class MushTownGame
                 int unit = c switch { 'K' => 1, 'M' => 2, 'B' => 3, _ => -1 };
                 if (unit < 0) continue;
                 var d = dmg.Unit.Images[unit];
-                glyphs.Add((_textures[d.Image], d.Ox, d.Oy, 0, 0));
+                var tex = _textures[d.Image];
+                // The letter's bottom edge sits on the digits' bottom edge.
+                var digit = dmg.Digits[0];
+                int oy = tex.Height - (_textures[digit.Image].Height - digit.Oy);
+                glyphs.Add((tex, d.Ox, oy, 0, 0));
             }
         }
         float totalW = 0;

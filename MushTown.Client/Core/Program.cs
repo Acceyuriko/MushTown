@@ -41,7 +41,7 @@ CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 // the equipment window; --screen decorations opens its Outfits page; --screen
 // damageskins opens its Damage Skins page with a filled storage,
 // damageskinsempty the same page with an empty storage, damageskinsselect
-// poses a selected storage cell, damageskinsdeleted the page after that
+// poses a storage cell picked up in hand, damageskinsdeleted the page after that
 // cell is deleted and damageskinsask its delete question; --screen dec opens
 // only the inventory DEC tab. --screen dropqty opens the inventory
 // with five potions held and the drop quantity popup; dropqtymax fills MAX.

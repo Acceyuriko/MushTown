@@ -68,13 +68,13 @@ public sealed class EquipWindow : UiWindow
 
     private EquipPage _page = EquipPage.Equipment;
 
-    // Damage Skins page: the notice, the selected storage cell (delete) and
-    // the double-click state. The selected cell is not the current skin.
+    // Damage Skins page: the notice, the picked-up storage cell (delete) and
+    // the double-click state. The picked-up cell is not the current skin; it
+    // is held in the shared hand, like a worn piece.
     private string _dmgNotice = "";
     private int _dmgSelCell = -1;
     private int _dmgDeleteIndex = -1;
     private bool _dmgDeleteAsk;
-    private int _dmgLastCell = -1;
     private double _dmgLastMs;
 
     public override void OnClosed()
@@ -84,7 +84,6 @@ public sealed class EquipWindow : UiWindow
         _dmgSelCell = -1;
         _dmgDeleteIndex = -1;
         _dmgDeleteAsk = false;
-        _dmgLastCell = -1;
     }
 
     private void CloseEquipWindow()
@@ -278,6 +277,7 @@ public sealed class EquipWindow : UiWindow
         var skins = chara?.DamageSkins;
         int current = chara?.DamageSkin ?? 0;
         var saved = SlotsForPage().ToDictionary(s => s.Slot, s => s.Id);
+        int picked = PickedCell;
 
         var currentCoupon = CouponForSkin(current);
         if (currentCoupon != null)
@@ -307,14 +307,15 @@ public sealed class EquipWindow : UiWindow
             int skin = skins != null && index < skins.Count ? skins[index] : 0;
             if (skin != 0 && saved.TryGetValue($"dmg{index}", out int couponId))
             {
-                // One highlight at a time: while a storage cell is selected,
+                // One highlight at a time: while a storage cell is in hand,
                 // the cyan tile marks it instead of the current skin.
-                if ((skin == current && _dmgSelCell < 0) || index == _dmgSelCell)
+                if ((skin == current && picked < 0) || index == picked)
                     cell.Add(new Picture("ui/deco_dmg_activated.png", 0, 0));
                 var data = _game.Items[couponId];
                 _game.LoadTexture(data.Image);
                 cell.Add(new Picture(data.Image, _lay.Get("dmgIconX", 5), _lay.Get("dmgIconY", 6)));
-                cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => ClickDamageSkinCell(index) });
+                cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickUpDamageSkin(index, couponId) });
+                cell.Add(new Grab(() => true));
                 cell.Add(new ItemTip(() => couponId));
             }
             else
@@ -405,22 +406,44 @@ public sealed class EquipWindow : UiWindow
         Dirty = true;
     }
 
-    // One click selects the cell, a second click inside the window switches.
-    private void ClickDamageSkinCell(int index)
+    // A click picks the skin up (grab cursor, its icon in hand). The hand
+    // swallows the next click (HudBar): DropDamageSkin decides what it does.
+    private void PickUpDamageSkin(int index, int couponId)
     {
-        double now = _game.TimeMs;
-        if (_dmgLastCell != index || now - _dmgLastMs > _lay.Get("doubleClickMs", 350))
-        {
-            _dmgLastCell = index;
-            _dmgLastMs = now;
-            _dmgSelCell = index;
-            Dirty = true;
-            return;
-        }
-        _dmgLastCell = -1;
-        _dmgSelCell = -1;
-        SwitchDamageSkin(index);
+        _dmgSelCell = index;
+        _dmgLastMs = _game.TimeMs;
+        _game.PickUpWorn(couponId, false);
         Dirty = true;
+    }
+
+    // The cell in hand, or -1 (the hand may have been cleared elsewhere).
+    private int PickedCell => _game.WornHeld || _dmgDeleteAsk ? _dmgSelCell : -1;
+
+    // The click that follows a pick-up: outside the window asks to delete the
+    // skin, a second click on the same cell inside the double-click window
+    // switches to it, anything else puts it back.
+    internal bool DropDamageSkin(int gx, int gy)
+    {
+        if (_page != EquipPage.DamageSkins || !_game.WornHeld || _dmgSelCell < 0) return false;
+        int index = _dmgSelCell;
+        _game.ClearWornHand();
+        if (!ScreenBox().Contains(gx, gy))
+        {
+            _dmgDeleteIndex = index;
+            _dmgDeleteAsk = true;
+            _dmgNotice = "";
+        }
+        else if (SlotAt(gx, gy) == $"dmg{index}" && _game.TimeMs - _dmgLastMs <= _lay.Get("doubleClickMs", 350))
+        {
+            _dmgSelCell = -1;
+            SwitchDamageSkin(index);
+        }
+        else
+        {
+            _dmgSelCell = -1;
+        }
+        Dirty = true;
+        return true;
     }
 
     private void SwitchDamageSkin(int index)
@@ -491,7 +514,6 @@ public sealed class EquipWindow : UiWindow
         _dmgDeleteAsk = false;
         _dmgDeleteIndex = -1;
         _dmgSelCell = -1;
-        _dmgLastCell = -1;
         Dirty = true;
     }
 
@@ -499,20 +521,8 @@ public sealed class EquipWindow : UiWindow
     {
         _dmgDeleteAsk = false;
         _dmgDeleteIndex = -1;
+        _dmgSelCell = -1;
         Dirty = true;
-    }
-
-    // Called from the shared HUD click path: a selected storage cell plus a
-    // click outside the equipment window asks to delete it.
-    internal bool ClickOutsideDamageSkins(int gx, int gy)
-    {
-        if (_page != EquipPage.DamageSkins || _dmgSelCell < 0 || ScreenBox().Contains(gx, gy)) return false;
-        _dmgDeleteIndex = _dmgSelCell;
-        _dmgDeleteAsk = true;
-        _dmgNotice = "";
-        _dmgLastCell = -1;
-        Dirty = true;
-        return true;
     }
 
     // The shot entries pose the delete selection and its question; production
@@ -520,6 +530,7 @@ public sealed class EquipWindow : UiWindow
     internal void SelectDamageSkinForShot(int index)
     {
         _dmgSelCell = index;
+        _game.PickUpWorn(DamageSkinSlots().First(s => s.Slot == $"dmg{index}").Id, false);
         Dirty = true;
     }
 
@@ -592,7 +603,6 @@ public sealed class EquipWindow : UiWindow
         _dmgSelCell = -1;
         _dmgDeleteIndex = -1;
         _dmgDeleteAsk = false;
-        _dmgLastCell = -1;
         Dirty = true; // the frame, tabs and canvas change together
     }
 
@@ -641,6 +651,7 @@ public partial class MushTownGame
     {
         _wornHeldId = 0;
         _wornHeldCash = false;
+        if (WindowFor(HotkeyAction.Equip) is { } window) window.Dirty = true; // a picked-up skin cell loses its highlight
     }
 
     // The Damage Skins page changed a saved value: write it to the save file.
