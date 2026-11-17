@@ -327,4 +327,65 @@ public class SceneTests
         scene.Layout();
         Assert.AreEqual(new Point(300, 150), popup.Get<Rect>()!.Screen.Location);
     }
+
+    // The real system popups inside a modal root with a dim under them (the way the
+    // delete confirm, the shop notice and the cash shop notice are built).
+    private static (Scene scene, GameObject popup) ModalPopupScene(bool ok)
+    {
+        var lay = new PanelLayout();
+        var box = new Rectangle(524, 304, 318, 160);
+        var root = new GameObject { Modal = true };
+        var dim = new GameObject { NoHit = true };
+        dim.Add(new Rect(new Rectangle(0, 0, 1366, 768)));
+        root.AddChild(dim);
+        var popup = ok
+            ? SysPopUi.BuildOk(box, new List<string> { "x" }, () => { }, 34, 17, 32, 115, 12, lay)
+            : SysPopUi.Build(box, new List<string> { "Delete hero?" }, () => { }, () => { }, lay);
+        root.AddChild(popup);
+        var scene = new Scene();
+        scene.Add(root);
+        return (scene, popup);
+    }
+
+    [TestMethod]
+    public void SysPopUi_BuildOkAndBuildFollowTheMouseInsideAModalRoot()
+    {
+        foreach (bool ok in new[] { true, false })
+        {
+            var (scene, popup) = ModalPopupScene(ok);
+            scene.Click(600, 330); // the text area, no button
+            scene.Drag(true, 700, 400);
+            scene.Layout();
+            Assert.AreEqual(new Point(624, 374), popup.Get<Rect>()!.Screen.Location, ok ? "BuildOk" : "Build");
+        }
+    }
+
+    [TestMethod]
+    public void SysPopUi_ButtonClickIsNotADrag()
+    {
+        var (scene, popup) = ModalPopupScene(false);
+        scene.Layout();
+        var yes = popup.Children[0].Get<Rect>()!.Screen;
+        scene.Click(yes.Center.X, yes.Center.Y);
+        scene.Drag(true, 900, 700);
+        scene.Layout();
+        Assert.AreEqual(new Point(524, 304), popup.Get<Rect>()!.Screen.Location);
+    }
+
+    [TestMethod]
+    public void SysPopUi_EveryButtonHasAHoverId()
+    {
+        foreach (bool ok in new[] { true, false })
+        {
+            var (scene, popup) = ModalPopupScene(ok);
+            scene.Layout();
+            var buttons = popup.Children.Where(c => c.Get<Button>() != null).ToList();
+            Assert.AreEqual(ok ? 1 : 2, buttons.Count);
+            foreach (var b in buttons)
+            {
+                var r = b.Get<Rect>()!.Screen;
+                Assert.AreNotEqual("", scene.Hover(r.Center.X, r.Center.Y), "a popup button must name its hover tick");
+            }
+        }
+    }
 }

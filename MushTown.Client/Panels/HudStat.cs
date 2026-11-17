@@ -190,8 +190,7 @@ public partial class MushTownGame
     // six rows on page 2.
     private int PanelRow(int index) => index >= UtilityFirstRow ? index + _statPage * 6 : index;
 
-    // What the hover of one row shows: the official text, the current value
-    // and the source groups. The Status Resistance text carries a %d for the
+    // What the hover of one row shows: the official text and the source groups. The Status Resistance text carries a %d for the
     // share of the status duration the number cuts.
     private StatTipView StatTipFor(int row)
     {
@@ -202,7 +201,7 @@ public partial class MushTownGame
         var sources = row == 6 // the damage range has no source of its own
             ? new List<(string, string)>()
             : StatDisplay.Sources(_stats, row).Select(l => (l.Label, StatDisplay.LineText(row, l))).ToList();
-        return new StatTipView(desc.Title, lines, StatValue(row), sources);
+        return new StatTipView(desc.Title, lines, sources);
     }
 
     // The damage range the panel shows: the current class and weapon profile
@@ -248,14 +247,13 @@ public sealed class NamePlate : Component, IDrawable
     }
 }
 
-// What a stat row hover shows: the row name, the official text, the current
-// value and the source groups (label, number).
-public sealed record StatTipView(string Title, List<string> Lines, string Current, List<(string Label, string Value)> Sources);
+// What a stat row hover shows: the row name, the official text and the source
+// groups (label, number).
+public sealed record StatTipView(string Title, List<string> Lines, List<(string Label, string Value)> Sources);
 
 // The hover box of a stat row (the official Default tooltip frame): the row
-// name, the text of UICharacterInfo.img detailStat, the current value on a
-// highlight bar, then the "in use" list of source groups. The tip layer draws
-// it next to the cursor.
+// name, the text of UICharacterInfo.img detailStat, then the "in use" list of
+// source groups. The tip layer draws it next to the cursor.
 public sealed class StatTip : Component
 {
     private readonly Func<StatTipView> _view;
@@ -271,16 +269,14 @@ public sealed class StatTip : Component
         foreach (string line in view.Lines)
             if (line == "") lines.Add(null);
             else foreach (string wrapped in gfx.Ui.Wrap(line, textW)) lines.Add(gfx.Ui.GetSmall(wrapped));
-        var currentLabel = gfx.Ui.GetSmall("Current Value");
-        var current = gfx.Ui.GetSmall(view.Current);
         var inUse = gfx.Ui.GetSmall("[In Use]");
         var labels = view.Sources.Select(s => gfx.Ui.GetSmall(s.Label)).ToList();
         var values = view.Sources.Select(s => gfx.Ui.GetSmall(s.Value)).ToList();
-        int rowW = currentLabel.Width + valueGap + current.Width;
+        int rowW = 0;
         for (int i = 0; i < labels.Count; i++) rowW = Math.Max(rowW, labels[i].Width + valueGap + values[i].Width);
         int inner = Math.Max(Math.Max(title.Width, lines.Max(l => l?.Width ?? 0)), rowW);
         int w = inner + pad * 2;
-        int rows = 2 + lines.Count + 2 + (labels.Count > 0 ? 2 + labels.Count : 0); // title + blank, text, blank + current, blank + header + sources
+        int rows = 2 + lines.Count + (labels.Count > 0 ? 2 + labels.Count : 0); // title + blank, text, blank + header + sources
         var box = anchor.At(gfx, w, pad * 2 + rows * gap);
         NineSlice.Draw(gfx, "tip", box);
         gfx.Sb.Draw(title, new Vector2(box.X + (w - title.Width) / 2, box.Y + pad), Color.White);
@@ -290,11 +286,6 @@ public sealed class StatTip : Component
             if (line != null) gfx.Sb.Draw(line, new Vector2(box.X + pad, y), new Color(214, 216, 222));
             y += gap;
         }
-        y += gap;
-        gfx.Sb.Draw(gfx.Pixel, new Rectangle(box.X + pad / 2, y, w - pad, gap), new Color(67, 79, 92)); // the official highlight colour
-        gfx.Sb.Draw(currentLabel, new Vector2(box.X + pad, y), Color.White);
-        gfx.Sb.Draw(current, new Vector2(box.Right - pad - current.Width, y), new Color(255, 220, 0));
-        y += gap;
         if (labels.Count == 0) return;
         y += gap;
         gfx.Sb.Draw(inUse, new Vector2(box.X + pad, y), Color.White);

@@ -312,21 +312,9 @@ public sealed class CashShopWindow : UiWindow
 
     private void BuildNotice(GameObject root)
     {
-        var notice = new GameObject();
-        notice.Add(new Rect(new Rectangle(L("noticeX"), L("noticeY"), L("noticeW"), L("noticeH"))));
-        notice.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
-        notice.Add(new SysPopText
-        {
-            Y = L("popTextY"),
-            Step = L("popTextStep"),
-            MaxWidth = L("noticeW") - L("popTextPad"),
-            Lines = _game.Ui.Wrap(_noticeText, L("noticeW") - L("popTextPad")),
-        });
-        var ok = new GameObject();
-        ok.Add(new Rect(new Rectangle(L("popYesX"), L("noticeH") - L("popBottomH") + L("popBtnY"), L("popBtnW"), L("popBtnH"))));
-        ok.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _noticeText = ""; Dirty = true; } });
-        ok.Add(new Image("ui/wm_pop_yes"));
-        notice.AddChild(ok);
+        var notice = SysPopUi.BuildOk(new Rectangle(L("noticeX"), L("noticeY"), L("noticeW"), L("noticeH")),
+            _game.Ui.Wrap(_noticeText, L("noticeW") - L("popTextPad")), () => { _noticeText = ""; Dirty = true; },
+            L("popTextY"), L("popTextStep"), L("popTextPad"), L("noticeH") - L("popBottomH") + L("popBtnY"), 0, _lay);
 
         var blocker = new GameObject();
         blocker.Add(new Rect(new Rectangle(0, 0, L("w"), L("h"))));
@@ -410,6 +398,12 @@ public sealed class CashShopWindow : UiWindow
         _checkoutId = 5051001;
         _dialog = CashShopDialog.Single;
         _selectedId = 0;
+        Dirty = true;
+    }
+
+    public void PoseNotice()
+    {
+        _noticeText = "The cart is full.";
         Dirty = true;
     }
 
@@ -570,6 +564,7 @@ public sealed class CashShopWindow : UiWindow
             L(multi ? "checkoutMultiW" : "checkoutSingleW"),
             L(multi ? "checkoutMultiH" : "checkoutSingleH"))));
         panel.Add(new Picture("ui/" + (multi ? "cashshop_checkout_multi.png" : "cashshop_checkout_single.png")));
+        panel.Add(new DragHandle()); // a click on the panel body (no button over it) carries it, like every system popup
         if (multi) BuildMultiRows(panel); else BuildSingleRow(panel);
 
         int closeX = L("checkoutCloseX"), closeY = L("checkoutCloseY");

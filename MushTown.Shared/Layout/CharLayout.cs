@@ -27,11 +27,8 @@ public static class CharLayout
     public static (int X, int Y) Delete = (418, 684); // delete button top-left (art-sized)
     public static (int X, int Y) Select = (1150, 608); // start button top-left
     public static (int X, int Y) Back = (30, 700); // back button top-left
-    public static (int X, int Y) DelPanel = (483, 284); // delete box top-left
-    public static (int X, int Y) DelSize = (400, 200); // delete box size
-    public static int DelTextY = 320; // "Delete {name}?" line
-    public static (int X, int Y) DelYes = (493, 410);
-    public static (int X, int Y) DelNo = (693, 410);
+    public static (int X, int Y) DelPanel = (524, 304); // delete popup top-left (centered)
+    public static (int X, int Y) DelSize = (318, 160); // delete popup size
     public static int ErrorY = 732;
 
     public static void Load(string path)
@@ -60,15 +57,12 @@ public static class CharLayout
         var back = GetPoint(root, "back", Back);
         var delPanel = GetPoint(root, "delPanel", DelPanel);
         var delSize = GetPoint(root, "delSize", DelSize);
-        var delTextY = GetInt(root, "delTextY", DelTextY);
-        var delYes = GetPoint(root, "delYes", DelYes);
-        var delNo = GetPoint(root, "delNo", DelNo);
         var errorY = GetInt(root, "errorY", ErrorY);
         SlotTopX = slotTopX; SlotBotX = slotBotX; SlotTopY = slotTopY; SlotBotY = slotBotY;
         SlotW = slotW; SlotH = slotH; TagDown = tagDown; Pillar = pillar; Pill = pill; Board = board;
         BoardCount = boardCount; Pager = pager; PagerGlass = pagerGlass; PageL = pageL; PageR = pageR;
         New = @new; Delete = delete;
         Select = select; Back = back; DelPanel = delPanel; DelSize = delSize;
-        DelTextY = delTextY; DelYes = delYes; DelNo = delNo; ErrorY = errorY;
+        ErrorY = errorY;
     }
 }

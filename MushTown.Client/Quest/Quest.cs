@@ -203,7 +203,7 @@ public partial class MushTownGame
     // and opens the menu. Missing quest/NPC/ground fails loud, like other poses.
     private void SetupShotQuests()
     {
-        if (_shotScreen is not ("quest" or "questask" or "questforfeit" or "questpick" or "talk" or "shop" or "shopscroll")) return;
+        if (_shotScreen is not ("quest" or "questask" or "questforfeit" or "questpick" or "talk" or "shop" or "shopscroll" or "shopnotice")) return;
         _save ??= new SaveData();
         var chara = _save.Slots[_slot] ??= DemoChara();
         if (_shotScreen is "quest" or "questask" or "questforfeit" or "questpick")
@@ -272,12 +272,13 @@ public partial class MushTownGame
             _talkQuest = 90002;
             CompleteQuest(90002);
         }
-        if (_shotScreen is "shop" or "shopscroll") // the same call the talk entry makes (non-keepers fail loud)
+        if (_shotScreen is "shop" or "shopscroll" or "shopnotice") // the same call the talk entry makes (non-keepers fail loud)
         {
             if (!NpcHasShop(npc.NpcId))
                 throw new InvalidDataException($"NPC {_shotTalk} keeps no shop");
             OpenShop(npc.NpcId);
-            if (_shotScreen == "shopscroll")
+            if (_shotScreen == "shopnotice") _shopNotice = "Not enough mesos.\nYou need 1,000 mesos.";
+            else if (_shotScreen == "shopscroll")
             {
                 foreach (int id in _potions.Concat(_equips).Distinct())
                     if (_shopStock.Count < 12 && !_shopStock.Contains(id)) _shopStock.Add(id);

@@ -300,6 +300,7 @@ public static partial class Export
                 Slot = slot,
                 Atk = Int(info, "incPAD"),
                 Attack = Int(info, "attack", 1),
+                AttackSpeed = Int(info, "attackSpeed"),
                 Def = Int(info, "incPDD"),
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),

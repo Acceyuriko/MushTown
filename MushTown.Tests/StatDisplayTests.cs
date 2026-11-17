@@ -111,18 +111,16 @@ public class StatDisplayTests
     }
 
     [TestMethod]
-    public void Sources_MultipliedRowsListEverySourceAndATotal()
+    public void Sources_MultipliedRowsListEverySourceAndNoTotal()
     {
         var lines = StatDisplay.Sources(Defaults, StatDisplay.IedRow);
-        Assert.AreEqual(7, lines.Count); // six sources and the total
-        Assert.AreEqual("Total", lines[^1].Label);
-        Assert.AreEqual(72.53344, lines[^1].Value, 1e-6);
-        Assert.IsTrue(lines.Take(6).All(l => l.Label != "Total" && l.Value > 0));
+        Assert.AreEqual(6, lines.Count); // six sources, no total line
+        Assert.IsTrue(lines.All(l => l.Label != "Total" && l.Value > 0));
         Assert.AreEqual(20.0, lines.First(l => l.Label.Contains("Light Wash")).Value, 1e-9);
         var final = StatDisplay.Sources(Defaults, StatDisplay.FinalDamageRow);
-        Assert.AreEqual(2, final.Count);
+        Assert.AreEqual(1, final.Count);
         Assert.AreEqual("35.00%", StatDisplay.LineText(StatDisplay.FinalDamageRow, final[^1]));
-        Assert.AreEqual(0, StatDisplay.Sources(Snap(), StatDisplay.IedRow).Count); // no source: nothing, not a lone Total
+        Assert.AreEqual(0, StatDisplay.Sources(Snap(), StatDisplay.IedRow).Count); // no source: nothing
     }
 
     [TestMethod]

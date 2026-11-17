@@ -123,8 +123,8 @@ public static class StatDisplay
     };
 
     // The hover source list of a row. Rows whose sources multiply (final
-    // damage, ignore defense) list one line per source and a Total line; the
-    // others list one line per source group that is not 0, in the group order.
+    // damage, ignore defense) list one line per source; the others list one
+    // line per source group that is not 0, in the group order.
     public static List<StatSourceLine> Sources(StatSnapshot s, int row) => row switch
     {
         FinalDamageRow => Multiplied(s, StatKey.FINAL_DAMAGE_PCT, m => (m - 1.0) * 100.0),
@@ -134,14 +134,11 @@ public static class StatDisplay
 
     private static List<StatSourceLine> Multiplied(StatSnapshot s, StatKey key, Func<double, double> toPoints)
     {
-        var lines = s.Modifiers
+        return s.Modifiers
             .Where(m => m.Key == key && m.Type == StatValueType.MULTIPLIER && m.Source != StatSource.Base && toPoints(m.Value) != 0.0)
             .OrderBy(m => m.Source)
             .Select(m => new StatSourceLine(m.Label != "" ? m.Label : SourceName(m.Source), toPoints(m.Value), key, false))
             .ToList();
-        if (lines.Count > 0)
-            lines.Add(new StatSourceLine("Total", toPoints(s.Multiplier(key)), key, false));
-        return lines;
     }
 
     private static List<StatSourceLine> Grouped(StatSnapshot s, StatKey[] keys)

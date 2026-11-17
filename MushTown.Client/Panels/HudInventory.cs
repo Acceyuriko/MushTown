@@ -28,6 +28,9 @@ public partial class MushTownGame
     private bool _dropQtyMeso;
     private bool DropQtyOpen => _dropQtyMeso || _dropQtyId != 0;
     private bool CursorFree => (DropQtyOpen || _hand.Empty) && !Holding && !WornHeld;
+
+    // Something rides the mouse: a held bag cell, a worn piece or skin, or a picked-up target.
+    private bool HandFull => !_hand.Empty || Holding || WornHeld;
     private string _dropQtyKind = "";
     private int _dropWheel;
     private bool _showHeldDropCell; // staging only: keep the held stack visible in the bag

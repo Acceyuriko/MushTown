@@ -90,8 +90,7 @@ public partial class MushTownGame
         "cs_new_n.png", "cs_new_h.png", "cs_new_p.png",
         "cs_delete_n.png", "cs_delete_h.png", "cs_delete_p.png",
         "cs_back_n.png", "cs_back_h.png", "cs_back_p.png",
-        "cs_delyes_n.png", "cs_delyes_h.png", "cs_delyes_p.png",
-        "cs_delno_n.png", "cs_delno_h.png", "cs_delno_p.png",
+        "wm_pop_top.png", "wm_pop_mid.png", "wm_pop_bottom.png", "wm_pop_yes_n.png", "wm_pop_yes_h.png", "wm_pop_yes_p.png", "wm_pop_no_n.png", "wm_pop_no_h.png", "wm_pop_no_p.png", // the delete confirm is the system popup
         "cs_board.png", "cs_pillar.png", "cs_page_bg.png", "cs_page_base.png", "cs_delglass.png",
         "cs_page_l_n.png", "cs_page_l_h.png", "cs_page_l_p.png",
         "cs_page_r_n.png", "cs_page_r_h.png", "cs_page_r_p.png",
@@ -164,7 +163,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -230,7 +229,7 @@ public partial class MushTownGame
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
             if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);
-            if (shotScreen is "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall")
+            if (shotScreen is "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice")
             {
                 if (shotScreen == "cashshopfashion") _cashShopWindow.PoseFashion();
                 if (shotScreen == "cashshopbeauty") _cashShopWindow.PoseBeauty();
@@ -245,6 +244,7 @@ public partial class MushTownGame
                 if (shotScreen == "cashshopladder") _cashShopWindow.PoseLadder();
                 if (shotScreen == "cashshopcheckout") _cashShopWindow.PoseCheckout();
                 if (shotScreen == "cashshopbuyall") _cashShopWindow.PoseBuyAll();
+                if (shotScreen == "cashshopnotice") _cashShopWindow.PoseNotice();
             }
             if (shotScreen is "party" or "partysearch" or "partyask")
             {
@@ -582,7 +582,7 @@ public partial class MushTownGame
         _gfx = new UiGfx { Sb = _spriteBatch, Ui = _ui, Tex = TexByKey, Pixel = _pixel };
         PoseShotChat(); // the chat shots pose the window before the tree is built
         BuildScreenScene();
-        if (_shotScreen == "delete") _csDeleteModal.Enabled = true;
+        if (_shotScreen == "delete") OpenDeleteConfirm();
         _contentLoaded = true;
     }
 
@@ -767,6 +767,7 @@ public partial class MushTownGame
         var ms = Mouse.GetState();
         var (gx, gy) = MouseGamePos(ms);
         bool click = ClickEdge(ms);
+        bool held = ms.LeftButton == ButtonState.Pressed;
 
         var kb = Keyboard.GetState();
         bool enter = kb.IsKeyDown(Keys.Enter) && !_enterWasDown;
@@ -791,7 +792,7 @@ public partial class MushTownGame
         {
             case Screen.Saves: UpdateSaves(click, enter, gx, gy); break;
             case Screen.Server: UpdateServer(click, enter, esc, gx, gy, r); break;
-            case Screen.Chars: UpdateChars(click, enter, esc, gx, gy, dtMs); break;
+            case Screen.Chars: UpdateChars(click, held, enter, esc, gx, gy, dtMs); break;
             case Screen.Job: UpdateJob(click, enter, esc, gx, gy, dtMs); break;
             case Screen.Setup: UpdateSetup(click, enter, esc, gx, gy, dtMs); break;
         }

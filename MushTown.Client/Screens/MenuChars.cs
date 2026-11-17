@@ -48,9 +48,6 @@ public partial class MushTownGame
     }
     private static Rectangle DeletePanelRect() => new(CharLayout.DelPanel.X, CharLayout.DelPanel.Y, CharLayout.DelSize.X, CharLayout.DelSize.Y);
 
-    private Rectangle DeleteYesRect() => UiRect("cs_delyes_n.png", CharLayout.DelYes.X, CharLayout.DelYes.Y);
-    private Rectangle DeleteNoRect() => UiRect("cs_delno_n.png", CharLayout.DelNo.X, CharLayout.DelNo.Y);
-
     private void BuildCharsScene()
     {
         _menuScene = new Scene();
@@ -113,7 +110,7 @@ public partial class MushTownGame
         _menuScene.Add(nb);
         if (sel != null)
         {
-            var db = MenuButton(DeleteBtnRect(), "chars:delete", () => { if (_save!.Slots[_slot] != null) { PlaySfx("click"); _csDeleteModal.Enabled = true; } });
+            var db = MenuButton(DeleteBtnRect(), "chars:delete", () => { if (_save!.Slots[_slot] != null) { PlaySfx("click"); OpenDeleteConfirm(); } });
             db.Add(new Picture("ui/cs_delglass.png", 0, 0) { Tint = new Color(255, 255, 255, CharLayout.PagerGlass) });
             db.Add(new Image("ui/cs_delete"));
             _menuScene.Add(db);
@@ -125,28 +122,24 @@ public partial class MushTownGame
         var err = new GameObject { NoHit = true };
         err.Add(new CenterText(() => _error, 683, CharLayout.ErrorY, ErrRed));
         _menuScene.Add(err);
-        _csDeleteModal = new GameObject { Modal = true };
-        var dim = new GameObject { NoHit = true };
-        dim.Add(new Dim(120));
-        _csDeleteModal.AddChild(dim);
-        var panel = new GameObject();
-        panel.Add(new Rect(DeletePanelRect())); // panel hits (not buttons): the box stays open, like legacy
-        panel.Add(new WhitePanel());
-        _csDeleteModal.AddChild(panel);
-        var dt = new GameObject(); // no Rect: draws, never hits
-        dt.Add(new CenterText(() => $"Delete {_save!.Slots[_slot]!.Name}?", 683, CharLayout.DelTextY, Ink));
-        _csDeleteModal.AddChild(dt);
-        var dy = MenuButton(DeleteYesRect(), "chars:delyes", () => DoDelete(), ButtonKind.Click);
-        dy.Add(new Image("ui/cs_delyes"));
-        _csDeleteModal.AddChild(dy);
-        var dn = MenuButton(DeleteNoRect(), "chars:delno", () => _csDeleteModal.Enabled = false, ButtonKind.Click);
-        dn.Add(new Image("ui/cs_delno"));
-        _csDeleteModal.AddChild(dn);
+        _csDeleteModal = new GameObject { Modal = true }; // Dim + the official system popup; filled by OpenDeleteConfirm
         _csDeleteModal.Enabled = false;
         _menuScene.Add(_csDeleteModal);
     }
 
-    private void UpdateChars(bool click, bool enter, bool esc, int gx, int gy, float dtMs)
+    // The popup is built per open: its text names the hero, and a fresh build puts it back at the center.
+    private void OpenDeleteConfirm()
+    {
+        _csDeleteModal.Clear();
+        var dim = new GameObject { NoHit = true };
+        dim.Add(new Dim(120));
+        _csDeleteModal.AddChild(dim);
+        _csDeleteModal.AddChild(SysPopUi.Build(DeletePanelRect(), new List<string> { $"Delete {_save!.Slots[_slot]!.Name}?" },
+            DoDelete, () => _csDeleteModal.Enabled = false, MapLay.Lay));
+        _csDeleteModal.Enabled = true;
+    }
+
+    private void UpdateChars(bool click, bool held, bool enter, bool esc, int gx, int gy, float dtMs)
     {
         SfxOnHover(_scenes.Current?.Hover(gx, gy) ?? "");
         AdvanceClip(_ghost, dtMs);
@@ -158,6 +151,7 @@ public partial class MushTownGame
         if (_walkT >= delays[_walkFrame]) { _walkT -= delays[_walkFrame]; _walkFrame = (_walkFrame + 1) % delays.Count; }
         if (_csDeleteModal.Enabled)
         {
+            _menuScene.Drag(held, gx, gy); // the popup follows the mouse while it is held
             if (esc) { _csDeleteModal.Enabled = false; return; }
             if (click && ClickTree(_scenes.Current, gx, gy) == null) _csDeleteModal.Enabled = false; // outside click closes, silent
             return;

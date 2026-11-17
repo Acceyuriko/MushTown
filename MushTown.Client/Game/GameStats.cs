@@ -67,6 +67,9 @@ public partial class MushTownGame
             mods.Add(new(StatKey.ATT, StatValueType.FLAT,
                 _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor), StatSource.Skill));
         }
+        // A mage has the fixed stage; the others take the stage of the worn weapon (no weapon: no stage).
+        if (StatTables.AttackSpeed(CurrentJob().Main == StatKey.INT, WornWeapon(chara)?.AttackSpeed ?? 0) is { } speed)
+            mods.Add(speed);
         mods.Add(new(StatKey.DEF, StatValueType.FLAT, worn.def, StatSource.Equipment));
         mods.Add(new(StatKey.STR, StatValueType.FLAT, worn.str, StatSource.Equipment));
         mods.Add(new(StatKey.DEX, StatValueType.FLAT, worn.dex, StatSource.Equipment));
@@ -119,15 +122,19 @@ public partial class MushTownGame
 
     private WeaponType _weaponType = WeaponType.Default;
 
-    private WeaponType DetectWeaponType()
+    private WeaponType DetectWeaponType() => WornWeapon(_save?.Slots[_slot]) is { } weapon
+        ? StatTables.WeaponTypeOf(weapon.ItemId)
+        : WeaponType.Default;
+
+    // The worn real weapon (a cash weapon is only a look), or null.
+    private ItemData? WornWeapon(CharaSlot? chara)
     {
-        var chara = _save?.Slots[_slot];
-        if (chara?.Equips == null) return WeaponType.Default;
-        var type = WeaponType.Default;
+        ItemData? weapon = null;
+        if (chara?.Equips == null) return null;
         foreach (int id in chara.Equips)
             if (_items.TryGetValue(id, out var item) && item.Slot == "Wp" && !item.Cash)
-                type = StatTables.WeaponTypeOf(id);
-        return type;
+                weapon = item;
+        return weapon;
     }
 
     // The current class and weapon profile. A saved character with no

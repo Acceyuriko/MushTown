@@ -386,6 +386,7 @@ public sealed class ItemData
     public string? Slot { get; set; } // equip slot (WZ islot); null = consumable
     public int Atk { get; set; } // WZ incPAD
     public int Attack { get; set; } = 1; // WZ info/attack: the swing action (missing = 1, the one-handed sword)
+    public int AttackSpeed { get; set; } // WZ info/attackSpeed of a weapon: 2 is the fastest, 9 the slowest (0 = none)
     public int Def { get; set; } // WZ incPDD
     public int Str { get; set; } // WZ incSTR
     public int Dex { get; set; } // WZ incDEX

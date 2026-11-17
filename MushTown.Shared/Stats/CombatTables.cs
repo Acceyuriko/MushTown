@@ -32,6 +32,20 @@ public static class StatTables
         _ => new(StatKey.STR, StatKey.DEX, WeaponType.Default),
     };
 
+    // The attack speed stage of the panel (1 slowest .. 10 fastest). A weapon's
+    // WZ attackSpeed counts the other way round (2 fastest .. 9 slowest), so the
+    // stage is 10 minus it: a sword with 4 is stage 6, a wand with 6 is stage 4.
+    // A mage always has the fixed stage 4.
+    public const int MageAttackSpeed = 4;
+    public static int AttackSpeedStage(int wzAttackSpeed) => 10 - wzAttackSpeed;
+
+    // The attack speed record of a character: a mage has the fixed stage, the others take the
+    // stage of the worn weapon (WZ value 0 or no weapon: no record).
+    public static StatModifier? AttackSpeed(bool mage, int weaponWzAttackSpeed) =>
+        mage ? new(StatKey.ATTACK_SPEED, StatValueType.FLAT, MageAttackSpeed, StatSource.Base)
+        : weaponWzAttackSpeed > 0 ? new(StatKey.ATTACK_SPEED, StatValueType.FLAT, AttackSpeedStage(weaponWzAttackSpeed), StatSource.Equipment)
+        : null;
+
     public static WeaponProfile Weapon(WeaponType type) => type switch
     {
         WeaponType.OneHandSword => new(1.24, 20),

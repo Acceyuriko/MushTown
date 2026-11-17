@@ -13,6 +13,7 @@ public partial class MushTownGame
     private void SetupShotMobs()
     {
         StartLocalWorld();
+        if (_shotJob != 0) { _save ??= new SaveData(); (_save.Slots[_slot] ??= DemoChara()).Job = _shotJob; } // --job on a stat shot: the demo plays that class
         RefreshStats();
         if (_shotHit && _shotDmgSkin is { } hitSkin) Hero!.DamageSkin = hitSkin; // --dmgskin: the --hit number reads the demo's own skin
         if (_shotDmg > 0)

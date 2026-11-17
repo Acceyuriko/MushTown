@@ -489,18 +489,9 @@ public partial class MushTownGame
         int w = _shopLay.Get("noticeW", 318), h = _shopLay.Get("noticeH", 160);
         var box = new Rectangle((ShopW - w) / 2, (ShopH - h) / 2, w, h);
         var blocker = PanelButton(ShopRect(), "", () => { }, ButtonKind.Silent); // the shop waits behind the notice
-        var popup = new GameObject();
-        popup.Add(new Rect(box));
-        popup.Add(new Panel("ui/wm_pop_top.png", "ui/wm_pop_mid.png", "ui/wm_pop_bottom.png"));
-        popup.Add(new SysPopText
-        {
-            Lines = _ui.Wrap(_shopNotice, _shopLay.Get("noticeTextW", 286)),
-            Y = _shopLay.Get("noticeTextY", 38),
-            Step = _shopLay.Get("noticeLineStep", 17),
-            MaxWidth = _shopLay.Get("noticeTextW", 286),
-        });
-        popup.AddChild(ArtButton(new Rectangle(_shopLay.Get("noticeOkX", 117), _shopLay.Get("noticeOkY", 115), 83, 26),
-            "ui/wm_pop_yes", () => _shopNotice = ""));
+        var popup = SysPopUi.BuildOk(box, _ui.Wrap(_shopNotice, _shopLay.Get("noticeTextW", 286)), () => _shopNotice = "",
+            _shopLay.Get("noticeTextY", 38), _shopLay.Get("noticeLineStep", 17), w - _shopLay.Get("noticeTextW", 286),
+            _shopLay.Get("noticeOkY", 115), 0, _shopLay);
         // The blocker must be under the popup: add it first, the popup last.
         var root = new GameObject { Modal = true };
         root.AddChild(blocker);

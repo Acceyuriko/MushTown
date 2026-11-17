@@ -144,6 +144,28 @@ public class StatsTests
     }
 
     [TestMethod]
+    public void AttackSpeedStage_TurnsTheWzValueAroundAndMageIsFixed()
+    {
+        Assert.AreEqual(8, StatTables.AttackSpeedStage(2)); // WZ 2 is the fastest weapon
+        Assert.AreEqual(1, StatTables.AttackSpeedStage(9)); // WZ 9 is the slowest
+        Assert.AreEqual(4, StatTables.AttackSpeedStage(6)); // a wand (WZ 6) matches the fixed mage stage
+        Assert.AreEqual(4, StatTables.MageAttackSpeed);
+    }
+
+    [TestMethod]
+    public void AttackSpeed_MageIsFixedOthersTakeTheWeaponAndNoWeaponHasNoRecord()
+    {
+        var mage = StatTables.AttackSpeed(true, 8)!.Value; // a staff does not matter to a mage
+        Assert.AreEqual(4.0, mage.Value);
+        Assert.AreEqual(StatSource.Base, mage.Source);
+        var sword = StatTables.AttackSpeed(false, 4)!.Value;
+        Assert.AreEqual(StatKey.ATTACK_SPEED, sword.Key);
+        Assert.AreEqual(6.0, sword.Value);
+        Assert.AreEqual(StatSource.Equipment, sword.Source);
+        Assert.IsNull(StatTables.AttackSpeed(false, 0));
+    }
+
+    [TestMethod]
     public void WeaponTable_FollowsTheCharacterStatsTable()
     {
         Assert.AreEqual(1.24, StatTables.Weapon(WeaponType.OneHandSword).Coefficient, 1e-9);

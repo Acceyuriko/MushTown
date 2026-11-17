@@ -504,7 +504,7 @@ public partial class MushTownGame : Game
         LoadMenuContent();
         LoadDeathArt();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -560,10 +560,8 @@ public partial class MushTownGame : Game
         // must not eat the click or the key the player pressed with it.
         if (esc && _shopQtyId == 0 && !DropQtyOpen && !_chatWindow.Focused && !_worldMapWindow.SearchFocused)
         {
+            if (HandFull) { _hand.Return(); ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // hands first: a held bag cell, worn piece, skin or picked-up target goes back and this Esc is eaten, no window closes
             if (_worldMapWindow.EscLayer()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the world map closes its dialog and search board first
-            if (Holding) { ClearHeld(); PlaySfx("click"); base.Update(gameTime); return; } // the piece a click picked up goes back, nothing changes
-            var escChara = _save?.Slots[_slot];
-            if (escChara != null && !_hand.Empty) { _hand.Return(); PlaySfx("click"); base.Update(gameTime); return; } // hands first: Esc clears the held cell preview, panels stay
             if (_showQuest && _questConfirm != QuestConfirmKind.None) { CloseQuestConfirm(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the quest question first
             if (_talkNpc != 0) { _talkNpc = 0; _talkQuest = 0; _talkPage = 0; _uiScene.ClearHover(); base.Update(gameTime); return; } // modal first: Esc closes talk before panels
             if (_showShop && _shopNotice != "") { _shopNotice = ""; _shopQtyField.Unfocus(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the notice closes before its shop
@@ -636,7 +634,7 @@ public partial class MushTownGame : Game
             _uiScene.ClearHover();
         }
 
-        if (RightEdge(ms) && (!_hand.Empty || Holding || WornHeld)) { _hand.Return(); ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
+        if (RightEdge(ms) && HandFull) { _hand.Return(); ClearHeld(); PlaySfx("click"); } // the other way to put the piece back
         UpdateHud(kb, click, held, mx, my, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
         // The MENU window and a confirmation box are modal for the character:
         // while either is open the character ignores the keys. The key window

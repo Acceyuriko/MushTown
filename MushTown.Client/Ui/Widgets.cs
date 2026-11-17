@@ -478,17 +478,6 @@ public sealed class Dim : Component, IDrawable
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(0, 0, MushTownGame.GameWidth, MushTownGame.GameHeight), new Color(0, 0, 0, _alpha));
 }
 
-// White box plus gray border (matches DrawWhitePanel).
-public sealed class WhitePanel : Component, IDrawable
-{
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Screen;
-        gfx.Sb.Draw(gfx.Pixel, r, Color.White);
-        Border.Draw(gfx, r, new Color(150, 150, 150));
-    }
-}
-
 // Bridge: runs Menu draws inside the tree (game art the tree does not
 // own yet — the chars dolls now; gone when the sim phase owns the doll).
 public sealed class Invoke : Component, IDrawable
@@ -498,7 +487,7 @@ public sealed class Invoke : Component, IDrawable
     public void Draw(UiGfx gfx) => _draw(gfx);
 }
 
-// 2px box border (was DrawBoxBorder; WhitePanel uses it).
+// 2px box border (was DrawBoxBorder).
 public static class Border
 {
     public static void Draw(UiGfx gfx, Rectangle r, Color color)
@@ -857,7 +846,7 @@ public static class SysPopUi
     {
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(x, y, lay.Get("popBtnW", 83), lay.Get("popBtnH", 26))));
-        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+        o.Add(new Button { LegacyId = stem, Kind = ButtonKind.Click, OnClick = onClick }); // a non-empty id is the hover tick (the host loop plays it on entry)
         o.Add(new Image(stem)); // the official button art already carries its label
         return o;
     }
@@ -899,7 +888,7 @@ public static class SysPopUi
     {
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(x, y, w, h)));
-        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+        o.Add(new Button { LegacyId = stem, Kind = ButtonKind.Click, OnClick = onClick }); // the hover tick, like the popup buttons
         o.Add(new Image(stem));
         return o;
     }
