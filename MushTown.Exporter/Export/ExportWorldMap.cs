@@ -94,8 +94,6 @@ public static partial class Export
         foreach (var (node, name) in new[] { ("Line", "line"), ("Mob", "mob"), ("Npc", "npc") })
             if (!UiPng.Save(ui, "UI", $"UIWindow2.img/ToolTip/WorldMap/{node}", Path.Combine(dir, $"wm_tip_{name}.png"))) return false;
 
-        var root = map.Find($"{mapPre}WorldMap/WorldMap.img");
-        if (root == null) { Console.WriteLine("world map not found: Map/WorldMap/WorldMap.img"); return false; }
         var helper = map.Find($"{mapPre}MapHelper.img/worldMap");
         if (helper == null) { Console.WriteLine("world map art not found: MapHelper.img/worldMap"); return false; }
 
@@ -132,23 +130,33 @@ public static partial class Export
             return names[id];
         }
 
-        // The root and the regions its links point at.
-        var wanted = new List<string> { "WorldMap" };
-        var rootLinks = root.Nodes["MapLink"];
-        if (rootLinks != null)
-            foreach (Wz_Node link in rootLinks.Nodes)
-            {
-                if (link.Nodes["link"]?.Nodes["linkMap"]?.Value is not string target) continue;
-                if (!wanted.Contains(target)) wanted.Add(target);
-            }
-
+        // The worlds of the first combo (UIMap.img/WorldMap/combo:worldSearch0). A world is exported when its
+        // root page or one of its first level regions holds a map of ours; it takes the root and those regions.
+        var worldList = ui.Find("UIMap.img/WorldMap/combo:worldSearch0/contents/worldSearch0");
+        if (worldList == null) { Console.WriteLine("world list not found: UIMap.img/WorldMap/combo:worldSearch0"); return false; }
         var ours = new HashSet<int>(ExportList.Load("maps"));
+        var worlds = new List<object>();
+        var wanted = new List<string>();
+        foreach (Wz_Node world in worldList.Nodes)
+        {
+            string page = Str(world, "data");
+            var rootImg = map.Find($"{mapPre}WorldMap/{page}.img");
+            if (rootImg == null) { Console.WriteLine($"world map {page}: not found"); return false; }
+            var pages = new List<string> { page };
+            foreach (string target in LinkTargets(rootImg))
+                if (!pages.Contains(target)) pages.Add(target);
+            if (!pages.Any(p => HasOurs(map.Find($"{mapPre}WorldMap/{p}.img"), ours))) continue;
+            worlds.Add(new { Text = Str(world, "string"), Page = page });
+            wanted.AddRange(pages.Where(p => !wanted.Contains(p)));
+        }
+
         var maps = new List<object>();
         foreach (string name in wanted)
             if (!AddWorldMap(map, mapCat, mapPre, dir, name, ours, maps, MapName)) return false;
 
         WriteJson(Path.Combine(dir, "worldmap.json"), new
         {
+            Worlds = worlds,
             Maps = maps,
             Icons = icons,
             Pin = new { OX = pinOrigin?.X ?? 0, OY = pinOrigin?.Y ?? 0 },
@@ -158,6 +166,20 @@ public static partial class Export
         Console.WriteLine($"world map: {maps.Count} maps, {names.Count} names");
         return true;
     }
+
+    // The pages the links of a world map point at.
+    private static IEnumerable<string> LinkTargets(Wz_Node img)
+    {
+        var links = img.Nodes["MapLink"];
+        if (links == null) yield break;
+        foreach (Wz_Node link in links.Nodes)
+            if (link.Nodes["link"]?.Nodes["linkMap"]?.Value is string target) yield return target;
+    }
+
+    // Whether a page lists a map of ours.
+    private static bool HasOurs(Wz_Node? img, HashSet<int> ours) =>
+        img?.Nodes["MapList"]?.Nodes.Cast<Wz_Node>().Any(e =>
+            e.Nodes["mapNo"]?.Nodes.Cast<Wz_Node>().Any(n => ours.Contains(n.GetValueEx<int>(0))) == true) == true;
 
     // One world map: the base picture, its nodes and its links.
     private static bool AddWorldMap(WzRoot map, string mapCat, string mapPre, string dir, string name,

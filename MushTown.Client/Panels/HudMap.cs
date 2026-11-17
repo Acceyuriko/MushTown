@@ -390,6 +390,9 @@ public sealed class WorldMapWindow : UiWindow
         Dirty = true;
     }
 
+    // The shot picks a world in the first combo, the way a click on its row does.
+    public void PoseWorld(int row) => ComboPick(0, row);
+
     // The shot poses the search panel with a query: a player uses the search button.
     public void OpenSearch(string query)
     {
@@ -494,9 +497,9 @@ public sealed class WorldMapWindow : UiWindow
         art.Add(new Button { Kind = ButtonKind.Click, OnClick = ClickMap });
         art.Add(new WorldMapArt { Game = _game, State = _state });
         root.AddChild(art);
-        // The root map is a region picker: its nodes stand where the links are,
-        // so there only the links take clicks.
-        if (_state.Shown != "WorldMap")
+        // A root map (a world's first page) is a region picker: its nodes stand where
+        // the links are, so there only the links take clicks.
+        if (region.Parent != "")
             for (int i = 0; i < region.Nodes.Count; i++) AddNode(root, region, i);
 
         AddToolbar(root);
@@ -566,7 +569,8 @@ public sealed class WorldMapWindow : UiWindow
 
     // A node: the icon is drawn by the art component, this is its click box.
     // The box is as big as the icon, so a big plate is clickable as a whole. A
-    // node with no icon (type -1, an event map) gets neither.
+    // node with no icon (type -1, an event map) gets neither. A node with none of
+    // our maps keeps the box for its tip but takes no click.
     private void AddNode(GameObject root, WorldMapRegion region, int i)
     {
         var node = region.Nodes[i];
@@ -576,7 +580,7 @@ public sealed class WorldMapWindow : UiWindow
         int py = Lay.Get("worldY", 75) + region.OriginY + node.Y;
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(px - icon.OX, py - icon.OY, icon.W, icon.H)));
-        o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(i) });
+        if (node.Ours) o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => Pick(i) });
         o.Add(new WorldMapNodeMark { State = _state, Index = i });
         root.AddChild(o);
     }
@@ -596,7 +600,6 @@ public sealed class WorldMapWindow : UiWindow
             Dirty = true; // the info column names the picked map: its lists follow
             return;
         }
-        if (_state.SelMap == 0) return; // nowhere to go
         _confirmMapId = _state.SelMap;
         _confirm = true;
         Dirty = true;
@@ -707,12 +710,13 @@ public sealed class WorldMapWindow : UiWindow
     // Built on every read: the layout can change under a running window.
     private Combo[] Combos() => new[]
     {
-        // The only world we have.
+        // The worlds we have a map in (Maple World, Arcane River).
         new Combo(Lay.Get("comboX", 294), Lay.Get("comboY", 42), Lay.Get("comboW", 98),
-            () => "Maple World", () => new List<string> { "Maple World" }, _ => Switch("WorldMap")),
+            () => WorldMapUi.WorldText(_state.Shown), () => WorldMapUi.Data.Worlds.Select(w => w.Text).ToList(),
+            row => Switch(WorldMapUi.Data.Worlds[row].Page)),
         new Combo(Lay.Get("comboX", 294) + Lay.Get("comboPitch", 101), Lay.Get("comboY", 42), Lay.Get("comboW", 98),
-            RegionText, () => WorldMapUi.Regions().Select(r => r.Text).ToList(),
-            row => Switch(WorldMapUi.Regions()[row].Target)),
+            RegionText, () => WorldMapUi.Regions(WorldMapUi.RootOf(_state.Shown)).Select(r => r.Text).ToList(),
+            row => Switch(WorldMapUi.Regions(WorldMapUi.RootOf(_state.Shown))[row].Target)),
         new Combo(Lay.Get("comboX", 294) + Lay.Get("comboPitch", 101) * 2, Lay.Get("comboY", 42), Lay.Get("comboW", 98),
             MapText, () => WorldMapUi.Ours(_state.Shown).Select(i => WorldMapUi.Region(_state.Shown)!.Nodes[i].Name).ToList(),
             row =>
@@ -771,9 +775,9 @@ public sealed class WorldMapWindow : UiWindow
     // The second box: the region that is on screen.
     private string RegionText()
     {
-        foreach (var (text, target) in WorldMapUi.Regions())
+        foreach (var (text, target) in WorldMapUi.Regions(WorldMapUi.RootOf(_state.Shown)))
             if (target == _state.Shown) return text;
-        return "Maple World"; // the root page is the world itself
+        return WorldMapUi.WorldText(_state.Shown); // the root page is the world itself
     }
 
     // The third box: the picked node, when it stands for a map we have.
@@ -951,7 +955,7 @@ public sealed class WorldMapWindow : UiWindow
         }
     }
 
-    // The region that shows a map, and the node in it. A region beats the root.
+    // The region that shows a map, and the node in it. A region beats a root.
     private (string Region, int Node) Find(int mapId)
     {
         (string, int)? inRoot = null;
@@ -959,8 +963,8 @@ public sealed class WorldMapWindow : UiWindow
             for (int i = 0; i < region.Nodes.Count; i++)
             {
                 if (!region.Nodes[i].Maps.Contains(mapId)) continue;
-                if (region.Name != "WorldMap") return (region.Name, i);
-                inRoot ??= ("WorldMap", i);
+                if (region.Parent != "") return (region.Name, i);
+                inRoot ??= (region.Name, i);
             }
         return inRoot ?? ("WorldMap", -1);
     }

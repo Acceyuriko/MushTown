@@ -49,19 +49,29 @@ internal static class WorldMapUi
         return MapUi.Name(id).Name;
     }
 
-    // The regions the first combo lists: the links of the root map that point at a
-    // world map we exported, with the name the link carries. Built once, because
-    // a combo asks for it every frame.
-    private static List<(string Text, string Target)>? _regions;
-
-    public static List<(string Text, string Target)> Regions() => _regions ??= BuildRegions();
-
-    private static List<(string Text, string Target)> BuildRegions()
+    // The root page of the world a page belongs to: the page itself when it has no
+    // parent (Maple World, Arcane River), else the root of its parent.
+    public static string RootOf(string page)
     {
+        var region = Region(page)!;
+        return region.Parent == "" ? page : RootOf(region.Parent);
+    }
+
+    // The name the first combo shows for the world a page belongs to.
+    public static string WorldText(string page) => Data.Worlds.First(w => w.Page == RootOf(page)).Text;
+
+    // The regions the second combo lists: the links of the world's root map that
+    // point at a world map we exported, with the name the link carries. Built once
+    // per world, because a combo asks for it every frame.
+    private static readonly Dictionary<string, List<(string Text, string Target)>> _regions = new();
+
+    public static List<(string Text, string Target)> Regions(string root)
+    {
+        if (_regions.TryGetValue(root, out var hit)) return hit;
         var list = new List<(string, string)>();
-        foreach (var link in Region("WorldMap")!.Links)
+        foreach (var link in Region(root)!.Links)
             if (Region(link.Target) != null && link.ToolTip != "") list.Add((link.ToolTip, link.Target));
-        return list;
+        return _regions[root] = list;
     }
 
     // The nodes of a region that stand for a map we have: the third combo.
@@ -273,11 +283,19 @@ public sealed class WorldMapInfo : Component, IDrawable
 // json: the loader is case sensitive).
 public sealed class WorldMapData
 {
+    public List<WorldMapWorld> Worlds { get; set; } = new();
     public List<WorldMapRegion> Maps { get; set; } = new();
     public List<WorldMapIcon> Icons { get; set; } = new();
     public WorldMapIcon Pin { get; set; } = new();
     public WorldMapIcon Sel { get; set; } = new();
     public List<WorldMapName> Names { get; set; } = new();
+}
+
+// One entry of the first combo: its name and the root page of that world.
+public sealed class WorldMapWorld
+{
+    public string Text { get; set; } = "";
+    public string Page { get; set; } = "";
 }
 
 public sealed class WorldMapIcon
