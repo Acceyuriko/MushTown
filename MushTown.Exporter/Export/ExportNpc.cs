@@ -34,6 +34,7 @@ public static partial class Export
         if (stand != null)
             foreach (Wz_Node n in stand.Nodes)
             {
+                if (n.Text == "head") continue; // metadata of a portrait NPC (9070104), not a frame
                 if (!int.TryParse(n.Text, out int key))
                 {
                     Console.WriteLine($"npc {npcId} stand: non-frame child {n.Text}");

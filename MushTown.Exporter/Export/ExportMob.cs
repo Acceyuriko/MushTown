@@ -35,6 +35,7 @@ public static partial class Export
         [100006] = ("0210100", 240), // Slime
         [100007] = ("1210100", 300), // Pig
         [BossMushmom] = ("6130101", 600), // Mushmom
+        [8641000] = ("8641000", 300), // Happy Erda (Weathered Land of Happiness); aggro is a feel number, the WZ has none
     };
 
     // One mob's art + stats. The structure tree is not in Data/Mob: it lives in

@@ -10,4 +10,4 @@
 
 数据来源只有两个：`.dsh/research/drop-tables.md` 的「Wiki 掉落数据（2026-11-14）」和 WZ。WZ 本身没有掉落表。
 
-`8641000`（Happy Erda）只写金币，`Items` 为空。神秘球的额外掉落归 ARC 题。
+`8641000`（Happy Erda）写金币和两种药水（与其他怪相同的设计值）。神秘球的额外掉落归 ARC 题。

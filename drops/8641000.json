@@ -2,5 +2,8 @@
   "MobId": 8641000,
   "MesoMin": 1200,
   "MesoMax": 1800,
-  "Items": []
+  "Items": [
+    { "Item": 2000002, "Chance": 0.1, "Count": 1 },
+    { "Item": 2000006, "Chance": 0.1, "Count": 1 }
+  ]
 }

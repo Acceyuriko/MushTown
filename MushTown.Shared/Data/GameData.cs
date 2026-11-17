@@ -59,6 +59,9 @@ public sealed class MapInfo
     // WZ info/returnMap: the map a dead player revives on (the town the map
     // belongs to). A town points at itself.
     public int ReturnMap { get; set; }
+
+    // WZ info/barrierArc: the Arcane Power the map asks for (0 = none).
+    public int BarrierArc { get; set; }
 }
 
 // WZ miniMap node: the canvas plus the world rect it covers. The rect's

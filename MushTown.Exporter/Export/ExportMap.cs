@@ -17,8 +17,10 @@ public static partial class Export
     // take 190 px.
     private const int VrSideMargin = 10, VrTopMargin = 360, VrBottomMargin = 190;
 
-    // Every portal with a real target must land on an exported map and a
-    // portal name that exists there ( Tn matches the target's Pn ).
+    // Every portal with a real target must land on a portal name that exists
+    // there ( Tn matches the target's Pn ). The target map is always exported:
+    // ExportMap drops every door to a map that is not in MapIds, and Run stops
+    // when any listed map fails to export.
     private static bool VerifyLinks(Dictionary<int, MapData> maps)
     {
         foreach (var map in maps.Values)
@@ -31,11 +33,7 @@ public static partial class Export
             foreach (var p in map.Portals)
             {
                 if (p.Tm == PortalRules.NoTarget) continue;
-                if (!maps.TryGetValue(p.Tm, out var target))
-                {
-                    Console.WriteLine($"map {map.MapId} portal {p.Pn}: target map {p.Tm} not exported");
-                    return false;
-                }
+                var target = maps[p.Tm];
                 // arrival lands on the ground at/below the target portal (top00/top0
                 // platforms sit ~1px above their portal point, so look from y - ArrivalLookUp)
                 var land = target.Portals.FirstOrDefault(q => q.Pn == p.Tn);
@@ -215,6 +213,7 @@ public static partial class Export
         // info
         map.Info.Bgm = MapBgm(info, mapId);
         if (map.Info.Bgm == "") return null;
+        map.Info.BarrierArc = Int(info, "barrierArc", 0);
         map.Info.ReturnMap = Int(info, "returnMap", 0);
         if (map.Info.ReturnMap == 0 || map.Info.ReturnMap == 999999999)
         {
@@ -312,13 +311,27 @@ public static partial class Export
         if (portalNode != null)
             foreach (Wz_Node p in portalNode.Nodes)
             {
+                int tm = Int(p, "tm");
+                // The soft failures: a door to a map we do not export, or to a portal of this same map that
+                // the WZ lacks (450001000 PH00 -> PH01), is dropped so no dead door stays. Any other
+                // bad link still fails in VerifyLinks.
+                if (tm != PortalRules.NoTarget && !MapIds.Contains(tm))
+                {
+                    Console.WriteLine($"map {mapId} portal {Str(p, "pn")}: target map {tm} is not exported, portal dropped");
+                    continue;
+                }
+                if (tm == mapId && !portalNode.Nodes.Cast<Wz_Node>().Any(q => Str(q, "pn") == Str(p, "tn")))
+                {
+                    Console.WriteLine($"map {mapId} portal {Str(p, "pn")}: target portal '{Str(p, "tn")}' is not on this map, portal dropped");
+                    continue;
+                }
                 var item = new PortalItem
                 {
                     Pn = Str(p, "pn"),
                     Pt = Int(p, "pt"),
                     X = Int(p, "x"),
                     Y = Int(p, "y"),
-                    Tm = Int(p, "tm"),
+                    Tm = tm,
                     Tn = Str(p, "tn")
                 };
                 if (item.Tm != PortalRules.NoTarget && !ExportPortalArt(root, mapId, p, item, outDir, saved))
