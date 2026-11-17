@@ -67,7 +67,7 @@ public partial class MushTownGame
             _save.Slots[_slot] ??= DemoChara();
             var data = _skills[_shotSkill];
             if (!TryPaySkill(_shotSkill))
-                throw new InvalidDataException($"--skill {_shotSkill} cannot cast: needs Lv.{data.ReqLevel} and {data.Mp} MP");
+                throw new InvalidDataException($"--skill {_shotSkill} cannot cast: needs {data.Mp} MP");
             CastBuff(_shotSkill);
             RunShotAi();
             SnapCamera();

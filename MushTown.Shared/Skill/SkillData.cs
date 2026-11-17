@@ -42,7 +42,6 @@ public sealed class SkillData
 
     public int SkillId { get; set; }
     public string Name { get; set; } = "";
-    public int ReqLevel { get; set; }
     public int MaxLevel { get; set; }
     public int Kind { get; set; }
     public int Mp { get; set; }

@@ -17,7 +17,7 @@ public static class SkillText
         if (skill.Kind != SkillData.KindPassive)
         {
             parts.Add($"MP Cost: {skill.Mp}");
-            parts.Add($"Cooldown: {Seconds(skill.CooldownMs)} sec");
+            if (skill.CooldownMs > 0) parts.Add($"Cooldown: {Seconds(skill.CooldownMs)} sec"); // a skill with no cooldown says nothing
         }
         if (skill.Kind == SkillData.KindActive)
         {

@@ -21,14 +21,14 @@ public class SkillTests
         Assert.AreEqual(15, Damage.SkillCalc(1.0, 0.0, 0.0, new Build(4, 4, 32, 0, 100, 0), 150, -1));
     }
 
-    // The cast gate: the skill must be learned, and level, MP, and
-    // cooldown must all pass.
+    // The cast gate: the skill must be learned, and MP and cooldown must pass.
+    // The character level does not matter.
     [TestMethod]
-    public void CanCast_GatesLevelMpAndCooldown()
+    public void CanCast_GatesMpAndCooldown()
     {
-        var skill = new SkillData { ReqLevel = 3, Mp = 5 };
+        var skill = new SkillData { Mp = 5 };
         Assert.IsTrue(Progression.CanCast(new CharaSlot { Level = 5, Mp = 10 }, skill, 1, 0));
-        Assert.IsFalse(Progression.CanCast(new CharaSlot { Level = 2, Mp = 10 }, skill, 1, 0)); // too young
+        Assert.IsTrue(Progression.CanCast(new CharaSlot { Level = 1, Mp = 10 }, skill, 1, 0)); // a Lv.1 character casts too
         Assert.IsFalse(Progression.CanCast(new CharaSlot { Level = 5, Mp = 4 }, skill, 1, 0)); // too dry
         Assert.IsFalse(Progression.CanCast(new CharaSlot { Level = 5, Mp = 10 }, skill, 1, 1)); // still cooling
         Assert.IsFalse(Progression.CanCast(new CharaSlot { Level = 5, Mp = 10 }, skill, 0, 0)); // never learned

@@ -173,13 +173,17 @@ public partial class MushTownGame
         if (CanPickUp(view)) Hold(new BindTarget(BindKind.Skill, view!.SkillId));
     }
 
-    // The live part of a cell: the timers and the skill in hand.
+    // A skill in hand dropped back on its own cell: the grab is cancelled (the hand clears, nothing changes).
+    private bool DropOnOwnSkillCell(int gx, int gy, BindTarget target) =>
+        target.Kind == BindKind.Skill && _uiScene.TopAt(gx, gy)?.Get<SkillCell>() is { SkillId: var id } && id == target.Id;
+
+    // The live part of a cell: the timers.
     private SkillCellState StateOf(SkillView view)
     {
         if (view.SkillId == 0) return default;
         _fighter.Cooldowns.TryGetValue(view.SkillId, out float cd);
         _fighter.Buffs.TryGetValue(view.SkillId, out float buff);
-        return new SkillCellState(cd, buff, Held == new BindTarget(BindKind.Skill, view.SkillId));
+        return new SkillCellState(cd, buff);
     }
 
     // The wheel scrolls the cells while the mouse is over the window: one notch is one row.
@@ -223,7 +227,7 @@ public sealed record SkillView(string Name, string Icon, string IconOff, int Max
     IReadOnlyList<string> Desc, IReadOnlyList<string> Effect, int SkillId, bool Passive);
 
 // What changes from frame to frame in a cell.
-public readonly record struct SkillCellState(float CdMs, float BuffMs, bool Held);
+public readonly record struct SkillCellState(float CdMs, float BuffMs);
 
 // One page tab: the official Roman numeral art (the selected tab is orange).
 public sealed class SkillTabArt : Component, IDrawable
@@ -264,6 +268,7 @@ public sealed class SkillCell : Component, IDrawable
     private readonly Func<SkillView?> _view;
     private readonly Func<SkillView, SkillCellState> _state;
     public SkillCell(Func<SkillView?> view, Func<SkillView, SkillCellState> state) { _view = view; _state = state; }
+    public int SkillId => _view()?.SkillId ?? 0;
     public void Draw(UiGfx gfx)
     {
         var lay = MushTownGame._skillLay;
@@ -274,8 +279,7 @@ public sealed class SkillCell : Component, IDrawable
         if (view == null) return;
         var s = _state(view);
         bool cooling = s.CdMs > 0;
-        if (!s.Held) // in hand: the icon rides the mouse, the cell keeps the name and the numbers
-            gfx.Sb.Draw(gfx.Tex(cooling ? view.IconOff : view.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
+        gfx.Sb.Draw(gfx.Tex(cooling ? view.IconOff : view.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
         int textW = lay.Get("rowRightX", 136) - lay.Get("rowNameX", 38);
         gfx.Sb.Draw(Text.Fit(gfx, view.Name, textW), new Vector2(r.X + lay.Get("rowNameX", 38), r.Y + lay.Get("rowNameY", 3)), new Color(30, 30, 40));
         gfx.Sb.Draw(gfx.Ui.GetSmall(view.MaxLevel.ToString()), new Vector2(r.X + lay.Get("rowSubX", 38), r.Y + lay.Get("rowSubY", 19)), new Color(105, 105, 115));

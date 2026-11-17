@@ -1,4 +1,5 @@
 using MushTown.Client;
+using MushTown.Shared;
 
 namespace MushTown.Client.Tests;
 
@@ -94,6 +95,59 @@ public class MacroTests
         run.Stop();
         for (int f = 1; f < 20; f++) pose.Frame(run, f);
         CollectionAssert.AreEqual(new[] { (0, 11) }, pose.Casts);
+    }
+
+    private static SkillData Active(int id, int cooldownMs) =>
+        new() { SkillId = id, Kind = SkillData.KindActive, Mp = 5, CooldownMs = cooldownMs, CastLockMs = 600 };
+
+    // The real cast checks (SkillCost: MP, cooldown) behind the run, 60 frames a second. A Lv.1
+    // character with plenty of MP: the level does not matter.
+    private static List<int> RunWithCosts(int[] macro, params SkillData[] defs)
+    {
+        var byId = defs.ToDictionary(d => d.SkillId);
+        var cost = new SkillCost(byId);
+        var chara = new CharaSlot { Level = 1, Mp = 100 };
+        var cooldowns = new Dictionary<int, float>();
+        var casts = new List<int>();
+        float lockMs = 0;
+        var run = new MacroRun();
+        run.Start(macro);
+        for (int frame = 0; frame < 600; frame++)
+        {
+            run.Step(() => lockMs > 0, id =>
+            {
+                if (!cost.Pay(chara, id, 10, cooldowns)) return;
+                casts.Add(id);
+                lockMs = byId[id].CastLockMs;
+            });
+            lockMs = Math.Max(0, lockMs - 1000f / 60);
+            foreach (int id in cooldowns.Keys.ToList()) cooldowns[id] = Math.Max(0, cooldowns[id] - 1000f / 60);
+        }
+        return casts;
+    }
+
+    // Three of the same skill with a cooldown: the first cast starts the cooldown (3 s), the pose
+    // lock (0.6 s) ends long before it, so the second and the third are skipped as "cooling down".
+    [TestMethod]
+    public void ThreeOfTheSameSkill_WithACooldown_OnlyTheFirstCasts()
+    {
+        var skill = Active(1101011, 3000);
+        CollectionAssert.AreEqual(new[] { 1101011 }, RunWithCosts(new[] { 1101011, 1101011, 1101011 }, skill));
+    }
+
+    // Slash Blast has no cooldown in the WZ: three of it cast three times, each after the pose.
+    [TestMethod]
+    public void ThreeOfTheSameSkill_WithNoCooldown_AllCast()
+    {
+        var skill = Active(1001005, 0);
+        CollectionAssert.AreEqual(new[] { 1001005, 1001005, 1001005 }, RunWithCosts(new[] { 1001005, 1001005, 1001005 }, skill));
+    }
+
+    [TestMethod]
+    public void ThreeDifferentSkills_AllCastInOrder()
+    {
+        var defs = new[] { Active(1001005, 3000), Active(1101011, 4000), Active(1111010, 5000) };
+        CollectionAssert.AreEqual(new[] { 1001005, 1101011, 1111010 }, RunWithCosts(new[] { 1001005, 1101011, 1111010 }, defs));
     }
 
     [TestMethod]

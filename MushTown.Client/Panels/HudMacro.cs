@@ -70,7 +70,7 @@ public sealed class MacroWindow : UiWindow
                 cell.Add(new Rect(SlotRect(macro, slot)));
                 cell.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => _game.PickMacroSlot(macro, slot) }); // the drop is taken before the click chain; the pick plays the click
                 cell.Add(new Grab(() => _game.MacroSkill(macro, slot) != 0));
-                cell.Add(new MacroArt(() => _game.MacroSlotIcon(macro, slot)));
+                cell.Add(new MacroArt(() => _game.SkillIconTex(_game.MacroSkill(macro, slot))));
                 root.AddChild(cell);
             }
             var icon = new GameObject();

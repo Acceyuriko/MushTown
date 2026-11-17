@@ -122,6 +122,7 @@ public partial class MushTownGame
     private bool DropTarget(int gx, int gy, BindTarget target)
     {
         if (_macroWindow.TryDropAt(gx, gy, target)) return true; // a slot of a macro
+        if (DropOnOwnSkillCell(gx, gy, target)) return true; // the skill window cell it came from: the grab ends
         var keyWin = DraftWindow;
         if (keyWin != null && keyWin.TryDropAt(gx, gy, target)) return true; // the keyboard or the pool
         if (!QslotRect().Contains(gx, gy)) return false; // not near the strip: no need to hit test

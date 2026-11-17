@@ -10,7 +10,6 @@ public class SkillCastTests
     {
         SkillId = id,
         Name = "Slash Blast",
-        ReqLevel = 1,
         MaxLevel = 20,
         Kind = SkillData.KindActive,
         Mp = 10,
@@ -22,7 +21,7 @@ public class SkillCastTests
     private static Dictionary<int, SkillData> Defs(params SkillData[] ss) =>
         ss.ToDictionary(s => s.SkillId);
 
-    // Pay gates: no chara, unlearned, too young, too dry, cooling. Pays MP
+    // Pay gates: no chara, unlearned, too dry, cooling. Pays MP
     // and sets the cooldown only when all pass.
     [TestMethod]
     public void Pay_GatesAndPays()
@@ -32,7 +31,6 @@ public class SkillCastTests
         var cd = new Dictionary<int, float>();
         Assert.IsFalse(cost.Pay(null, 1001005, 1, cd));
         Assert.IsFalse(cost.Pay(new CharaSlot { Level = 5, Mp = 10 }, 1001005, 0, cd)); // unlearned
-        Assert.IsFalse(cost.Pay(new CharaSlot { Level = 0, Mp = 10 }, 1001005, 1, cd)); // too young
         var dry = new CharaSlot { Level = 5, Mp = 4 };
         Assert.IsFalse(cost.Pay(dry, 1001005, 1, cd)); // too dry
         Assert.AreEqual(4, dry.Mp); // failed pays spend nothing

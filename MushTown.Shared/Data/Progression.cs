@@ -263,10 +263,11 @@ public static class Progression
         };
     }
 
-    // One cast's checks: learned, level, MP, cooldown. The client deducts MP
-    // and sets the cooldown after this passes (single-threaded: no race).
+    // One cast's checks: learned, MP, cooldown (the character level does not matter: every
+    // skill stands at its max level). The client deducts MP and sets the cooldown after this
+    // passes (single-threaded: no race).
     public static bool CanCast(CharaSlot chara, SkillData skill, int lv, float cdLeftMs) =>
-        lv > 0 && chara.Level >= skill.ReqLevel && chara.Mp >= skill.Mp && cdLeftMs <= 0;
+        lv > 0 && chara.Mp >= skill.Mp && cdLeftMs <= 0;
 
     // One mob touch: DEF% blocks its share (min 1 when damage lands), HP
     // floors at 0. Returns the damage dealt (the client shows it; Hp 0 means dead).

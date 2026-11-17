@@ -13,6 +13,13 @@ public class SkillTextTests
     }
 
     [TestMethod]
+    public void Effect_NoCooldown_SaysNothingAboutIt()
+    {
+        var skill = new SkillData { Kind = SkillData.KindActive, MaxLevel = 10, Mp = 5, DmgLo = 150, DmgHi = 250, MobCount = 6 };
+        Assert.AreEqual("MP Cost: 5, Damage: 250%, Max Targets: 6", SkillText.Effect(skill, 10));
+    }
+
+    [TestMethod]
     public void Effect_Passive_ShowsOnlyStatsAtLevel()
     {
         var skill = new SkillData { Kind = SkillData.KindPassive, MaxLevel = 10, HpPct = 2, MovePct = 1 };

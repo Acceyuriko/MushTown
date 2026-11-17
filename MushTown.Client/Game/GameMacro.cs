@@ -77,10 +77,6 @@ public partial class MushTownGame
     // The skill in hand lands on a slot.
     internal void DropMacroSkill(int macro, int slot, int skill) => PlaceMacroSkill(macro, slot, skill, _heldMacroSlot);
 
-    // What a slot draws: nothing while its skill is in hand (the drop or the cancel brings it back).
-    internal string MacroSlotIcon(int macro, int slot) =>
-        _heldMacroSlot == (macro, slot) ? "" : SkillIconTex(MacroSkill(macro, slot));
-
     // A skill picked up from a macro slot was dropped on the world: the slot loses it.
     private bool CancelMacroHoldOnWorldClick(int gx, int gy, GameObject? top)
     {
