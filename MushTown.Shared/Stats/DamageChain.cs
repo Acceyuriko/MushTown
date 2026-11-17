@@ -41,12 +41,32 @@ public static class DamageChain
         StatKey key = magic ? StatKey.MATT : StatKey.ATT;
         StatKey pctKey = magic ? StatKey.MATT_PCT : StatKey.ATT_PCT;
         double pct = stats.Percent(key) + stats.Percent(pctKey);
-        return (long)Math.Floor(stats.Flat(key) * (1.0 + pct / 100.0))
+        return (long)Math.Floor(stats.Flat(key) * (100.0 + pct) / 100.0)
             + (long)Math.Floor(stats.FinalFlat(key));
     }
 
+    // Final damage: one multiplier per source, all multiplied (1.0 = none).
+    // The panel shows this minus 100%.
     public static double FinalDamageMultiplier(StatSnapshot stats) =>
-        stats.Multiplier(StatKey.FINAL_DAMAGE_PCT) * (1.0 + Points(stats, StatKey.FINAL_DAMAGE_PCT) / 100.0);
+        stats.Multiplier(StatKey.FINAL_DAMAGE_PCT);
+
+    // Damage, boss/normal damage and extra status damage are summed points
+    // (0 = none). The damage zone is 100% plus their sum; the panel shows the
+    // sum, which is that zone minus 100%. Damage counts for both kinds of mob.
+    public static double DamageMultiplier(StatSnapshot stats, bool boss, bool statusAfflicted = false) =>
+        1.0 + (stats.Value(StatKey.DAMAGE_PCT)
+            + stats.Value(boss ? StatKey.BOSS_PCT : StatKey.NORMAL_PCT)
+            + (statusAfflicted ? stats.Value(StatKey.STATUS_DAMAGE_PCT) : 0.0)) / 100.0;
+
+    // Damage taken: the product of the sources, an element attack is cut by
+    // half of the element resistance, and a hit always does at least 1.
+    public static long TakenDamage(StatSnapshot stats, long damage, bool elemental = false)
+    {
+        double ratio = stats.Multiplier(StatKey.DAMAGE_TAKEN);
+        if (elemental)
+            ratio *= 1.0 - stats.Value(StatKey.ELEMENT_RESISTANCE) / 200.0;
+        return Math.Max(1L, (long)Math.Floor(damage * ratio));
+    }
 
     // Step 3 truncates instead of rounding, matching the old panel.
     private static (long MinActual, long MaxActual, long MinPanel, long MaxPanel) Panel(
@@ -79,16 +99,10 @@ public static class DamageChain
     public static double DefenseMultiplier(double mobDefPct, double iedMultiplier) =>
         1.0 - mobDefPct / 100.0 * iedMultiplier;
 
+    // The share of the defense that is left: one multiplier (1 - source) per
+    // source, multiplied. Ignore defense is 1 minus this, so it cannot pass 100%.
     public static double IedMultiplier(StatSnapshot stats) =>
-        IedMultiplier(stats.Multiplier(StatKey.IED_PCT), Points(stats, StatKey.IED_PCT));
-
-    // Ignore defense applies up to 100% (the official text), so the sum of
-    // the sources cannot push the multiplier below 0.
-    public static double IedMultiplier(double multiplier, double flatPct) =>
-        Math.Max(0.0, multiplier * (1.0 - flatPct / 100.0));
-
-    private static double Points(StatSnapshot stats, StatKey key) =>
-        Math.Floor(stats.Flat(key) * (1.0 + stats.Percent(key) / 100.0)) + stats.FinalFlat(key);
+        stats.Multiplier(StatKey.IED_PCT);
 
     public static double LevelMultiplier(int attackerLevel, int mobLevel)
     {
@@ -117,7 +131,7 @@ public static class DamageChain
     // return value used by Damage.
     public static DamageResult Calculate(Build build, double roll01, double crit01, double mobDef,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
-        int skillPct = 100, bool boss = false)
+        int skillPct = 100, bool boss = false, double ignoreElemPct = 0)
     {
         var weapon = StatTables.Weapon((WeaponType)build.WeaponType);
         long statValue = StatValue(build.Str, build.Dex);
@@ -133,7 +147,7 @@ public static class DamageChain
         double critMult = CritMultiplier(crit, build.CritDamage);
         double defense = DefenseMultiplier(mobDef * 100.0, 1.0 - build.IedPct / 100.0);
         double level = mobLevel <= 0 ? 1.0 : LevelMultiplier(build.Level, mobLevel);
-        double elemMult = string.IsNullOrEmpty(mobElemAttr) ? 1.0 : MobElemAttr.Multiplier(mobElemAttr, element);
+        double elemMult = string.IsNullOrEmpty(mobElemAttr) ? 1.0 : MobElemAttr.Multiplier(mobElemAttr, element, ignoreElemPct);
         double after = actual * critMult * defense * elemMult * level;
         long perHit = Math.Max(1L, (long)Math.Floor(after));
         return new DamageResult(statValue, minActual, maxActual,

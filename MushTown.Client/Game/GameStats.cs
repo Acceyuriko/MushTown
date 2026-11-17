@@ -54,6 +54,10 @@ public partial class MushTownGame
         mods.Add(new(StatKey.DEX, StatValueType.FLAT, worn.dex, "equipment"));
 
         mods.AddRange(DefaultPassives.All);
+        mods.Add(DefaultPassives.MapleWarrior(StatKey.STR, chara.Str));
+        mods.Add(DefaultPassives.MapleWarrior(StatKey.DEX, chara.Dex));
+        mods.Add(DefaultPassives.MapleWarrior(StatKey.INT, chara.Int));
+        mods.Add(DefaultPassives.MapleWarrior(StatKey.LUK, chara.Luk));
 
         int training = SkillLv(SkillData.PhysicalTraining);
         int agile = SkillLv(SkillData.AgileArms);

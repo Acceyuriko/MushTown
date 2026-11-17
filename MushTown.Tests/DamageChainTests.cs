@@ -56,10 +56,66 @@ public class DamageChainTests
     public void Step5_FinalDamageMultipliesEverySource()
     {
         var s = Snap(
-            M(StatKey.FINAL_DAMAGE_PCT, StatValueType.FLAT, 20),
+            M(StatKey.FINAL_DAMAGE_PCT, StatValueType.MULTIPLIER, 1.2),
             M(StatKey.FINAL_DAMAGE_PCT, StatValueType.MULTIPLIER, 1.5),
             M(StatKey.FINAL_DAMAGE_PCT, StatValueType.MULTIPLIER, 2.0));
-        Assert.AreEqual(3.6, DamageChain.FinalDamageMultiplier(s), 1e-9); // (1 + 20%) * 1.5 * 2
+        Assert.AreEqual(3.6, DamageChain.FinalDamageMultiplier(s), 1e-9); // 1.2 * 1.5 * 2
+        Assert.AreEqual(1.0, DamageChain.FinalDamageMultiplier(Snap()), 1e-9); // no source: the panel shows 0%
+    }
+
+    [TestMethod]
+    public void Step6_DamageBossAndNormalAreSummedAndDamageCountsForBoth()
+    {
+        var s = Snap(
+            M(StatKey.DAMAGE_PCT, StatValueType.FLAT, 30),
+            M(StatKey.DAMAGE_PCT, StatValueType.FLAT, 20),
+            M(StatKey.BOSS_PCT, StatValueType.FLAT, 100),
+            M(StatKey.BOSS_PCT, StatValueType.FLAT, 40),
+            M(StatKey.NORMAL_PCT, StatValueType.FLAT, 10),
+            M(StatKey.STATUS_DAMAGE_PCT, StatValueType.FLAT, 5));
+        Assert.AreEqual(1.0, DamageChain.DamageMultiplier(Snap(), boss: true), 1e-9); // no source: panel 0%
+        Assert.AreEqual(1.0 + (50 + 140) / 100.0, DamageChain.DamageMultiplier(s, boss: true), 1e-9);
+        Assert.AreEqual(1.0 + (50 + 10) / 100.0, DamageChain.DamageMultiplier(s, boss: false), 1e-9);
+        Assert.AreEqual(1.0 + (50 + 10 + 5) / 100.0, DamageChain.DamageMultiplier(s, boss: false, statusAfflicted: true), 1e-9);
+    }
+
+    [TestMethod]
+    public void Ied_SourcesMultiplyAndCannotPassOneHundredPercent()
+    {
+        var s = Snap(
+            M(StatKey.IED_PCT, StatValueType.MULTIPLIER, 0.8),
+            M(StatKey.IED_PCT, StatValueType.MULTIPLIER, 0.6));
+        Assert.AreEqual(0.48, DamageChain.IedMultiplier(s), 1e-9); // 52% ignored, not 60%
+        Assert.AreEqual(1.0, DamageChain.IedMultiplier(Snap()), 1e-9); // default: 0% ignored
+        var all = Snap(
+            M(StatKey.IED_PCT, StatValueType.MULTIPLIER, 0.0),
+            M(StatKey.IED_PCT, StatValueType.MULTIPLIER, 0.5));
+        Assert.AreEqual(0.0, DamageChain.IedMultiplier(all), 1e-9); // a 100% source ends at 100%
+    }
+
+    [TestMethod]
+    public void DamageTaken_SourcesMultiplyAndAHitDoesAtLeastOne()
+    {
+        var s = Snap(
+            M(StatKey.DAMAGE_TAKEN, StatValueType.MULTIPLIER, 0.82),
+            M(StatKey.DAMAGE_TAKEN, StatValueType.MULTIPLIER, 0.94));
+        Assert.AreEqual(0.7708, s.Multiplier(StatKey.DAMAGE_TAKEN), 1e-9); // the product, not 1 - 24%
+        Assert.AreEqual(770, DamageChain.TakenDamage(s, 1000));
+        Assert.AreEqual(1000, DamageChain.TakenDamage(Snap(), 1000)); // no source
+        Assert.AreEqual(1, DamageChain.TakenDamage(s, 1)); // 0.77 would round down to 0
+    }
+
+    [TestMethod]
+    public void ElementResistance_CutsElementDamageByHalfOfItAndIgnoreShrinksTheMobCut()
+    {
+        var s = Snap(
+            M(StatKey.ELEMENT_RESISTANCE, StatValueType.FLAT, 20),
+            M(StatKey.ELEMENT_RESISTANCE, StatValueType.FLAT, 20));
+        Assert.AreEqual(800, DamageChain.TakenDamage(s, 1000, elemental: true)); // 40% resistance cuts 20%
+        Assert.AreEqual(1000, DamageChain.TakenDamage(s, 1000)); // a physical hit is untouched
+        Assert.AreEqual(0.55, MobElemAttr.Multiplier("F2", AttackElement.Fire, 10), 1e-9); // 50% cut, 10% ignore: 45% cut
+        Assert.AreEqual(0.1, MobElemAttr.Multiplier("F1", AttackElement.Fire, 10), 1e-9); // immune, 10% ignore
+        Assert.AreEqual(1.5, MobElemAttr.Multiplier("I3", AttackElement.Ice, 10), 1e-9); // weak: untouched
     }
 
     [TestMethod]

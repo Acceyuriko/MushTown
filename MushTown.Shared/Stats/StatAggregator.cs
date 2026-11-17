@@ -1,7 +1,8 @@
 namespace MushTown.Shared;
 
-// The 28 keys every character-stat source can modify. The order is the
-// canonical order used by snapshots and the stat panel.
+// The keys every character-stat source can modify. The order is the
+// canonical order used by snapshots and the stat panel. The first 28 keys
+// are the original contract; new keys are only ever added after JUMP.
 public enum StatKey
 {
     STR,
@@ -32,6 +33,18 @@ public enum StatKey
     EXP_PCT,
     SPEED,
     JUMP,
+    IGNORE_ELEMENT_RESISTANCE_PCT,
+    STATUS_DAMAGE_PCT,
+    SUMMON_DURATION_PCT,
+    STAR_FORCE,
+    ARCANE_POWER,
+    SACRED_POWER,
+    ATTACK_SPEED,
+    CDR_SECONDS,
+    // Hidden keys, no stat panel row. DAMAGE_TAKEN takes one MULTIPLIER per
+    // source (0.82 = 18% less damage taken); ELEMENT_RESISTANCE is summed.
+    DAMAGE_TAKEN,
+    ELEMENT_RESISTANCE,
 }
 
 // How one source contributes to a key. FLAT first, then PERCENT, then
@@ -85,13 +98,17 @@ public sealed class StatSnapshot
     // Product of MULTIPLIER sources. No source means 1.0 (the neutral value).
     public double Multiplier(StatKey key) => _multiplier[(int)key];
 
-    // The fully aggregated value of one key.
-    public double Value(StatKey key)
+    // The value before the MULTIPLIER zone, capped. The multiplier zone is a
+    // separate calculation: Heroic's Meso x6 must not show in the panel
+    // number, so the panel reads this for the keys that have such a zone.
+    public double Additive(StatKey key)
     {
         int i = (int)key;
-        double value = Math.Floor(_flat[i] * (1.0 + _percent[i] / 100.0)) + _finalFlat[i];
-        return value * _multiplier[i];
+        return Cap(key, Math.Floor(_flat[i] * (100.0 + _percent[i]) / 100.0) + _finalFlat[i]);
     }
+
+    // The fully aggregated value of one key.
+    public double Value(StatKey key) => Additive(key) * _multiplier[(int)key];
 
     public long IntValue(StatKey key) => (long)Math.Floor(Value(key));
 
@@ -99,8 +116,25 @@ public sealed class StatSnapshot
     public double DoubleValue(StatKey key)
     {
         int i = (int)key;
-        return (_flat[i] * (1.0 + _percent[i] / 100.0) + _finalFlat[i]) * _multiplier[i];
+        return Cap(key, _flat[i] * (1.0 + _percent[i] / 100.0) + _finalFlat[i]) * _multiplier[i];
     }
+
+    // SPEED / JUMP are stored as pixel values; 100% is the base value.
+    public double SpeedPercent => DoubleValue(StatKey.SPEED) / PlayerMover.WalkSpeed * 100.0;
+
+    public double JumpPercent => DoubleValue(StatKey.JUMP) / PlayerMover.JumpV0 * 100.0;
+
+    // The caps of research/stat-formulas-decisions.md rule 12. IED needs
+    // none: its sources multiply, so it cannot pass 100%. JUMP is a negative
+    // take-off velocity, so its cap is a maximum magnitude.
+    private static double Cap(StatKey key, double value) => key switch
+    {
+        StatKey.MAX_HP or StatKey.MAX_MP => Math.Min(value, 500_000),
+        StatKey.CRIT_RATE => Math.Min(value, 100),
+        StatKey.SPEED => Math.Min(value, PlayerMover.WalkSpeed * 1.40),
+        StatKey.JUMP => Math.Max(value, PlayerMover.JumpV0 * 1.23),
+        _ => value,
+    };
 }
 
 // Pure aggregator: four ordered buckets, no source-system logic.

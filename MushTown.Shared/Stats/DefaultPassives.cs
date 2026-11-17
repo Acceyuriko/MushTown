@@ -5,8 +5,8 @@ using System.Text.Json.Serialization;
 namespace MushTown.Shared;
 
 // The default account passives of a Lv.200 character (Heroic, Maple Warrior,
-// Will of the Alliance, Hero's Echo, every Link, the full Union and the six
-// traits at Lv.100), folded into stat modifiers. The numbers live in
+// Will of the Alliance, Hero's Echo, every Link at its highest level, the full
+// Union and the six traits at Lv.100), folded into stat modifiers. The numbers live in
 // Stats/default-passives.json; the aggregator treats them like any other
 // source.
 public static class DefaultPassives
@@ -25,6 +25,14 @@ public static class DefaultPassives
     }
 
     public static IReadOnlyList<StatModifier> All { get; } = Load();
+
+    // Maple Warrior adds 15% of the pure stat (the points the player put in
+    // by hand), rounded down, as an added stat. It does not touch gear or
+    // other fixed values, so it cannot be a PERCENT record.
+    public const int MapleWarriorPct = 15;
+
+    public static StatModifier MapleWarrior(StatKey key, long pureStat) =>
+        new(key, StatValueType.FLAT, Math.Floor(pureStat * MapleWarriorPct / 100.0), "Maple Warrior");
 
     private static List<StatModifier> Load()
     {

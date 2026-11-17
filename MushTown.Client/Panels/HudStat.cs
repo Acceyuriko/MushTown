@@ -207,7 +207,8 @@ public partial class MushTownGame
         }
     }
 
-    private string Percent(StatKey key) => $"{_stats.IntValue(key)}%";
+    // The panel number leaves the separate multiplier zone out (Heroic's Meso x6).
+    private string Percent(StatKey key) => $"{(long)Math.Floor(_stats.Additive(key))}%";
 
     // The damage range the panel shows: the current class and weapon profile
     // read from the same snapshot as the rest of the panel.
