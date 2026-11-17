@@ -7,7 +7,7 @@ namespace MushTown.Tests;
 public class DamageChainTests
 {
     private static StatSnapshot Snap(params StatModifier[] mods) => StatAggregator.Aggregate(mods);
-    private static StatModifier M(StatKey key, StatValueType type, double value) => new(key, type, value, "test");
+    private static StatModifier M(StatKey key, StatValueType type, double value) => new(key, type, value, StatSource.Skill);
 
     private static readonly JobProfile OneHand = new(StatKey.STR, StatKey.DEX, WeaponType.OneHandSword);
 

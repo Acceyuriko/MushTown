@@ -8,7 +8,7 @@ public class StatsTests
     private static StatSnapshot Snap(params StatModifier[] mods) => StatAggregator.Aggregate(mods);
 
     private static StatModifier M(StatKey key, StatValueType type, double value) =>
-        new(key, type, value, "test");
+        new(key, type, value, StatSource.Skill);
 
     [TestMethod]
     public void Aggregate_OrderIsFlatPercentFinalFlatMultiplier()

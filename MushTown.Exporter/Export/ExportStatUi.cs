@@ -49,6 +49,7 @@ public static partial class Export
         0, 1, 2, 3, 4, 5, // HP MP / STR DEX / INT LUK
         7, 6, 9, 8, 12, 11, 10, 18, 13, 21, 14, 16, 17, 15, 20, 19, // the attack area
         22, 23, 24, 25, 26, 27, // mesos, star force, drop, arcane, exp, sacred
+        28, 29, 30, 31, 32, 33, // page 2 of the bottom block: defense, status resistance, speed, jump, knockback resistance, attack speed
     };
 
     // Title and Desc of every row. The WZ text carries the two characters

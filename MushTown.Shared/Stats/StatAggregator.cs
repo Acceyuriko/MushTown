@@ -57,9 +57,24 @@ public enum StatValueType
     MULTIPLIER,
 }
 
-// One modifier record. Source is for tracing only; the aggregator never
-// branches on the source name.
-public readonly record struct StatModifier(StatKey Key, StatValueType Type, double Value, string Source);
+// Where a modifier comes from: a fixed list, in the order the hover shows the
+// groups. Base (level, AP, start values, the movement base) is never shown, only
+// the extra on top of it.
+public enum StatSource
+{
+    Base,
+    Equipment,
+    Skill, // class skills, Heroic and Link
+    Buff,
+    UnionMember,
+    UnionAttacker,
+    HyperStat,
+    Trait,
+}
+
+// One modifier record. Label names the single source (the hover lists it for
+// the keys whose sources multiply); the aggregator never branches on it.
+public readonly record struct StatModifier(StatKey Key, StatValueType Type, double Value, StatSource Source, string Label = "");
 
 // One immutable character-stat snapshot. Values are kept as the four
 // aggregation buckets; Value() applies them in the official order:
@@ -73,12 +88,16 @@ public sealed class StatSnapshot
     private readonly double[] _finalFlat = new double[AllKeys.Length];
     private readonly double[] _multiplier = new double[AllKeys.Length];
 
+    // Every modifier the snapshot was built from, for the source breakdown.
+    public IReadOnlyList<StatModifier> Modifiers { get; } = Array.Empty<StatModifier>();
+
     public static StatSnapshot Empty { get; } = new();
 
     private StatSnapshot() => Array.Fill(_multiplier, 1.0);
 
-    internal StatSnapshot(double[] flat, double[] percent, double[] finalFlat, double[] multiplier)
+    internal StatSnapshot(double[] flat, double[] percent, double[] finalFlat, double[] multiplier, IReadOnlyList<StatModifier> modifiers)
     {
+        Modifiers = modifiers;
         _flat = flat;
         _percent = percent;
         _finalFlat = finalFlat;
@@ -105,6 +124,15 @@ public sealed class StatSnapshot
     {
         int i = (int)key;
         return Cap(key, Math.Floor(_flat[i] * (100.0 + _percent[i]) / 100.0) + _finalFlat[i]);
+    }
+
+    // Like Additive but not rounded down: the percentage rows (damage, boss
+    // damage, EXP, ...) keep their decimals for the panel. The formula keys
+    // keep reading Additive.
+    public double Exact(StatKey key)
+    {
+        int i = (int)key;
+        return Cap(key, _flat[i] * (100.0 + _percent[i]) / 100.0 + _finalFlat[i]);
     }
 
     // The fully aggregated value of one key.
@@ -148,8 +176,9 @@ public static class StatAggregator
         var finalFlat = new double[n];
         var multiplier = new double[n];
         Array.Fill(multiplier, 1.0);
+        var all = modifiers.ToList();
 
-        foreach (var m in modifiers)
+        foreach (var m in all)
         {
             int i = (int)m.Key;
             switch (m.Type)
@@ -168,6 +197,6 @@ public static class StatAggregator
                     break;
             }
         }
-        return new StatSnapshot(flat, percent, finalFlat, multiplier);
+        return new StatSnapshot(flat, percent, finalFlat, multiplier, all);
     }
 }

@@ -19,6 +19,7 @@ public static class DefaultPassives
     private sealed class Row
     {
         public string Source { get; set; } = "";
+        public StatSource Category { get; set; }
         public List<StatKey> Keys { get; set; } = new();
         public StatValueType Type { get; set; }
         public double Value { get; set; }
@@ -32,7 +33,7 @@ public static class DefaultPassives
     public const int MapleWarriorPct = 15;
 
     public static StatModifier MapleWarrior(StatKey key, long pureStat) =>
-        new(key, StatValueType.FLAT, Math.Floor(pureStat * MapleWarriorPct / 100.0), "Maple Warrior");
+        new(key, StatValueType.FLAT, Math.Floor(pureStat * MapleWarriorPct / 100.0), StatSource.Skill, "Maple Warrior");
 
     private static List<StatModifier> Load()
     {
@@ -42,7 +43,7 @@ public static class DefaultPassives
             Converters = { new JsonStringEnumConverter() },
         })!;
         return table.Modifiers
-            .SelectMany(row => row.Keys.Select(key => new StatModifier(key, row.Type, row.Value, row.Source)))
+            .SelectMany(row => row.Keys.Select(key => new StatModifier(key, row.Type, row.Value, row.Category, row.Source)))
             .ToList();
     }
 }

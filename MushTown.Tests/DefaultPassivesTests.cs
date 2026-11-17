@@ -62,9 +62,9 @@ public class DefaultPassivesTests
     public void DamageTaken_IsZeroAndRenOnlyAndMultiplies()
     {
         Assert.AreEqual(0.82 * 0.94, Snap.Multiplier(StatKey.DAMAGE_TAKEN), 1e-9); // takes about 22.9% less
-        Assert.IsFalse(DefaultPassives.All.Any(m => m.Key == StatKey.DAMAGE_TAKEN && m.Source.Contains("Pirate")));
+        Assert.IsFalse(DefaultPassives.All.Any(m => m.Key == StatKey.DAMAGE_TAKEN && m.Label.Contains("Pirate")));
         Assert.IsTrue(DefaultPassives.All
-            .Where(m => m.Key == StatKey.DAMAGE_TAKEN).All(m => m.Source.Contains("wiki, not verified")));
+            .Where(m => m.Key == StatKey.DAMAGE_TAKEN).All(m => m.Label.Contains("wiki, not verified")));
     }
 
     [TestMethod]
@@ -104,8 +104,8 @@ public class DefaultPassivesTests
     public void EveryLinkIsListedOnceAtItsHighestLevel()
     {
         var repeats = DefaultPassives.All
-            .Where(m => m.Source.StartsWith("Link:"))
-            .GroupBy(m => (m.Source, m.Key, m.Type))
+            .Where(m => m.Label.StartsWith("Link:"))
+            .GroupBy(m => (m.Label, m.Key, m.Type))
             .Where(g => g.Count() > 1);
         Assert.IsFalse(repeats.Any());
     }
@@ -114,6 +114,6 @@ public class DefaultPassivesTests
     public void EveryRecordNamesItsSource()
     {
         Assert.IsTrue(DefaultPassives.All.Count > 0);
-        Assert.IsTrue(DefaultPassives.All.All(m => m.Source != ""));
+        Assert.IsTrue(DefaultPassives.All.All(m => m.Label != ""));
     }
 }

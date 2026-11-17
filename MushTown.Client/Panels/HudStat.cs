@@ -106,8 +106,8 @@ public partial class MushTownGame
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(bx + row.X, by + row.Y, row.W, 16)));
             o.Add(new Button { Kind = ButtonKind.Silent }); // the row only takes the hover
-            o.Add(new StatTip(() => _statPage == 0 || index < UtilityFirstRow ? _statDesc.Rows[index] : null));
-            o.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(index >= UtilityFirstRow ? index + _statPage * 6 : index), row.Vx - row.X, row.Vy - row.Y, Color.White));
+            o.Add(new StatTip(() => StatTipFor(PanelRow(index))));
+            o.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(PanelRow(index)), row.Vx - row.X, row.Vy - row.Y, Color.White));
             body.AddChild(o);
         }
         // The page dots flip the bottom block between its two pages.
@@ -181,34 +181,29 @@ public partial class MushTownGame
                     long maxMp = _stats.IntValue(StatKey.MAX_MP);
                     return $"{(c?.Mp ?? maxMp):#,##0} / {maxMp:#,##0}";
                 }
-            case 2: return $"{_stats.IntValue(StatKey.STR):#,##0}";
-            case 3: return $"{_stats.IntValue(StatKey.DEX):#,##0}";
-            case 4: return $"{_stats.IntValue(StatKey.INT):#,##0}";
-            case 5: return $"{_stats.IntValue(StatKey.LUK):#,##0}";
             case 6: return DamageRange();
-            case 7: return Percent(StatKey.DAMAGE_PCT);
-            case 8: return $"{Math.Round((DamageChain.FinalDamageMultiplier(_stats) - 1) * 100)}%";
-            case 9: return Percent(StatKey.BOSS_PCT);
-            case 10: return $"{Math.Round((1 - DamageChain.IedMultiplier(_stats)) * 100)}%";
-            case 11: return Percent(StatKey.NORMAL_PCT);
-            case 12: return $"{DamageChain.TotalAttack(_stats):#,##0}";
-            case 13: return Percent(StatKey.CRIT_RATE);
-            case 14: return $"{DamageChain.TotalAttack(_stats, magic: true):#,##0}";
-            case 15: return Percent(StatKey.CRIT_DAMAGE);
-            case 16: return Percent(StatKey.CDR_PCT);
-            case 17: return Percent(StatKey.BUFF_DURATION_PCT);
-            case 18: return Percent(StatKey.COOLDOWN_SKIP_PCT);
-            case 19: case 20: case 21: return "0%"; // ignore elemental resistance, additional status damage, summons duration: no key yet
-            case 22: return Percent(StatKey.MESO_PCT);
-            case 24: return Percent(StatKey.DROP_PCT);
-            case 26: return Percent(StatKey.EXP_PCT);
-            case 32: return Percent(StatKey.KNOCKBACK_RESISTANCE);
-            default: return "0"; // star force, arcane power, sacred power and the page 2 rows the snapshot has no key for
+            default: return StatDisplay.Text(_stats, index); // the format and the rounding of every other row live in Shared
         }
     }
 
-    // The panel number leaves the separate multiplier zone out (Heroic's Meso x6).
-    private string Percent(StatKey key) => $"{(long)Math.Floor(_stats.Additive(key))}%";
+    // The panel row (0..33) of a box: the bottom block's boxes show the next
+    // six rows on page 2.
+    private int PanelRow(int index) => index >= UtilityFirstRow ? index + _statPage * 6 : index;
+
+    // What the hover of one row shows: the official text, the current value
+    // and the source groups. The Status Resistance text carries a %d for the
+    // share of the status duration the number cuts.
+    private StatTipView StatTipFor(int row)
+    {
+        var desc = _statDesc.Rows[row];
+        var lines = desc.Lines.Select(l => row == StatDisplay.StatusResistanceRow
+            ? l.Replace("%d%%", $"{StatDisplay.StatusReductionPct(_stats.Additive(StatKey.STATUS_RESISTANCE))}%")
+            : l).ToList();
+        var sources = row == 6 // the damage range has no source of its own
+            ? new List<(string, string)>()
+            : StatDisplay.Sources(_stats, row).Select(l => (l.Label, StatDisplay.LineText(row, l))).ToList();
+        return new StatTipView(desc.Title, lines, StatValue(row), sources);
+    }
 
     // The damage range the panel shows: the current class and weapon profile
     // read from the same snapshot as the rest of the panel.
@@ -253,33 +248,61 @@ public sealed class NamePlate : Component, IDrawable
     }
 }
 
-// The explanation of the hovered stat row (the official Default tooltip
-// frame): the row name, then the text of UICharacterInfo.img detailStat. The
-// tip layer draws it next to the cursor.
+// What a stat row hover shows: the row name, the official text, the current
+// value and the source groups (label, number).
+public sealed record StatTipView(string Title, List<string> Lines, string Current, List<(string Label, string Value)> Sources);
+
+// The hover box of a stat row (the official Default tooltip frame): the row
+// name, the text of UICharacterInfo.img detailStat, the current value on a
+// highlight bar, then the "in use" list of source groups. The tip layer draws
+// it next to the cursor.
 public sealed class StatTip : Component
 {
-    private readonly Func<StatDescRow?> _row;
-    public StatTip(Func<StatDescRow?> row) => _row = row;
+    private readonly Func<StatTipView> _view;
+    public StatTip(Func<StatTipView> view) => _view = view;
 
     public void DrawAt(UiGfx gfx, TipAnchor anchor, PanelLayout lay)
     {
-        if (_row() is not { } row) return;
-        int pad = lay.Get("statTipPad", 8), gap = lay.Get("statTipLineGap", 16);
+        var view = _view();
+        int pad = lay.Get("statTipPad", 8), gap = lay.Get("statTipLineGap", 16), valueGap = lay.Get("statTipValueGap", 16);
         int textW = lay.Get("statTipW", 260) - pad * 2;
-        var title = gfx.Ui.GetSmall(row.Title);
+        var title = gfx.Ui.GetSmall(view.Title);
         var lines = new List<Texture2D?>(); // null = the blank line between two paragraphs
-        foreach (string line in row.Lines)
+        foreach (string line in view.Lines)
             if (line == "") lines.Add(null);
             else foreach (string wrapped in gfx.Ui.Wrap(line, textW)) lines.Add(gfx.Ui.GetSmall(wrapped));
-        int w = Math.Max(title.Width, lines.Max(l => l?.Width ?? 0)) + pad * 2;
-        int h = pad * 2 + gap * 2 + lines.Count * gap;
-        var box = anchor.At(gfx, w, h);
+        var currentLabel = gfx.Ui.GetSmall("Current Value");
+        var current = gfx.Ui.GetSmall(view.Current);
+        var inUse = gfx.Ui.GetSmall("[In Use]");
+        var labels = view.Sources.Select(s => gfx.Ui.GetSmall(s.Label)).ToList();
+        var values = view.Sources.Select(s => gfx.Ui.GetSmall(s.Value)).ToList();
+        int rowW = currentLabel.Width + valueGap + current.Width;
+        for (int i = 0; i < labels.Count; i++) rowW = Math.Max(rowW, labels[i].Width + valueGap + values[i].Width);
+        int inner = Math.Max(Math.Max(title.Width, lines.Max(l => l?.Width ?? 0)), rowW);
+        int w = inner + pad * 2;
+        int rows = 2 + lines.Count + 2 + (labels.Count > 0 ? 2 + labels.Count : 0); // title + blank, text, blank + current, blank + header + sources
+        var box = anchor.At(gfx, w, pad * 2 + rows * gap);
         NineSlice.Draw(gfx, "tip", box);
-        gfx.Sb.Draw(title, new Vector2(box.X + (w - title.Width) / 2, box.Y + pad), new Color(255, 220, 0));
+        gfx.Sb.Draw(title, new Vector2(box.X + (w - title.Width) / 2, box.Y + pad), Color.White);
         int y = box.Y + pad + gap * 2;
         foreach (var line in lines)
         {
             if (line != null) gfx.Sb.Draw(line, new Vector2(box.X + pad, y), new Color(214, 216, 222));
+            y += gap;
+        }
+        y += gap;
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(box.X + pad / 2, y, w - pad, gap), new Color(67, 79, 92)); // the official highlight colour
+        gfx.Sb.Draw(currentLabel, new Vector2(box.X + pad, y), Color.White);
+        gfx.Sb.Draw(current, new Vector2(box.Right - pad - current.Width, y), new Color(255, 220, 0));
+        y += gap;
+        if (labels.Count == 0) return;
+        y += gap;
+        gfx.Sb.Draw(inUse, new Vector2(box.X + pad, y), Color.White);
+        y += gap;
+        for (int i = 0; i < labels.Count; i++)
+        {
+            gfx.Sb.Draw(labels[i], new Vector2(box.X + pad, y), new Color(214, 216, 222));
+            gfx.Sb.Draw(values[i], new Vector2(box.Right - pad - values[i].Width, y), Color.White);
             y += gap;
         }
     }

@@ -47,9 +47,9 @@ public class ProgressionTests
     {
         var s = StatAggregator.Aggregate(new[]
         {
-            new StatModifier(StatKey.STR, StatValueType.FLAT, 4, "test"),
-            new StatModifier(StatKey.DEX, StatValueType.FLAT, 4, "test"),
-            new StatModifier(StatKey.ATT, StatValueType.FLAT, Progression.WeaponAtk, "test"),
+            new StatModifier(StatKey.STR, StatValueType.FLAT, 4, StatSource.Skill),
+            new StatModifier(StatKey.DEX, StatValueType.FLAT, 4, StatSource.Skill),
+            new StatModifier(StatKey.ATT, StatValueType.FLAT, Progression.WeaponAtk, StatSource.Skill),
         });
         var job = new JobProfile(StatKey.STR, StatKey.DEX, WeaponType.Default);
         Assert.AreEqual((2L, 7L), DamageChain.PanelRange(s, job));

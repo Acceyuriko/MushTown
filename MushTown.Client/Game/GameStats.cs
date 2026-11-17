@@ -14,16 +14,31 @@ public partial class MushTownGame
     // movement must still work (`--host` / `--join` never load a save).
     public static StatSnapshot BeginnerSnapshot() => StatAggregator.Aggregate(new[]
     {
-        new StatModifier(StatKey.STR, StatValueType.FLAT, 4, "beginner"),
-        new StatModifier(StatKey.DEX, StatValueType.FLAT, 4, "beginner"),
-        new StatModifier(StatKey.INT, StatValueType.FLAT, 4, "beginner"),
-        new StatModifier(StatKey.LUK, StatValueType.FLAT, 4, "beginner"),
-        new StatModifier(StatKey.MAX_HP, StatValueType.FLAT, Progression.MaxHp(1), "beginner"),
-        new StatModifier(StatKey.MAX_MP, StatValueType.FLAT, Progression.MaxMp(1), "beginner"),
-        new StatModifier(StatKey.ATT, StatValueType.FLAT, Progression.WeaponAtk, "beginner"),
-        new StatModifier(StatKey.SPEED, StatValueType.FLAT, PlayerMover.WalkSpeed, "base"),
-        new StatModifier(StatKey.JUMP, StatValueType.FLAT, PlayerMover.JumpV0, "base"),
+        new StatModifier(StatKey.STR, StatValueType.FLAT, 4, StatSource.Base),
+        new StatModifier(StatKey.DEX, StatValueType.FLAT, 4, StatSource.Base),
+        new StatModifier(StatKey.INT, StatValueType.FLAT, 4, StatSource.Base),
+        new StatModifier(StatKey.LUK, StatValueType.FLAT, 4, StatSource.Base),
+        new StatModifier(StatKey.MAX_HP, StatValueType.FLAT, Progression.MaxHp(1), StatSource.Base),
+        new StatModifier(StatKey.MAX_MP, StatValueType.FLAT, Progression.MaxMp(1), StatSource.Base),
+        new StatModifier(StatKey.ATT, StatValueType.FLAT, Progression.WeaponAtk, StatSource.Base),
+        new StatModifier(StatKey.SPEED, StatValueType.FLAT, PlayerMover.WalkSpeed, StatSource.Base),
+        new StatModifier(StatKey.JUMP, StatValueType.FLAT, PlayerMover.JumpV0, StatSource.Base),
     });
+
+    // Hyper Stats are not built yet (T-20261114000518). Every key they will
+    // touch already has a neutral record of its own group, so the hover lists
+    // the group as soon as a level gives it a value.
+    private static readonly StatModifier[] HyperStats = Array.ConvertAll(new (StatKey Key, StatValueType Type)[]
+    {
+        (StatKey.STR, StatValueType.FINAL_FLAT), (StatKey.DEX, StatValueType.FINAL_FLAT),
+        (StatKey.INT, StatValueType.FINAL_FLAT), (StatKey.LUK, StatValueType.FINAL_FLAT),
+        (StatKey.MAX_HP, StatValueType.PERCENT), (StatKey.MAX_MP, StatValueType.PERCENT),
+        (StatKey.ATT, StatValueType.FINAL_FLAT), (StatKey.MATT, StatValueType.FINAL_FLAT),
+        (StatKey.CRIT_RATE, StatValueType.FLAT), (StatKey.CRIT_DAMAGE, StatValueType.FLAT),
+        (StatKey.IED_PCT, StatValueType.MULTIPLIER),
+        (StatKey.DAMAGE_PCT, StatValueType.FLAT), (StatKey.BOSS_PCT, StatValueType.FLAT), (StatKey.NORMAL_PCT, StatValueType.FLAT),
+        (StatKey.STATUS_RESISTANCE, StatValueType.FLAT), (StatKey.EXP_PCT, StatValueType.FLAT), (StatKey.ARCANE_POWER, StatValueType.FLAT),
+    }, slot => new StatModifier(slot.Key, slot.Type, slot.Type == StatValueType.MULTIPLIER ? 1.0 : 0.0, StatSource.HyperStat, "Hyper Stat"));
 
     private void RefreshStats()
     {
@@ -37,63 +52,67 @@ public partial class MushTownGame
             return;
         }
 
-        mods.Add(new(StatKey.STR, StatValueType.FLAT, chara.Str, "character"));
-        mods.Add(new(StatKey.DEX, StatValueType.FLAT, chara.Dex, "character"));
-        mods.Add(new(StatKey.INT, StatValueType.FLAT, chara.Int, "character"));
-        mods.Add(new(StatKey.LUK, StatValueType.FLAT, chara.Luk, "character"));
-        mods.Add(new(StatKey.MAX_HP, StatValueType.FLAT, Progression.MaxHp(chara.Level), "level"));
-        mods.Add(new(StatKey.MAX_MP, StatValueType.FLAT, Progression.MaxMp(chara.Level), "level"));
+        mods.Add(new(StatKey.STR, StatValueType.FLAT, chara.Str, StatSource.Base));
+        mods.Add(new(StatKey.DEX, StatValueType.FLAT, chara.Dex, StatSource.Base));
+        mods.Add(new(StatKey.INT, StatValueType.FLAT, chara.Int, StatSource.Base));
+        mods.Add(new(StatKey.LUK, StatValueType.FLAT, chara.Luk, StatSource.Base));
+        mods.Add(new(StatKey.MAX_HP, StatValueType.FLAT, Progression.MaxHp(chara.Level), StatSource.Base));
+        mods.Add(new(StatKey.MAX_MP, StatValueType.FLAT, Progression.MaxMp(chara.Level), StatSource.Base));
 
         var worn = ItemData.EquipBonus(chara.Equips, _items);
         _hasWeapon = worn.weapon > 0;
         if (_hasWeapon)
+        {
+            mods.Add(new(StatKey.ATT, StatValueType.FLAT, worn.weapon, StatSource.Equipment));
             mods.Add(new(StatKey.ATT, StatValueType.FLAT,
-                worn.weapon + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor), "equipment"));
-        mods.Add(new(StatKey.DEF, StatValueType.FLAT, worn.def, "equipment"));
-        mods.Add(new(StatKey.STR, StatValueType.FLAT, worn.str, "equipment"));
-        mods.Add(new(StatKey.DEX, StatValueType.FLAT, worn.dex, "equipment"));
+                _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor), StatSource.Skill));
+        }
+        mods.Add(new(StatKey.DEF, StatValueType.FLAT, worn.def, StatSource.Equipment));
+        mods.Add(new(StatKey.STR, StatValueType.FLAT, worn.str, StatSource.Equipment));
+        mods.Add(new(StatKey.DEX, StatValueType.FLAT, worn.dex, StatSource.Equipment));
 
         mods.AddRange(DefaultPassives.All);
         mods.Add(DefaultPassives.MapleWarrior(StatKey.STR, chara.Str));
         mods.Add(DefaultPassives.MapleWarrior(StatKey.DEX, chara.Dex));
         mods.Add(DefaultPassives.MapleWarrior(StatKey.INT, chara.Int));
         mods.Add(DefaultPassives.MapleWarrior(StatKey.LUK, chara.Luk));
+        mods.AddRange(HyperStats);
 
         int training = SkillLv(SkillData.PhysicalTraining);
         int agile = SkillLv(SkillData.AgileArms);
-        mods.Add(new(StatKey.STR, StatValueType.FLAT, _skills[SkillData.PhysicalTraining].Str * training, "skill"));
-        mods.Add(new(StatKey.DEX, StatValueType.FLAT, _skills[SkillData.PhysicalTraining].Dex * training, "skill"));
-        mods.Add(new(StatKey.STR, StatValueType.FLAT, _skills[SkillData.AgileArms].Str * agile, "skill"));
+        mods.Add(new(StatKey.STR, StatValueType.FLAT, _skills[SkillData.PhysicalTraining].Str * training, StatSource.Skill));
+        mods.Add(new(StatKey.DEX, StatValueType.FLAT, _skills[SkillData.PhysicalTraining].Dex * training, StatSource.Skill));
+        mods.Add(new(StatKey.STR, StatValueType.FLAT, _skills[SkillData.AgileArms].Str * agile, StatSource.Skill));
 
         mods.Add(new(StatKey.DAMAGE_PCT, StatValueType.FLAT,
-            _skills[SkillData.WeaponMastery].DmgPct * SkillLv(SkillData.WeaponMastery), "skill"));
+            _skills[SkillData.WeaponMastery].DmgPct * SkillLv(SkillData.WeaponMastery), StatSource.Skill));
         mods.Add(new(StatKey.CRIT_RATE, StatValueType.FLAT,
             _skills[SkillData.WeaponMastery].CritPct * SkillLv(SkillData.WeaponMastery)
-            + _skills[SkillData.ChanceAttack].CritPct * SkillLv(SkillData.ChanceAttack), "skill"));
+            + _skills[SkillData.ChanceAttack].CritPct * SkillLv(SkillData.ChanceAttack), StatSource.Skill));
 
-        int hpPct =
-            (_fighter.Buffs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].HpPct * SkillLv(SkillData.IronBody) : 0)
-            + _skills[SkillData.WarriorMastery].HpPct * SkillLv(SkillData.WarriorMastery)
-            + _skills[SkillData.Endure].HpPct * SkillLv(SkillData.Endure);
-        if (hpPct != 0)
-            mods.Add(new(StatKey.MAX_HP, StatValueType.PERCENT, hpPct, "skill/buff"));
+        // Iron Body is a buff while it runs: its HP% and DEF are their own Buff records.
+        bool ironBody = _fighter.Buffs.ContainsKey(SkillData.IronBody);
+        mods.Add(new(StatKey.MAX_HP, StatValueType.PERCENT,
+            ironBody ? _skills[SkillData.IronBody].HpPct * SkillLv(SkillData.IronBody) : 0, StatSource.Buff));
+        mods.Add(new(StatKey.MAX_HP, StatValueType.PERCENT,
+            _skills[SkillData.WarriorMastery].HpPct * SkillLv(SkillData.WarriorMastery)
+            + _skills[SkillData.Endure].HpPct * SkillLv(SkillData.Endure), StatSource.Skill));
 
-        int defPct =
-            (_fighter.Buffs.ContainsKey(SkillData.IronBody) ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0)
-            + _skills[SkillData.GuardianArmor].DefPct * SkillLv(SkillData.GuardianArmor)
-            + _skills[SkillData.Endure].DefPct * SkillLv(SkillData.Endure);
-        if (defPct != 0)
-            mods.Add(new(StatKey.DEF, StatValueType.FLAT, defPct, "skill"));
+        mods.Add(new(StatKey.DEF, StatValueType.FLAT,
+            ironBody ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0, StatSource.Buff));
+        mods.Add(new(StatKey.DEF, StatValueType.FLAT,
+            _skills[SkillData.GuardianArmor].DefPct * SkillLv(SkillData.GuardianArmor)
+            + _skills[SkillData.Endure].DefPct * SkillLv(SkillData.Endure), StatSource.Skill));
 
         int movePct = _skills[SkillData.WarriorMastery].MovePct * SkillLv(SkillData.WarriorMastery);
-        mods.Add(new(StatKey.SPEED, StatValueType.FLAT, PlayerMover.WalkSpeed, "base"));
-        mods.Add(new(StatKey.SPEED, StatValueType.PERCENT, movePct, "skill"));
-        mods.Add(new(StatKey.JUMP, StatValueType.FLAT, PlayerMover.JumpV0, "base"));
-        mods.Add(new(StatKey.JUMP, StatValueType.PERCENT, movePct, "skill"));
+        mods.Add(new(StatKey.SPEED, StatValueType.FLAT, PlayerMover.WalkSpeed, StatSource.Base));
+        mods.Add(new(StatKey.SPEED, StatValueType.PERCENT, movePct, StatSource.Skill));
+        mods.Add(new(StatKey.JUMP, StatValueType.FLAT, PlayerMover.JumpV0, StatSource.Base));
+        mods.Add(new(StatKey.JUMP, StatValueType.PERCENT, movePct, StatSource.Skill));
 
         if (_fighter.Buffs.ContainsKey(SkillData.SpiritBlade))
             mods.Add(new(StatKey.ATT_PCT, StatValueType.PERCENT,
-                _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade), "buff"));
+                _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade), StatSource.Buff));
 
         _stats = StatAggregator.Aggregate(mods);
     }
