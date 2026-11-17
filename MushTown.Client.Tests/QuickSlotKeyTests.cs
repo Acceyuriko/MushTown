@@ -109,4 +109,186 @@ public class QuickSlotKeyTests
         KeyBindings.ApplyItems(table, new() { [2000000] = "D5" });
         Assert.AreEqual("Item:2000000", table["D5"]);
     }
+
+    // Cell Q takes X: X is another cell's key, so the two swap. The cell then shows what X binds
+    // and X fires it (the content follows the key).
+    [TestMethod]
+    public void SetQuickKey_AKeyAnotherCellHas_SwapsTheTwoCells()
+    {
+        var keys = KeyDefaults.QuickKeys();
+        var next = KeyBindings.SetQuickKey(keys, 0, "X"); // cell 0 is Q, X is cell 23
+        Assert.AreEqual("X", next[0]);
+        Assert.AreEqual("Q", next[23]);
+        Assert.AreEqual(32, next.Distinct().Count());
+        Assert.AreEqual("Q", keys[0]); // the old list is left alone: the strip parses a list once
+        var table = KeyDefaults.Table();
+        KeyBindings.ApplySkills(table, new() { [1001005] = "X" });
+        var c = new InputController();
+        c.Install(table);
+        Assert.AreEqual(new BindTarget(BindKind.Skill, 1001005), c.TargetOf(Enum.Parse<Keys>(next[0]))); // the cell shows X's skill
+        c.Poll(new KeyboardState(Keys.X), default, false, false, 0);
+        Assert.IsTrue(c.Fire(new BindTarget(BindKind.Skill, 1001005))); // and pressing X casts it
+    }
+
+    [TestMethod]
+    public void SetQuickKey_Q_To_W_SwapsTheTwo()
+    {
+        var next = KeyBindings.SetQuickKey(KeyDefaults.QuickKeys(), 0, "W");
+        Assert.AreEqual("W", next[0]);
+        Assert.AreEqual("Q", next[1]);
+    }
+
+    [TestMethod]
+    public void SetQuickKey_AFreeKey_JustReplaces()
+    {
+        var next = KeyBindings.SetQuickKey(KeyDefaults.QuickKeys(), 0, "B");
+        Assert.AreEqual("B", next[0]);
+        Assert.IsFalse(next.Contains("Q")); // the old key has no cell now; its binding stays in the table
+        Assert.AreEqual(32, next.Count);
+    }
+
+    [TestMethod]
+    public void SetQuickKey_SameKey_ChangesNothing()
+    {
+        var keys = KeyDefaults.QuickKeys();
+        Assert.AreSame(keys, KeyBindings.SetQuickKey(keys, 0, "Q"));
+    }
+
+    [TestMethod]
+    public void SetQuickKey_EscEnterTabAndArrows_AreRefused()
+    {
+        var keys = KeyDefaults.QuickKeys();
+        foreach (string name in new[] { "Escape", "Enter", "Tab", "Up", "Down", "Left", "Right", "", "Nonsense" })
+            Assert.AreSame(keys, KeyBindings.SetQuickKey(keys, 0, name), name);
+    }
+
+    // Edit one preset's list, save, load: the other two presets stay as they were.
+    [TestMethod]
+    public void QuickKeys_EditOnePreset_OthersStayAfterSaveAndLoad()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-qk2-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            var hero = store.CreateHero(0, 0, "hero", 110);
+            KeyBindings.Ensure(hero);
+            hero.QuickKeys![1] = KeyBindings.SetQuickKey(hero.QuickKeys[1], 0, "B");
+            store.Save(path);
+            var loaded = SaveStore.Load(path).Saves[0]!.Slots[0]!;
+            Assert.AreEqual("B", loaded.QuickKeys![1][0]);
+            Assert.AreEqual("Q", loaded.QuickKeys[0][0]);
+            Assert.AreEqual("Q", loaded.QuickKeys[2][0]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    // The Default button: the default list again, a fresh list each time (one preset never shares another's).
+    [TestMethod]
+    public void Default_IsTheSameListEachTimeAndNeverShared()
+    {
+        var a = KeyDefaults.QuickKeys();
+        a[0] = "B";
+        CollectionAssert.AreNotEqual(a, KeyDefaults.QuickKeys());
+        Assert.AreEqual("Q", KeyDefaults.QuickKeys()[0]);
+        Assert.AreEqual(SaveStore.QuickKeyCount, KeyDefaults.QuickKeys().Count);
+    }
+
+    // Load: three lists of QuickKeyCount, every name a real key. A bad file fails loud.
+    private static string SaveWith(Action<CharaSlot> edit)
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-qk3-{Guid.NewGuid():N}.json");
+        var store = new SaveStore();
+        var hero = store.CreateHero(0, 0, "hero", 110);
+        KeyBindings.Ensure(hero);
+        edit(hero);
+        store.Save(path);
+        return path;
+    }
+
+    private static bool KeyOk(string name) => InputController.IsSingleKey(name);
+
+    [TestMethod]
+    public void Load_QuickKeysOfTheWrongShape_Throws()
+    {
+        foreach (var edit in new Action<CharaSlot>[]
+        {
+            h => h.QuickKeys!.RemoveAt(2),                        // two presets
+            h => h.QuickKeys![1].RemoveAt(31),                    // 31 keys
+            h => h.QuickKeys![0].Add("B"),                        // 33 keys
+        })
+        {
+            string path = SaveWith(edit);
+            try
+            {
+                var ex = Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path, KeyOk));
+                StringAssert.Contains(ex.Message, "QuickKeys");
+            }
+            finally { File.Delete(path); }
+        }
+    }
+
+    [TestMethod]
+    public void Load_QuickKeysWithABadKeyName_Throws()
+    {
+        foreach (string bad in new[] { "Nonsense", "", "Escape", "Q+W", "+Q" })
+        {
+            string path = SaveWith(h => h.QuickKeys![1][3] = bad);
+            try
+            {
+                var ex = Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path, KeyOk));
+                StringAssert.Contains(ex.Message, "bad key name");
+            }
+            finally { File.Delete(path); }
+        }
+    }
+
+    [TestMethod]
+    public void Load_QuickKeysWithANullKeyName_Throws()
+    {
+        string path = SaveWith(h => h.QuickKeys![2][7] = null!);
+        try
+        {
+            var ex = Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path, KeyOk));
+            StringAssert.Contains(ex.Message, "QuickKeys");
+            StringAssert.Contains(ex.Message, "hero");
+        }
+        finally { File.Delete(path); }
+    }
+
+    // A key with no cap art is a valid key: it saves, loads, and the strip draws its name (QuickCell).
+    [TestMethod]
+    public void QuickKeys_KeysWithoutCapArt_SaveAndLoad()
+    {
+        string[] noCap = { "Back", "CapsLock", "RightShift", "NumPad0", "LeftWindows" };
+        string path = SaveWith(h => { for (int i = 0; i < noCap.Length; i++) h.QuickKeys![0][i] = noCap[i]; });
+        try
+        {
+            var loaded = SaveStore.Load(path, KeyOk).Saves[0]!.Slots[0]!;
+            CollectionAssert.AreEqual(noCap, loaded.QuickKeys![0].Take(noCap.Length).ToArray());
+        }
+        finally { File.Delete(path); }
+    }
+
+    // Every key a cell can take has cap art or none: never a name that points at a missing png.
+    // (QuickCell draws the key name when the art is ""; that draw needs a graphics device, the shot checks it.)
+    [TestMethod]
+    public void CapArt_EveryBindableKey_HasAnExistingPngOrNone()
+    {
+        string? ui = null;
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+            if (File.Exists(Path.Combine(d.FullName, "assets", "ui", "keys.json"))) { ui = Path.Combine(d.FullName, "assets", "ui"); break; }
+        if (ui == null) { Assert.Inconclusive("no exported assets above the test output: this check needs the repo"); return; }
+        int none = 0;
+        foreach (var key in Enum.GetValues<Keys>())
+        {
+            if (!InputController.TryParseKeys(key.ToString(), out _)) continue;
+            string cap = KeyConfigWindow.CapArt(key.ToString());
+            if (cap == "") { none++; continue; }
+            Assert.IsTrue(File.Exists(Path.Combine(ui, "..", cap)), $"{key}: {cap}");
+        }
+        Assert.IsTrue(none > 0, "Backspace and friends have no cap art");
+    }
 }

@@ -11,6 +11,8 @@ namespace MushTown.Shared;
 public sealed class SaveStore
 {
     public const int MaxSaves = 3;
+    public const int QuickKeyPresets = 3; // key presets of a hero
+    public const int QuickKeyCount = 32; // keys of the bottom strip in one preset (two rows of 16)
     public const int MaxHeroes = 60; // 12 per page x 5 pages, like the official select
     public const long NewHeroMesos = 10_000_000_000L; // new hero starting mesos
 
@@ -34,7 +36,8 @@ public sealed class SaveStore
 
     // Missing file means first run: start empty. A file of another format version is void: it is
     // not read, nothing is shown, and the next save overwrites it. Bad JSON fails loud.
-    public static SaveStore Load(string path)
+    // keyNameOk tells whether a strip key name is a real key (the keys live in the client, not here).
+    public static SaveStore Load(string path, Func<string, bool>? keyNameOk = null)
     {
         if (!File.Exists(path)) return new SaveStore();
         SaveStore store;
@@ -67,9 +70,19 @@ public sealed class SaveStore
                     hero.UseOrder.Count != Inventory.Capacity || hero.EquipOrder.Count != Inventory.Capacity ||
                     hero.CashOrder.Count != Inventory.Capacity || hero.DecOrder.Count != Inventory.Capacity)
                     throw new InvalidDataException($"save file {path} is from an older version; delete it to start fresh");
+                if (hero.QuickKeys != null) CheckQuickKeys(path, hero, keyNameOk);
             }
         }
         return store;
+    }
+
+    private static void CheckQuickKeys(string path, CharaSlot hero, Func<string, bool>? keyNameOk)
+    {
+        if (hero.QuickKeys!.Count != QuickKeyPresets || hero.QuickKeys.Any(keys => keys == null || keys.Count != QuickKeyCount))
+            throw new InvalidDataException($"save file {path}: QuickKeys of {hero.Name} must be {QuickKeyPresets} lists of {QuickKeyCount} key names");
+        foreach (var name in hero.QuickKeys.SelectMany(keys => keys))
+            if (name == null || (keyNameOk != null && !keyNameOk(name)))
+                throw new InvalidDataException($"save file {path}: QuickKeys of {hero.Name} has a bad key name \"{name}\"");
     }
 
     // Atomic write: a crash leaves the old file or the new one, never half.

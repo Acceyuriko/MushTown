@@ -163,6 +163,7 @@ public static partial class Export
             ($"{sb3}/mainBar/EXPBar/1366/layer:cover", "hud_expcover.png"),
             ($"{sb3}/mainBar/EXPBar/1366/layer:gauge", "hud_expgauge.png"),
             ("UIQuickSlot.img/quickSlot/backgrnd", "hud_qslot.png"),
+            ("UIQuickSlot.img/quickSlot/selected/0", "hud_qslot_sel.png"), // the blue frame of a picked cell (origin 2,2)
             ("UIWindow.img/Item/BtCoin/normal/0", "hud_coin.png"),
             ("UICharacterInfo.img/common/detailStat/canvas:highlightLong", "hud_stathilong.png"),
             ("UICharacterInfo.img/common/main/button:close/normal/0", "hud_statx.png"),

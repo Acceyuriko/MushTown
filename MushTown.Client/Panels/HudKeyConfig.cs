@@ -137,7 +137,13 @@ public sealed class KeyConfigWindow : UiWindow
     private readonly Dictionary<int, string> _draftSkills = new(); // the skills the draft bound (from the skill window)
     private readonly Dictionary<int, string> _draftItems = new(); // the items the draft bound (from the inventory)
     private readonly Dictionary<int, string> _draftMacros = new(); // the macros the draft bound (from the macro list)
+    private List<string> _draftQuick = KeyDefaults.QuickKeys(); // the 32 strip keys of the picked preset; every change makes a new list (the strip parses a list once)
     private int _slot;
+
+    // The strip key editing: the Quick Slots button turns it on, a click on a strip cell picks
+    // the cell, the next key pressed becomes its key. Closing the window turns it off.
+    private bool _quickEdit;
+    private int _quickSel = -1;
 
     // Key -> what sits on it, built once per Build: the 73 key caps read it
     // every frame, and walking the draft 73 times would split a string 73
@@ -201,6 +207,7 @@ public sealed class KeyConfigWindow : UiWindow
         foreach (var (id, key) in _game.HotkeyItems(_slot)) _draftItems[id] = key;
         _draftMacros.Clear();
         foreach (var (id, key) in _game.HotkeyMacros(_slot)) _draftMacros[id] = key;
+        _draftQuick = _game.HotkeyQuickKeys(_slot);
     }
 
     // Close the window: the unsaved changes go away, a piece in hand stays.
@@ -217,6 +224,8 @@ public sealed class KeyConfigWindow : UiWindow
         _draftSkills.Clear();
         _draftItems.Clear();
         _draftMacros.Clear();
+        _quickEdit = false;
+        _quickSel = -1;
         // The piece a click picked up stays in hand: the quick slot strip is a drop area too.
         _filterOpen = false;
         _comboMode = false;
@@ -307,10 +316,10 @@ public sealed class KeyConfigWindow : UiWindow
         }
 
         // The bottom buttons: combo key, quick slots, reset, skill, cancel,
-        // save. The quick slots page is gone, so that button is a plain
-        // picture: the click does nothing.
-        root.AddChild(ComboButton());
-        root.Add(new Picture("ui/keys_qslot_n.png", _lay.Get("qslotX", 98), _lay.Get("qslotY", 568)));
+        // save. Combo Key and Quick Slots stay lit while their mode is on.
+        root.AddChild(ToggleButton("ui/keys_combo", _lay.Get("comboX", 20), _lay.Get("comboY", 568), () => _comboMode, ToggleComboMode));
+        if (_game.Hero != null) // the strip keys are saved in the character: no character, nothing to edit
+            root.AddChild(ToggleButton("ui/keys_qslot", _lay.Get("qslotX", 98), _lay.Get("qslotY", 568), () => _quickEdit, ToggleQuickEdit));
         root.AddChild(ArtButton("ui/keys_reset", _lay.Get("resetX", 176), _lay.Get("resetY", 568), 67, 27, Default));
         root.AddChild(ArtButton("ui/keys_skill", _lay.Get("skillX", 245), _lay.Get("skillY", 568), 67, 27, OpenSkill));
         root.AddChild(ArtButton("ui/keys_cancel", _lay.Get("cancelX", 474), _lay.Get("cancelY", 568), 87, 27, Cancel));
@@ -347,14 +356,13 @@ public sealed class KeyConfigWindow : UiWindow
         return o;
     }
 
-    // The Combo Key button: it stays lit while the combo mode is on.
-    private GameObject ComboButton()
+    // A mode button of the bottom row (the art is 76x27): it shows its pressed art while the mode is on.
+    private GameObject ToggleButton(string stem, int x, int y, Func<bool> on, Action onClick)
     {
-        int x = _lay.Get("comboX", 20), y = _lay.Get("comboY", 568);
         var o = new GameObject();
         o.Add(new Rect(new Rectangle(x, y, 76, 27)));
-        o.Add(new Button { Kind = ButtonKind.Click, OnClick = ToggleComboMode });
-        o.Add(new Image("ui/keys_combo", () => _comboMode));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = onClick });
+        o.Add(new Image(stem, on));
         return o;
     }
 
@@ -704,7 +712,7 @@ public sealed class KeyConfigWindow : UiWindow
     // Save: the draft goes into the picked preset.
     private void Save()
     {
-        _game.SaveHotkeyPreset(_slot, _draft, _draftSkills, _draftItems, _draftMacros);
+        _game.SaveHotkeyPreset(_slot, _draft, _draftSkills, _draftItems, _draftMacros, _draftQuick);
         ReloadDraft();
         Build();
     }
@@ -721,6 +729,7 @@ public sealed class KeyConfigWindow : UiWindow
         foreach (var id in _draftMacros.Keys.ToList()) _draftMacros[id] = "";
         var defaults = KeyBindings.Defaults();
         foreach (var (action, _) in Actions) _draft[action] = defaults.GetValueOrDefault(action, ""); // the pool only: the sub-windows keep whatever they have
+        _draftQuick = KeyDefaults.QuickKeys();
         Build();
     }
 
@@ -785,6 +794,32 @@ public sealed class KeyConfigWindow : UiWindow
     {
         _comboMode = !_comboMode;
         Build();
+    }
+
+    // The Quick Slots button: the strip cells can be picked for a new key; again to leave.
+    private void ToggleQuickEdit()
+    {
+        _quickEdit = !_quickEdit;
+        _quickSel = -1;
+    }
+
+    // The strip keys the draft holds (the strip draws and reads them while this window is open).
+    internal List<string> QuickKeys => _draftQuick;
+    internal bool EditingQuick => _quickEdit;
+    internal bool QuickKeyWaiting => _quickEdit && _quickSel >= 0; // a cell is picked: the next key is its key
+    internal int QuickSelected => _quickEdit ? _quickSel : -1;
+    internal void SelectQuick(int cell) => _quickSel = cell;
+    internal void ClearQuickSelect() => _quickSel = -1;
+
+    // The picked cell takes this key (the rules are in KeyBindings.SetQuickKey). The cell stays picked.
+    internal void SetQuickKey(string name) => _draftQuick = KeyBindings.SetQuickKey(_draftQuick, _quickSel, name);
+
+    // Shot staging: the editing is on and a cell is picked, then the key pressed on it if one is given.
+    internal void PoseQuickEdit(int cell, string? key)
+    {
+        _quickEdit = true;
+        _quickSel = cell;
+        if (key != null) SetQuickKey(key);
     }
 
     // The skill button: the skill window opens above this one, so the player

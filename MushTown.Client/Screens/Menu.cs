@@ -146,7 +146,7 @@ public partial class MushTownGame
         Window.TextInput += (_, e) => MenuTextInput(e.Character);
         if (_shotPath == null && !_host && _joinHost == null) // real menu session only: CLI never touches saves
         {
-            _store = SaveStore.Load(_savesPath);
+            _store = SaveStore.Load(_savesPath, InputController.IsSingleKey);
             _rollLog ??= new RollLog(NetLogPath());
             _screen = Screen.Saves; // every launch starts at saves (no session skip)
         }
@@ -163,7 +163,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "quickedit" or "quickeditswap" or "quickeditnocap" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -233,6 +233,16 @@ public partial class MushTownGame
             if (shotScreen == "worldmapask") _worldMapWindow.OpenConfirm();
             if (shotScreen == "worldmapcombo") _worldMapWindow.PoseCombo(1);
             if (shotScreen == "keys") KeyWindow?.Open();
+            if (shotScreen is "quickedit" or "quickeditswap" or "quickeditnocap") // the strip key editing: the Q cell picked; the swap shot has pressed W on it; the nocap shot has pressed five keys without cap art on cells 0..4
+            {
+                KeyWindow!.Open();
+                if (shotScreen == "quickeditnocap")
+                {
+                    string[] noCap = { "Back", "CapsLock", "RightShift", "NumPad0", "LeftWindows" };
+                    for (int cell = 0; cell < noCap.Length; cell++) KeyWindow.PoseQuickEdit(cell, noCap[cell]);
+                }
+                else KeyWindow.PoseQuickEdit(0, shotScreen == "quickeditswap" ? "W" : null);
+            }
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
             if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);

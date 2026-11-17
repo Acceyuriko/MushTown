@@ -146,6 +146,20 @@ public static class KeyBindings
         };
     }
 
+    // The strip: the cell takes the key. A key another cell holds goes to the cell's old key
+    // (the two cells swap). Esc, Enter, Tab and the arrows take no cell. Returns a new list
+    // (the strip parses a list once), or the same one when nothing changes.
+    public static List<string> SetQuickKey(List<string> keys, int cell, string name)
+    {
+        if (!InputController.TryParseKeys(name, out _)) return keys;
+        int other = keys.IndexOf(name);
+        if (other == cell) return keys;
+        var next = new List<string>(keys);
+        if (other >= 0) next[other] = keys[cell];
+        next[cell] = name;
+        return next;
+    }
+
     // The default action -> key map (the key window's Default button).
     public static Dictionary<HotkeyAction, string> Defaults()
     {
@@ -330,9 +344,20 @@ public partial class MushTownGame
         return map;
     }
 
-    // Write the given actions, skills, items and macros into one preset.
+    // The 32 strip keys of one preset (a copy: the key window's draft).
+    public List<string> HotkeyQuickKeys(int slot)
+    {
+        var chara = Hero;
+        if (chara == null) return KeyDefaults.QuickKeys();
+        KeyBindings.Ensure(chara);
+        return new List<string>(chara.QuickKeys![slot]);
+    }
+
+    // Write the given actions, skills, items and macros into one preset; the strip keys too when given
+    // (a drop on a cell leaves them alone).
     public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map,
-        Dictionary<int, string> skills, Dictionary<int, string> items, Dictionary<int, string> macros)
+        Dictionary<int, string> skills, Dictionary<int, string> items, Dictionary<int, string> macros,
+        List<string>? quickKeys = null)
     {
         var chara = Hero!; // the key window hides Save/Copy without a character
         KeyBindings.Ensure(chara);
@@ -341,6 +366,7 @@ public partial class MushTownGame
         KeyBindings.ApplySkills(table, skills);
         KeyBindings.ApplyItems(table, items);
         KeyBindings.ApplyMacros(table, macros);
+        if (quickKeys != null) chara.QuickKeys![slot] = new List<string>(quickKeys); // a new list: the strip parses it again (the live and the saved list are never one object)
         if (slot == chara.ActivePreset) _keysDirty = true;
         SaveChara();
     }

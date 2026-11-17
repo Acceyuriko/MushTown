@@ -1,3 +1,4 @@
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MushTown.Shared;
@@ -17,17 +18,39 @@ public partial class MushTownGame
     // point is on the cell and not on a window dragged over the strip.
     private readonly GameObject[] _cells = new GameObject[KeyDefaults.QuickKeys().Count];
 
-    // The key name of a cell: the active preset's list, the defaults with no character.
-    private string SlotName(int cell)
+    // The key names of the strip: the key window's draft while it is open (the preset it
+    // looks at, which may not be the live one), else the active preset's list, else the
+    // defaults with no character. Every change replaces the list, so a new list is a new key set.
+    private List<string> SlotNames()
     {
-        if (Hero is not { } chara) return DefaultQuickKeys[cell];
+        if (DraftWindow is { } keyWin) return keyWin.QuickKeys;
+        if (Hero is not { } chara) return DefaultQuickKeys;
         KeyBindings.Ensure(chara);
-        return chara.QuickKeys![chara.ActivePreset][cell];
+        return chara.QuickKeys![chara.ActivePreset];
     }
+
+    private string SlotName(int cell) => SlotNames()[cell];
 
     private static readonly List<string> DefaultQuickKeys = KeyDefaults.QuickKeys();
 
-    private Keys SlotKey(int cell) => Enum.Parse<Keys>(SlotName(cell));
+    // The parsed keys of the list in use: parsed again only when the list is another one.
+    private List<string>? _parsedNames;
+    private Keys[] _parsedKeys = Array.Empty<Keys>();
+
+    private Keys SlotKey(int cell)
+    {
+        var names = SlotNames();
+        if (!ReferenceEquals(names, _parsedNames))
+        {
+            _parsedNames = names;
+            _parsedKeys = names.Select(Enum.Parse<Keys>).ToArray();
+        }
+        return _parsedKeys[cell];
+    }
+
+    // The cell the key window picked to get a new key, null when no cell is picked.
+    private Rectangle? PickedCell() =>
+        DraftWindow is { QuickSelected: >= 0 and var cell } ? QslotCell(cell) : null;
 
     // The key window while it is open: the strip draws its draft and a drop on a
     // cell is a drop on that key.
@@ -43,11 +66,15 @@ public partial class MushTownGame
             _cells[slot] = cell;
             cell.Add(new Rect(QslotCell(slot)));
             cell.Add(new ItemTip(() => ItemOn(slot))); // the tooltip of the bound item
-            cell.Add(new QuickCell(() => KeyConfigWindow.CapArt(SlotName(slot)), () => IconOn(slot), LoadArt));
+            cell.Add(new QuickCell(() => SlotName(slot), () => IconOn(slot), LoadArt));
             cell.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => PickSlot(slot) }); // the drop is taken before the click chain; PickSlot plays the click
             cell.Add(new Grab(() => Pickable(slot)));
             root.AddChild(cell);
         }
+        var picked = new GameObject { NoHit = true };
+        picked.Add(new Rect(QslotRect()));
+        picked.Add(new QuickSelect(PickedCell, LoadArt));
+        root.AddChild(picked);
         return root;
     }
 
@@ -65,6 +92,12 @@ public partial class MushTownGame
     // on it comes up and rides the mouse.
     private void PickSlot(int cell)
     {
+        if (DraftWindow is { EditingQuick: true } keyWin) // editing the strip keys: a click only picks the cell
+        {
+            keyWin.SelectQuick(cell);
+            PlaySfx("click");
+            return;
+        }
         if (!_hand.Empty || SlotTarget(cell) is not { } target) return;
         Hold(target, true); // remember the cell: a world click clears its binding
         PlaySfx("click"); // the cell's button is silent: only a cell that gave something up clicks
@@ -92,7 +125,7 @@ public partial class MushTownGame
     }
 
     // The cell holds something a click can pick up.
-    private bool Pickable(int cell) => SlotTarget(cell) != null;
+    private bool Pickable(int cell) => DraftWindow is { EditingQuick: true } || SlotTarget(cell) != null; // editing: the cell can always be picked
 
     // A click while a key target is in hand: use the shared drop check.
     private bool DropHeld(int gx, int gy)
@@ -125,6 +158,7 @@ public partial class MushTownGame
         if (_uiScene.TopAt(gx, gy) is not { } top) return false;
         int cell = Array.IndexOf(_cells, top); // -1: not a strip cell
         if (cell < 0) return false; // a window covers the strip: the click is its
+        if (keyWin is { EditingQuick: true }) return false; // editing the strip keys: the click picks the cell instead
         if (keyWin != null)
         {
             keyWin.ApplyDrop(SlotName(cell), target); // a cell is the same key as its cap on the keyboard

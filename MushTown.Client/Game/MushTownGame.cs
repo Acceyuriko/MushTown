@@ -505,7 +505,7 @@ public partial class MushTownGame : Game
         LoadMenuContent();
         LoadDeathArt();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "quickedit" or "quickeditswap" or "quickeditnocap" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -570,6 +570,7 @@ public partial class MushTownGame : Game
             if (_cashShopWindow.SearchFocused) { _cashShopWindow.UnfocusSearch(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // search next: the next Esc closes the shop
             if (_cashUseId != 0) { EscCashUse(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the CASH Utility popup closes before its inventory
             if (WindowFor(HotkeyAction.Equip) is EquipWindow equipWindow && equipWindow.EscNotice()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // the Damage Skins notice closes before its window
+            if (KeyWindow is { QuickKeyWaiting: true } quickWindow) { quickWindow.ClearQuickSelect(); _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // a picked cell: Esc only drops the pick, the window and the draft stay
             if (EscCloseFront()) { _uiScene.ClearHover(); PlaySfx("click"); base.Update(gameTime); return; } // one layer per press: the top of the raise row
             base.Update(gameTime); return; // nothing open: Esc rests (exit lives in the menu)
         }
@@ -585,8 +586,19 @@ public partial class MushTownGame : Game
             _cashShopWindow.UnfocusSearch();
         bool shopPopupOpen = _shopQtyId != 0;
         bool dropPopupOpen = DropQtyOpen;
-        _input.Capture = _chatWindow.Focused || _worldMapWindow.SearchFocused || _cashShopWindow.SearchFocused || shopPopupOpen || dropPopupOpen || _cashUseId != 0; // typing must not fire the actions the same keys bind
+        bool quickKeyWaiting = KeyWindow is { QuickKeyWaiting: true }; // a strip cell waits for its new key: the key is not an action, not a step
+        _input.Capture = quickKeyWaiting || _chatWindow.Focused || _worldMapWindow.SearchFocused || _cashShopWindow.SearchFocused || shopPopupOpen || dropPopupOpen || _cashUseId != 0; // typing must not fire the actions the same keys bind
         _input.Poll(kb, new Point(mx, my), click, held, ms.ScrollWheelValue);
+        if (quickKeyWaiting)
+        {
+            foreach (var key in kb.GetPressedKeys())
+            {
+                if (!_input.Fresh(key) || !InputController.TryParseKeys(key.ToString(), out _)) continue; // Esc, Enter, Tab and the arrows take no cell
+                KeyWindow!.SetQuickKey(key.ToString());
+                break; // several keys in one frame: the first usable one wins
+            }
+            kb = new KeyboardState(); // the arrows must not walk the character, Enter must not open the chat
+        }
         if (shopPopupOpen)
         {
             UpdateShopPopupKeys(kb, (float)gameTime.ElapsedGameTime.TotalMilliseconds);
@@ -600,7 +612,7 @@ public partial class MushTownGame : Game
         // Enter starts a chat line: the input row only shows while one is typed.
         // The check sits before the chat block, so the Enter that sends a line
         // cannot open the next one.
-        if (!_chatWindow.Focused && !_worldMapWindow.SearchFocused && !_menuWindow.Show && !_uiScene.ModalOpen && _talkNpc == 0 && !shopPopupOpen && _input.Fresh(Keys.Enter))
+        if (!_chatWindow.Focused && !_worldMapWindow.SearchFocused && !_menuWindow.Show && !_uiScene.ModalOpen && _talkNpc == 0 && !shopPopupOpen && !quickKeyWaiting && _input.Fresh(Keys.Enter))
             _chatWindow.FocusInput(kb);
         if (_chatWindow.Focused)
         {

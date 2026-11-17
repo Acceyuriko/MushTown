@@ -1,5 +1,5 @@
 {
-  "_help": "HUD widget top-left positions in 1366x768 space. Sizes stay in code (they must match the art). qslotcap = the key cap offset inside a 32x32 quick slot cell (all 32 cells draw the same: cap top-left, icon centered). qslotpitch = the step between two cells of the 2x16 strip: across, down. The game windows (inventory, stat, skill, quest, settings) have their own file: layouts/panel-<name>.json. Keys may be omitted (keeps current value). DEBUG builds reload this file live on save; the file wins over dragged panels.",
+  "_help": "HUD widget top-left positions in 1366x768 space. Sizes stay in code (they must match the art). qslotcap = the key cap offset inside a 32x32 quick slot cell (all 32 cells draw the same: cap top-left, icon centered). qslotpitch = the step between two cells of the 2x16 strip: across, down. qslotselect = where the blue frame of a picked cell sits against the cell. The game windows (inventory, stat, skill, quest, settings) have their own file: layouts/panel-<name>.json. Keys may be omitted (keeps current value). DEBUG builds reload this file live on save; the file wins over dragged panels.",
   "hpmp": [
     584,
     715
@@ -19,5 +19,9 @@
   "qslotpitch": [
     35,
     35
+  ],
+  "qslotselect": [
+    -2,
+    -2
   ]
 }

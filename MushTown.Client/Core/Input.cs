@@ -250,6 +250,9 @@ public sealed class InputController
         return keys.Length > 0;
     }
 
+    // One strip cell key: a single key name, no "+" combo (the strip parses it with Enum.Parse).
+    public static bool IsSingleKey(string name) => !name.Contains('+') && TryParseKeys(name, out _);
+
     public static bool IsBindable(Keys key) =>
         key is not (Keys.None or Keys.Escape or Keys.Enter or Keys.Tab
             or Keys.Up or Keys.Down or Keys.Left or Keys.Right);

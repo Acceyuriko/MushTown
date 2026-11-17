@@ -20,7 +20,7 @@ public partial class MushTownGame
         "hud_plate.png", "hud_lvtag.png",
         "hud_hpbg.png", "hud_hpcover.png", "hud_hpfill.png", "hud_mpfill.png",
         "hud_expback.png", "hud_expcover.png", "hud_expgauge.png",
-        "hud_qslot.png",
+        "hud_qslot.png", "hud_qslot_sel.png",
         "hud_coin.png", "hud_stathilong.png", "hud_statx.png",
         "party_head_graduation.png", "party_head_bar.png", "party_head_gauge.png",
     };
@@ -409,7 +409,7 @@ public partial class MushTownGame
         qslot.Add(new Rect(QslotRect()));
         qslot.Add(new Picture("ui/hud_qslot.png"));
         _uiScene.Add(qslot); // the strip: the plain official cells, no gloss layer (the official cover is a second layer that has to keep its own 562x73 size and -2,-3 spot; the plain cells are the look we want)
-        _uiScene.Add(BuildQuickSlots()); // the 32 key cells of the same strip
+        _uiScene.Add(BuildQuickSlots()); // the 32 key cells of the same strip, then the blue frame of the picked one above them
         _uiScene.Add(BuildQuestHelper()); // the quest helper bar: the count, the buttons, the quest list
         _uiScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
         var bossBar = new GameObject { NoHit = true };
