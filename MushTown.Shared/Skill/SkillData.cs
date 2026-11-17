@@ -76,6 +76,7 @@ public sealed class SkillData
     public int ProcPct { get; set; }
     public int SynDmg { get; set; }
     public int SynChance { get; set; }
+    public List<string> Desc { get; set; } = new(); // String.wz desc, one entry per line (the tooltip)
     public string Icon { get; set; } = "";
     public string Disabled { get; set; } = "";
     public List<string> Effect { get; set; } = new();

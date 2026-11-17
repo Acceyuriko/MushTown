@@ -321,7 +321,6 @@ public class QuestTests
         var chara = new CharaSlot
         {
             Name = "hero",
-            Sp = Progression.SpPerLevel, // CreateChara banks the first level's points
             Use = new() { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
         };
         // Guided order: Sugar -> field Sugar -> Pio -> Lucas -> Mai. Pio's

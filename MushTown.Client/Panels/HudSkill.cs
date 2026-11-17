@@ -5,8 +5,9 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // The skill window: the official MapleStory skill window (UIWindow2.img/Skill/main).
-// The frame, the job tabs (the Roman numerals I, II, III), the skill rows and
-// the SP box are WZ art; the text is baked from the skill data.
+// The frame, the page tabs, the two columns of skill cells and the button row are WZ
+// art; the text is baked from the skill data. No skill points: every skill stands at
+// its max level.
 public partial class MushTownGame
 {
     // Every number of this window lives in layouts/panel-skill.json.
@@ -19,112 +20,87 @@ public partial class MushTownGame
     // The window art (MushTown.Exporter ExportSkillUi). Missing files fail loud.
     private static readonly string[] SkillFiles = new[]
     {
-        "skill_bg.png", "skill_panel.png", "skill_bar.png", "skill_row.png",
-        "skill_row_sel.png", "skill_sp.png", "skill_tab1.png", "skill_tab2.png",
-        "skill_tab3.png", "skill_tab0.png", "skill_tabsel0.png", "skill_tabsel1.png", "skill_tabsel2.png", "skill_tabsel3.png",
-        "skill_spup_n.png", "skill_spup_h.png", "skill_spup_p.png", "skill_spup_d.png",
+        "skill_bg.png", "skill_panel.png", "skill_bar.png", "skill_row.png", "skill_blank.png",
+        "skill_tab0.png", "skill_tab1.png", "skill_tab2.png", "skill_tab3.png", "skill_tab4.png", "skill_tab5.png",
+        "skill_tabsel0.png", "skill_tabsel1.png", "skill_tabsel2.png", "skill_tabsel3.png", "skill_tabsel4.png", "skill_tabsel5.png",
+        "skill_tabdis6.png",
+        "skill_bt_macro_n.png", "skill_bt_macro_h.png", "skill_bt_macro_p.png",
+        "skill_bt_hyper_d.png", "skill_bt_guild_d.png", "skill_bt_alarm_d.png", "skill_bt_sequence_d.png",
         "skill_tip_nw.png", "skill_tip_ne.png", "skill_tip_sw.png", "skill_tip_se.png",
         "skill_tip_n.png", "skill_tip_s.png", "skill_tip_w.png", "skill_tip_e.png",
-        "skill_tip_c.png",
+        "skill_tip_c.png", "skill_tip_dotw.png", "skill_tip_dotc.png", "skill_tip_dote.png", "skill_tip_iconbg.png",
+        "skill_book000.png", "skill_book100.png", "skill_book110.png", "skill_book111.png",
     };
 
-    // The skill row the player picked (the detail box follows it) and the
-    // drag flag (a dragged window ignores the layout spot).
-    private int _skillSel;
-    private bool _skillDragged;
-
-    // The skill page of the default passives (the beginner page): the skills the
-    // game hands to every Lv.200 character. Read only, listed from
-    // assets/skill/passive/passives.json, eight rows at a time.
+    // The skill window pages: the beginner page (the default passives), then the Roman
+    // numerals I to V. VI (6) stays gray until the character changes jobs (not made yet).
     private const int SkillTabBeginner = 0;
-    private const int PassiveVisibleRows = 8;
+    private const int SkillTabLast = 5;
+    private const int SkillTabVI = 6;
+    private const int SkillRows = 7; // the rows of the two columns, the pages scroll by row
+    private int _skillScroll;  // the first row shown
+    private int _skillWheel;   // the last wheel value the list saw
+    private bool _skillDragged;
+    private ScrollBar? _skillBar;
     private DefaultPassiveSkillData _passives = new();
-    private int _passiveSel;     // the picked row of the whole list
-    private int _passiveScroll;  // the first row shown
-    private int _skillWheel;     // the last wheel value the beginner list saw
-    private ScrollBar? _passiveBar;
-    private int PassiveScrollMax => _passives.Rows.Count - PassiveVisibleRows;
+    private List<SkillView> _skillPage = new();
+    private int SkillScrollMax => Math.Max(0, (_skillPage.Count + 1) / 2 - SkillRows);
 
-    // Skill window tabs (the beginner page, then one per job) + rows: the skill ids.
-    private static readonly string[] SkillTabNames = { "Beginner", "Warrior", "Fighter", "Crusader" };
+    // The name and the book of each page (the blue bar), the skill ids of each job page.
+    private static readonly string[] SkillTabNames = { "Legendary Skill", "Warrior", "Fighter", "Crusader", "4th Job", "5th Job" };
+    private static readonly string?[] SkillTabBooks = { "ui/skill_book000.png", "ui/skill_book100.png", "ui/skill_book110.png", "ui/skill_book111.png", null, null };
     private static readonly int[][] SkillTabs = new[]
     {
         Array.Empty<int>(), // the beginner page lists the default passives, not skill ids
         new[] { SkillData.SlashBlast, SkillData.IronBody, SkillData.WarLeap, SkillData.WarriorMastery, SkillData.LeapAttack, SkillData.GuardianArmor },
         new[] { SkillData.Brandish, SkillData.WeaponMastery, SkillData.SpiritBlade, SkillData.ComboAttack, SkillData.FlashBlade, SkillData.AgileArms, SkillData.FinalAttack, SkillData.PhysicalTraining },
         new[] { SkillData.IntrepidSlash, SkillData.BeamBlade, SkillData.Rush, SkillData.ScarringSword, SkillData.ComboSynergy, SkillData.SelfRecovery, SkillData.ChanceAttack, SkillData.Endure },
-    };
-    // One-line passive blurbs (per skill level): the window's only help text.
-    private static readonly Dictionary<int, string> PassiveBlurb = new()
-    {
-        [SkillData.WarriorMastery] = "+HP/speed",
-        [SkillData.GuardianArmor] = "+attack/DEF",
-        [SkillData.WeaponMastery] = "+damage/crit",
-        [SkillData.AgileArms] = "+STR",
-        [SkillData.FinalAttack] = "bonus hit",
-        [SkillData.PhysicalTraining] = "+STR/DEX",
-        [SkillData.ComboSynergy] = "+orb gain/dmg",
-        [SkillData.SelfRecovery] = "HP/MP regen",
-        [SkillData.ChanceAttack] = "+crit",
-        [SkillData.Endure] = "+Max HP/DEF",
+        Array.Empty<int>(), // IV: no skills yet
+        Array.Empty<int>(), // V: no skills yet
     };
 
     private Rectangle SkillRect() => new(0, 0, SkillW, SkillBodyH);
     private Rectangle SkillTitleRect() => new(0, 0, SkillW, _skillLay.Get("titleH", 20));
 
+    // The cells of one page: the default passives or the skills of the job.
+    private List<SkillView> SkillPageOf(int tab) => tab == SkillTabBeginner
+        ? _passives.Rows.Select(r => new SkillView(r.Name, r.Icon, r.Icon, r.MaxLevel, r.Desc, r.Effect, 0, true)).ToList()
+        : SkillTabs[tab].Select(id =>
+        {
+            var s = _skills[id];
+            return new SkillView(s.Name, s.Icon, s.Disabled, s.MaxLevel, s.Desc, new[] { SkillText.Effect(s, s.MaxLevel) }, id, s.Kind == SkillData.KindPassive);
+        }).ToList();
+
     private void BuildSkillScene()
     {
         if (!_skillDragged) _skillPos = new Point(_skillLay.Get("x", 326), _skillLay.Get("y", 130));
         foreach (string f in SkillFiles) LoadTexture("ui/" + f);
+        _skillPage = SkillPageOf(_skillTab);
+        foreach (var view in _skillPage) LoadTexture(view.Icon);
+        _skillScroll = Math.Min(_skillScroll, SkillScrollMax);
         _skillHost.Clear();
         var body = new GameObject();
         body.Add(new Rect(SkillRect()));
         body.Add(new Picture("ui/skill_bg.png")); // the window frame (the SKILL title is baked in)
         body.Add(new Picture("ui/skill_panel.png", _skillLay.Get("panelX", 6), _skillLay.Get("panelY", 22))); // the light body panel
-        body.Add(new Picture("ui/skill_bar.png", _skillLay.Get("barX", 8), _skillLay.Get("barY", 47))); // the blue bar: the picked skill
-        bool beginner = _skillTab == SkillTabBeginner;
-        if (beginner) body.Add(new PassivePickBar(() => _passives.Rows[_passiveSel]));
-        else body.Add(new SkillPickBar(() => _skills[SelectedSkillId], () => SkillLiveOf(SelectedSkillId)));
-        body.Add(new Picture("ui/skill_sp.png", _skillLay.Get("spX", 212), _skillLay.Get("spY", 29))); // SKILL POINT + the value box
-        body.Add(new RightLabel((ui, t) => ui.GetSmall(t), () => SkillSpText(), _skillLay.Get("spValX", 305), _skillLay.Get("spValY", 31), new Color(40, 40, 50)));
-        body.Add(new LiveLabel(() => SkillTabNames[_skillTab], _skillLay.Get("jobX", 100), _skillLay.Get("jobY", 33), new Color(90, 90, 100)));
-        for (int t = 0; t < SkillTabs.Length; t++)
+        var bar = new GameObject();
+        bar.Add(new Rect(new Rectangle(_skillLay.Get("barX", 8), _skillLay.Get("barY", 47), _skillLay.Get("barW", 304), _skillLay.Get("barH", 45))));
+        bar.Add(new Picture("ui/skill_bar.png", 0, 0)); // the blue bar: the name of the page
+        bar.Add(new SkillPageBar(SkillTabNames[_skillTab], SkillTabBooks[_skillTab]));
+        body.AddChild(bar);
+        for (int t = 0; t <= SkillTabLast; t++)
         {
             int i = t;
-            var tb = PanelButton(SkillTabRect(i), "skilltab" + i, () => { _skillTab = i; _skillSel = 0; }, ButtonKind.Click);
+            var tb = PanelButton(SkillTabRect(i), "skilltab" + i, () => { _skillTab = i; _skillScroll = 0; }, ButtonKind.Click);
             tb.Add(new SkillTabArt(i, () => _skillTab == i));
             body.AddChild(tb);
         }
-        var tab = SkillTabs[_skillTab];
-        if (beginner) BuildPassiveList(body);
-        for (int row = 0; row < tab.Length; row++)
-        {
-            int i = row; // for-loop variables capture shared: copy per row
-            int id = tab[i];
-            var line = new GameObject();
-            line.Add(new Rect(SkillRowRect(i)));
-            line.Add(new Button { Kind = ButtonKind.Click, OnClick = () => { _skillSel = i; Hold(new BindTarget(BindKind.Skill, id)); } }); // a click picks the skill up: the strip and the keys take the drop
-            line.Add(new Grab(() => true));
-            line.Add(new SkillListRow(_skills[id], PassiveBlurb.TryGetValue(id, out string? b) ? b : "", () => _skillSel == i, () => SkillLiveOf(id), () => Held == new BindTarget(BindKind.Skill, id)));
-            body.AddChild(line);
-        }
-        var detail = new GameObject();
-        detail.Add(new Rect(SkillDetailRect()));
-        detail.Add(new SkillTipFrame()); // the official skill info frame
-        if (beginner)
-            detail.Add(new PassiveDetailBox(() => _passives.Rows[_passiveSel])); // no [+] and no MAX: the default passives are not leveled
-        else
-            detail.Add(new SkillDetailBox(() => _skills[SelectedSkillId], () => SelectedBlurb, () => SkillLiveOf(SelectedSkillId)));
-        body.AddChild(detail);
-        if (!beginner)
-        {
-            var plus = PanelButton(SkillPlusRect(), "skillplus", () => { if (LearnSkill(SelectedSkillId)) PushBuild(); }, ButtonKind.Click);
-            plus.Add(new SkillPlusArt(() => CanLearn(SelectedSkillId)));
-            body.AddChild(plus);
-            var max = PanelButton(SkillMaxRect(), "skillmax", () => { if (LearnSkillMax(SelectedSkillId)) PushBuild(); }, ButtonKind.Click);
-            max.Add(new LiveTint(() => CanLearn(SelectedSkillId) ? ("MAX", new Color(120, 220, 120)) : ("MAX", new Color(150, 150, 160)), 0, 0));
-            body.AddChild(max);
-        }
+        var locked = new GameObject(); // VI: gray, nothing to click
+        locked.Add(new Rect(SkillTabRect(SkillTabVI)));
+        locked.Add(new Picture("ui/skill_tabdis6.png", 0, _skillLay.Get("tabArtY", 2)));
+        body.AddChild(locked);
+        BuildSkillCells(body);
+        BuildSkillButtons(body);
         body.AddChild(PanelButton(SkillTitleRect(), "", () => { _skillDragged = true; _dragSkill = _uiScene.LastClick - _skillPos; })); // silent, like legacy
         var x = PanelButton(SkillXRect(), "x2", CloseSkillWindow, ButtonKind.Click);
         x.Add(new Picture("ui/hud_statx.png")); // the skill window has no X of its own in the WZ
@@ -132,47 +108,86 @@ public partial class MushTownGame
         _skillHost.AddChild(body);
     }
 
-    // The beginner page: eight row slots that read the list from the scroll row
-    // (so a scroll needs no rebuild), the scroll bar, no pick-up (the rows have no
-    // Grab and never call Hold: a default passive cannot go to a quick slot).
-    private void BuildPassiveList(GameObject body)
+    // Two columns of cells, SkillRows rows. A cell reads its skill from the scroll row (so a
+    // scroll needs no rebuild); a cell with no skill is the empty cell art. A job page lets a
+    // click pick an active skill up (the strip and the keys take the drop); a passive does not.
+    private void BuildSkillCells(GameObject body)
     {
-        foreach (var row in _passives.Rows) LoadTexture(row.Icon);
         LoadTexture("ui/inv_scroll_base.png");
         for (int t = 0; t < 3; t++) LoadTexture($"ui/inv_scroll_thumb{t}.png");
-        for (int slot = 0; slot < PassiveVisibleRows; slot++)
+        for (int slot = 0; slot < SkillRows * 2; slot++)
         {
             int i = slot;
-            var line = new GameObject();
-            line.Add(new Rect(SkillRowRect(i)));
-            line.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _passiveSel = _passiveScroll + i });
-            line.Add(new PassiveRow(() => _passives.Rows[_passiveScroll + i], () => _passiveSel == _passiveScroll + i));
-            line.Add(new PassiveTip(() => _passives.Rows[_passiveScroll + i]));
-            body.AddChild(line);
+            SkillView? View() => _skillScroll * 2 + i < _skillPage.Count ? _skillPage[_skillScroll * 2 + i] : null;
+            var cell = new GameObject();
+            cell.Add(new Rect(SkillCellRect(i)));
+            if (_skillTab != SkillTabBeginner)
+            {
+                cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickUpSkill(View()) });
+                cell.Add(new Grab(() => CanPickUp(View())));
+            }
+            cell.Add(new SkillCell(View, StateOf));
+            cell.Add(new SkillTip(View));
+            body.AddChild(cell);
         }
-        var bar = new ScrollBar(
-            () => (float)_passiveScroll / PassiveScrollMax,
-            value => _passiveScroll = (int)MathF.Round(value * PassiveScrollMax),
-            () => true,
+        var scroll = new ScrollBar(
+            () => (float)_skillScroll / Math.Max(1, SkillScrollMax),
+            value => _skillScroll = (int)MathF.Round(value * SkillScrollMax),
+            () => SkillScrollMax > 0,
             "ui/inv_scroll_base.png", "ui/inv_scroll_thumb", _skillLay.Get("scrollThumbH", 28));
-        _passiveBar = bar;
+        _skillBar = scroll;
         var o = new GameObject();
-        o.Add(new Rect(new Rectangle(_skillLay.Get("scrollX", 150), _skillLay.Get("scrollY", 92),
-            _skillLay.Get("scrollW", 5), PassiveVisibleRows * _skillLay.Get("rowPitch", 32))));
-        o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => bar.Grab(_uiScene.LastClick.Y) });
-        o.Add(bar);
+        o.Add(new Rect(new Rectangle(_skillLay.Get("scrollX", 297), _skillLay.Get("scrollY", 92),
+            _skillLay.Get("scrollW", 5), SkillRows * _skillLay.Get("rowPitch", 34))));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => scroll.Grab(_uiScene.LastClick.Y) });
+        o.Add(scroll);
         body.AddChild(o);
     }
 
-    // The wheel scrolls the beginner list while the mouse is over the window: one notch is one row.
+    // The button row under the cells: only MACRO NOTIFIER is lit, and it opens nothing yet
+    // (the macro window comes with its own ticket). The others show their gray art.
+    private void BuildSkillButtons(GameObject body)
+    {
+        int y = _skillLay.Get("btnY", 336);
+        foreach (var (art, key) in new[] { ("hyper", "hyperX"), ("guild", "guildX"), ("alarm", "alarmX"), ("sequence", "sequenceX") })
+        {
+            var gray = new GameObject();
+            gray.Add(new Rect(new Rectangle(_skillLay.Get(key, 8), y, _skillLay.Get("grayW", 50), _skillLay.Get("btnH", 16))));
+            gray.Add(new Picture($"ui/skill_bt_{art}_d.png", 0, 0));
+            body.AddChild(gray);
+        }
+        var macro = new GameObject();
+        macro.Add(new Rect(new Rectangle(_skillLay.Get("macroX", 220), y, _skillLay.Get("macroW", 89), _skillLay.Get("btnH", 16))));
+        macro.Add(new Button { LegacyId = "skillmacro", Kind = ButtonKind.Click });
+        macro.Add(new Image("ui/skill_bt_macro"));
+        body.AddChild(macro);
+    }
+
+    private static bool CanPickUp(SkillView? view) => view is { Passive: false };
+
+    private void PickUpSkill(SkillView? view)
+    {
+        if (CanPickUp(view)) Hold(new BindTarget(BindKind.Skill, view!.SkillId));
+    }
+
+    // The live part of a cell: the timers and the skill in hand.
+    private SkillCellState StateOf(SkillView view)
+    {
+        if (view.SkillId == 0) return default;
+        _fighter.Cooldowns.TryGetValue(view.SkillId, out float cd);
+        _fighter.Buffs.TryGetValue(view.SkillId, out float buff);
+        return new SkillCellState(cd, buff, Held == new BindTarget(BindKind.Skill, view.SkillId));
+    }
+
+    // The wheel scrolls the cells while the mouse is over the window: one notch is one row.
     private void UpdateSkillWheel()
     {
         int wheel = _input.Wheel;
-        bool over = _showSkill && _skillTab == SkillTabBeginner && RootOf(_uiScene.Hovered) == _skillHost;
+        bool over = _showSkill && RootOf(_uiScene.Hovered) == _skillHost;
         if (!over) { _skillWheel = wheel; return; }
         int notches = (wheel - _skillWheel) / 120;
         _skillWheel = wheel;
-        _passiveScroll = Math.Clamp(_passiveScroll - notches, 0, PassiveScrollMax);
+        _skillScroll = Math.Clamp(_skillScroll - notches, 0, SkillScrollMax);
     }
 
     // The skill window closes. A skill a click picked up stays in hand: the
@@ -183,83 +198,31 @@ public partial class MushTownGame
         _dragSkill = null;
     }
 
-    // Skill window job tabs (three Roman numerals under the title).
+    // Skill window page tabs (the beginner tab and the Roman numerals under the title).
     private Rectangle SkillTabRect(int t) => new(_skillLay.Get("tabX", 10) + t * _skillLay.Get("tabStep", 26),
-        _skillLay.Get("tabY", 27), 25, 20);
+        _skillLay.Get("tabY", 27), _skillLay.Get("tabW", 25), _skillLay.Get("tabH", 20));
 
-    // One skill row of the list (the row art is cut to this height).
-    private Rectangle SkillRowRect(int i)
+    // One cell of the two columns (the cell art is cut to this height).
+    private Rectangle SkillCellRect(int slot)
     {
-        int pitch = _skillLay.Get("rowPitch", 32);
-        return new Rectangle(_skillLay.Get("listX", 8), _skillLay.Get("listY", 92) + i * pitch, 140, pitch);
-    }
-
-    // The skill info box of the picked skill (right of the list).
-    private Rectangle SkillDetailRect()
-    {
-        return new Rectangle(_skillLay.Get("detailX", 160), _skillLay.Get("detailY", 98),
-            _skillLay.Get("detailW", 150), _skillLay.Get("detailH", 200));
-    }
-
-    // The [+] button (raises the picked skill by one level).
-    private Rectangle SkillPlusRect()
-    {
-        var d = SkillDetailRect();
-        return new Rectangle(d.X + _skillLay.Get("plusX", 16), d.Y + _skillLay.Get("plusY", 164), 12, 12);
-    }
-
-    // The MAX button (raises the picked skill as far as the SP go).
-    private Rectangle SkillMaxRect()
-    {
-        var d = SkillDetailRect();
-        return new Rectangle(d.X + _skillLay.Get("maxX", 34), d.Y + _skillLay.Get("maxY", 163),
-            _skillLay.Get("maxW", 34), _skillLay.Get("maxH", 14));
+        int pitch = _skillLay.Get("rowPitch", 34);
+        return new Rectangle(_skillLay.Get("listX", 8) + slot % 2 * _skillLay.Get("colStep", 142),
+            _skillLay.Get("listY", 92) + slot / 2 * pitch, _skillLay.Get("cellW", 140), pitch);
     }
 
     private Rectangle SkillXRect() => new(SkillRect().Width - _skillLay.Get("closeX", 15) - 11,
         _skillLay.Get("closeY", 2), 11, 11);
-
-    // The picked skill and its numbers.
-    private int SelectedSkillId => SkillTabs[_skillTab][_skillSel];
-    private string SelectedBlurb => PassiveBlurb.TryGetValue(SelectedSkillId, out string? b) ? b : "";
-
-    // The live numbers of one skill (level, SP, cooldown, buff, orbs).
-    private SkillLive SkillLiveOf(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        int lv = 0;
-        chara?.SkillLv.TryGetValue(id, out lv);
-        _fighter.Cooldowns.TryGetValue(id, out float cd);
-        _fighter.Buffs.TryGetValue(id, out float buff);
-        return new SkillLive(lv, chara?.Sp ?? 0, chara?.Level ?? 1, cd, buff, _fighter.Orbs);
-    }
-
-    // The SP number in the official box.
-    private string SkillSpText() => (_save?.Slots[_slot]?.Sp ?? 0).ToString();
-
-    // Can the player raise this skill right now?
-    private bool CanLearn(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        return chara != null && Progression.CanLearn(chara, _skills[id]);
-    }
-
-    // Click a [+]: learn one level. CLI sessions carry no character.
-    private bool LearnSkill(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        return chara != null && Progression.LearnSkill(chara, _skills[id]);
-    }
-
-    // Click MAX: spend the SP on as many levels as they buy.
-    private bool LearnSkillMax(int id)
-    {
-        var chara = _save?.Slots[_slot];
-        return chara != null && Progression.LearnSkillMax(chara, _skills[id]) > 0;
-    }
 }
 
-// One job tab: the official Roman numeral art (the selected tab is orange).
+// One skill of a page, as the cell and the tooltip show it: a job skill or a default
+// passive (SkillId 0). The numbers are the max level, read once when the page is built.
+public sealed record SkillView(string Name, string Icon, string IconOff, int MaxLevel,
+    IReadOnlyList<string> Desc, IReadOnlyList<string> Effect, int SkillId, bool Passive);
+
+// What changes from frame to frame in a cell.
+public readonly record struct SkillCellState(float CdMs, float BuffMs, bool Held);
+
+// One page tab: the official Roman numeral art (the selected tab is orange).
 public sealed class SkillTabArt : Component, IDrawable
 {
     private readonly int _index;
@@ -274,250 +237,108 @@ public sealed class SkillTabArt : Component, IDrawable
     }
 }
 
-// One skill row: the official row art, the icon, the name and the live numbers.
-// The row art is 140x35 but the rows step 32 (8 skills must fit under the
-// blue bar), so the art is cut to the row height and never covers the next row.
-public sealed class SkillListRow : Component, IDrawable
+// The blue bar: the book of the page and its name, centered.
+public sealed class SkillPageBar : Component, IDrawable
 {
-    private readonly SkillData _skill;
-    private readonly string _blurb;
-    private readonly Func<bool> _selected;
-    private readonly Func<SkillLive> _live;
-    private readonly Func<bool> _held;
-    public SkillListRow(SkillData skill, string blurb, Func<bool> selected, Func<SkillLive> live, Func<bool> held)
-    {
-        _skill = skill; _blurb = blurb; _selected = selected; _live = live; _held = held;
-    }
+    private readonly string _name;
+    private readonly string? _book;
+    public SkillPageBar(string name, string? book) { _name = name; _book = book; }
     public void Draw(UiGfx gfx)
     {
         var lay = MushTownGame._skillLay;
         var r = Owner.Get<Rect>()!.Screen;
-        var s = _live();
-        bool locked = s.Level < _skill.ReqLevel;
-        bool cooling = !locked && s.CdMs > 0;
-        bool live = s.BuffMs > 0;
-        var art = gfx.Tex(_selected() ? "ui/skill_row_sel.png" : "ui/skill_row.png");
+        if (_book != null)
+            gfx.Sb.Draw(gfx.Tex(_book), new Vector2(r.X + lay.Get("bookX", 6), r.Y + lay.Get("bookY", 7)), Color.White);
+        var name = gfx.Ui.GetSmall(_name);
+        gfx.Sb.Draw(name, new Vector2(r.X + lay.Get("barNameX", 171) - name.Width / 2, r.Y + lay.Get("barNameY", 14)), Color.White);
+    }
+}
+
+// One cell of the list: the official cell art (or the empty cell), the icon, the name
+// and the max level. The right of the second line shows what the skill is doing now.
+public sealed class SkillCell : Component, IDrawable
+{
+    private readonly Func<SkillView?> _view;
+    private readonly Func<SkillView, SkillCellState> _state;
+    public SkillCell(Func<SkillView?> view, Func<SkillView, SkillCellState> state) { _view = view; _state = state; }
+    public void Draw(UiGfx gfx)
+    {
+        var lay = MushTownGame._skillLay;
+        var r = Owner.Get<Rect>()!.Screen;
+        var view = _view();
+        var art = gfx.Tex(view == null ? "ui/skill_blank.png" : "ui/skill_row.png");
         gfx.Sb.Draw(art, r, new Rectangle(0, 0, art.Width, r.Height), Color.White);
-        if (!_held()) // in hand: the icon rides the mouse, the row keeps the name and the numbers
-            gfx.Sb.Draw(gfx.Tex(locked || cooling ? _skill.Disabled : _skill.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
-        var ink = locked ? new Color(140, 140, 150) : new Color(30, 30, 40);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(_skill.Name), new Vector2(r.X + lay.Get("rowNameX", 38), r.Y + lay.Get("rowNameY", 3)), ink);
-        // The sub line: the level (a passive shows its blurb).
-        string sub = _skill.Kind == SkillData.KindPassive
-            ? _blurb
-            : $"Lv.{s.Lv}/{_skill.MaxLevel}";
-        gfx.Sb.Draw(gfx.Ui.GetSmall(sub), new Vector2(r.X + lay.Get("rowSubX", 38), r.Y + lay.Get("rowSubY", 19)), new Color(105, 105, 115));
-        // The right of the sub line: what the skill is doing right now.
-        // A passive shows its blurb there, so it has no room for this.
-        string right = locked ? $"Lv.{_skill.ReqLevel}"
-            : live ? $"{(int)Math.Ceiling(s.BuffMs / 1000)}s"
-            : cooling ? $"{(int)Math.Ceiling(s.CdMs / 1000)}s" : "";
-        if (right == "" || _skill.Kind == SkillData.KindPassive) return;
-        var rc = locked ? new Color(200, 60, 60) : new Color(190, 110, 0);
-        var rt = gfx.Ui.GetSmall(right);
-        gfx.Sb.Draw(rt, new Vector2(r.X + lay.Get("rowRightX", 136) - rt.Width, r.Y + lay.Get("rowSubY", 19)), rc);
-    }
-}
-
-// The blue bar: the picked skill (icon, name, level).
-public sealed class SkillPickBar : Component, IDrawable
-{
-    private readonly Func<SkillData> _skill;
-    private readonly Func<SkillLive> _live;
-    public SkillPickBar(Func<SkillData> skill, Func<SkillLive> live) { _skill = skill; _live = live; }
-    public void Draw(UiGfx gfx)
-    {
-        var lay = MushTownGame._skillLay;
-        var skill = _skill();
-        var s = _live();
-        var r = Owner.Get<Rect>()!.Screen;
-        gfx.Sb.Draw(gfx.Tex(s.Level < skill.ReqLevel ? skill.Disabled : skill.Icon), new Vector2(r.X + lay.Get("pickIconX", 12), r.Y + lay.Get("pickIconY", 51)), Color.White);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(skill.Name), new Vector2(r.X + lay.Get("pickNameX", 46), r.Y + lay.Get("pickNameY", 60)), Color.White);
-        var t = gfx.Ui.GetSmall($"Lv.{s.Lv}/{skill.MaxLevel}");
-        gfx.Sb.Draw(t, new Vector2(r.X + lay.Get("pickRightX", 304) - t.Width, r.Y + lay.Get("pickNameY", 60)), new Color(255, 220, 0));
-    }
-}
-
-// The official skill info frame (UIToolTip.img/Skill/Frame): nine pieces
-// (four corners, four edges and the center) drawn around the owner rect.
-public sealed class SkillTipFrame : Component, IDrawable
-{
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Screen;
-        var nw = gfx.Tex("ui/skill_tip_nw.png"); var ne = gfx.Tex("ui/skill_tip_ne.png");
-        var sw = gfx.Tex("ui/skill_tip_sw.png"); var se = gfx.Tex("ui/skill_tip_se.png");
-        var n = gfx.Tex("ui/skill_tip_n.png"); var s = gfx.Tex("ui/skill_tip_s.png");
-        var w = gfx.Tex("ui/skill_tip_w.png"); var e = gfx.Tex("ui/skill_tip_e.png");
-        var c = gfx.Tex("ui/skill_tip_c.png");
-        gfx.Sb.Draw(nw, new Vector2(r.X, r.Y), Color.White);
-        gfx.Sb.Draw(ne, new Vector2(r.Right - ne.Width, r.Y), Color.White);
-        gfx.Sb.Draw(sw, new Vector2(r.X, r.Bottom - sw.Height), Color.White);
-        gfx.Sb.Draw(se, new Vector2(r.Right - se.Width, r.Bottom - se.Height), Color.White);
-        gfx.Sb.Draw(n, new Rectangle(r.X + nw.Width, r.Y, r.Width - nw.Width - ne.Width, n.Height), Color.White);
-        gfx.Sb.Draw(s, new Rectangle(r.X + sw.Width, r.Bottom - s.Height, r.Width - sw.Width - se.Width, s.Height), Color.White);
-        gfx.Sb.Draw(w, new Rectangle(r.X, r.Y + nw.Height, w.Width, r.Height - nw.Height - sw.Height), Color.White);
-        gfx.Sb.Draw(e, new Rectangle(r.Right - e.Width, r.Y + ne.Height, e.Width, r.Height - ne.Height - se.Height), Color.White);
-        gfx.Sb.Draw(c, new Rectangle(r.X + w.Width, r.Y + n.Height, r.Width - w.Width - e.Width, r.Height - n.Height - s.Height), Color.White);
-    }
-}
-
-// The skill info box: the level, the costs and the timers (light text on the
-// dark official frame).
-public sealed class SkillDetailBox : Component, IDrawable
-{
-    private readonly Func<SkillData> _skill;
-    private readonly Func<string> _blurb;
-    private readonly Func<SkillLive> _live;
-    public SkillDetailBox(Func<SkillData> skill, Func<string> blurb, Func<SkillLive> live)
-    {
-        _skill = skill; _blurb = blurb; _live = live;
-    }
-    public void Draw(UiGfx gfx)
-    {
-        var lay = MushTownGame._skillLay;
-        var skill = _skill();
-        var s = _live();
-        var r = Owner.Get<Rect>()!.Screen;
-        int y = r.Y + lay.Get("textY", 16);
-        int step = lay.Get("detailLine", 16);
-        void Line(string text, Color ink)
-        {
-            gfx.Sb.Draw(gfx.Ui.GetSmall(text), new Vector2(r.X + lay.Get("textX", 16), y), ink);
-            y += step;
-        }
-        Line($"Lv.{s.Lv}/{skill.MaxLevel}", new Color(235, 235, 240));
-        string blurb = _blurb();
-        if (blurb != "") Line(blurb, new Color(130, 195, 255));
-        Line($"Req. Lv.{skill.ReqLevel}", new Color(255, 200, 80));
-        Line($"SP {Progression.SkillSpCost} (have {s.Sp})", new Color(235, 235, 240));
-        if (skill.Kind != SkillData.KindPassive)
-        {
-            Line($"MP {skill.Mp}", new Color(235, 235, 240));
-            if (s.CdMs > 0) Line($"CD {(int)Math.Ceiling(s.CdMs / 1000)}s", new Color(255, 180, 60));
-            else Line($"CD {skill.CooldownMs / 1000}s", new Color(235, 235, 240));
-        }
-        if (skill.Kind == SkillData.KindBuff)
-        {
-            if (s.BuffMs > 0) Line($"Buff {(int)Math.Ceiling(s.BuffMs / 1000)}s", new Color(255, 180, 60));
-            else Line($"Buff {skill.BuffMs / 1000}s", new Color(235, 235, 240));
-        }
-        if (skill.SkillId == SkillData.ComboAttack) Line($"{s.Orbs} orbs", new Color(255, 200, 80));
-    }
-}
-
-// The [+] button: the official SP-up art in its four states.
-public sealed class SkillPlusArt : Component, IDrawable
-{
-    private readonly Func<bool> _enabled;
-    public SkillPlusArt(Func<bool> enabled) => _enabled = enabled;
-    public void Draw(UiGfx gfx)
-    {
-        var r = Owner.Get<Rect>()!.Screen;
-        string key = !_enabled() ? "ui/skill_spup_d.png"
-            : gfx.Hovered == Owner ? gfx.Pressed ? "ui/skill_spup_p.png" : "ui/skill_spup_h.png"
-            : "ui/skill_spup_n.png";
-        gfx.Sb.Draw(gfx.Tex(key), new Vector2(r.X, r.Y), Color.White);
-    }
-}
-
-// One default passive row of the beginner page: the official row art, the icon,
-// the name and the first line of what it gives. The level is fixed at the top
-// and the row never picks the skill up.
-public sealed class PassiveRow : Component, IDrawable
-{
-    private readonly Func<DefaultPassiveSkillRow> _row;
-    private readonly Func<bool> _selected;
-    public PassiveRow(Func<DefaultPassiveSkillRow> row, Func<bool> selected) { _row = row; _selected = selected; }
-    public void Draw(UiGfx gfx)
-    {
-        var lay = MushTownGame._skillLay;
-        var r = Owner.Get<Rect>()!.Screen;
-        var row = _row();
-        var art = gfx.Tex(_selected() ? "ui/skill_row_sel.png" : "ui/skill_row.png");
-        gfx.Sb.Draw(art, r, new Rectangle(0, 0, art.Width, r.Height), Color.White);
-        gfx.Sb.Draw(gfx.Tex(row.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
+        if (view == null) return;
+        var s = _state(view);
+        bool cooling = s.CdMs > 0;
+        if (!s.Held) // in hand: the icon rides the mouse, the cell keeps the name and the numbers
+            gfx.Sb.Draw(gfx.Tex(cooling ? view.IconOff : view.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
         int textW = lay.Get("rowRightX", 136) - lay.Get("rowNameX", 38);
-        gfx.Sb.Draw(Text.Fit(gfx, row.Name, textW), new Vector2(r.X + lay.Get("rowNameX", 38), r.Y + lay.Get("rowNameY", 3)), new Color(30, 30, 40));
-        gfx.Sb.Draw(Text.Fit(gfx, row.Effect[0], textW), new Vector2(r.X + lay.Get("rowSubX", 38), r.Y + lay.Get("rowSubY", 19)), new Color(105, 105, 115));
+        gfx.Sb.Draw(Text.Fit(gfx, view.Name, textW), new Vector2(r.X + lay.Get("rowNameX", 38), r.Y + lay.Get("rowNameY", 3)), new Color(30, 30, 40));
+        gfx.Sb.Draw(gfx.Ui.GetSmall(view.MaxLevel.ToString()), new Vector2(r.X + lay.Get("rowSubX", 38), r.Y + lay.Get("rowSubY", 19)), new Color(105, 105, 115));
+        string right = s.BuffMs > 0 ? $"{(int)Math.Ceiling(s.BuffMs / 1000)}s"
+            : cooling ? $"{(int)Math.Ceiling(s.CdMs / 1000)}s" : "";
+        if (right == "") return;
+        var rt = gfx.Ui.GetSmall(right);
+        gfx.Sb.Draw(rt, new Vector2(r.X + lay.Get("rowRightX", 136) - rt.Width, r.Y + lay.Get("rowSubY", 19)), new Color(190, 110, 0));
     }
 }
 
-// The blue bar of the beginner page: the picked passive (icon, name, the fixed top level).
-public sealed class PassivePickBar : Component, IDrawable
+// The hover box of a cell (the official skill tooltip frame): the name, the icon in its frame,
+// the master level and the description, then a dotted line, the current level and the effect.
+// The tip layer draws it next to the cursor.
+public sealed class SkillTip : Component
 {
-    private readonly Func<DefaultPassiveSkillRow> _row;
-    public PassivePickBar(Func<DefaultPassiveSkillRow> row) => _row = row;
-    public void Draw(UiGfx gfx)
-    {
-        var lay = MushTownGame._skillLay;
-        var row = _row();
-        var r = Owner.Get<Rect>()!.Screen;
-        gfx.Sb.Draw(gfx.Tex(row.Icon), new Vector2(r.X + lay.Get("pickIconX", 12), r.Y + lay.Get("pickIconY", 51)), Color.White);
-        gfx.Sb.Draw(gfx.Ui.GetSmall(row.Name), new Vector2(r.X + lay.Get("pickNameX", 46), r.Y + lay.Get("pickNameY", 60)), Color.White);
-        var t = gfx.Ui.GetSmall($"Lv.{row.MaxLevel}/{row.MaxLevel}");
-        gfx.Sb.Draw(t, new Vector2(r.X + lay.Get("pickRightX", 304) - t.Width, r.Y + lay.Get("pickNameY", 60)), new Color(255, 220, 0));
-    }
-}
-
-// The skill info box of the beginner page: the fixed level and what the skill
-// gives (light text on the dark official frame). What the skill is stays in the
-// hover box: with it the longest text would not fit the frame.
-public sealed class PassiveDetailBox : Component, IDrawable
-{
-    private readonly Func<DefaultPassiveSkillRow> _row;
-    public PassiveDetailBox(Func<DefaultPassiveSkillRow> row) => _row = row;
-    public void Draw(UiGfx gfx)
-    {
-        var lay = MushTownGame._skillLay;
-        var row = _row();
-        var r = Owner.Get<Rect>()!.Screen;
-        int pad = lay.Get("passiveTextX", 10);
-        int x = r.X + pad;
-        int y = r.Y + lay.Get("textY", 16);
-        int step = lay.Get("passiveLine", 14);
-        int textW = r.Width - pad * 2;
-        gfx.Sb.Draw(gfx.Ui.GetSmall($"Lv.{row.MaxLevel}/{row.MaxLevel}"), new Vector2(x, y), new Color(235, 235, 240));
-        y += step;
-        foreach (string line in row.Effect)
-            foreach (string wrapped in gfx.Ui.Wrap(line, textW))
-            {
-                gfx.Sb.Draw(gfx.Ui.GetSmall(wrapped), new Vector2(x, y), new Color(130, 195, 255));
-                y += step;
-            }
-    }
-}
-
-// The hover box of a beginner row (the official skill tooltip frame): the name,
-// the fixed level, what the skill is and what it gives. The tip layer draws it
-// next to the cursor.
-public sealed class PassiveTip : Component
-{
-    private readonly Func<DefaultPassiveSkillRow> _row;
-    public PassiveTip(Func<DefaultPassiveSkillRow> row) => _row = row;
+    private readonly Func<SkillView?> _view;
+    public SkillTip(Func<SkillView?> view) => _view = view;
 
     public void DrawAt(UiGfx gfx, TipAnchor anchor)
     {
+        if (_view() is not { } view) return;
         var lay = MushTownGame._skillLay;
-        var row = _row();
-        int pad = lay.Get("tipPad", 10), gap = lay.Get("tipLine", 16);
-        int textW = lay.Get("tipW", 260) - pad * 2;
-        var title = gfx.Ui.GetSmall(row.Name);
-        var level = gfx.Ui.GetSmall($"Lv.{row.MaxLevel}/{row.MaxLevel}");
-        var lines = new List<(Texture2D Tex, Color Ink)>();
-        foreach (var (texts, ink) in new[] { (row.Desc, new Color(214, 216, 222)), (row.Effect, new Color(130, 195, 255)) })
-            foreach (string text in texts)
-                foreach (string wrapped in gfx.Ui.Wrap(text, textW))
-                    lines.Add((gfx.Ui.GetSmall(wrapped), ink));
-        int w = Math.Max(Math.Max(title.Width, level.Width), lines.Max(l => l.Tex.Width)) + pad * 2;
-        var box = anchor.At(gfx, w, pad * 2 + (2 + lines.Count) * gap);
+        int pad = lay.Get("tipPad", 12), gap = lay.Get("tipLine", 16), w = lay.Get("tipW", 270);
+        var frame = gfx.Tex("ui/skill_tip_iconbg.png");
+        int textX = pad + frame.Width + lay.Get("tipIconGap", 8);
+        var title = gfx.Ui.GetSmall(view.Name);
+        var side = new List<(Texture2D Tex, Color Ink)> { (gfx.Ui.GetSmall($"[Master Level: {view.MaxLevel}]"), Color.White) };
+        foreach (string text in view.Desc)
+            foreach (string wrapped in gfx.Ui.Wrap(text, w - textX - pad))
+                side.Add((gfx.Ui.GetSmall(wrapped), new Color(221, 221, 226)));
+        var effect = new List<Texture2D>();
+        foreach (string text in view.Effect)
+            foreach (string wrapped in gfx.Ui.Wrap(text, w - pad * 2))
+                effect.Add(gfx.Ui.GetSmall(wrapped));
+        // The wrap measures a little narrower than the drawn text: the box grows to the widest line.
+        w = Math.Max(w, Math.Max(textX + side.Max(l => l.Tex.Width) + pad, effect.Count == 0 ? 0 : effect.Max(t => t.Width) + pad * 2));
+        int topH = Math.Max(frame.Height, side.Count * gap);
+        int titleY = pad, topY = titleY + gap + lay.Get("tipTitleGap", 6), lineY = topY + topH + lay.Get("tipSectionGap", 8);
+        int levelY = lineY + lay.Get("tipLineGap", 3) + lay.Get("tipSectionGap", 8);
+        var box = anchor.At(gfx, w, levelY + (1 + effect.Count) * gap + pad);
         NineSlice.Draw(gfx, "skill_tip", box);
-        gfx.Sb.Draw(title, new Vector2(box.X + pad, box.Y + pad), Color.White);
-        gfx.Sb.Draw(level, new Vector2(box.X + pad, box.Y + pad + gap), new Color(255, 220, 0));
-        int y = box.Y + pad + gap * 2;
-        foreach (var (tex, ink) in lines)
+        int dot = lay.Get("tipDot", 5);
+        gfx.Sb.Draw(gfx.Pixel, new Rectangle(box.X + pad, box.Y + titleY + lay.Get("tipDotY", 5), dot, dot), new Color(90, 200, 240)); // the dot before the name
+        gfx.Sb.Draw(title, new Vector2(box.X + pad + lay.Get("tipTitleX", 10), box.Y + titleY), Color.White);
+        gfx.Sb.Draw(frame, new Vector2(box.X + pad, box.Y + topY), Color.White);
+        var icon = gfx.Tex(view.Icon);
+        int iconW = icon.Width * lay.Get("tipIconScale", 2), iconH = icon.Height * lay.Get("tipIconScale", 2);
+        gfx.Sb.Draw(icon, new Rectangle(box.X + pad + (frame.Width - iconW) / 2, box.Y + topY + (frame.Height - iconH) / 2, iconW, iconH), Color.White);
+        int y = box.Y + topY;
+        foreach (var (tex, ink) in side)
         {
-            gfx.Sb.Draw(tex, new Vector2(box.X + pad, y), ink);
+            gfx.Sb.Draw(tex, new Vector2(box.X + textX, y), ink);
+            y += gap;
+        }
+        var west = gfx.Tex("ui/skill_tip_dotw.png"); var centre = gfx.Tex("ui/skill_tip_dotc.png"); var east = gfx.Tex("ui/skill_tip_dote.png");
+        int x0 = box.X + pad, x1 = box.Right - pad;
+        gfx.Sb.Draw(west, new Vector2(x0, box.Y + lineY), Color.White);
+        gfx.Sb.Draw(centre, new Rectangle(x0 + west.Width, box.Y + lineY, x1 - x0 - west.Width - east.Width, centre.Height), Color.White);
+        gfx.Sb.Draw(east, new Vector2(x1 - east.Width, box.Y + lineY), Color.White);
+        y = box.Y + levelY;
+        gfx.Sb.Draw(gfx.Ui.GetSmall($"[Current Level: {view.MaxLevel}]"), new Vector2(box.X + pad, y), Color.White);
+        y += gap;
+        foreach (var tex in effect)
+        {
+            gfx.Sb.Draw(tex, new Vector2(box.X + pad, y), Color.White);
             y += gap;
         }
     }

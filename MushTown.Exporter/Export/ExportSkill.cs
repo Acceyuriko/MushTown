@@ -68,6 +68,12 @@ public static partial class Export
                 return false;
             }
             data.Name = name;
+            data.Desc = DescLines(str.Find($@"Skill.img\{id}\desc")?.GetValueEx<string>("") ?? "");
+            if (data.Desc.Count == 0)
+            {
+                Console.WriteLine($"skill {id} has no String desc");
+                return false;
+            }
             data.Icon = $"skill/{id}/icon.png";
             data.Disabled = $"skill/{id}/dis.png";
             if (!UiPng.Save(skill, "Skill", $@"_Canvas/{img}/skill/{id}/icon", Path.Combine(outDir, data.Icon)))
@@ -104,6 +110,12 @@ public static partial class Export
         }
         return true;
     }
+
+    // The String.wz text: the two characters backslash-n are a line break, and #c ... # is a color
+    // mark that the tooltip does not use.
+    private static List<string> DescLines(string text) =>
+        text.Replace(@"\r\n", "\n").Replace(@"\n", "\n").Replace("#c", "").Replace("#", "")
+            .Split('\n').Select(l => l.Trim()).Where(l => l != "").ToList();
 
     // Saves one flat frame list (int-named png children) as dir/{i}.png.
     private static bool SaveSkillFrames(Wz_Node list, string dir, List<string> into, string outDir, HashSet<string> saved, int id)

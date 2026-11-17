@@ -217,11 +217,8 @@ public partial class MushTownGame
     private bool TryPaySkill(int id) =>
         _skillCost.Pay(_save?.Slots[_slot], id, SkillLv(id), _fighter.Cooldowns);
 
-    private int SkillLv(int id)
-    {
-        if (_save?.Slots[_slot] is not CharaSlot chara) return 0;
-        return chara.SkillLv.TryGetValue(id, out int lv) ? lv : 0;
-    }
+    // Every skill stands at its max level (no skill points); CLI sessions have no character.
+    private int SkillLv(int id) => _save?.Slots[_slot] == null ? 0 : _skills[id].MaxLevel;
 
     // One fresh edge for a key (Esc, the MENU arrows).
     private static bool FreshKey(KeyboardState kb, Keys key, ref bool was)

@@ -211,7 +211,7 @@ public partial class MushTownGame
                 ShowWindow(HotkeyAction.Equip);
             }
             if (shotScreen is "skill" or "skillscroll") { _showSkill = true; _skillTab = _shotSkillTab; }
-            if (shotScreen == "skillscroll") { _passiveScroll = PassiveScrollMax; _passiveSel = _passives.Rows.FindIndex(r => r.Label == "Link: Grounded Body (Ren)"); } // the beginner list at its end, the longest text (Grounded Body) picked
+            if (shotScreen == "skillscroll") _skillScroll = int.MaxValue; // the beginner list at its end (the build clamps it)
             if (shotScreen is "quest" or "questask" or "questforfeit" or "questpick") _showQuest = true;
             if (shotScreen == "settings") _showSettings = true;
             if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
@@ -355,8 +355,6 @@ public partial class MushTownGame
             Mp = Progression.MaxMp(7),
             Str = 28,
             Dex = 10,
-            Sp = 18, // earned 21 (creation 3 + 6 level-ups), spent 3 on Slash Blast
-            SkillLv = new Dictionary<int, int> { { SkillData.SlashBlast, 3 } },
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
             Equips = new List<int>(ItemData.StarterEquips),
             EquipBag = new Dictionary<int, int> { { ItemData.IslandRing, 1 }, { ItemData.LongSword, 1 }, { ItemData.LolicoArmor, 1 } },

@@ -37,7 +37,7 @@ public partial class MushTownGame
     private readonly Dictionary<int, SkillData> _skills = new();
     private SkillCost _skillCost = null!; // live casts over _skills (same dict ref)
     private SkillDamage _skillDmg = null!;
-    private int _skillTab = 1; // 0 Beginner (the default passives), 1 Warrior, 2 Fighter, 3 Crusader
+    private int _skillTab = 1; // 0 Beginner (the default passives), 1..5 = I..V (Warrior, Fighter, Crusader, two empty pages)
     private bool _showInv, _showStat, _showSkill, _showQuest, _showSettings, _showShop;
     private readonly SceneManager _scenes = new();
     private Scene _uiScene = new(); // one tree, ordered by Z (a reload makes a fresh one); not null from the start: shots raise windows before the HUD is built
@@ -166,7 +166,7 @@ public partial class MushTownGame
         foreach (var slider in _sliders) slider.Drag(held, gx);
         UpdateInvWheel(gx, gy); // the wheel scrolls the open inventory under the mouse
         UpdateSkillWheel(); // the wheel scrolls the beginner list of the skill window
-        if (_showSkill) _passiveBar?.Drag(held, gy); else _passiveBar?.Release();
+        if (_showSkill) _skillBar?.Drag(held, gy); else _skillBar?.Release();
         if (_showInv) _invBar?.Drag(held, gy); else _invBar?.Release();
         UpdateShopWheel(gx, gy);
         if (_showShop) { _shopBar?.Drag(held, gy); _shopInvBar?.Drag(held, gy); }

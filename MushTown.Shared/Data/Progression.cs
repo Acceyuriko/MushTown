@@ -25,47 +25,16 @@ public static class Progression
     // skill source client-side (passives, buffs, orbs stay in SkillCast).
     public static readonly Build Beginner = new(4, 4, WeaponAtk, 0, 0, 0);
 
-    // Skill points banked per level-up (creation banks one level too).
-    public const int SpPerLevel = 3;
-
     // Active damage pct at a skill level: lv 1 deals DmgLo, max deals DmgHi,
     // linear between. Single-level skills (max 1) always deal DmgLo.
     public static int SkillDamage(SkillData data, int lv) =>
         data.MaxLevel <= 1 ? data.DmgLo : data.DmgLo + (data.DmgHi - data.DmgLo) * (lv - 1) / (data.MaxLevel - 1);
 
-    // The SP cost of one skill level.
+    // The SP one skill level cost (the SP Reset coupon still refunds with it).
     public const int SkillSpCost = 1;
 
-    // Can the character raise this skill right now? The rule LearnSkill uses:
-    // the character level, an unspent point and headroom under max.
-    public static bool CanLearn(CharaSlot chara, SkillData data)
-    {
-        chara.SkillLv.TryGetValue(data.SkillId, out int lv);
-        return chara.Level >= data.ReqLevel && chara.Sp >= SkillSpCost && lv < data.MaxLevel;
-    }
-
-    // Spends one SP to raise a skill: needs the character level, an unspent
-    // point, and headroom under max. Returns false when nothing happens.
-    public static bool LearnSkill(CharaSlot chara, SkillData data)
-    {
-        if (!CanLearn(chara, data)) return false;
-        chara.SkillLv.TryGetValue(data.SkillId, out int lv);
-        chara.SkillLv[data.SkillId] = lv + 1;
-        chara.Sp -= SkillSpCost;
-        return true;
-    }
-
-    // Raises the skill as far as the SP go (the MAX button). Returns the
-    // levels bought: 0 when nothing happens (no SP, too young, already maxed).
-    public static int LearnSkillMax(CharaSlot chara, SkillData data)
-    {
-        int bought = 0;
-        while (LearnSkill(chara, data)) bought++;
-        return bought;
-    }
-
     // Adds EXP, levels up while the bar is full. Each level: auto stat points
-    // (+4 STR +1 DEX warrior ratio), +3 SP, pools refilled to the max supplied
+    // (+4 STR +1 DEX warrior ratio), pools refilled to the max supplied
     // by the caller. Returns levels gained (0 when the bar is not full yet).
     public static int ApplyExp(CharaSlot chara, long exp, long maxHp)
     {
@@ -77,7 +46,6 @@ public static class Progression
             chara.Level++;
             chara.Str += 4;
             chara.Dex += 1;
-            chara.Sp += SpPerLevel;
             chara.Hp = maxHp;
             chara.Mp = MaxMp(chara.Level);
             ups++;

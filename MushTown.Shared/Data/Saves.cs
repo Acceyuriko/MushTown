@@ -106,7 +106,6 @@ public sealed class SaveStore
             Name = name,
             Job = job,
             Mesos = NewHeroMesos,
-            Sp = Progression.SpPerLevel, // creation banks the first level's points
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
             Equips = new List<int>(ItemData.StarterEquips),
@@ -166,8 +165,8 @@ public sealed class SaveData
 // Use null means an empty bag. The four *Order lists hold cell positions;
 // null/0 means empty and CreateHero creates them through Inventory.Ensure.
 // CashWorn/DecBag hold the free default coupons and are set on creation.
-// SkillLv maps skill -> level (lv 0 = unlearned, no entry); Sp is unspent
-// skill points.
+// SkillLv and Sp are old skill-point fields: no skill is leveled any more (every skill is at its
+// max level), only the SP Reset coupon still reads and clears them.
 public sealed class CharaSlot
 {
     public string Name { get; set; } = "";

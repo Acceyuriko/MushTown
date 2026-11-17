@@ -519,10 +519,6 @@ public sealed class RightLabel : Component, IDrawable
     }
 }
 
-// Live skill numbers per draw (level/SP/cooldown/buff/orbs change
-// without a scene rebuild, so the row reads them every frame).
-public readonly record struct SkillLive(int Lv, int Sp, int Level, float CdMs, float BuffMs, int Orbs);
-
 // One inventory item object: its icon is centered in its own box. The cell
 // object owns the click; this child only draws the item (empty reads live).
 public sealed class InvItem : Component, IDrawable

@@ -120,15 +120,6 @@ public class ProgressionTests
         Assert.AreEqual(5, chara.Mp); // clamped to MaxMp(1)
     }
 
-    // Each level banks 3 SP for the skill window to spend.
-    [TestMethod]
-    public void ApplyExp_BanksSkillPoints()
-    {
-        var chara = new CharaSlot { Name = "hero" };
-        Assert.AreEqual(2, Progression.ApplyExp(chara, 100, Progression.MaxHp(3)));
-        Assert.AreEqual(6, chara.Sp);
-    }
-
     // Active damage lerps lo->hi over the skill's levels (level 1 pays lo).
     [TestMethod]
     public void SkillDamage_LerpsOverLevels()
@@ -138,58 +129,6 @@ public class ProgressionTests
         Assert.AreEqual(250, Progression.SkillDamage(skill, 11));
         Assert.AreEqual(200, Progression.SkillDamage(skill, 6));
         Assert.AreEqual(150, Progression.SkillDamage(new SkillData { DmgLo = 150, MaxLevel = 1 }, 1));
-    }
-
-    // Learning costs one SP and needs the level; maxed or poor stays put.
-    [TestMethod]
-    public void LearnSkill_SpendsOnePoint()
-    {
-        var skill = new SkillData { SkillId = SkillData.SlashBlast, ReqLevel = 1, MaxLevel = 2 };
-        var chara = new CharaSlot { Name = "hero", Level = 5, Sp = 2 };
-        Assert.IsTrue(Progression.LearnSkill(chara, skill));
-        Assert.AreEqual(1, chara.SkillLv[SkillData.SlashBlast]);
-        Assert.AreEqual(1, chara.Sp);
-        Assert.IsTrue(Progression.LearnSkill(chara, skill));
-        Assert.IsFalse(Progression.LearnSkill(chara, skill)); // maxed
-        Assert.AreEqual(0, chara.Sp);
-        Assert.IsFalse(Progression.LearnSkill(chara, new SkillData { SkillId = 1, ReqLevel = 9, MaxLevel = 1 })); // too young
-        Assert.IsFalse(Progression.LearnSkill(chara, new SkillData { SkillId = 2, ReqLevel = 1, MaxLevel = 1 })); // too poor
-    }
-
-    // The MAX button: the skill goes as high as the SP reach.
-    [TestMethod]
-    public void LearnSkillMax_SpendsAllPoints()
-    {
-        var skill = new SkillData { SkillId = SkillData.SlashBlast, ReqLevel = 1, MaxLevel = 10 };
-        var chara = new CharaSlot { Name = "hero", Level = 5, Sp = 5 };
-        Assert.AreEqual(5, Progression.LearnSkillMax(chara, skill));
-        Assert.AreEqual(5, chara.SkillLv[SkillData.SlashBlast]);
-        Assert.AreEqual(0, chara.Sp);
-    }
-
-    // MAX stops at the skill's max level and keeps the rest of the SP.
-    [TestMethod]
-    public void LearnSkillMax_StopsAtMaxLevel()
-    {
-        var skill = new SkillData { SkillId = SkillData.SlashBlast, ReqLevel = 1, MaxLevel = 3 };
-        var chara = new CharaSlot { Name = "hero", Level = 5, Sp = 20 };
-        Assert.AreEqual(3, Progression.LearnSkillMax(chara, skill));
-        Assert.AreEqual(3, chara.SkillLv[SkillData.SlashBlast]);
-        Assert.AreEqual(17, chara.Sp);
-    }
-
-    // MAX with no SP (or too young) buys nothing.
-    [TestMethod]
-    public void LearnSkillMax_NoPoints_BuysNothing()
-    {
-        var skill = new SkillData { SkillId = SkillData.SlashBlast, ReqLevel = 1, MaxLevel = 10 };
-        var chara = new CharaSlot { Name = "hero", Level = 5, Sp = 0 };
-        Assert.AreEqual(0, Progression.LearnSkillMax(chara, skill));
-        Assert.IsFalse(chara.SkillLv.ContainsKey(SkillData.SlashBlast));
-        Assert.AreEqual(0, chara.Sp);
-        var young = new CharaSlot { Name = "hero", Level = 1, Sp = 9 };
-        Assert.AreEqual(0, Progression.LearnSkillMax(young, new SkillData { SkillId = SkillData.Brandish, ReqLevel = 9, MaxLevel = 10 }));
-        Assert.AreEqual(9, young.Sp);
     }
 
     // Level-up refills and potions both use the max supplied by the caller.

@@ -61,13 +61,11 @@ public partial class MushTownGame
             throw new InvalidDataException($"unknown skill: {_shotSkill}");
         if (_shotSkill != 0 && _skills[_shotSkill].Kind == SkillData.KindBuff)
         {
-            // buff shots run the real path (learn, pay, cast): a demo that
+            // buff shots run the real path (pay, cast): a demo that
             // cannot afford the pose fails loud instead of faking it
             _save ??= new SaveData();
-            var chara = _save.Slots[_slot] ??= DemoChara();
+            _save.Slots[_slot] ??= DemoChara();
             var data = _skills[_shotSkill];
-            if (!chara.SkillLv.ContainsKey(_shotSkill) && !Progression.LearnSkill(chara, data))
-                throw new InvalidDataException($"--skill {_shotSkill} cannot learn: demo Lv.{chara.Level} needs Lv.{data.ReqLevel}");
             if (!TryPaySkill(_shotSkill))
                 throw new InvalidDataException($"--skill {_shotSkill} cannot cast: needs Lv.{data.ReqLevel} and {data.Mp} MP");
             CastBuff(_shotSkill);
@@ -139,11 +137,7 @@ public partial class MushTownGame
                 if (_skills[_shotSkill].Kind == SkillData.KindPassive)
                     throw new InvalidDataException($"--skill {_shotSkill} is passive (no art to pose)");
                 var chara = _save?.Slots[_slot];
-                if (chara != null) // window shots learn and pay best-effort (cooldowns show); plain shots have no one
-                {
-                    if (!chara.SkillLv.ContainsKey(_shotSkill)) Progression.LearnSkill(chara, _skills[_shotSkill]);
-                    TryPaySkill(_shotSkill);
-                }
+                if (chara != null) TryPaySkill(_shotSkill); // window shots pay best-effort (cooldowns show); plain shots have no one
                 SpawnCastFx(_shotSkill, _mover.X, _mover.Y, true);
                 int n = _skills[_shotSkill].Effect.Count;
                 if (n <= 5) throw new InvalidDataException($"--skill {_shotSkill} needs 6+ effect frames, got {n}");

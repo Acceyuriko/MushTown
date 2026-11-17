@@ -46,7 +46,7 @@ public static partial class Export
             "inventory" => ExportInventoryUi(ui, outDir),
             "equip" => ExportEquipUi(ui, outDir),
             "stat" => ExportStatUi(ui, outDir),
-            "skill" => ExportSkillUi(ui, outDir),
+            "skill" => ExportSkillUi(ui, WzRoot.LoadCategory(ExporterPaths.DataDir, "Skill"), outDir),
             "quest" => ExportQuestUi(ui, outDir),
             "keys" => ExportKeyUi(ui, outDir),
             "menu" => ExportMenuUi(ui, outDir),
@@ -237,7 +237,7 @@ public static partial class Export
             return;
         }
         // The game panels: one export step per panel.
-        if (!ExportInventoryUi(ui, outDir) || !ExportEquipUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, outDir)
+        if (!ExportInventoryUi(ui, outDir) || !ExportEquipUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, skill, outDir)
             || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportWorldMap(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir)
             || !ExportMenuUi(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir)
             || !ExportShopUi(ui, outDir) || !ExportBuffUi(ui, outDir)
