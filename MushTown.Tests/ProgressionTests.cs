@@ -72,6 +72,30 @@ public class ProgressionTests
     }
 
     [TestMethod]
+    public void ClampPools_NewHeroStartsFull_OldPoolsKeepTheirValue()
+    {
+        var hero = new SaveStore().CreateHero(0, 0, "hero", 110);
+        Progression.ClampPools(hero, 29_358, 9_546); // the first frame in the game
+        Assert.AreEqual((29_358L, 9_546L), (hero.Hp, hero.Mp));
+        var old = new CharaSlot { Name = "old", Hp = 1_000, Mp = 200 };
+        Progression.ClampPools(old, 29_358, 9_546); // a loaded hero is never healed
+        Assert.AreEqual((1_000L, 200L), (old.Hp, old.Mp));
+        Progression.ClampPools(old, 500, 100); // a smaller max pulls the pools down
+        Assert.AreEqual((500L, 100L), (old.Hp, old.Mp));
+    }
+
+    [TestMethod]
+    public void ApplyExp_At200_DoesNotOverflowOrCrash()
+    {
+        var chara = new CharaSlot { Name = "hero", Level = Progression.StartLevel };
+        Assert.AreEqual(4015, Progression.ExpNext(200));
+        Assert.AreEqual(0, Progression.ApplyExp(chara, 4014, Progression.MaxHp(201)));
+        Assert.AreEqual(1, Progression.ApplyExp(chara, 1, Progression.MaxHp(201)));
+        Assert.AreEqual(201, chara.Level); // the bar keeps going past 200: no cap, no throw
+        Assert.AreEqual(0, chara.Exp);
+    }
+
+    [TestMethod]
     public void ApplyExp_BigAward_LevelsTwice()
     {
         var chara = new CharaSlot { Name = "hero" };

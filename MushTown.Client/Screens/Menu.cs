@@ -163,7 +163,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -177,7 +177,14 @@ public partial class MushTownGame
                 PoseCashUse(shotScreen == "cashuserename" ? 5400000 : 5051001);
             if (shotScreen is "dropqty" or "dropqtymax") PoseDropQuantity(shotScreen == "dropqtymax");
             if (shotScreen == "invscroll") { _showInv = true; _invTab = 1; FillInvScrollShot(); }
-            if (shotScreen is "stat" or "stat2" or "equipui" or "decorations" or "hud")
+            if (shotScreen == "stat200") // a hero fresh from the create page: its level, vitals and stats ride on the demo hero
+            {
+                var fresh = new SaveStore().CreateHero(0, 0, "hero", _shotJob != 0 ? _shotJob : 110);
+                var demo = _save!.Slots[0]!;
+                (demo.Job, demo.Level, demo.Exp, demo.Hp, demo.Mp) = (fresh.Job, fresh.Level, fresh.Exp, fresh.Hp, fresh.Mp);
+                (demo.Str, demo.Dex, demo.Int, demo.Luk) = (fresh.Str, fresh.Dex, fresh.Int, fresh.Luk);
+            }
+            if (shotScreen is "stat" or "stat2" or "stat200" or "equipui" or "decorations" or "hud")
                 DressDemoForShot(shotScreen is "equipui" or "decorations");
             if (shotScreen == "fashionworn")
             {
@@ -189,7 +196,7 @@ public partial class MushTownGame
                     Progression.WearCash(chara, id, _items);
                 }
             }
-            if (shotScreen is "stat" or "stat2" or "hud") _showStat = true;
+            if (shotScreen is "stat" or "stat2" or "stat200" or "hud") _showStat = true;
             if (shotScreen == "stat2") _statPage = 1;
             if (shotScreen is "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask")
             {
@@ -905,6 +912,8 @@ public partial class MushTownGame
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         _input.Seed(kb);
         ReseedPortalState(); // the arrival spot, not the old one
+        RefreshStats(); // a new hero's FullPool must be real before the first frame draws (Update only clamps one frame later)
+        ClampPoolsToMax();
         _screen = Screen.Game;
         BuildGameScene();
         PlayScreenBgm(); // the map's own track takes over from the login theme

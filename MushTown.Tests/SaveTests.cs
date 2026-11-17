@@ -78,10 +78,10 @@ public class SaveTests
         Assert.ThrowsException<InvalidDataException>(() => store.CreateHero(1, 0, "toolongheroname", 110));
         var chara = store.Saves[0]!.Slots[0]!;
         Assert.AreEqual("hero", chara.Name);
-        Assert.AreEqual(1, chara.Level);
+        Assert.AreEqual(200, chara.Level);
         Assert.AreEqual(0, chara.Exp);
-        Assert.AreEqual(50, chara.Hp);
-        Assert.AreEqual(5, chara.Mp);
+        Assert.AreEqual(Progression.FullPool, chara.Hp);
+        Assert.AreEqual(Progression.FullPool, chara.Mp);
         Assert.AreEqual(20, chara.Use![ItemData.RedPotion]); // starter kit
         Assert.AreEqual(10, chara.Use[ItemData.BluePotion]);
         Assert.IsNull(chara.X);
@@ -113,6 +113,7 @@ public class SaveTests
         {
             var store = new SaveStore();
             store.CreateHero(0, 0, "hero", 110);
+            store.Version = SaveStore.FormatVersion;
             string json = JsonSerializer.Serialize(store).Replace("\"Skin\":0,", "\"Female\":true,");
             StringAssert.Contains(json, "\"Female\":true");
             File.WriteAllText(path, json);
@@ -460,7 +461,7 @@ public class SaveTests
             // a short outer array: Load pads saves and slots back to the caps
             var source = new SaveStore();
             var hero = source.CreateHero(0, 0, "hero", 110);
-            File.WriteAllText(path, "{\"Saves\":[null,{\"Slots\":[" + JsonSerializer.Serialize(hero) + "]}]}");
+            File.WriteAllText(path, "{\"Version\":" + SaveStore.FormatVersion + ",\"Saves\":[null,{\"Slots\":[" + JsonSerializer.Serialize(hero) + "]}]}");
             var store = SaveStore.Load(path);
             Assert.AreEqual(SaveStore.MaxSaves, store.Saves.Count);
             Assert.IsNotNull(store.Saves[0]);
@@ -488,15 +489,15 @@ public class SaveTests
         string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
         try
         {
-            File.WriteAllText(path, """{"Saves":null}""");
+            File.WriteAllText(path, """{"Version":1,"Saves":null}""");
             Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
-            File.WriteAllText(path, """{"Saves":[null,null,null,null]}""");
+            File.WriteAllText(path, """{"Version":1,"Saves":[null,null,null,null]}""");
             Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
-            File.WriteAllText(path, """{"Saves":[{"Slots":null}]}""");
+            File.WriteAllText(path, """{"Version":1,"Saves":[{"Slots":null}]}""");
             Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
             // 61 slots breaks the 60 cap (4 nulls would just pad back up)
             string over = string.Join(",", Enumerable.Repeat("null", 61));
-            File.WriteAllText(path, """{"Saves":[{"Slots":[""" + over + """]}]}""");
+            File.WriteAllText(path, """{"Version":1,"Saves":[{"Slots":[""" + over + """]}]}""");
             Assert.ThrowsException<InvalidDataException>(() => SaveStore.Load(path));
         }
         finally
@@ -505,4 +506,66 @@ public class SaveTests
         }
     }
 
+    [TestMethod]
+    public void CreateHero_Level200_AllApOnTheMainStat()
+    {
+        var store = new SaveStore();
+        var hero = store.CreateHero(0, 0, "hero", 110); // Hero: STR
+        Assert.AreEqual(200, hero.Level);
+        Assert.AreEqual(0, hero.Exp);
+        Assert.AreEqual(1014, Progression.StartAp);
+        Assert.AreEqual((1018L, 4L, 4L, 4L), (hero.Str, hero.Dex, hero.Int, hero.Luk));
+        var mage = store.CreateHero(0, 1, "mage", 210); // Fire/Poison: INT
+        Assert.AreEqual((4L, 4L, 1018L, 4L), (mage.Str, mage.Dex, mage.Int, mage.Luk));
+        Assert.AreEqual(Progression.FullPool, hero.Hp);
+        Assert.AreEqual(Progression.FullPool, hero.Mp);
+        Assert.AreEqual(SaveStore.NewHeroMesos, hero.Mesos);
+    }
+
+    [TestMethod]
+    public void Save_Load_RoundtripsLevelApAndMesos()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.CreateHero(0, 0, "hero", 110);
+            store.CreateHero(0, 1, "mage", 210);
+            store.Save(path);
+            var heroes = SaveStore.Load(path).Saves[0]!.Slots;
+            Assert.AreEqual((200, 0L, 1018L, 4L, 4L, 4L, SaveStore.NewHeroMesos),
+                (heroes[0]!.Level, heroes[0]!.Exp, heroes[0]!.Str, heroes[0]!.Dex, heroes[0]!.Int, heroes[0]!.Luk, heroes[0]!.Mesos));
+            Assert.AreEqual((200, 1018L), (heroes[1]!.Level, heroes[1]!.Int));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Load_OtherFormatVersion_IsVoid_NoThrow()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.CreateHero(0, 0, "old", 110);
+            string json = JsonSerializer.Serialize(store);
+            // number 0 is any file from before the version field; another number is void too
+            File.WriteAllText(path, json);
+            Assert.IsTrue(SaveStore.Load(path).Saves.All(s => s!.Slots.All(h => h == null)));
+            File.WriteAllText(path, json.Replace("\"Version\":0", "\"Version\":" + (SaveStore.FormatVersion + 1)));
+            Assert.IsTrue(SaveStore.Load(path).Saves.All(s => s!.Slots.All(h => h == null)));
+            File.WriteAllText(path, json.Replace("\"Version\":0,", "")); // no number at all
+            var loaded = SaveStore.Load(path);
+            Assert.AreEqual(SaveStore.MaxSaves, loaded.Saves.Count);
+            Assert.IsTrue(loaded.Saves.All(s => s!.Slots.All(h => h == null)));
+            loaded.CreateHero(0, 0, "old", 110); // the slot and the name are free again
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

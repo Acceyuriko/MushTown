@@ -14,6 +14,12 @@ public sealed class SaveStore
     public const int MaxHeroes = 60; // 12 per page x 5 pages, like the official select
     public const long NewHeroMesos = 10_000_000_000L; // new hero starting mesos
 
+    // The save format number. Files written before it existed have none (0), so they never match.
+    // Raise it whenever an old file must stop loading (the 200-level start did: all old heroes are void).
+    public const int FormatVersion = 1;
+
+    // Default 0 is on purpose: a file without this field reads as 0, so it never matches FormatVersion and is void.
+    public int Version { get; set; }
     public List<SaveData?> Saves { get; set; } = new();
 
     public SaveStore()
@@ -26,7 +32,8 @@ public sealed class SaveStore
         while (list.Count < n) list.Add(null);
     }
 
-    // Missing file means first run: start empty. Bad JSON fails loud.
+    // Missing file means first run: start empty. A file of another format version is void: it is
+    // not read, nothing is shown, and the next save overwrites it. Bad JSON fails loud.
     public static SaveStore Load(string path)
     {
         if (!File.Exists(path)) return new SaveStore();
@@ -40,6 +47,7 @@ public sealed class SaveStore
         {
             throw new InvalidDataException($"corrupt save file: {path}", ex);
         }
+        if (store.Version != FormatVersion) return new SaveStore();
         if (store.Saves == null || store.Saves.Count > MaxSaves)
             throw new InvalidDataException($"corrupt save file: {path}");
         Pad(store.Saves, MaxSaves);
@@ -71,6 +79,7 @@ public sealed class SaveStore
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var slim = new SaveStore
         {
+            Version = FormatVersion,
             Saves = Saves.Select(s => s == null ? null : new SaveData { Slots = Trimmed(s.Slots) }).ToList(),
         };
         string tmp = path + ".tmp";
@@ -105,11 +114,15 @@ public sealed class SaveStore
         {
             Name = name,
             Job = job,
+            Level = Progression.StartLevel,
+            Hp = Progression.FullPool,
+            Mp = Progression.FullPool,
             Mesos = NewHeroMesos,
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
             Equips = new List<int>(ItemData.StarterEquips),
         };
+        Progression.GiveStartAp(chara, StatTables.Job(job).Main);
         Inventory.GiveCashDefaults(chara);
         Inventory.Ensure(chara);
         heroes[slot] = chara;

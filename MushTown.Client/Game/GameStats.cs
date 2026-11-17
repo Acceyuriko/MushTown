@@ -175,6 +175,11 @@ public partial class MushTownGame
             (int)CurrentJob().Weapon);
     }
 
+    private void ClampPoolsToMax()
+    {
+        if (_save?.Slots[_slot] is CharaSlot chara) Progression.ClampPools(chara, MaxHpNow(), MaxMpNow());
+    }
+
     private long MaxHpNow() => _stats.IntValue(StatKey.MAX_HP);
     private long MaxMpNow() => _stats.IntValue(StatKey.MAX_MP);
     private int OwnDef() => (int)_stats.IntValue(StatKey.DEF);

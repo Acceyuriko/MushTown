@@ -15,6 +15,33 @@ public static class Progression
     // clear, so grinding the training mobs always outruns the cap.
     public static long ExpNext(int level) => 20L * level + 15;
 
+    // A new hero starts at level 200 with every AP spent on the class's main stat.
+    // Total AP follows the v271 4th-job formula 14 + 5 per level (.dsh/research/character-baseline.md).
+    public const int StartLevel = 200;
+    public const int StartAp = 14 + 5 * StartLevel;
+
+    public static void GiveStartAp(CharaSlot chara, StatKey main)
+    {
+        switch (main)
+        {
+            case StatKey.STR: chara.Str += StartAp; break;
+            case StatKey.DEX: chara.Dex += StartAp; break;
+            case StatKey.INT: chara.Int += StartAp; break;
+            case StatKey.LUK: chara.Luk += StartAp; break;
+        }
+    }
+
+    // A new hero is born with full pools. The real max (with passives) lives in the game's stat
+    // snapshot, so the save holds this "full" value and the first frame in the game clamps it down.
+    public const long FullPool = long.MaxValue;
+
+    // Pools never exceed the max (a skill expiring or a new hero's FullPool shrinks them; never heals).
+    public static void ClampPools(CharaSlot chara, long maxHp, long maxMp)
+    {
+        chara.Hp = Math.Min(chara.Hp, maxHp);
+        chara.Mp = Math.Min(chara.Mp, maxMp);
+    }
+
     // Vitals grow per level; a level-up refills both pools (official does too).
     public static long MaxHp(int level) => 50 + 30L * (level - 1);
     public static long MaxMp(int level) => 5 + 5L * (level - 1);
