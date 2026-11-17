@@ -4,34 +4,30 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The sixteen fixed cells of the official bottom strip. A cell draws the official
+// The 32 cells of the official bottom strip, two rows of 16. A cell draws the official
 // cap of its key and the target the table binds to that key; nothing bound, only
-// the cap. A key with an Item target drinks its potion. A cell is a drop area
+// the cap. The key of each cell comes from the active preset (CharaSlot.QuickKeys). A key with an Item target drinks its potion. A cell is a drop area
 // for the click-style drag: a click picks its target up, a click while holding
 // binds the held thing to its key.
 public partial class MushTownGame
 {
-    // The key of each cell, in strip order.
-    private static readonly Keys[] SlotKeys =
+    private const int QslotColumns = 16; // cells in a row of the strip
+
+    // The cell of each slot, in strip order (row by row): a drop asks whether the
+    // point is on the cell and not on a window dragged over the strip.
+    private readonly GameObject[] _cells = new GameObject[KeyDefaults.QuickKeys().Count];
+
+    // The key name of a cell: the active preset's list, the defaults with no character.
+    private string SlotName(int cell)
     {
-        Keys.LeftControl, Keys.LeftAlt, Keys.I, Keys.C,
-        Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6,
-        Keys.D7, Keys.D8, Keys.D9, Keys.D0, Keys.OemMinus, Keys.OemPlus,
-    };
+        if (Hero is not { } chara) return DefaultQuickKeys[cell];
+        KeyBindings.Ensure(chara);
+        return chara.QuickKeys![chara.ActivePreset][cell];
+    }
 
-    // The cell of each slot, in strip order: a drop asks whether the point is
-    // on the cell and not on a window dragged over the strip.
-    private readonly GameObject[] _cells = new GameObject[SlotKeys.Length];
+    private static readonly List<string> DefaultQuickKeys = KeyDefaults.QuickKeys();
 
-    // The name and the cap art of each key, from the key window's table
-    // (keys.json). Built once: the strip draws sixteen cells every frame and
-    // must not build a string per cell.
-    private static string[]? _slotNames;
-    private static string[] SlotNames =>
-        _slotNames ??= SlotKeys.Select(k => k.ToString()).ToArray();
-    private static string[]? _slotCaps;
-    private static string[] SlotCaps =>
-        _slotCaps ??= SlotNames.Select(KeyConfigWindow.CapArt).ToArray();
+    private Keys SlotKey(int cell) => Enum.Parse<Keys>(SlotName(cell));
 
     // The key window while it is open: the strip draws its draft and a drop on a
     // cell is a drop on that key.
@@ -40,14 +36,14 @@ public partial class MushTownGame
     private GameObject BuildQuickSlots()
     {
         var root = new GameObject();
-        for (int i = 0; i < SlotKeys.Length; i++)
+        for (int i = 0; i < _cells.Length; i++)
         {
             int slot = i; // its own copy: the closures below outlive the loop and a for loop shares one variable
             var cell = new GameObject();
             _cells[slot] = cell;
             cell.Add(new Rect(QslotCell(slot)));
             cell.Add(new ItemTip(() => ItemOn(slot))); // the tooltip of the bound item
-            cell.Add(new QuickCell(SlotCaps[slot], () => IconOn(slot), LoadArt));
+            cell.Add(new QuickCell(() => KeyConfigWindow.CapArt(SlotName(slot)), () => IconOn(slot), LoadArt));
             cell.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => PickSlot(slot) }); // the drop is taken before the click chain; PickSlot plays the click
             cell.Add(new Grab(() => Pickable(slot)));
             root.AddChild(cell);
@@ -62,7 +58,7 @@ public partial class MushTownGame
     private BindTarget? SlotTarget(int cell)
     {
         var keyWin = DraftWindow;
-        return keyWin == null ? _input.TargetOf(SlotKeys[cell]) : keyWin.DraftOn(SlotNames[cell]);
+        return keyWin == null ? _input.TargetOf(SlotKey(cell)) : keyWin.DraftOn(SlotName(cell));
     }
 
     // A click on a cell with something to pick up: the action, skill or item
@@ -131,10 +127,10 @@ public partial class MushTownGame
         if (cell < 0) return false; // a window covers the strip: the click is its
         if (keyWin != null)
         {
-            keyWin.ApplyDrop(SlotNames[cell], target); // a cell is the same key as its cap on the keyboard
+            keyWin.ApplyDrop(SlotName(cell), target); // a cell is the same key as its cap on the keyboard
             return true;
         }
-        return BindSlotLive(SlotKeys[cell], target); // no draft open: the cell binds the live preset
+        return BindSlotLive(SlotKey(cell), target); // no draft open: the cell binds the live preset
     }
 
     // The drop landed on a cell with the key window closed: the key binds now.

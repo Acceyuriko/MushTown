@@ -218,6 +218,7 @@ public sealed class CharaSlot
     public List<int>? DamageSkins { get; set; } // saved damage skin ids (null = empty)
     public List<int>? CashWorn { get; set; } // worn decorative cash item ids (Fashion, current hair/face coupons)
     public List<Dictionary<string, string>>? KeyPresets { get; set; } // three key -> target maps (null = defaults)
+    public List<List<string>>? QuickKeys { get; set; } // three lists of the 32 strip key names, row by row, one per preset (null = defaults)
     public int ActivePreset { get; set; } // which of the three is live (0..2)
     public List<int>? Equips { get; set; } // worn equip ids (null = nothing worn)
     public Dictionary<int, int> SkillLv { get; set; } = new();

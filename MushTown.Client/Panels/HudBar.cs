@@ -409,7 +409,7 @@ public partial class MushTownGame
         qslot.Add(new Rect(QslotRect()));
         qslot.Add(new Picture("ui/hud_qslot.png"));
         _uiScene.Add(qslot); // the strip: the plain official cells, no gloss layer (the official cover is a second layer that has to keep its own 562x73 size and -2,-3 spot; the plain cells are the look we want)
-        _uiScene.Add(BuildQuickSlots()); // the sixteen key cells of the same strip
+        _uiScene.Add(BuildQuickSlots()); // the 32 key cells of the same strip
         _uiScene.Add(BuildQuestHelper()); // the quest helper bar: the count, the buttons, the quest list
         _uiScene.Add(BuildBuffBar()); // the buff bar: the live buffs, top right
         var bossBar = new GameObject { NoHit = true };
@@ -654,7 +654,8 @@ public partial class MushTownGame
         return $"EXP : {value:#,##0} / {max:#,##0} [{pct:0.00}%]";
     }
 
-    private static Rectangle QslotCell(int i) => new(QslotRect().X + i * 35, QslotRect().Y, 32, 32); // the official cells: 32x32, pitch 35
+    private static Rectangle QslotCell(int i) => new(
+        QslotRect().X + i % QslotColumns * Layout.QslotPitch.X, QslotRect().Y + i / QslotColumns * Layout.QslotPitch.Y, 32, 32); // the official cells: 32x32
 
     // Rounds the title strip's top corners in place (drawn stretched ~2x wide,
     // so the native ellipse is rx=2 by ry=3).

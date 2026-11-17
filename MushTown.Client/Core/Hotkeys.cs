@@ -121,19 +121,29 @@ public static class KeyDefaults
         ["Space"] = "Talk",
         ["Z"] = "Pickup",
     };
+
+    // The 32 keys of the bottom strip, row by row (16 a row): the default of every preset.
+    public static List<string> QuickKeys() => new()
+    {
+        "Q", "W", "E", "R", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D0", "U", "P",
+        "A", "S", "D", "F", "LeftControl", "LeftAlt", "Z", "X", "C", "V", "I", "J", "K", "L", "M", "N",
+    };
 }
 
 // The table operations, testable without a game instance.
 public static class KeyBindings
 {
-    // A character without the field (the old save) starts from the defaults.
+    // A character without a field (the old save) starts from the defaults.
     public static void Ensure(CharaSlot chara)
     {
-        if (chara.KeyPresets == null)
-            chara.KeyPresets = new List<Dictionary<string, string>>
-            {
-                KeyDefaults.Table(), KeyDefaults.Table(), KeyDefaults.Table(),
-            };
+        chara.KeyPresets ??= new List<Dictionary<string, string>>
+        {
+            KeyDefaults.Table(), KeyDefaults.Table(), KeyDefaults.Table(),
+        };
+        chara.QuickKeys ??= new List<List<string>>
+        {
+            KeyDefaults.QuickKeys(), KeyDefaults.QuickKeys(), KeyDefaults.QuickKeys(),
+        };
     }
 
     // The default action -> key map (the key window's Default button).
@@ -361,6 +371,7 @@ public partial class MushTownGame
         var chara = Hero!; // the key window hides Copy without a character
         KeyBindings.Ensure(chara);
         chara.KeyPresets![to] = new Dictionary<string, string>(chara.KeyPresets[from]);
+        chara.QuickKeys![to] = new List<string>(chara.QuickKeys[from]);
         if (to == chara.ActivePreset) _keysDirty = true;
         SaveChara();
     }

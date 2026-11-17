@@ -852,7 +852,8 @@ public sealed class KeyConfigWindow : UiWindow
             foreach (var s in Spots.Keys)
                 if (s.Cap != "") _capArt[KeyName(s.Code)] = "ui/" + s.Cap;
         }
-        string first = keyName.Split('+', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        int plus = keyName.IndexOf('+');
+        string first = plus < 0 ? keyName : keyName[..plus]; // the strip asks every frame: no split
         return _capArt.GetValueOrDefault(first, "");
     }
 
