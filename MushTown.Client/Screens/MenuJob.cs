@@ -12,7 +12,7 @@ public partial class MushTownGame
     // the first card 35px under the baked title (pitch measured off the art).
     private const int JobCellTop = 35, JobCellPitchX = 161, JobCellPitchY = 81;
     private const int JobCols = 2, JobRows = 7;
-    private const int JobPlayable = 110; // every other class answers "Not playable yet."
+    private const int JobPlayable = 210; // Fire/Poison Mage: the picked card on entry; every other class answers "Not playable yet."
     private const int JobTextW = 305; // WZ descWH width: name, blurb, and stat rows use it
     private string? _jobArt; // class art currently in _textures (BuildJobScene keeps one)
     private SpineClip? _spine; // baked animation for the picked class, if it has one
@@ -230,11 +230,17 @@ public partial class MushTownGame
         if (enter && took == null && _screen == Screen.Job) JobMake();
     }
 
+    // The playable class starts picked, on its own page.
+    private void PickDefaultJob()
+    {
+        _jobPick = _jobs.FindIndex(j => j.Id == JobPlayable);
+        _jobPage = _jobPick / (JobCols * JobRows);
+    }
+
     private void EnterJob(int slot)
     {
         _slot = slot;
-        _jobPick = 0; // Hero first (WZ card order)
-        _jobPage = 0;
+        PickDefaultJob();
         _screen = Screen.Job;
         BuildJobScene();
         _scenes.Show(_menuScene);

@@ -587,6 +587,7 @@ public partial class MushTownGame
             _jobPage = at / (JobCols * JobRows);
             _jobPick = at;
         }
+        else if (_shotScreen == "job") PickDefaultJob(); // the job shot poses the page the real menu opens on (the roster loads here, after the shot setup)
         foreach (var job in _jobs) { LoadTexture(job.Card); LoadTexture(job.Name); LoadTexture(job.Mark); } // big art loads on pick
         for (int d = 0; d <= 9; d++) { LoadTexture($"ui/hud_lv{d}.png"); LoadTexture($"ui/hud_num{d}.png"); }
         foreach (var item in _items.Values) LoadTexture(item.Image); // icons for the scanned defs

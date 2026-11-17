@@ -517,6 +517,8 @@ public class SaveTests
         Assert.AreEqual((1018L, 4L, 4L, 4L), (hero.Str, hero.Dex, hero.Int, hero.Luk));
         var mage = store.CreateHero(0, 1, "mage", 210); // Fire/Poison: INT
         Assert.AreEqual((4L, 4L, 1018L, 4L), (mage.Str, mage.Dex, mage.Int, mage.Luk));
+        Assert.AreEqual((210, 450001000), (mage.Job, mage.Map)); // Fire/Poison, born in Nameless Town
+        Assert.IsNull(mage.X); // never played: the map's own spawn point
         Assert.AreEqual(Progression.FullPool, hero.Hp);
         Assert.AreEqual(Progression.FullPool, hero.Mp);
         Assert.AreEqual(SaveStore.NewHeroMesos, hero.Mesos);
@@ -536,6 +538,7 @@ public class SaveTests
             Assert.AreEqual((200, 0L, 1018L, 4L, 4L, 4L, SaveStore.NewHeroMesos),
                 (heroes[0]!.Level, heroes[0]!.Exp, heroes[0]!.Str, heroes[0]!.Dex, heroes[0]!.Int, heroes[0]!.Luk, heroes[0]!.Mesos));
             Assert.AreEqual((200, 1018L), (heroes[1]!.Level, heroes[1]!.Int));
+            Assert.AreEqual((210, 450001000, SaveStore.NewHeroMesos), (heroes[1]!.Job, heroes[1]!.Map, heroes[1]!.Mesos));
         }
         finally
         {

@@ -91,10 +91,10 @@ public partial class MushTownGame
         var (top, image) = NpcFrame(a);
         DrawTexture(image, top.X, top.Y, n.FacingRight);
         var tag = _ui.GetSmall(_npcs[n.NpcId].Name);
-        // The tag hangs under the middle of the art, not under the spawn point:
-        // a flipped draw mirrors the picture around the origin, so the two are
-        // not the same spot.
-        int cx = top.X + _textures[image].Width / 2 - _camera.X;
+        // The tag hangs under the middle of the first frame, not under the spawn point
+        // (a flipped draw mirrors the picture around the origin, so the two are not the
+        // same spot) and not under the playing frame (that one shakes the tag).
+        int cx = NpcAnchor(a).CenterX - _camera.X;
         int tagY = n.Cy - _camera.Y + _balloonLay.Get("npcNameDown", 2); // the name sits under the feet
         int padX = _balloonLay.Get("npcNamePadX", 3);
         DrawTag(new Rectangle(cx - tag.Width / 2 - padX, tagY, tag.Width + padX * 2, _balloonLay.Get("npcNameH", 16)), tag);

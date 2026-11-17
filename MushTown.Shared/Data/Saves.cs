@@ -15,6 +15,7 @@ public sealed class SaveStore
     public const int QuickKeyCount = 32; // keys of the bottom strip in one preset (two rows of 16)
     public const int MaxHeroes = 60; // 12 per page x 5 pages, like the official select
     public const long NewHeroMesos = 10_000_000_000L; // new hero starting mesos
+    public const int StartMap = 450001000; // Nameless Town: where a new hero (and the host with no save) starts
 
     // The save format number. Files written before it existed have none (0), so they never match.
     // Raise it whenever an old file must stop loading (the 200-level start did: all old heroes are void).
@@ -128,6 +129,7 @@ public sealed class SaveStore
             Name = name,
             Job = job,
             Level = Progression.StartLevel,
+            Map = StartMap,
             Hp = Progression.FullPool,
             Mp = Progression.FullPool,
             Mesos = NewHeroMesos,

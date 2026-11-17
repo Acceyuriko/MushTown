@@ -18,7 +18,7 @@ public partial class MushTownGame : Game
     // The feet live in Shared now (PlayerMover); only the map-switch beat stays here.
     private const int LoadBeat = 10;      // black frames shown on map switch (~170ms)
 
-    private const int SpawnMapId = 10000; // Maple Island: Southperry
+    private const int SpawnMapId = SaveStore.StartMap; // Nameless Town
 
     private readonly GraphicsDeviceManager _graphics;
     private readonly string _assetsDir;
@@ -322,6 +322,9 @@ public partial class MushTownGame : Game
                     SnapCamera(); // the bubble is placed by the camera: move it with the player
                     // a shot renders without Update: make this NPC say its line now
                     _npcSay.Say(near.Spawn.NpcId, 0); // the first line: the same picture every run
+                    // a name ending in _f<n> (npcbubble_f3) sets the clock to the start of stand frame n
+                    if (System.Text.RegularExpressions.Regex.Match(Path.GetFileNameWithoutExtension(_shotPath)!, @"_f(\d+)") is { Success: true } at)
+                        _timeMs = LifeIdle(0, near.Spawn.NpcId).Delays.Take(int.Parse(at.Groups[1].Value)).Sum();
                 }
             }
 

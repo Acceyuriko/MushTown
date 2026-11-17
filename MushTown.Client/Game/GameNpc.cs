@@ -43,11 +43,20 @@ public partial class MushTownGame
         return (new Point(x, n.Cy - origin.Y), image);
     }
 
-    // Where an NPC's head is on the screen: the middle of the playing frame, its top edge.
+    // The fixed spot the name tag and the bubbles hang on (first frame, in the world).
+    // The click box and the tips keep the playing frame: they follow the pixels drawn.
+    private (int CenterX, int TopY) NpcAnchor(NpcArt a)
+    {
+        var art = a.Owner.Get<LifeStand>()!.Art;
+        var n = a.Spawn;
+        return SceneMath.NpcAnchor(n.X, n.Cy, n.FacingRight, art.Origins, i => _textures[art.Images[i]].Width);
+    }
+
+    // Where an NPC's head is on the screen: the middle of its first frame, its top edge.
     private Point NpcHead(NpcArt a)
     {
-        var (top, image) = NpcFrame(a);
-        return new Point(top.X + _textures[image].Width / 2 - _camera.X, top.Y - _camera.Y);
+        var (x, y) = NpcAnchor(a);
+        return new Point(x - _camera.X, y - _camera.Y);
     }
 
     // The talk panel opens on this NPC. A mouse-opened dialog ignores the

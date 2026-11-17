@@ -203,6 +203,17 @@ public static class SceneMath
     // Left edge of a part mirrored around feetX (DrawTexture flips inside the rect).
     public static int FlipDrawX(int feetX, int partX, int texWidth) => feetX - partX - texWidth;
 
+    // Where an NPC's name tag and bubbles hang: the middle of its first stand frame and that
+    // frame's top edge. Only frame 0 counts: the later frames each carry their own origin and
+    // size, so an anchor read from the playing frame shakes left and right (and up and down).
+    // widthOf(i) is the picture width of frame i.
+    public static (int CenterX, int TopY) NpcAnchor(int feetX, int feetY, bool facingRight, IReadOnlyList<Origin> origins, Func<int, int> widthOf)
+    {
+        int w = widthOf(0);
+        int left = facingRight ? FlipDrawX(feetX, -origins[0].X, w) : feetX - origins[0].X;
+        return (left + w / 2, feetY - origins[0].Y);
+    }
+
     // Bar fill width, integer math (a float ratio can round a boundary
     // pixel the other way). Same expression the legacy draws used, so
     // corrupt saves break exactly like before (loud, not clamped).

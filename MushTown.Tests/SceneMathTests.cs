@@ -426,6 +426,23 @@ public class SceneMathTests
     }
 
     [TestMethod]
+    public void NpcAnchor_ReadsOnlyTheFirstFrame()
+    {
+        // Two stands share frame 0; the later frames differ in origin and size (the Legato case).
+        Origin[] plain = [new(30, 80), new(30, 80)];
+        Origin[] shaky = [new(30, 80), new(26, 83)];
+        int[] plainW = [60, 60], shakyW = [60, 50];
+        foreach (bool right in new[] { false, true })
+        {
+            var a = SceneMath.NpcAnchor(500, 300, right, plain, i => plainW[i]);
+            var b = SceneMath.NpcAnchor(500, 300, right, shaky, i => shakyW[i]);
+            Assert.AreEqual(a, b);
+        }
+        Assert.AreEqual((500, 220), SceneMath.NpcAnchor(500, 300, false, plain, i => plainW[i])); // 500-30+30
+        Assert.AreEqual((500, 220), SceneMath.NpcAnchor(500, 300, true, plain, i => plainW[i])); // mirrored: 500-(-30)-60+30
+    }
+
+    [TestMethod]
     public void StepTo_SameLevel_PicksIt()
     {
         var same = new FootholdItem { X1 = 90, Y1 = 100, X2 = 200, Y2 = 100 };
