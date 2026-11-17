@@ -47,7 +47,7 @@ public class StatDisplayTests
         Assert.AreEqual("0.00%", StatDisplay.Text(Snap(), StatDisplay.IedRow));
         Assert.AreEqual("0.00%", StatDisplay.Text(Snap(), 7)); // damage points are already the panel number
         Assert.AreEqual("35.00%", StatDisplay.Text(Defaults, StatDisplay.FinalDamageRow));
-        Assert.AreEqual("71.56%", StatDisplay.Text(Defaults, StatDisplay.IedRow));
+        Assert.AreEqual("72.53%", StatDisplay.Text(Defaults, StatDisplay.IedRow));
     }
 
     [TestMethod]
@@ -116,7 +116,7 @@ public class StatDisplayTests
         var lines = StatDisplay.Sources(Defaults, StatDisplay.IedRow);
         Assert.AreEqual(7, lines.Count); // six sources and the total
         Assert.AreEqual("Total", lines[^1].Label);
-        Assert.AreEqual(71.564032, lines[^1].Value, 1e-6);
+        Assert.AreEqual(72.53344, lines[^1].Value, 1e-6);
         Assert.IsTrue(lines.Take(6).All(l => l.Label != "Total" && l.Value > 0));
         Assert.AreEqual(20.0, lines.First(l => l.Label.Contains("Light Wash")).Value, 1e-9);
         var final = StatDisplay.Sources(Defaults, StatDisplay.FinalDamageRow);

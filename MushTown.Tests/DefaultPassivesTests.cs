@@ -52,19 +52,18 @@ public class DefaultPassivesTests
     [TestMethod]
     public void IgnoreDefense_SourcesMultiply()
     {
-        // 20, 12, 15, 10, 40 and 12 percent: 1 - 0.8 * 0.88 * 0.85 * 0.9 * 0.6 * 0.88, about 71.6%.
+        // 20, 15, 15, 10, 40 and 12 percent: 1 - 0.8 * 0.85 * 0.85 * 0.9 * 0.6 * 0.88, about 72.5%.
         double left = DamageChain.IedMultiplier(Snap);
-        Assert.AreEqual(0.28435968, left, 1e-9);
-        Assert.AreEqual(71.564032, (1 - left) * 100, 1e-6);
+        Assert.AreEqual(0.2746656, left, 1e-9);
+        Assert.AreEqual(72.53344, (1 - left) * 100, 1e-6);
     }
 
     [TestMethod]
     public void DamageTaken_IsZeroAndRenOnlyAndMultiplies()
     {
-        Assert.AreEqual(0.82 * 0.94, Snap.Multiplier(StatKey.DAMAGE_TAKEN), 1e-9); // takes about 22.9% less
+        Assert.AreEqual(0.8 * 0.94, Snap.Multiplier(StatKey.DAMAGE_TAKEN), 1e-9); // takes about 24.8% less (Zero -20%, Ren -6%, both in the WZ)
         Assert.IsFalse(DefaultPassives.All.Any(m => m.Key == StatKey.DAMAGE_TAKEN && m.Label.Contains("Pirate")));
-        Assert.IsTrue(DefaultPassives.All
-            .Where(m => m.Key == StatKey.DAMAGE_TAKEN).All(m => m.Label.Contains("wiki, not verified")));
+        Assert.AreEqual(2, DefaultPassives.All.Count(m => m.Key == StatKey.DAMAGE_TAKEN)); // Zero and Ren
     }
 
     [TestMethod]

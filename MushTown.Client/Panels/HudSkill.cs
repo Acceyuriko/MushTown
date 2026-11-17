@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -20,7 +21,7 @@ public partial class MushTownGame
     {
         "skill_bg.png", "skill_panel.png", "skill_bar.png", "skill_row.png",
         "skill_row_sel.png", "skill_sp.png", "skill_tab1.png", "skill_tab2.png",
-        "skill_tab3.png", "skill_tabsel1.png", "skill_tabsel2.png", "skill_tabsel3.png",
+        "skill_tab3.png", "skill_tab0.png", "skill_tabsel0.png", "skill_tabsel1.png", "skill_tabsel2.png", "skill_tabsel3.png",
         "skill_spup_n.png", "skill_spup_h.png", "skill_spup_p.png", "skill_spup_d.png",
         "skill_tip_nw.png", "skill_tip_ne.png", "skill_tip_sw.png", "skill_tip_se.png",
         "skill_tip_n.png", "skill_tip_s.png", "skill_tip_w.png", "skill_tip_e.png",
@@ -32,10 +33,23 @@ public partial class MushTownGame
     private int _skillSel;
     private bool _skillDragged;
 
-    // Skill window tabs (one per job) + rows: the skill ids.
-    private static readonly string[] SkillTabNames = { "Warrior", "Fighter", "Crusader" };
+    // The skill page of the default passives (the beginner page): the skills the
+    // game hands to every Lv.200 character. Read only, listed from
+    // assets/skill/passive/passives.json, eight rows at a time.
+    private const int SkillTabBeginner = 0;
+    private const int PassiveVisibleRows = 8;
+    private DefaultPassiveSkillData _passives = new();
+    private int _passiveSel;     // the picked row of the whole list
+    private int _passiveScroll;  // the first row shown
+    private int _skillWheel;     // the last wheel value the beginner list saw
+    private ScrollBar? _passiveBar;
+    private int PassiveScrollMax => _passives.Rows.Count - PassiveVisibleRows;
+
+    // Skill window tabs (the beginner page, then one per job) + rows: the skill ids.
+    private static readonly string[] SkillTabNames = { "Beginner", "Warrior", "Fighter", "Crusader" };
     private static readonly int[][] SkillTabs = new[]
     {
+        Array.Empty<int>(), // the beginner page lists the default passives, not skill ids
         new[] { SkillData.SlashBlast, SkillData.IronBody, SkillData.WarLeap, SkillData.WarriorMastery, SkillData.LeapAttack, SkillData.GuardianArmor },
         new[] { SkillData.Brandish, SkillData.WeaponMastery, SkillData.SpiritBlade, SkillData.ComboAttack, SkillData.FlashBlade, SkillData.AgileArms, SkillData.FinalAttack, SkillData.PhysicalTraining },
         new[] { SkillData.IntrepidSlash, SkillData.BeamBlade, SkillData.Rush, SkillData.ScarringSword, SkillData.ComboSynergy, SkillData.SelfRecovery, SkillData.ChanceAttack, SkillData.Endure },
@@ -68,7 +82,9 @@ public partial class MushTownGame
         body.Add(new Picture("ui/skill_bg.png")); // the window frame (the SKILL title is baked in)
         body.Add(new Picture("ui/skill_panel.png", _skillLay.Get("panelX", 6), _skillLay.Get("panelY", 22))); // the light body panel
         body.Add(new Picture("ui/skill_bar.png", _skillLay.Get("barX", 8), _skillLay.Get("barY", 47))); // the blue bar: the picked skill
-        body.Add(new SkillPickBar(() => _skills[SelectedSkillId], () => SkillLiveOf(SelectedSkillId)));
+        bool beginner = _skillTab == SkillTabBeginner;
+        if (beginner) body.Add(new PassivePickBar(() => _passives.Rows[_passiveSel]));
+        else body.Add(new SkillPickBar(() => _skills[SelectedSkillId], () => SkillLiveOf(SelectedSkillId)));
         body.Add(new Picture("ui/skill_sp.png", _skillLay.Get("spX", 212), _skillLay.Get("spY", 29))); // SKILL POINT + the value box
         body.Add(new RightLabel((ui, t) => ui.GetSmall(t), () => SkillSpText(), _skillLay.Get("spValX", 305), _skillLay.Get("spValY", 31), new Color(40, 40, 50)));
         body.Add(new LiveLabel(() => SkillTabNames[_skillTab], _skillLay.Get("jobX", 100), _skillLay.Get("jobY", 33), new Color(90, 90, 100)));
@@ -76,10 +92,11 @@ public partial class MushTownGame
         {
             int i = t;
             var tb = PanelButton(SkillTabRect(i), "skilltab" + i, () => { _skillTab = i; _skillSel = 0; }, ButtonKind.Click);
-            tb.Add(new SkillTabArt(i + 1, () => _skillTab == i));
+            tb.Add(new SkillTabArt(i, () => _skillTab == i));
             body.AddChild(tb);
         }
         var tab = SkillTabs[_skillTab];
+        if (beginner) BuildPassiveList(body);
         for (int row = 0; row < tab.Length; row++)
         {
             int i = row; // for-loop variables capture shared: copy per row
@@ -94,19 +111,68 @@ public partial class MushTownGame
         var detail = new GameObject();
         detail.Add(new Rect(SkillDetailRect()));
         detail.Add(new SkillTipFrame()); // the official skill info frame
-        detail.Add(new SkillDetailBox(() => _skills[SelectedSkillId], () => SelectedBlurb, () => SkillLiveOf(SelectedSkillId)));
+        if (beginner)
+            detail.Add(new PassiveDetailBox(() => _passives.Rows[_passiveSel])); // no [+] and no MAX: the default passives are not leveled
+        else
+            detail.Add(new SkillDetailBox(() => _skills[SelectedSkillId], () => SelectedBlurb, () => SkillLiveOf(SelectedSkillId)));
         body.AddChild(detail);
-        var plus = PanelButton(SkillPlusRect(), "skillplus", () => { if (LearnSkill(SelectedSkillId)) PushBuild(); }, ButtonKind.Click);
-        plus.Add(new SkillPlusArt(() => CanLearn(SelectedSkillId)));
-        body.AddChild(plus);
-        var max = PanelButton(SkillMaxRect(), "skillmax", () => { if (LearnSkillMax(SelectedSkillId)) PushBuild(); }, ButtonKind.Click);
-        max.Add(new LiveTint(() => CanLearn(SelectedSkillId) ? ("MAX", new Color(120, 220, 120)) : ("MAX", new Color(150, 150, 160)), 0, 0));
-        body.AddChild(max);
+        if (!beginner)
+        {
+            var plus = PanelButton(SkillPlusRect(), "skillplus", () => { if (LearnSkill(SelectedSkillId)) PushBuild(); }, ButtonKind.Click);
+            plus.Add(new SkillPlusArt(() => CanLearn(SelectedSkillId)));
+            body.AddChild(plus);
+            var max = PanelButton(SkillMaxRect(), "skillmax", () => { if (LearnSkillMax(SelectedSkillId)) PushBuild(); }, ButtonKind.Click);
+            max.Add(new LiveTint(() => CanLearn(SelectedSkillId) ? ("MAX", new Color(120, 220, 120)) : ("MAX", new Color(150, 150, 160)), 0, 0));
+            body.AddChild(max);
+        }
         body.AddChild(PanelButton(SkillTitleRect(), "", () => { _skillDragged = true; _dragSkill = _uiScene.LastClick - _skillPos; })); // silent, like legacy
         var x = PanelButton(SkillXRect(), "x2", CloseSkillWindow, ButtonKind.Click);
         x.Add(new Picture("ui/hud_statx.png")); // the skill window has no X of its own in the WZ
         body.AddChild(x);
         _skillHost.AddChild(body);
+    }
+
+    // The beginner page: eight row slots that read the list from the scroll row
+    // (so a scroll needs no rebuild), the scroll bar, no pick-up (the rows have no
+    // Grab and never call Hold: a default passive cannot go to a quick slot).
+    private void BuildPassiveList(GameObject body)
+    {
+        foreach (var row in _passives.Rows) LoadTexture(row.Icon);
+        LoadTexture("ui/inv_scroll_base.png");
+        for (int t = 0; t < 3; t++) LoadTexture($"ui/inv_scroll_thumb{t}.png");
+        for (int slot = 0; slot < PassiveVisibleRows; slot++)
+        {
+            int i = slot;
+            var line = new GameObject();
+            line.Add(new Rect(SkillRowRect(i)));
+            line.Add(new Button { Kind = ButtonKind.Click, OnClick = () => _passiveSel = _passiveScroll + i });
+            line.Add(new PassiveRow(() => _passives.Rows[_passiveScroll + i], () => _passiveSel == _passiveScroll + i));
+            line.Add(new PassiveTip(() => _passives.Rows[_passiveScroll + i]));
+            body.AddChild(line);
+        }
+        var bar = new ScrollBar(
+            () => (float)_passiveScroll / PassiveScrollMax,
+            value => _passiveScroll = (int)MathF.Round(value * PassiveScrollMax),
+            () => true,
+            "ui/inv_scroll_base.png", "ui/inv_scroll_thumb", _skillLay.Get("scrollThumbH", 28));
+        _passiveBar = bar;
+        var o = new GameObject();
+        o.Add(new Rect(new Rectangle(_skillLay.Get("scrollX", 150), _skillLay.Get("scrollY", 92),
+            _skillLay.Get("scrollW", 5), PassiveVisibleRows * _skillLay.Get("rowPitch", 32))));
+        o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => bar.Grab(_uiScene.LastClick.Y) });
+        o.Add(bar);
+        body.AddChild(o);
+    }
+
+    // The wheel scrolls the beginner list while the mouse is over the window: one notch is one row.
+    private void UpdateSkillWheel()
+    {
+        int wheel = _input.Wheel;
+        bool over = _showSkill && _skillTab == SkillTabBeginner && RootOf(_uiScene.Hovered) == _skillHost;
+        if (!over) { _skillWheel = wheel; return; }
+        int notches = (wheel - _skillWheel) / 120;
+        _skillWheel = wheel;
+        _passiveScroll = Math.Clamp(_passiveScroll - notches, 0, PassiveScrollMax);
     }
 
     // The skill window closes. A skill a click picked up stays in hand: the
@@ -352,5 +418,107 @@ public sealed class SkillPlusArt : Component, IDrawable
             : gfx.Hovered == Owner ? gfx.Pressed ? "ui/skill_spup_p.png" : "ui/skill_spup_h.png"
             : "ui/skill_spup_n.png";
         gfx.Sb.Draw(gfx.Tex(key), new Vector2(r.X, r.Y), Color.White);
+    }
+}
+
+// One default passive row of the beginner page: the official row art, the icon,
+// the name and the first line of what it gives. The level is fixed at the top
+// and the row never picks the skill up.
+public sealed class PassiveRow : Component, IDrawable
+{
+    private readonly Func<DefaultPassiveSkillRow> _row;
+    private readonly Func<bool> _selected;
+    public PassiveRow(Func<DefaultPassiveSkillRow> row, Func<bool> selected) { _row = row; _selected = selected; }
+    public void Draw(UiGfx gfx)
+    {
+        var lay = MushTownGame._skillLay;
+        var r = Owner.Get<Rect>()!.Screen;
+        var row = _row();
+        var art = gfx.Tex(_selected() ? "ui/skill_row_sel.png" : "ui/skill_row.png");
+        gfx.Sb.Draw(art, r, new Rectangle(0, 0, art.Width, r.Height), Color.White);
+        gfx.Sb.Draw(gfx.Tex(row.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
+        int textW = lay.Get("rowRightX", 136) - lay.Get("rowNameX", 38);
+        gfx.Sb.Draw(Text.Fit(gfx, row.Name, textW), new Vector2(r.X + lay.Get("rowNameX", 38), r.Y + lay.Get("rowNameY", 3)), new Color(30, 30, 40));
+        gfx.Sb.Draw(Text.Fit(gfx, row.Effect[0], textW), new Vector2(r.X + lay.Get("rowSubX", 38), r.Y + lay.Get("rowSubY", 19)), new Color(105, 105, 115));
+    }
+}
+
+// The blue bar of the beginner page: the picked passive (icon, name, the fixed top level).
+public sealed class PassivePickBar : Component, IDrawable
+{
+    private readonly Func<DefaultPassiveSkillRow> _row;
+    public PassivePickBar(Func<DefaultPassiveSkillRow> row) => _row = row;
+    public void Draw(UiGfx gfx)
+    {
+        var lay = MushTownGame._skillLay;
+        var row = _row();
+        var r = Owner.Get<Rect>()!.Screen;
+        gfx.Sb.Draw(gfx.Tex(row.Icon), new Vector2(r.X + lay.Get("pickIconX", 12), r.Y + lay.Get("pickIconY", 51)), Color.White);
+        gfx.Sb.Draw(gfx.Ui.GetSmall(row.Name), new Vector2(r.X + lay.Get("pickNameX", 46), r.Y + lay.Get("pickNameY", 60)), Color.White);
+        var t = gfx.Ui.GetSmall($"Lv.{row.MaxLevel}/{row.MaxLevel}");
+        gfx.Sb.Draw(t, new Vector2(r.X + lay.Get("pickRightX", 304) - t.Width, r.Y + lay.Get("pickNameY", 60)), new Color(255, 220, 0));
+    }
+}
+
+// The skill info box of the beginner page: the fixed level and what the skill
+// gives (light text on the dark official frame). What the skill is stays in the
+// hover box: with it the longest text would not fit the frame.
+public sealed class PassiveDetailBox : Component, IDrawable
+{
+    private readonly Func<DefaultPassiveSkillRow> _row;
+    public PassiveDetailBox(Func<DefaultPassiveSkillRow> row) => _row = row;
+    public void Draw(UiGfx gfx)
+    {
+        var lay = MushTownGame._skillLay;
+        var row = _row();
+        var r = Owner.Get<Rect>()!.Screen;
+        int pad = lay.Get("passiveTextX", 10);
+        int x = r.X + pad;
+        int y = r.Y + lay.Get("textY", 16);
+        int step = lay.Get("passiveLine", 14);
+        int textW = r.Width - pad * 2;
+        gfx.Sb.Draw(gfx.Ui.GetSmall($"Lv.{row.MaxLevel}/{row.MaxLevel}"), new Vector2(x, y), new Color(235, 235, 240));
+        y += step;
+        foreach (string line in row.Effect)
+            foreach (string wrapped in gfx.Ui.Wrap(line, textW))
+            {
+                gfx.Sb.Draw(gfx.Ui.GetSmall(wrapped), new Vector2(x, y), new Color(130, 195, 255));
+                y += step;
+            }
+    }
+}
+
+// The hover box of a beginner row (the official skill tooltip frame): the name,
+// the fixed level, what the skill is and what it gives. The tip layer draws it
+// next to the cursor.
+public sealed class PassiveTip : Component
+{
+    private readonly Func<DefaultPassiveSkillRow> _row;
+    public PassiveTip(Func<DefaultPassiveSkillRow> row) => _row = row;
+
+    public void DrawAt(UiGfx gfx, TipAnchor anchor)
+    {
+        var lay = MushTownGame._skillLay;
+        var row = _row();
+        int pad = lay.Get("tipPad", 10), gap = lay.Get("tipLine", 16);
+        int textW = lay.Get("tipW", 260) - pad * 2;
+        var title = gfx.Ui.GetSmall(row.Name);
+        var level = gfx.Ui.GetSmall($"Lv.{row.MaxLevel}/{row.MaxLevel}");
+        var lines = new List<(Texture2D Tex, Color Ink)>();
+        foreach (var (texts, ink) in new[] { (row.Desc, new Color(214, 216, 222)), (row.Effect, new Color(130, 195, 255)) })
+            foreach (string text in texts)
+                foreach (string wrapped in gfx.Ui.Wrap(text, textW))
+                    lines.Add((gfx.Ui.GetSmall(wrapped), ink));
+        int w = Math.Max(Math.Max(title.Width, level.Width), lines.Max(l => l.Tex.Width)) + pad * 2;
+        var box = anchor.At(gfx, w, pad * 2 + (2 + lines.Count) * gap);
+        NineSlice.Draw(gfx, "skill_tip", box);
+        gfx.Sb.Draw(title, new Vector2(box.X + pad, box.Y + pad), Color.White);
+        gfx.Sb.Draw(level, new Vector2(box.X + pad, box.Y + pad + gap), new Color(255, 220, 0));
+        int y = box.Y + pad + gap * 2;
+        foreach (var (tex, ink) in lines)
+        {
+            gfx.Sb.Draw(tex, new Vector2(box.X + pad, y), ink);
+            y += gap;
+        }
     }
 }

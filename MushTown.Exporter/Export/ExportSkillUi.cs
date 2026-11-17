@@ -21,9 +21,9 @@ public static partial class Export
             ("UIWindow2.img/Skill/main/BtSpUp/pressed/0", "skill_spup_p.png"),
             ("UIWindow2.img/Skill/main/BtSpUp/disabled/0", "skill_spup_d.png"),
         };
-        // The job tabs: Roman numerals I, II, III (Warrior, Fighter, Crusader).
+        // The tabs: the beginner tab (0), then the Roman numerals I, II, III (Warrior, Fighter, Crusader).
         // The enabled art is the gray tab, the selected art the orange one.
-        for (int i = 1; i <= 3; i++)
+        for (int i = 0; i <= 3; i++)
         {
             files.Add(($"UIWindow2.img/Skill/main/Tab/enabled/{i}", $"skill_tab{i}.png"));
             files.Add(($"UIWindow2.img/Skill/main/Tab/selected/{i}", $"skill_tabsel{i}.png"));

@@ -1,5 +1,5 @@
 {
-  "_help": "The skill window box in 1366x768 space. x/y = the window top-left (the file wins until the player drags the window). w/h = the window size (the official art is 318x361). The other spots are window-local inside the official art: panelX/panelY = the light body panel, barX/barY = the blue bar (the picked skill), spX/spY = the SKILL POINT art, spValX/spValY = the SP number (spValX is its right edge), jobX/jobY = the job name. tabX/tabY/tabStep = the job tab row (three Roman numeral tabs), tabArtY = how much lower the unselected tab art sits. listX/listY = the first skill row, rowPitch = the step between the rows and the row height: the official row art is 140x35, but 8 skills must fit under the blue bar, so the step is 32 and the art is cut to it. rowIconX/rowIconY = the skill icon, rowNameX/rowNameY = the name, rowSubX/rowSubY = the sub line, rowRightX = the right edge of the sub line. pickIconX/pickIconY, pickNameX/pickNameY, pickRightX = the blue bar text. detailX/detailY/detailW/detailH = the skill info box (the official skill tooltip frame), textX/textY = the first line inside it, detailLine = the line step. plusX/plusY = the [+] button, maxX/maxY = the MAX button, maxW/maxH = the MAX box. titleH = the title strip. closeX = the gap from the right edge to the X button, closeY = its top. Keys may be omitted (keeps the default).",
+  "_help": "The skill window box in 1366x768 space. x/y = the window top-left (the file wins until the player drags the window). w/h = the window size (the official art is 318x361). The other spots are window-local inside the official art: panelX/panelY = the light body panel, barX/barY = the blue bar (the picked skill), spX/spY = the SKILL POINT art, spValX/spValY = the SP number (spValX is its right edge), jobX/jobY = the job name. tabX/tabY/tabStep = the tab row (the beginner tab, then three Roman numeral tabs), tabArtY = how much lower the unselected tab art sits. listX/listY = the first skill row, rowPitch = the step between the rows and the row height: the official row art is 140x35, but 8 skills must fit under the blue bar, so the step is 32 and the art is cut to it. rowIconX/rowIconY = the skill icon, rowNameX/rowNameY = the name, rowSubX/rowSubY = the sub line, rowRightX = the right edge of the sub line. pickIconX/pickIconY, pickNameX/pickNameY, pickRightX = the blue bar text. detailX/detailY/detailW/detailH = the skill info box (the official skill tooltip frame), textX/textY = the first line inside it, detailLine = the line step. plusX/plusY = the [+] button, maxX/maxY = the MAX button, maxW/maxH = the MAX box. titleH = the title strip. closeX = the gap from the right edge to the X button, closeY = its top. scrollX/scrollY/scrollW/scrollThumbH = the scroll bar of the beginner list (it ends at the last row, eight rows tall), passiveTextX/passiveLine = the text of the beginner info box (left gap, line step), tipW/tipPad/tipLine = the hover box of a beginner row (width, padding, line step). Keys may be omitted (keeps the default).",
   "x": 326,
   "y": 130,
   "w": 318,
@@ -12,7 +12,7 @@
   "spY": 29,
   "spValX": 305,
   "spValY": 31,
-  "jobX": 100,
+  "jobX": 124,
   "jobY": 33,
   "tabX": 10,
   "tabY": 27,
@@ -48,5 +48,14 @@
   "maxH": 14,
   "titleH": 20,
   "closeX": 15,
-  "closeY": 2
+  "closeY": 2,
+  "passiveTextX": 10,
+  "passiveLine": 14,
+  "scrollX": 150,
+  "scrollY": 92,
+  "scrollW": 5,
+  "scrollThumbH": 28,
+  "tipW": 260,
+  "tipPad": 10,
+  "tipLine": 16
 }

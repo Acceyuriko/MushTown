@@ -164,7 +164,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -211,7 +211,8 @@ public partial class MushTownGame
                 }
                 ShowWindow(HotkeyAction.Equip);
             }
-            if (shotScreen == "skill") { _showSkill = true; _skillTab = _shotSkillTab; }
+            if (shotScreen is "skill" or "skillscroll") { _showSkill = true; _skillTab = _shotSkillTab; }
+            if (shotScreen == "skillscroll") { _passiveScroll = PassiveScrollMax; _passiveSel = _passives.Rows.FindIndex(r => r.Label == "Link: Grounded Body (Ren)"); } // the beginner list at its end, the longest text (Grounded Body) picked
             if (shotScreen is "quest" or "questask" or "questforfeit" or "questpick") _showQuest = true;
             if (shotScreen == "settings") _showSettings = true;
             if (shotScreen == "minimap") ShowWindow(HotkeyAction.Minimap);
@@ -502,6 +503,11 @@ public partial class MushTownGame
         foreach (int id in _manifest.Skills)
             if (!_skills.ContainsKey(id))
                 throw new InvalidDataException($"manifest lists skill {id} with no exported def");
+        // The beginner page: one row per default passive skill, in the order of the
+        // Shared table (an old export fails loud).
+        _passives = LoadJson<DefaultPassiveSkillData>(Path.Combine(dir, "passive", "passives.json"));
+        if (!_passives.Rows.Select(r => r.Label).SequenceEqual(DefaultPassiveSkills.All.Select(p => p.Label)))
+            throw new InvalidDataException("skill/passive/passives.json does not match DefaultPassiveSkills: run the exporter (panel passive)");
         _skillCost = new SkillCost(_skills);
         _skillDmg = new SkillDamage(_skills);
     }

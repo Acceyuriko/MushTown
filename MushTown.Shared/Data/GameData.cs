@@ -537,6 +537,24 @@ public sealed class StatDescRow
     public List<string> Lines { get; set; } = new(); // the official explanation, one entry per line
 }
 
+// The default passives of the skill window beginner page:
+// assets/skill/passive/passives.json, one row per DefaultPassiveSkills entry
+// (same order). The values of the texts are already put in at the highest level.
+public sealed class DefaultPassiveSkillData
+{
+    public List<DefaultPassiveSkillRow> Rows { get; set; } = new();
+}
+
+public sealed class DefaultPassiveSkillRow
+{
+    public string Label { get; set; } = ""; // the source name of the stat hover
+    public string Name { get; set; } = "";
+    public string Icon { get; set; } = ""; // under assets/
+    public int MaxLevel { get; set; }
+    public List<string> Desc { get; set; } = new(); // what the skill is, one entry per line
+    public List<string> Effect { get; set; } = new(); // what it gives, one entry per line
+}
+
 public sealed class JobData
 {
     public int Id { get; set; } // job id (110 = Hero)
