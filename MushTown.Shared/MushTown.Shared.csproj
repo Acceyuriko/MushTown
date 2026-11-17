@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Stats\default-passives.json" LogicalName="default-passives.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="MushTown.Tests" />
   </ItemGroup>
 

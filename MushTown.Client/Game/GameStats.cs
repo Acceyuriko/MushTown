@@ -8,6 +8,7 @@ namespace MushTown.Client;
 public partial class MushTownGame
 {
     private StatSnapshot _stats = StatSnapshot.Empty;
+    private bool _hasWeapon = true; // a worn weapon; the default passives give ATT too, so the snapshot cannot tell
 
     // CLI sessions have no saved character: the old beginner values, but
     // movement must still work (`--host` / `--join` never load a save).
@@ -32,6 +33,7 @@ public partial class MushTownGame
         if (chara == null)
         {
             _stats = BeginnerSnapshot();
+            _hasWeapon = true;
             return;
         }
 
@@ -43,12 +45,15 @@ public partial class MushTownGame
         mods.Add(new(StatKey.MAX_MP, StatValueType.FLAT, Progression.MaxMp(chara.Level), "level"));
 
         var worn = ItemData.EquipBonus(chara.Equips, _items);
-        if (worn.weapon > 0)
+        _hasWeapon = worn.weapon > 0;
+        if (_hasWeapon)
             mods.Add(new(StatKey.ATT, StatValueType.FLAT,
                 worn.weapon + _skills[SkillData.GuardianArmor].Atk * SkillLv(SkillData.GuardianArmor), "equipment"));
         mods.Add(new(StatKey.DEF, StatValueType.FLAT, worn.def, "equipment"));
         mods.Add(new(StatKey.STR, StatValueType.FLAT, worn.str, "equipment"));
         mods.Add(new(StatKey.DEX, StatValueType.FLAT, worn.dex, "equipment"));
+
+        mods.AddRange(DefaultPassives.All);
 
         int training = SkillLv(SkillData.PhysicalTraining);
         int agile = SkillLv(SkillData.AgileArms);
@@ -146,7 +151,7 @@ public partial class MushTownGame
     private int OwnKnockbackResistance() => (int)_stats.IntValue(StatKey.KNOCKBACK_RESISTANCE);
     private float OwnWalk() => (float)_stats.DoubleValue(StatKey.SPEED);
     private float OwnJump() => (float)_stats.DoubleValue(StatKey.JUMP);
-    private bool HasWeapon() => _stats.IntValue(StatKey.ATT) > 0;
+    private bool HasWeapon() => _hasWeapon;
 
     private void PushBuild()
     {

@@ -82,8 +82,10 @@ public static class DamageChain
     public static double IedMultiplier(StatSnapshot stats) =>
         IedMultiplier(stats.Multiplier(StatKey.IED_PCT), Points(stats, StatKey.IED_PCT));
 
+    // Ignore defense applies up to 100% (the official text), so the sum of
+    // the sources cannot push the multiplier below 0.
     public static double IedMultiplier(double multiplier, double flatPct) =>
-        multiplier * (1.0 - flatPct / 100.0);
+        Math.Max(0.0, multiplier * (1.0 - flatPct / 100.0));
 
     private static double Points(StatSnapshot stats, StatKey key) =>
         Math.Floor(stats.Flat(key) * (1.0 + stats.Percent(key) / 100.0)) + stats.FinalFlat(key);
