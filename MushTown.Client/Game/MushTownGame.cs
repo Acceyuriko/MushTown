@@ -188,6 +188,7 @@ public partial class MushTownGame : Game
         _partyHpWindow = new PartyHpWindow(this);
         _guideWindow = new GuideWindow(this);
         _guideCardWindow = new GuideCardWindow(this);
+        _macroWindow = new MacroWindow(this);
         new EquipWindow(this);
         _cashShopWindow = new CashShopWindow(this);
         _menuWindow = new MenuWindow(this);
@@ -504,7 +505,7 @@ public partial class MushTownGame : Game
         LoadMenuContent();
         LoadDeathArt();
         _gfx.Blur = _blur; // the frosted glass source for the MENU window
-        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice";
+        bool gameShot = _shotScreen is null or "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice";
         if (_shotWear && !gameShot)
             throw new InvalidDataException("--wear needs a game shot (menu screens have no demo to dress)");
         if (_shotPath != null && gameShot) // game shots show mobs; menu shots don't
@@ -753,6 +754,7 @@ public partial class MushTownGame : Game
                 foreach (var action in casts) CastSkill(action.Target.Id, _input.Fresh(action.Target));
             }
         }
+        UpdateMacro(blocked);
 
         // The feet step in Shared: snapshot in, outputs drained after. Skills
         // above already poked the state (leaps, dashes); travel and respawn

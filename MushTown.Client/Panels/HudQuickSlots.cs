@@ -121,6 +121,7 @@ public partial class MushTownGame
     // the click runs as usual.
     private bool DropTarget(int gx, int gy, BindTarget target)
     {
+        if (_macroWindow.TryDropAt(gx, gy, target)) return true; // a slot of a macro
         var keyWin = DraftWindow;
         if (keyWin != null && keyWin.TryDropAt(gx, gy, target)) return true; // the keyboard or the pool
         if (!QslotRect().Contains(gx, gy)) return false; // not near the strip: no need to hit test
@@ -158,12 +159,13 @@ public partial class MushTownGame
         return TexByKey(name);
     }
 
-    // The art of a bound target: the item picture, the skill icon, or the
-    // official icon of the action.
+    // The art of a bound target: the item picture, the skill icon, the official
+    // macro icon, or the official icon of the action.
     internal string TargetArt(BindTarget target) => target.Kind switch
     {
         BindKind.Item => _items.TryGetValue(target.Id, out var item) ? item.Image : "",
         BindKind.Skill => SkillIconTex(target.Id),
+        BindKind.Macro => $"ui/macro_icon{target.Id}.png",
         _ => KeyConfigWindow.IconTex((HotkeyAction)target.Id),
     };
 

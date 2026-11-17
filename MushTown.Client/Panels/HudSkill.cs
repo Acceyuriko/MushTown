@@ -59,6 +59,9 @@ public partial class MushTownGame
         Array.Empty<int>(), // V: no skills yet
     };
 
+    // Where the skill window is (the macro list docks beside it).
+    internal Point SkillSpot => _skillDragged ? _skillPos : new Point(_skillLay.Get("x", 326), _skillLay.Get("y", 130));
+
     private Rectangle SkillRect() => new(0, 0, SkillW, SkillBodyH);
     private Rectangle SkillTitleRect() => new(0, 0, SkillW, _skillLay.Get("titleH", 20));
 
@@ -144,8 +147,8 @@ public partial class MushTownGame
         body.AddChild(o);
     }
 
-    // The button row under the cells: only MACRO NOTIFIER is lit, and it opens nothing yet
-    // (the macro window comes with its own ticket). The others show their gray art.
+    // The button row under the cells: only MACRO NOTIFIER is lit, and it opens the macro list.
+    // The others show their gray art.
     private void BuildSkillButtons(GameObject body)
     {
         int y = _skillLay.Get("btnY", 336);
@@ -158,7 +161,7 @@ public partial class MushTownGame
         }
         var macro = new GameObject();
         macro.Add(new Rect(new Rectangle(_skillLay.Get("macroX", 220), y, _skillLay.Get("macroW", 89), _skillLay.Get("btnH", 16))));
-        macro.Add(new Button { LegacyId = "skillmacro", Kind = ButtonKind.Click });
+        macro.Add(new Button { LegacyId = "skillmacro", Kind = ButtonKind.Click, OnClick = OpenMacroList });
         macro.Add(new Image("ui/skill_bt_macro"));
         body.AddChild(macro);
     }

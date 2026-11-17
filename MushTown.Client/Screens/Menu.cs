@@ -163,7 +163,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "keys" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -229,6 +229,28 @@ public partial class MushTownGame
             if (shotScreen == "menu") ShowWindow(HotkeyAction.Menu);
             if (shotScreen == "guide") ShowWindow(HotkeyAction.Guide);
             if (shotScreen == "guidecard") ShowWindow(HotkeyAction.GuideCard);
+            if (shotScreen is "macro" or "macrohold" or "macrobind" or "macromove")
+            {
+                // The demo macros: row 1 holds three skills, row 3 holds two; macrobind puts row 1 on D1 and row 3 on G.
+                var chara = _save!.Slots[_slot]!;
+                MacroBook.Ensure(chara);
+                chara.Macros![0] = new List<int> { SkillData.SlashBlast, SkillData.IronBody, SkillData.LeapAttack };
+                chara.Macros[2] = new List<int> { SkillData.WarLeap, SkillData.Brandish, 0 };
+                if (shotScreen == "macrobind")
+                {
+                    KeyBindings.Ensure(chara);
+                    KeyBindings.ApplyMacros(chara.KeyPresets![chara.ActivePreset], new() { [0] = "D1", [2] = "G" });
+                    KeyWindow?.Open();
+                }
+                else
+                {
+                    _showSkill = true;
+                    _skillTab = _shotSkillTab;
+                    ShowWindow(HotkeyAction.MacroList);
+                    if (shotScreen == "macromove") PickMacroSlot(0, 1); // the Iron Body slot comes up: its slot draws blank
+                    if (shotScreen == "macrohold") Hold(new BindTarget(BindKind.Skill, SkillData.WarLeap)); // the hand holds an active skill over the slots
+                }
+            }
             if (shotScreen is "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice")
             {
                 if (shotScreen == "cashshopfashion") _cashShopWindow.PoseFashion();
@@ -558,6 +580,7 @@ public partial class MushTownGame
             foreach (string f in skill.Hit) LoadTexture(f);
             foreach (string f in skill.Affected) LoadTexture(f);
         }
+        for (int i = 0; i < MacroBook.Count; i++) LoadTexture($"ui/macro_icon{i}.png"); // the keys and the quick slots draw them
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
         LoadNpcTextures(); // NPC stand textures (quest json already loaded in Initialize)
         if (_shotPath != null && _screen == Screen.Chars)
@@ -918,6 +941,7 @@ public partial class MushTownGame
         // keep its wheel baseline across the character screen.
         CloseAllWindows();
         ClearHeld(); // a target a click picked up does not follow the character out
+        _macro.Stop(); // a running macro does not follow the character out
         _talkKey = ""; _questKey = ""; _qhBuiltKey = ""; _qhHidden = false; _qhListOpen = true; _qhCount = 0; _qhPos = QuestHelperLayoutPos(); _qhDrag = null; // cached helper rows die with the char
         _questBuilt = false; _questBuiltKey = ""; _questSel = 0; _questDetail = null; _questDragged = false; _questPos = new Point(0, 0); _showQuest = false; // the next character starts with a closed, unselected window
         for (int i = 0; i < _questGroupOpen.Length; i++) _questGroupOpen[i] = true;

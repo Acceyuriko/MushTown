@@ -3,12 +3,13 @@ using Microsoft.Xna.Framework.Input;
 
 namespace MushTown.Client;
 
-// What a key can be bound to: a UI action, a skill or an item.
+// What a key can be bound to: a UI action, a skill, an item or a macro.
 public enum BindKind
 {
     Ui,
     Skill,
     Item,
+    Macro,
 }
 
 public readonly record struct BindTarget(BindKind Kind, int Id)
@@ -17,7 +18,7 @@ public readonly record struct BindTarget(BindKind Kind, int Id)
 
     public bool IsUi(HotkeyAction action) => Kind == BindKind.Ui && Id == (int)action;
 
-    // "Inventory", "Skill:1001005" or "Item:2000000". Only the exact enum
+    // "Inventory", "Skill:1001005", "Item:2000000" or "Macro:2". Only the exact enum
     // names parse: a numeric string is not an action.
     public static bool TryParse(string text, out BindTarget target)
     {
@@ -32,6 +33,12 @@ public readonly record struct BindTarget(BindKind Kind, int Id)
         {
             if (!int.TryParse(text.AsSpan(5), out int item)) return false;
             target = new(BindKind.Item, item);
+            return true;
+        }
+        if (text.StartsWith("Macro:", StringComparison.Ordinal))
+        {
+            if (!int.TryParse(text.AsSpan(6), out int macro)) return false;
+            target = new(BindKind.Macro, macro);
             return true;
         }
         if (!Enum.TryParse<HotkeyAction>(text, out var action) || Enum.GetName(action) != text) return false;
@@ -151,6 +158,7 @@ public sealed class InputController
     {
         BindKind.Item => 30,
         BindKind.Skill => 0,
+        BindKind.Macro => 0, // a running macro ignores the key: the macro itself gates it
         _ => (HotkeyAction)target.Id switch
         {
             HotkeyAction.Pickup => 6,

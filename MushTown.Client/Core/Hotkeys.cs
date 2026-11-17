@@ -6,7 +6,7 @@ namespace MushTown.Client;
 // Every action a key can open. The key window lists every official icon of
 // the KeyConfig art, implemented or not: an action with no window behind it
 // simply does nothing when its key fires, so the pool doubles as the list of
-// what is still missing. PartySearch, PartyAsk, PartyHp, GuideCard and
+// what is still missing. PartySearch, PartyAsk, PartyHp, GuideCard, MacroList and
 // Settings have no icon of their own, so the pool has no cell for them.
 public enum HotkeyAction
 {
@@ -26,6 +26,7 @@ public enum HotkeyAction
     Chat,        // no key: Enter focuses the chat input (and unfolds the chat)
     Guide,       // U: the big guide (the small guide's green plus also opens it)
     GuideCard,   // no key: the MENU window opens the small guide
+    MacroList,   // no key: the skill window's MACRO NOTIFIER button opens it
     Equip,       // E: the equipment window
     CashShop,    // no key: the MENU window opens the cash shop
     Attack,      // Ctrl: the basic swing
@@ -167,12 +168,15 @@ public static class KeyBindings
         Write(table, map.Select(kv => new KeyValuePair<string, string>(kv.Key.ToString(), kv.Value)));
 
     // The same for the skills and items the key window binds ("Skill:<id>" /
-    // "Item:<id>"). They share the action table, so a key moves between them.
+    // "Item:<id>" / "Macro:<n>"). They share the action table, so a key moves between them.
     public static void ApplySkills(Dictionary<string, string> table, Dictionary<int, string> skills) =>
         ApplyTargets(table, "Skill", skills);
 
     public static void ApplyItems(Dictionary<string, string> table, Dictionary<int, string> items) =>
         ApplyTargets(table, "Item", items);
+
+    public static void ApplyMacros(Dictionary<string, string> table, Dictionary<int, string> macros) =>
+        ApplyTargets(table, "Macro", macros);
 
     private static void ApplyTargets(Dictionary<string, string> table, string kind, Dictionary<int, string> targets) =>
         Write(table, targets.Select(kv => new KeyValuePair<string, string>($"{kind}:{kv.Key}", kv.Value)));
@@ -259,7 +263,7 @@ public partial class MushTownGame
 
     public string HotkeyKey(HotkeyAction action) => KeyBindings.FindKey(LiveKeys, action);
 
-    // What a click picked up: one action, skill or item target. It rides the
+    // What a click picked up: one action, skill, item or macro target. It rides the
     // mouse until a click drops it on a key, a quick slot cell or the action
     // pool; Esc or a right click throws it away and changes nothing. Nothing
     // comes up while the inventory hand holds a piece: one thing at a time.
@@ -280,6 +284,7 @@ public partial class MushTownGame
     {
         Held = null;
         _heldFromSlot = false;
+        _heldMacroSlot = null;
         ClearWornHand();
     }
 
@@ -301,6 +306,7 @@ public partial class MushTownGame
     // window's draft).
     public Dictionary<int, string> HotkeySkills(int slot) => HotkeyTargets(slot, BindKind.Skill);
     public Dictionary<int, string> HotkeyItems(int slot) => HotkeyTargets(slot, BindKind.Item);
+    public Dictionary<int, string> HotkeyMacros(int slot) => HotkeyTargets(slot, BindKind.Macro);
 
     private Dictionary<int, string> HotkeyTargets(int slot, BindKind kind)
     {
@@ -314,9 +320,9 @@ public partial class MushTownGame
         return map;
     }
 
-    // Write the given actions, skills and items into one preset.
+    // Write the given actions, skills, items and macros into one preset.
     public void SaveHotkeyPreset(int slot, Dictionary<HotkeyAction, string> map,
-        Dictionary<int, string> skills, Dictionary<int, string> items)
+        Dictionary<int, string> skills, Dictionary<int, string> items, Dictionary<int, string> macros)
     {
         var chara = Hero!; // the key window hides Save/Copy without a character
         KeyBindings.Ensure(chara);
@@ -324,6 +330,7 @@ public partial class MushTownGame
         KeyBindings.Apply(table, map);
         KeyBindings.ApplySkills(table, skills);
         KeyBindings.ApplyItems(table, items);
+        KeyBindings.ApplyMacros(table, macros);
         if (slot == chara.ActivePreset) _keysDirty = true;
         SaveChara();
     }
@@ -338,11 +345,13 @@ public partial class MushTownGame
         if (_input.TargetOf(key) == target) return; // already on that key: a combo keeps both parts
         string name = key.ToString();
         if (target.Kind == BindKind.Skill)
-            SaveHotkeyPreset(chara.ActivePreset, new(), new() { [target.Id] = name }, new());
+            SaveHotkeyPreset(chara.ActivePreset, new(), new() { [target.Id] = name }, new(), new());
         else if (target.Kind == BindKind.Item)
-            SaveHotkeyPreset(chara.ActivePreset, new(), new(), new() { [target.Id] = name });
+            SaveHotkeyPreset(chara.ActivePreset, new(), new(), new() { [target.Id] = name }, new());
+        else if (target.Kind == BindKind.Macro)
+            SaveHotkeyPreset(chara.ActivePreset, new(), new(), new(), new() { [target.Id] = name });
         else
-            SaveHotkeyPreset(chara.ActivePreset, new() { [(HotkeyAction)target.Id] = name }, new(), new());
+            SaveHotkeyPreset(chara.ActivePreset, new() { [(HotkeyAction)target.Id] = name }, new(), new(), new());
     }
 
     // Copy: the source preset covers the picked one whole (skills and items

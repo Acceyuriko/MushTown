@@ -42,6 +42,12 @@ public static partial class Export
         // four corners, four edges and the center).
         foreach (string part in new[] { "nw", "ne", "sw", "se", "n", "s", "w", "e", "c" })
             files.Add(($"UIToolTip.img/Skill/Frame/{part}", $"skill_tip_{part}.png"));
+        // The macro list window and its five fixed icons (the first row to the fifth).
+        files.Add(("UIWindow2.img/Skill/macro/backgrnd", "macro_bg.png"));     // the window frame (MACRO LIST title)
+        files.Add(("UIWindow2.img/Skill/macro/backgrnd2", "macro_panel.png")); // the light body panel
+        files.Add(("UIWindow2.img/Skill/macro/backgrnd3", "macro_list.png"));  // the five rows of slots
+        for (int i = 0; i < 5; i++)
+            files.Add(($"UIWindow2.img/Skill/macro/Macroicon/{i}/icon", $"macro_icon{i}.png"));
         foreach (var (node, file) in files)
         {
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))

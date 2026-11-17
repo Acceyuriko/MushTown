@@ -208,6 +208,7 @@ public sealed class CharaSlot
     public int ActivePreset { get; set; } // which of the three is live (0..2)
     public List<int>? Equips { get; set; } // worn equip ids (null = nothing worn)
     public Dictionary<int, int> SkillLv { get; set; } = new();
+    public List<List<int>>? Macros { get; set; } // five macros of three skill ids each (0 = empty slot; null = the old save: all empty)
     public List<int> Quests { get; set; } = new(); // accepted quest ids
     public List<int> QuestsDone { get; set; } = new(); // turned-in quest ids
     public List<int> QuestHelper { get; set; } = new(); // quests shown in the quest helper

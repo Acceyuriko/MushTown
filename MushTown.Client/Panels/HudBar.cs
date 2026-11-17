@@ -311,6 +311,7 @@ public partial class MushTownGame
         var top = _uiScene.TopAt(gx, gy);
         if (!_uiScene.ModalOpen && top == null && DropBagOnWorld()) { PlaySfx("click"); return; } // a bag item dropped on the world leaves the bag
         if (CancelSlotHoldOnWorldClick(gx, gy, top)) return; // a held quick slot dropped on the world: its key is cleared
+        if (CancelMacroHoldOnWorldClick(gx, gy, top)) return; // a skill taken from a macro slot dropped on the world: the slot is cleared
         ClearHeld(); // nothing there: the piece goes back where it came from
         if (_talkNpc == 0)
         {

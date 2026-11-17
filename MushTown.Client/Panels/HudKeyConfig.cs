@@ -48,7 +48,7 @@ public sealed class KeyConfigWindow : UiWindow
     // The game actions in the grid: every icon of the official KeyConfig art,
     // in its icon order. An action with no window behind it is still here on
     // purpose: pressing its key does nothing, and the pool then tells the
-    // player (and us) what is not built yet. GuideCard, PartySearch, PartyAsk,
+    // player (and us) what is not built yet. GuideCard, MacroList, PartySearch, PartyAsk,
     // PartyHp and Settings have no icon of their own, so they are not in the pool.
     private static readonly (HotkeyAction Action, int Icon)[] Actions =
     {
@@ -136,13 +136,14 @@ public sealed class KeyConfigWindow : UiWindow
     private readonly Dictionary<HotkeyAction, string> _draft = new();
     private readonly Dictionary<int, string> _draftSkills = new(); // the skills the draft bound (from the skill window)
     private readonly Dictionary<int, string> _draftItems = new(); // the items the draft bound (from the inventory)
+    private readonly Dictionary<int, string> _draftMacros = new(); // the macros the draft bound (from the macro list)
     private int _slot;
 
     // Key -> what sits on it, built once per Build: the 73 key caps read it
     // every frame, and walking the draft 73 times would split a string 73
     // times a frame for every action.
     private readonly Dictionary<string, HotkeyAction> _keyAction = new();
-    private readonly Dictionary<string, BindTarget> _keyTyped = new(); // skills and items
+    private readonly Dictionary<string, BindTarget> _keyTyped = new(); // skills, items and macros
 
     // The filter dropdown: the picked filter and the open list. Open() puts
     // the filter back to Not Added, so the window shows what is still free.
@@ -198,6 +199,8 @@ public sealed class KeyConfigWindow : UiWindow
         foreach (var (id, key) in _game.HotkeySkills(_slot)) _draftSkills[id] = key;
         _draftItems.Clear();
         foreach (var (id, key) in _game.HotkeyItems(_slot)) _draftItems[id] = key;
+        _draftMacros.Clear();
+        foreach (var (id, key) in _game.HotkeyMacros(_slot)) _draftMacros[id] = key;
     }
 
     // Close the window: the unsaved changes go away, a piece in hand stays.
@@ -213,6 +216,7 @@ public sealed class KeyConfigWindow : UiWindow
         _draft.Clear();
         _draftSkills.Clear();
         _draftItems.Clear();
+        _draftMacros.Clear();
         // The piece a click picked up stays in hand: the quick slot strip is a drop area too.
         _filterOpen = false;
         _comboMode = false;
@@ -602,9 +606,9 @@ public sealed class KeyConfigWindow : UiWindow
     // passes the key the game binds, or "", and the target that was in hand.
     internal void ApplyDrop(string key, BindTarget target)
     {
-        if (target.Kind is BindKind.Item or BindKind.Skill)
+        if (target.Kind != BindKind.Ui)
         {
-            var draft = target.Kind == BindKind.Item ? _draftItems : _draftSkills;
+            var draft = target.Kind == BindKind.Item ? _draftItems : target.Kind == BindKind.Skill ? _draftSkills : _draftMacros;
             string had = draft.GetValueOrDefault(target.Id, "");
             if (key == "" ? had == "" : KeyBindings.HasPart(had, key)) return;
             if (key != "") TakeAway(key, null);
@@ -662,7 +666,7 @@ public sealed class KeyConfigWindow : UiWindow
     }
 
     // The key goes away from the other actions, skills and items (part by
-    // part). A null keep means the new owner is a skill or an item.
+    // part). A null keep means the new owner is a skill, an item or a macro.
     private void TakeAway(string key, HotkeyAction? keep)
     {
         foreach (var other in _draft.Keys.ToList())
@@ -684,6 +688,12 @@ public sealed class KeyConfigWindow : UiWindow
             if (!parts.Contains(key)) continue;
             _draftItems[id] = string.Join("+", parts.Where(p => p != key));
         }
+        foreach (var id in _draftMacros.Keys.ToList())
+        {
+            var parts = Parts(_draftMacros[id]);
+            if (!parts.Contains(key)) continue;
+            _draftMacros[id] = string.Join("+", parts.Where(p => p != key));
+        }
     }
 
     // The keys of a binding: one key, or the two of a combo.
@@ -694,7 +704,7 @@ public sealed class KeyConfigWindow : UiWindow
     // Save: the draft goes into the picked preset.
     private void Save()
     {
-        _game.SaveHotkeyPreset(_slot, _draft, _draftSkills, _draftItems);
+        _game.SaveHotkeyPreset(_slot, _draft, _draftSkills, _draftItems, _draftMacros);
         ReloadDraft();
         Build();
     }
@@ -703,11 +713,12 @@ public sealed class KeyConfigWindow : UiWindow
     private void Default()
     {
         _draft.Clear();
-        // The defaults have no skill or item keys. Blank every skill and item
+        // The defaults have no skill, item or macro keys. Blank every skill, item and macro
         // the draft knows instead of dropping them: Save writes the blank out,
         // so a saved preset really loses them.
         foreach (var id in _draftSkills.Keys.ToList()) _draftSkills[id] = "";
         foreach (var id in _draftItems.Keys.ToList()) _draftItems[id] = "";
+        foreach (var id in _draftMacros.Keys.ToList()) _draftMacros[id] = "";
         var defaults = KeyBindings.Defaults();
         foreach (var (action, _) in Actions) _draft[action] = defaults.GetValueOrDefault(action, ""); // the pool only: the sub-windows keep whatever they have
         Build();
@@ -789,7 +800,7 @@ public sealed class KeyConfigWindow : UiWindow
         return _keyTyped.TryGetValue(key, out var target) ? target : null;
     }
 
-    // Key -> action, skill or item, rebuilt whenever the tree is: the key caps
+    // Key -> action, skill, item or macro, rebuilt whenever the tree is: the key caps
     // read it every frame.
     private void RebuildLookup()
     {
@@ -804,6 +815,9 @@ public sealed class KeyConfigWindow : UiWindow
         foreach (var (id, keys) in _draftItems)
             foreach (var key in keys.Split('+', StringSplitOptions.RemoveEmptyEntries))
                 _keyTyped.TryAdd(key, new BindTarget(BindKind.Item, id));
+        foreach (var (id, keys) in _draftMacros)
+            foreach (var key in keys.Split('+', StringSplitOptions.RemoveEmptyEntries))
+                _keyTyped.TryAdd(key, new BindTarget(BindKind.Macro, id));
     }
 
     // The icon art of an action, "" when the action has no official icon.
