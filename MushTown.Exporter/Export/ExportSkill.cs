@@ -18,8 +18,8 @@ public static partial class Export
         [SkillData.SlashBlast] = new() { MaxLevel = 10, Kind = SkillData.KindActive, Mp = 5, DmgLo = 150, DmgHi = 250, MobCount = 6, Range = 160, CastLockMs = 600 },
         [SkillData.WarLeap] = new() { MaxLevel = 1, Kind = SkillData.KindActive, Mp = 3, CooldownMs = 5000 },
         [SkillData.LeapAttack] = new() { MaxLevel = 10, Kind = SkillData.KindActive, Mp = 8, CooldownMs = 5000, DmgLo = 150, DmgHi = 250, MobCount = 6, Range = 160, CastLockMs = 600 },
-        [SkillData.IronBody] = new() { MaxLevel = 10, Kind = SkillData.KindBuff, Mp = 10, CooldownMs = 10000, BuffMs = 120000, HpPct = 3, DefPct = 2 },
-        [SkillData.WarriorMastery] = new() { MaxLevel = 10, Kind = SkillData.KindPassive, HpPct = 2, MovePct = 1 },
+        [SkillData.IronBody] = new() { MaxLevel = 10, Kind = SkillData.KindBuff, Mp = 10, CooldownMs = 10000, BuffMs = 120000, DefPct = 2 },
+        [SkillData.WarriorMastery] = new() { MaxLevel = 10, Kind = SkillData.KindPassive, MovePct = 1 },
         [SkillData.GuardianArmor] = new() { MaxLevel = 10, Kind = SkillData.KindPassive, Atk = 2, DefPct = 1 },
         // 110 Fighter.
         [SkillData.Brandish] = new() { MaxLevel = 10, Kind = SkillData.KindActive, Mp = 8, CooldownMs = 4000, DmgLo = 140, DmgHi = 230, MobCount = 6, Range = 170, CastLockMs = 600 },

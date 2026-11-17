@@ -201,8 +201,8 @@ public class SaveTests
         Assert.AreEqual(110, slot.Job);
         Assert.AreEqual(1, slot.Level);
         Assert.AreEqual(0, slot.Exp);
-        Assert.AreEqual(50, slot.Hp);
-        Assert.AreEqual(5, slot.Mp);
+        Assert.AreEqual(Progression.MaxHp(1), slot.Hp);
+        Assert.AreEqual(Progression.MaxMp(1), slot.Mp);
         Assert.IsNull(slot.Use); // pre-W10 saves never got the starter kit
     }
 

@@ -56,8 +56,7 @@ public partial class MushTownGame
         mods.Add(new(StatKey.DEX, StatValueType.FLAT, chara.Dex, StatSource.Base));
         mods.Add(new(StatKey.INT, StatValueType.FLAT, chara.Int, StatSource.Base));
         mods.Add(new(StatKey.LUK, StatValueType.FLAT, chara.Luk, StatSource.Base));
-        mods.Add(new(StatKey.MAX_HP, StatValueType.FLAT, Progression.MaxHp(chara.Level), StatSource.Base));
-        mods.Add(new(StatKey.MAX_MP, StatValueType.FLAT, Progression.MaxMp(chara.Level), StatSource.Base));
+        mods.AddRange(StatTables.Vitals(chara.Job, chara.Level)); // base vitals and the job skills that scale with the level
 
         var worn = ItemData.EquipBonus(chara.Equips, _items);
         _hasWeapon = worn.weapon > 0;
@@ -93,13 +92,11 @@ public partial class MushTownGame
             _skills[SkillData.WeaponMastery].CritPct * SkillLv(SkillData.WeaponMastery)
             + _skills[SkillData.ChanceAttack].CritPct * SkillLv(SkillData.ChanceAttack), StatSource.Skill));
 
-        // Iron Body is a buff while it runs: its HP% and DEF are their own Buff records.
+        // Iron Body is a buff while it runs: its DEF is its own Buff record. Its HP% and Warrior Mastery's HP
+        // are always on and come from StatTables.Vitals (WZ numbers), not from the skill data.
         bool ironBody = _fighter.Buffs.ContainsKey(SkillData.IronBody);
         mods.Add(new(StatKey.MAX_HP, StatValueType.PERCENT,
-            ironBody ? _skills[SkillData.IronBody].HpPct * SkillLv(SkillData.IronBody) : 0, StatSource.Buff));
-        mods.Add(new(StatKey.MAX_HP, StatValueType.PERCENT,
-            _skills[SkillData.WarriorMastery].HpPct * SkillLv(SkillData.WarriorMastery)
-            + _skills[SkillData.Endure].HpPct * SkillLv(SkillData.Endure), StatSource.Skill));
+            _skills[SkillData.Endure].HpPct * SkillLv(SkillData.Endure), StatSource.Skill));
 
         mods.Add(new(StatKey.DEF, StatValueType.FLAT,
             ironBody ? _skills[SkillData.IronBody].DefPct * SkillLv(SkillData.IronBody) : 0, StatSource.Buff));

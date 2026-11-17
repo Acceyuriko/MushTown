@@ -428,7 +428,7 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return; // CLI sessions have no one to level
-        int ups = Progression.ApplyExp(chara, exp, MaxHpNow());
+        int ups = Progression.ApplyExp(chara, exp, MaxHpNow(), MaxMpNow());
         if (ups > 0)
         {
             LogEvent($"level up! now Lv.{chara.Level} (STR {chara.Str} DEX {chara.Dex})");

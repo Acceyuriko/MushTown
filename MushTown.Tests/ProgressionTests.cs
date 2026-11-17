@@ -16,11 +16,78 @@ public class ProgressionTests
     [TestMethod]
     public void Vitals_GrowPerLevel()
     {
-        Assert.AreEqual(50, Progression.MaxHp(1));
-        Assert.AreEqual(80, Progression.MaxHp(2));
-        Assert.AreEqual(320, Progression.MaxHp(10));
-        Assert.AreEqual(5, Progression.MaxMp(1));
-        Assert.AreEqual(10, Progression.MaxMp(2));
+        // Hero (and every job without a row): 50 + 28 x (level - 1) + 700 HP, 5 + 12 x (level - 1) + 300 MP.
+        Assert.AreEqual(750, Progression.MaxHp(1));
+        Assert.AreEqual(778, Progression.MaxHp(2));
+        Assert.AreEqual(1002, Progression.MaxHp(10));
+        Assert.AreEqual(305, Progression.MaxMp(1));
+        Assert.AreEqual(317, Progression.MaxMp(2));
+        Assert.AreEqual(Progression.MaxHp(10), Progression.MaxHp(10, 999)); // a job with no row plays the Hero numbers
+    }
+
+    // The design values of research/hp-mp.md section 7.3 at level 200.
+    [TestMethod]
+    public void Vitals_At200_HeroAndFirePoisonMage()
+    {
+        Assert.AreEqual(6322, Progression.MaxHp(200, StatTables.Hero));
+        Assert.AreEqual(2693, Progression.MaxMp(200, StatTables.Hero));
+        Assert.AreEqual(3534, Progression.MaxHp(200, StatTables.FirePoisonMage));
+        Assert.AreEqual(5083, Progression.MaxMp(200, StatTables.FirePoisonMage));
+    }
+
+    // Base + the max-level job skills + Heroic (the default passives that touch HP/MP are Heroic only here:
+    // no equipment, no Link, no Union, no trait). WZ skill values; the base is a design value.
+    [TestMethod]
+    public void MaxHpMp_At200_WithJobSkillsAndHeroic()
+    {
+        var heroic = DefaultPassives.All.Where(m => m.Label.StartsWith("Heroic") && m.Key is StatKey.MAX_HP or StatKey.MAX_MP);
+        var hero = StatAggregator.Aggregate(StatTables.Vitals(StatTables.Hero, 200).Concat(heroic));
+        Assert.AreEqual(12_626, hero.IntValue(StatKey.MAX_HP)); // floor((6322 + 20 x 200 + 200) x 1.20)
+        Assert.AreEqual(2_793, hero.IntValue(StatKey.MAX_MP)); // 2693 + 100
+        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(heroic));
+        Assert.AreEqual(3_734, mage.IntValue(StatKey.MAX_HP)); // 3534 + 200
+        Assert.AreEqual(35_019, mage.IntValue(StatKey.MAX_MP)); // floor((5083 + 120 x 200 + 100) x 1.20)
+    }
+
+    // Everything the game adds without equipment at level 200: Vitals + every default passive
+    // (Heroic, the Links, the Union, the traits). Hyper Stats are 0 and Endure is client skill data, both left out.
+    [TestMethod]
+    public void MaxHpMp_At200_WithDefaultPassives()
+    {
+        var hero = StatAggregator.Aggregate(StatTables.Vitals(StatTables.Hero, 200).Concat(DefaultPassives.All));
+        Assert.AreEqual(30_988, hero.IntValue(StatKey.MAX_HP)); // floor((6322 + 4000 + 10200) x 1.51)
+        Assert.AreEqual(11_425, hero.IntValue(StatKey.MAX_MP)); // floor((2693 + 7600) x 1.11)
+        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(DefaultPassives.All));
+        Assert.AreEqual(17_991, mage.IntValue(StatKey.MAX_HP)); // floor((3534 + 10200) x 1.31)
+        Assert.AreEqual(48_054, mage.IntValue(StatKey.MAX_MP)); // floor((5083 + 24000 + 7600) x 1.31)
+    }
+
+    // The 500,000 cap stays on the new records.
+    [TestMethod]
+    public void MaxHpMp_StayCapped()
+    {
+        var huge = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 5_000));
+        Assert.AreEqual(500_000, huge.IntValue(StatKey.MAX_MP));
+    }
+
+    // The hover lists the skill group of max MP: the per-level points and the percent, named by their source group.
+    [TestMethod]
+    public void MaxMp_SourcesShowTheSkillPointsAndPercent()
+    {
+        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200));
+        var lines = StatDisplay.Sources(mage, 1); // row 1 is MP
+        Assert.IsTrue(lines.Any(l => l.Label == "Skill" && !l.Bucket && l.Value == 24_000));
+        Assert.IsTrue(lines.Any(l => l.Label == "Skill" && l.Bucket && l.Value == 20));
+    }
+
+    // Same for the hero's max HP: Warrior Mastery's 20 per level x 200 levels, and Iron Body's percent.
+    [TestMethod]
+    public void MaxHp_SourcesShowTheSkillPointsAndPercent()
+    {
+        var hero = StatAggregator.Aggregate(StatTables.Vitals(StatTables.Hero, 200));
+        var lines = StatDisplay.Sources(hero, 0); // row 0 is HP
+        Assert.IsTrue(lines.Any(l => l.Label == "Skill" && !l.Bucket && l.Value == 4_000));
+        Assert.IsTrue(lines.Any(l => l.Label == "Skill" && l.Bucket && l.Value == 20));
     }
 
     [TestMethod]
@@ -59,10 +126,10 @@ public class ProgressionTests
     public void ApplyExp_LevelsUpWithAutoStats()
     {
         var chara = new CharaSlot { Name = "hero" };
-        Assert.AreEqual(0, Progression.ApplyExp(chara, 34, Progression.MaxHp(1)));
+        Assert.AreEqual(0, Progression.ApplyExp(chara, 34, Progression.MaxHp(1), Progression.MaxMp(1)));
         Assert.AreEqual(1, chara.Level);
         Assert.AreEqual(34, chara.Exp);
-        Assert.AreEqual(1, Progression.ApplyExp(chara, 1, Progression.MaxHp(2))); // 35 = ExpNext(1)
+        Assert.AreEqual(1, Progression.ApplyExp(chara, 1, Progression.MaxHp(2), Progression.MaxMp(2))); // 35 = ExpNext(1)
         Assert.AreEqual(2, chara.Level);
         Assert.AreEqual(0, chara.Exp);
         Assert.AreEqual(8, chara.Str); // +4 auto
@@ -89,8 +156,8 @@ public class ProgressionTests
     {
         var chara = new CharaSlot { Name = "hero", Level = Progression.StartLevel };
         Assert.AreEqual(4015, Progression.ExpNext(200));
-        Assert.AreEqual(0, Progression.ApplyExp(chara, 4014, Progression.MaxHp(201)));
-        Assert.AreEqual(1, Progression.ApplyExp(chara, 1, Progression.MaxHp(201)));
+        Assert.AreEqual(0, Progression.ApplyExp(chara, 4014, Progression.MaxHp(201), Progression.MaxMp(201)));
+        Assert.AreEqual(1, Progression.ApplyExp(chara, 1, Progression.MaxHp(201), Progression.MaxMp(201)));
         Assert.AreEqual(201, chara.Level); // the bar keeps going past 200: no cap, no throw
         Assert.AreEqual(0, chara.Exp);
     }
@@ -99,7 +166,7 @@ public class ProgressionTests
     public void ApplyExp_BigAward_LevelsTwice()
     {
         var chara = new CharaSlot { Name = "hero" };
-        Assert.AreEqual(2, Progression.ApplyExp(chara, 100, Progression.MaxHp(3))); // 35 + 55 = 90, 10 left
+        Assert.AreEqual(2, Progression.ApplyExp(chara, 100, Progression.MaxHp(3), Progression.MaxMp(3))); // 35 + 55 = 90, 10 left
         Assert.AreEqual(3, chara.Level);
         Assert.AreEqual(10, chara.Exp);
         Assert.AreEqual(12, chara.Str);
@@ -112,11 +179,11 @@ public class ProgressionTests
         var chara = new CharaSlot { Name = "hero", Hp = 10 };
         chara.Use = new Dictionary<int, int> { { ItemData.RedPotion, 2 } };
         Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0,
-            Progression.MaxHp(1), Progression.MaxMp(1)));
-        Assert.AreEqual(50, chara.Hp); // clamped to MaxHp(1)
+            50, 5));
+        Assert.AreEqual(50, chara.Hp); // clamped to the max the caller gives
         Assert.AreEqual(1, chara.Use[ItemData.RedPotion]);
         Assert.IsFalse(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0,
-            Progression.MaxHp(1), Progression.MaxMp(1))); // full pool: nothing happens
+            50, 5)); // full pool: nothing happens
         Assert.AreEqual(1, chara.Use[ItemData.RedPotion]);
     }
 
@@ -125,12 +192,12 @@ public class ProgressionTests
     {
         var chara = new CharaSlot { Name = "hero", Hp = 10 }; // Use null (pre-W10 save)
         Assert.IsFalse(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0,
-            Progression.MaxHp(1), Progression.MaxMp(1)));
+            50, 5));
         chara.Use = new Dictionary<int, int> { { ItemData.RedPotion, 1 } };
         Assert.IsFalse(Progression.UsePotion(chara, ItemData.BluePotion, 0, 100,
-            Progression.MaxHp(1), Progression.MaxMp(1))); // not in the bag
+            50, 5)); // not in the bag
         Assert.IsTrue(Progression.UsePotion(chara, ItemData.RedPotion, 50, 0,
-            Progression.MaxHp(1), Progression.MaxMp(1)));
+            50, 5));
         Assert.IsFalse(chara.Use.ContainsKey(ItemData.RedPotion)); // the last bottle leaves no zero behind
     }
 
@@ -140,8 +207,8 @@ public class ProgressionTests
         var chara = new CharaSlot { Name = "hero", Mp = 1 };
         chara.Use = new Dictionary<int, int> { { ItemData.BluePotion, 1 } };
         Assert.IsTrue(Progression.UsePotion(chara, ItemData.BluePotion, 0, 100,
-            Progression.MaxHp(1), Progression.MaxMp(1)));
-        Assert.AreEqual(5, chara.Mp); // clamped to MaxMp(1)
+            50, 5));
+        Assert.AreEqual(5, chara.Mp); // clamped to the max the caller gives
     }
 
     // Active damage lerps lo->hi over the skill's levels (level 1 pays lo).
@@ -160,8 +227,9 @@ public class ProgressionTests
     public void ApplyExp_RefillsToGivenMax()
     {
         var chara = new CharaSlot { Name = "hero" };
-        Assert.AreEqual(1, Progression.ApplyExp(chara, 35, 160));
+        Assert.AreEqual(1, Progression.ApplyExp(chara, 35, 160, 90_000)); // a mage's max MP is far over the base formula
         Assert.AreEqual(160, chara.Hp);
+        Assert.AreEqual(90_000, chara.Mp); // the MP refill is the caller's max too
     }
 
     [TestMethod]

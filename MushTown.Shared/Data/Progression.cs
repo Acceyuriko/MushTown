@@ -42,9 +42,19 @@ public static class Progression
         chara.Mp = Math.Min(chara.Mp, maxMp);
     }
 
-    // Vitals grow per level; a level-up refills both pools (official does too).
-    public static long MaxHp(int level) => 50 + 30L * (level - 1);
-    public static long MaxMp(int level) => 5 + 5L * (level - 1);
+    // The base vitals of a job grow per level (the numbers are on the JobProfile); a level-up refills both
+    // pools (official does too). A job without a row of its own gets the Hero's.
+    public static long MaxHp(int level, int jobId = StatTables.Hero)
+    {
+        var job = StatTables.Job(jobId);
+        return 50 + job.HpPerLevel * (level - 1L) + job.HpBonus;
+    }
+
+    public static long MaxMp(int level, int jobId = StatTables.Hero)
+    {
+        var job = StatTables.Job(jobId);
+        return 5 + job.MpPerLevel * (level - 1L) + job.MpBonus;
+    }
 
     // Combat stats the client sends the server (Build message) so damage is
     // judged on the real attacker. Beginner is the default for clients that
@@ -61,9 +71,9 @@ public static class Progression
     public const int SkillSpCost = 1;
 
     // Adds EXP, levels up while the bar is full. Each level: auto stat points
-    // (+4 STR +1 DEX warrior ratio), pools refilled to the max supplied
+    // (+4 STR +1 DEX warrior ratio), pools refilled to the maxes supplied
     // by the caller. Returns levels gained (0 when the bar is not full yet).
-    public static int ApplyExp(CharaSlot chara, long exp, long maxHp)
+    public static int ApplyExp(CharaSlot chara, long exp, long maxHp, long maxMp)
     {
         chara.Exp += exp;
         int ups = 0;
@@ -74,7 +84,7 @@ public static class Progression
             chara.Str += 4;
             chara.Dex += 1;
             chara.Hp = maxHp;
-            chara.Mp = MaxMp(chara.Level);
+            chara.Mp = maxMp;
             ups++;
         }
         return ups;

@@ -14,7 +14,12 @@ public enum WeaponType
     OneHandAxe = 7,
 }
 
-public readonly record struct JobProfile(StatKey Main, StatKey Sub, WeaponType Weapon);
+// The vital fields are design values, not v271 official ones (WZ has no base table; .dsh/research/hp-mp.md
+// section 1, MapleStory Classic fixed gains): max HP = 50 + HpPerLevel x (level - 1) + HpBonus, max MP =
+// 5 + MpPerLevel x (level - 1) + MpBonus. The bonus is the job advancement gifts, folded in. The defaults are
+// the Hero row, so every job without a row of its own plays the Hero numbers.
+public readonly record struct JobProfile(StatKey Main, StatKey Sub, WeaponType Weapon,
+    int HpPerLevel = 28, int MpPerLevel = 12, int HpBonus = 700, int MpBonus = 300);
 
 public readonly record struct WeaponProfile(double Coefficient, double MasteryPct);
 
@@ -28,9 +33,29 @@ public static class StatTables
     public static JobProfile Job(int jobId) => jobId switch
     {
         Hero => new(StatKey.STR, StatKey.DEX, WeaponType.HeroTwoHand),
-        FirePoisonMage => new(StatKey.INT, StatKey.LUK, WeaponType.ShortStaff),
+        FirePoisonMage => new(StatKey.INT, StatKey.LUK, WeaponType.ShortStaff, 16, 22, 300, 700),
         _ => new(StatKey.STR, StatKey.DEX, WeaponType.Default),
     };
+
+    // The max HP / MP records of a job at a level: the base, plus the max-level job skills that raise it.
+    // The skill numbers are WZ's (hp-mp.md section 3): Warrior Mastery lv2mhp 20 and Iron Body mhpR 20 at
+    // level 20; MP Boost lv2mmp 20 + 5 x 20 and mmpR 20 at level 20. lv2mhp / lv2mmp are per character
+    // level, so they are one FLAT record of coefficient x level. A job without a row plays the Hero's skills.
+    public static IEnumerable<StatModifier> Vitals(int jobId, int level)
+    {
+        yield return new(StatKey.MAX_HP, StatValueType.FLAT, Progression.MaxHp(level, jobId), StatSource.Base);
+        yield return new(StatKey.MAX_MP, StatValueType.FLAT, Progression.MaxMp(level, jobId), StatSource.Base);
+        if (jobId == FirePoisonMage)
+        {
+            yield return new(StatKey.MAX_MP, StatValueType.FLAT, 120.0 * level, StatSource.Skill, "MP Boost");
+            yield return new(StatKey.MAX_MP, StatValueType.PERCENT, 20, StatSource.Skill, "MP Boost");
+        }
+        else
+        {
+            yield return new(StatKey.MAX_HP, StatValueType.FLAT, 20.0 * level, StatSource.Skill, "Warrior Mastery");
+            yield return new(StatKey.MAX_HP, StatValueType.PERCENT, 20, StatSource.Skill, "Iron Body");
+        }
+    }
 
     // The attack speed stage of the panel (1 slowest .. 10 fastest). A weapon's
     // WZ attackSpeed counts the other way round (2 fastest .. 9 slowest), so the
