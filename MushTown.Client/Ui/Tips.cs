@@ -31,6 +31,7 @@ public sealed class Tips : Component, IDrawable
         if (gfx.Hovered?.Get<LifeTip>() is LifeTip life) life.DrawAt(gfx, anchor);
         if (gfx.Hovered?.Get<HoverTip>() is HoverTip text) text.DrawAt(gfx, anchor); // Scene.Draw fills gfx.Hovered first
         if (_cursorFree() && gfx.Hovered?.Get<ItemTip>() is ItemTip item) DrawItem(gfx, anchor, item.Id());
+        if (_cursorFree() && gfx.Hovered?.Get<StatTip>() is StatTip stat) stat.DrawAt(gfx, anchor, _statLay);
     }
 
     // The item tooltip: the icon, the name, the bonuses and the description of

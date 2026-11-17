@@ -155,6 +155,7 @@ public partial class MushTownGame : Game
         _deathHost.Add(new Rect(new Rectangle(0, 0, GameWidth, GameHeight))); // the popup root covers the screen; BuildDeathScene only refills its children
         _panelHosts = new[] { _invHost, _statHost, _skillHost, _questHost, _settingsHost, _shopHost }; // the panel-id order the Z row and the hit lookups use
         _assetsDir = FindAssetsDir();
+        _statDesc = LoadJson<StatDescData>(Path.Combine(_assetsDir, "ui", "stat_desc.json"));
         _bgm = new BgmPlayer(Path.Combine(_assetsDir, "sound"), _shotPath != null);
         _audio.Add(_bgm);
         _npcSayLayer.Add(_npcSay); // the NPC bubbles: owned here, refilled per map

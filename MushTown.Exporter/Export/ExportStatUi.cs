@@ -1,3 +1,4 @@
+using MushTown.Shared;
 using WzComparerR2.WzLib;
 
 namespace MushTown.Exporter;
@@ -28,9 +29,6 @@ public static partial class Export
             ("UICharacterInfo.img/common/detailStat/canvas:attackFont", "stat_label_attack.png"),
             ("UICharacterInfo.img/common/detailStat/canvas:utilityFont", "stat_label_utility.png"),
             ("UICharacterInfo.img/common/detailStat/canvas:defenseFont", "stat_label_defense.png"), // page 2: defense, speed, knockback resistance
-            // The row highlight the official page puts under the hovered row.
-            ("UICharacterInfo.img/common/detailStat/canvas:highlightLong", "stat_hl_long.png"),
-            ("UICharacterInfo.img/common/detailStat/canvas:highlightShort", "stat_hl_short.png"),
         };
         // The item tooltip frame: four corners, four edges, one center.
         foreach (string piece in new[] { "nw", "ne", "sw", "se", "n", "s", "w", "e", "c" })
@@ -38,7 +36,40 @@ public static partial class Export
         foreach ((string node, string file) in files)
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))
                 return false;
+        if (!ExportStatDesc(ui, outDir)) return false;
         Console.WriteLine($"stat: {files.Count} files");
+        return true;
+    }
+
+    // The WZ node (Stat/<n>) of each panel row, in the row order of
+    // HudStat.StatRows: left then right, area by area. Checked against the
+    // clickRangeLT of each node (research/character-stats.md 8.4).
+    private static readonly int[] StatDescNodes =
+    {
+        0, 1, 2, 3, 4, 5, // HP MP / STR DEX / INT LUK
+        7, 6, 9, 8, 12, 11, 10, 18, 13, 21, 14, 16, 17, 15, 20, 19, // the attack area
+        22, 23, 24, 25, 26, 27, // mesos, star force, drop, arcane, exp, sacred
+    };
+
+    // Title and Desc of every row. The WZ text carries the two characters
+    // backslash-n (and backslash-r backslash-n) as line breaks and #c...# colour
+    // marks: lines are split and the marks are dropped.
+    private static bool ExportStatDesc(WzRoot ui, string outDir)
+    {
+        var data = new StatDescData();
+        foreach (int n in StatDescNodes)
+        {
+            var node = ui.Find($"UICharacterInfo.img/common/detailStat/Stat/{n}");
+            if (node?.Nodes["Title"]?.Value is not string title || node.Nodes["Desc"]?.Value is not string desc)
+            {
+                Console.WriteLine($"node not found: detailStat/Stat/{n} Title/Desc");
+                return false;
+            }
+            var lines = desc.Replace(@"\r\n", "\n").Replace(@"\n", "\n").Replace("\r\n", "\n")
+                .Replace("#c", "").Replace("#", "").Split('\n').Select(l => l.Trim()).ToList();
+            data.Rows.Add(new StatDescRow { Title = title, Lines = lines });
+        }
+        WriteJson(Path.Combine(outDir, "ui", "stat_desc.json"), data);
         return true;
     }
 }

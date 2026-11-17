@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -37,12 +38,13 @@ public partial class MushTownGame
         {
             "charinfo_main.png", "stat_win.png", "stat_statbar.png", "stat_name.png", "stat_x.png", "stat_page.png",
             "stat_label_main.png", "stat_label_mp.png", "stat_label_attack.png", "stat_label_utility.png", "stat_label_defense.png",
-            "stat_hl_long.png", "stat_hl_short.png",
             "tip_nw.png", "tip_ne.png", "tip_sw.png", "tip_se.png", "tip_n.png", "tip_s.png",
             "tip_w.png", "tip_e.png", "tip_c.png",
         })
             LoadTexture("ui/" + f);
     }
+
+    private readonly StatDescData _statDesc; // the hover text of the rows (assets/ui/stat_desc.json), loaded by the constructor
 
     private void BuildStatScene()
     {
@@ -104,7 +106,7 @@ public partial class MushTownGame
             var o = new GameObject();
             o.Add(new Rect(new Rectangle(bx + row.X, by + row.Y, row.W, 16)));
             o.Add(new Button { Kind = ButtonKind.Silent }); // the row only takes the hover
-            o.Add(new StatHighlight(row.Long ? "ui/stat_hl_long.png" : "ui/stat_hl_short.png"));
+            o.Add(new StatTip(() => _statPage == 0 || index < UtilityFirstRow ? _statDesc.Rows[index] : null));
             o.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => StatValue(index >= UtilityFirstRow ? index + _statPage * 6 : index), row.Vx - row.X, row.Vy - row.Y, Color.White));
             body.AddChild(o);
         }
@@ -113,16 +115,15 @@ public partial class MushTownGame
             _statLay.Get("pageW", 37), _statLay.Get("pageH", 11)), "", () => { _statPage ^= 1; _statBuilt = false; }, ButtonKind.Click));
     }
 
-    // One stat column: the hover box (x, w), the number spot (vx) and the
-    // bar art the official page uses for that column.
-    private readonly record struct StatColumn(int X, int W, int Vx, bool Long);
+    // One stat column: the hover box (x, w) and the number spot (vx).
+    private readonly record struct StatColumn(int X, int W, int Vx);
 
     // One stat area: the two columns, the first row and the row pitch.
     private readonly record struct StatArea(StatColumn Left, StatColumn Right, int Y, int Pitch, int Rows);
 
     // One stat row: the label art carries the name, this is the hover box
     // and the number spot (the stats page space).
-    private readonly record struct StatRowBox(int X, int Y, int W, int Vx, int Vy, bool Long);
+    private readonly record struct StatRowBox(int X, int Y, int W, int Vx, int Vy);
 
     // The official row grid: three areas, two columns each. The row counts
     // are fixed by the official label art (3, 8 and 3 rows).
@@ -131,16 +132,16 @@ public partial class MushTownGame
         var areas = new[]
         {
             new StatArea(
-                new StatColumn(_statLay.Get("mainLeftX", 7), _statLay.Get("mainLeftW", 215), _statLay.Get("mainLeftVx", 217), true),
-                new StatColumn(_statLay.Get("mainRightX", 227), _statLay.Get("mainRightW", 201), _statLay.Get("mainRightVx", 425), false),
+                new StatColumn(_statLay.Get("mainLeftX", 7), _statLay.Get("mainLeftW", 215), _statLay.Get("mainLeftVx", 217)),
+                new StatColumn(_statLay.Get("mainRightX", 227), _statLay.Get("mainRightW", 201), _statLay.Get("mainRightVx", 425)),
                 _statLay.Get("mainY", 48), _statLay.Get("mainPitch", 22), 3),
             new StatArea(
-                new StatColumn(_statLay.Get("atkLeftX", 5), _statLay.Get("atkLeftW", 215), _statLay.Get("atkLeftVx", 217), true),
-                new StatColumn(_statLay.Get("atkRightX", 227), _statLay.Get("atkRightW", 215), _statLay.Get("atkRightVx", 437), true),
+                new StatColumn(_statLay.Get("atkLeftX", 5), _statLay.Get("atkLeftW", 215), _statLay.Get("atkLeftVx", 217)),
+                new StatColumn(_statLay.Get("atkRightX", 227), _statLay.Get("atkRightW", 215), _statLay.Get("atkRightVx", 437)),
                 _statLay.Get("atkY", 131), _statLay.Get("atkPitch", 22), 8),
             new StatArea(
-                new StatColumn(_statLay.Get("utilLeftX", 5), _statLay.Get("utilLeftW", 215), _statLay.Get("utilLeftVx", 217), true),
-                new StatColumn(_statLay.Get("utilRightX", 227), _statLay.Get("utilRightW", 215), _statLay.Get("utilRightVx", 437), true),
+                new StatColumn(_statLay.Get("utilLeftX", 5), _statLay.Get("utilLeftW", 215), _statLay.Get("utilLeftVx", 217)),
+                new StatColumn(_statLay.Get("utilRightX", 227), _statLay.Get("utilRightW", 215), _statLay.Get("utilRightVx", 437)),
                 _statLay.Get("utilY", 324), _statLay.Get("utilPitch", 22), 3),
         };
         var rows = new List<StatRowBox>();
@@ -148,19 +149,23 @@ public partial class MushTownGame
             for (int i = 0; i < a.Rows; i++)
             {
                 int y = a.Y + i * a.Pitch;
-                rows.Add(new StatRowBox(a.Left.X, y, a.Left.W, a.Left.Vx, y + 1, a.Left.Long));
-                rows.Add(new StatRowBox(a.Right.X, y, a.Right.W, a.Right.Vx, y + 1, a.Right.Long));
+                rows.Add(new StatRowBox(a.Left.X, y, a.Left.W, a.Left.Vx, y + 1));
+                rows.Add(new StatRowBox(a.Right.X, y, a.Right.W, a.Right.Vx, y + 1));
             }
         return rows;
     }
 
     // The live value of one row, read when the row draws so the numbers
     // follow the game. The index follows the row order of StatRows: the main
-    // area (HP, MP, STR, DEX, INT, LUK), the attack area (damage range, final
-    // damage, attack power, critical rate), the utility area (mesos, exp),
-    // and 28..33 = page 2 of the bottom block (defense, status resistance,
-    // speed, jump, knockback resistance, attack speed). The stats the game has
-    // no value for show 0.
+    // area (HP, MP, STR, DEX, INT, LUK), the attack area (damage range,
+    // damage, final damage, boss damage, ignore defense, normal enemy damage,
+    // attack power, critical rate, magic att, critical damage, cooldown
+    // reduction, buff duration, cooldown not applied, ignore elemental
+    // resistance, additional status damage, summons duration), the utility
+    // area (mesos, star force, drop rate, arcane power, exp, sacred power),
+    // and 28..33 = page 2 of the bottom block. Every value comes from the
+    // one snapshot; a row the snapshot has no key for shows 0 (0% for a
+    // percentage row).
     private string StatValue(int index)
     {
         var c = _save?.Slots[_slot];
@@ -181,15 +186,28 @@ public partial class MushTownGame
             case 4: return $"{_stats.IntValue(StatKey.INT):#,##0}";
             case 5: return $"{_stats.IntValue(StatKey.LUK):#,##0}";
             case 6: return DamageRange();
-            case 8: return $"{CurrentBuild().FinalPct}%"; // Final Attack proc chance (panel text unchanged this ticket)
+            case 7: return Percent(StatKey.DAMAGE_PCT);
+            case 8: return $"{Math.Round((DamageChain.FinalDamageMultiplier(_stats) - 1) * 100)}%";
+            case 9: return Percent(StatKey.BOSS_PCT);
+            case 10: return $"{Math.Round((1 - DamageChain.IedMultiplier(_stats)) * 100)}%";
+            case 11: return Percent(StatKey.NORMAL_PCT);
             case 12: return $"{DamageChain.TotalAttack(_stats):#,##0}";
-            case 13: return $"{_stats.IntValue(StatKey.CRIT_RATE)}%"; // critical rate
-            case 22: return $"{(c?.Mesos ?? 0).ToString("#,##0")}";
-            case 26: return $"{(c?.Exp ?? 0):#,##0} / {Progression.ExpNext(c?.Level ?? 1):#,##0}";
-            case 32: return $"{_stats.IntValue(StatKey.KNOCKBACK_RESISTANCE)}%";
-            default: return "0";
+            case 13: return Percent(StatKey.CRIT_RATE);
+            case 14: return $"{DamageChain.TotalAttack(_stats, magic: true):#,##0}";
+            case 15: return Percent(StatKey.CRIT_DAMAGE);
+            case 16: return Percent(StatKey.CDR_PCT);
+            case 17: return Percent(StatKey.BUFF_DURATION_PCT);
+            case 18: return Percent(StatKey.COOLDOWN_SKIP_PCT);
+            case 19: case 20: case 21: return "0%"; // ignore elemental resistance, additional status damage, summons duration: no key yet
+            case 22: return Percent(StatKey.MESO_PCT);
+            case 24: return Percent(StatKey.DROP_PCT);
+            case 26: return Percent(StatKey.EXP_PCT);
+            case 32: return Percent(StatKey.KNOCKBACK_RESISTANCE);
+            default: return "0"; // star force, arcane power, sacred power and the page 2 rows the snapshot has no key for
         }
     }
+
+    private string Percent(StatKey key) => $"{_stats.IntValue(key)}%";
 
     // The damage range the panel shows: the current class and weapon profile
     // read from the same snapshot as the rest of the panel.
@@ -234,16 +252,34 @@ public sealed class NamePlate : Component, IDrawable
     }
 }
 
-// The official row highlight: the bar under the hovered stat row. It covers
-// the row box, so the bar is always as wide as the column it belongs to.
-public sealed class StatHighlight : Component, IDrawable
+// The explanation of the hovered stat row (the official Default tooltip
+// frame): the row name, then the text of UICharacterInfo.img detailStat. The
+// tip layer draws it next to the cursor.
+public sealed class StatTip : Component
 {
-    private readonly string _art;
-    public StatHighlight(string art) => _art = art;
-    public void Draw(UiGfx gfx)
+    private readonly Func<StatDescRow?> _row;
+    public StatTip(Func<StatDescRow?> row) => _row = row;
+
+    public void DrawAt(UiGfx gfx, TipAnchor anchor, PanelLayout lay)
     {
-        if (gfx.Hovered != Owner) return;
-        var r = Owner.Get<Rect>()!.Screen;
-        gfx.Sb.Draw(gfx.Tex(_art), new Rectangle(r.X, r.Y, r.Width, r.Height), Color.White);
+        if (_row() is not { } row) return;
+        int pad = lay.Get("statTipPad", 8), gap = lay.Get("statTipLineGap", 16);
+        int textW = lay.Get("statTipW", 260) - pad * 2;
+        var title = gfx.Ui.GetSmall(row.Title);
+        var lines = new List<Texture2D?>(); // null = the blank line between two paragraphs
+        foreach (string line in row.Lines)
+            if (line == "") lines.Add(null);
+            else foreach (string wrapped in gfx.Ui.Wrap(line, textW)) lines.Add(gfx.Ui.GetSmall(wrapped));
+        int w = Math.Max(title.Width, lines.Max(l => l?.Width ?? 0)) + pad * 2;
+        int h = pad * 2 + gap * 2 + lines.Count * gap;
+        var box = anchor.At(gfx, w, h);
+        NineSlice.Draw(gfx, "tip", box);
+        gfx.Sb.Draw(title, new Vector2(box.X + (w - title.Width) / 2, box.Y + pad), new Color(255, 220, 0));
+        int y = box.Y + pad + gap * 2;
+        foreach (var line in lines)
+        {
+            if (line != null) gfx.Sb.Draw(line, new Vector2(box.X + pad, y), new Color(214, 216, 222));
+            y += gap;
+        }
     }
 }

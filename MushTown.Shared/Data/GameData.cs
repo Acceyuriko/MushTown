@@ -523,6 +523,20 @@ public sealed class JobListData
     public List<JobData> Jobs { get; set; } = new();
 }
 
+// The hover text of the stat panel rows: assets/ui/stat_desc.json
+// (UICharacterInfo.img/common/detailStat/Stat/<n>). Rows[i] belongs to the
+// panel's row i (the order of HudStat.StatRows), so the client needs no table.
+public sealed class StatDescData
+{
+    public List<StatDescRow> Rows { get; set; } = new();
+}
+
+public sealed class StatDescRow
+{
+    public string Title { get; set; } = ""; // the official row name
+    public List<string> Lines { get; set; } = new(); // the official explanation, one entry per line
+}
+
 public sealed class JobData
 {
     public int Id { get; set; } // job id (110 = Hero)
