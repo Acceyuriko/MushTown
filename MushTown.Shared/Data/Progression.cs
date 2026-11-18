@@ -292,8 +292,7 @@ public static class Progression
             3 => "swingP1",
             4 => "stabO1",
             5 => "stabT1",
-            6 => "shoot1",
-            _ => "swingO1",
+            _ => "swingO1", // 6 is the WZ wand/staff group: they swing (their shoot1 is the cast pose, the same art as swingO2)
         };
     }
 

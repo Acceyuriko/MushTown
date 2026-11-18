@@ -85,7 +85,7 @@ public class SaveTests
         Assert.AreEqual(20, chara.Use![ItemData.RedPotion]); // starter kit
         Assert.AreEqual(10, chara.Use[ItemData.BluePotion]);
         Assert.IsNull(chara.X);
-        CollectionAssert.AreEquivalent(ItemData.StarterEquips, chara.Equips);
+        Assert.AreEqual(0, chara.Equips!.Count); // Hero has no starter gear yet
     }
 
     // The WZ slot of each starter piece and the window box it fills.
@@ -102,7 +102,7 @@ public class SaveTests
     [TestMethod]
     public void CreateHero_WearsThePensalirSet()
     {
-        var chara = new SaveStore().CreateHero(0, 0, "hero", 110);
+        var chara = new SaveStore().CreateHero(0, 0, "mage", 210);
         CollectionAssert.AreEqual(StarterSlots.Select(x => x.Id).ToArray(), chara.Equips);
         var defs = StarterSlots.ToDictionary(x => x.Id, x => new ItemData { ItemId = x.Id, Slot = x.Slot });
         foreach (var (id, _, box) in StarterSlots)
@@ -111,10 +111,11 @@ public class SaveTests
     }
 
     [TestMethod]
-    public void CreateHero_FireMageWearsThePensalirSet()
+    public void CreateHero_OtherClassesWearNothing()
     {
-        var mage = new SaveStore().CreateHero(0, 1, "mage", 210);
-        CollectionAssert.AreEqual(StarterSlots.Select(x => x.Id).ToArray(), mage.Equips);
+        var store = new SaveStore();
+        Assert.AreEqual(0, store.CreateHero(0, 0, "hero", 110).Equips!.Count);
+        Assert.AreEqual(0, store.CreateHero(0, 1, "bishop", 230).Equips!.Count);
     }
 
     [TestMethod]
@@ -124,7 +125,7 @@ public class SaveTests
         try
         {
             var store = new SaveStore();
-            store.CreateHero(0, 0, "hero", 110);
+            store.CreateHero(0, 0, "mage", 210);
             store.Save(path);
             CollectionAssert.AreEqual(StarterSlots.Select(x => x.Id).ToArray(),
                 SaveStore.Load(path).Saves[0]!.Slots[0]!.Equips);

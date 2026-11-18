@@ -17,7 +17,13 @@ public static partial class Export
 
     private static readonly GearRow[] Gears = new[]
     {
-        // The starter kit every new character wears: the 140-level Pensalir
+        // The classic beginner kit: new characters no longer wear it, but its
+        // export stays.
+        new GearRow(@"Weapon\01302000.img", BeginnerSword, true),
+        new GearRow(@"Coat\01040002.img", BeginnerLongcoat, true),
+        new GearRow(@"Pants\01060026.img", BeginnerBoxers, true),
+        new GearRow(@"Shoes\01072833.img", BeginnerShoes, true),
+        // The starter kit of the Fire/Poison Mage: the 140-level Pensalir
         // Magician set, base stats only.
         new GearRow(@"Weapon\01372207.img", BeginnerSword, true),
         new GearRow(@"Longcoat\01052800.img", BeginnerLongcoat, true),
@@ -324,7 +330,7 @@ public static partial class Export
                 Cash = Int(info, "cash") != 0,
                 IconW = UiPng.Width(chara, "Character", $@"{row.gear}\{icon}"),
             };
-            if (data.Price <= 0 && !data.Cash && !ItemData.DemoSlotGear.Contains(id)) // cash gear and demo samples are free
+            if (data.Price <= 0 && !data.Cash && !ItemData.BeginnerKit.Contains(id) && !ItemData.DemoSlotGear.Contains(id)) // cash gear, the old beginner kit and demo samples are free
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
                 return null;

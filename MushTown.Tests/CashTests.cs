@@ -204,7 +204,7 @@ public sealed class CashTests
         var cases = new (int Code, string Action)[]
         {
             (0, "swingO1"), (1, "swingO1"), (2, "swingT1"), (3, "swingP1"),
-            (4, "stabO1"), (5, "stabT1"), (6, "shoot1"), (7, "swingO1"),
+            (4, "stabO1"), (5, "stabT1"), (6, "swingO1"), (7, "swingO1"),
         };
         foreach (var (code, action) in cases)
         {

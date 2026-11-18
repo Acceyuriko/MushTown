@@ -508,7 +508,7 @@ public partial class MushTownGame
                 if (ItemData.BeginnerImgs.ContainsKey(item.Slot) && !item.HasArt)
                     throw new InvalidDataException($"equip {id} has no art");
             }
-            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0 && !ItemData.DemoSlotGear.Contains(id)) // stale jsons price 0, except cash items, rings and demo samples
+            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0 && !ItemData.BeginnerKit.Contains(id) && !ItemData.DemoSlotGear.Contains(id)) // stale jsons price 0, except cash items, rings, the old beginner kit and demo samples
                 throw new InvalidDataException($"item {id} has a bad price");
             if (item.Name == "") // pre-name jsons would print blank labels
                 throw new InvalidDataException($"item {id} has no name");

@@ -135,7 +135,7 @@ public sealed class SaveStore
             Mesos = NewHeroMesos,
             // Starter kit: the only potion source until W13 drops (no shop until W18).
             Use = new Dictionary<int, int> { { ItemData.RedPotion, 20 }, { ItemData.BluePotion, 10 } },
-            Equips = new List<int>(ItemData.StarterEquips),
+            Equips = new List<int>(ItemData.StarterEquipsOf(job)),
         };
         Progression.GiveStartAp(chara, StatTables.Job(job).Main);
         Inventory.GiveCashDefaults(chara);

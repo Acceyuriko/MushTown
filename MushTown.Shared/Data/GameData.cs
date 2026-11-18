@@ -296,8 +296,14 @@ public sealed class ItemData
     public const int LongSword = 1302007; // Long Sword (Wp, PAD 27): the shop of Sid (11000)
     public const int LolicoArmor = 1040015; // Brown Lolico Armor (Ma, PDD 15): the shop of Pan (21000)
 
-    // The starter kit: every new character wears the 140-level Pensalir
-    // Magician set (setItemID 448), six pieces with base stats only.
+    // The classic beginner kit (sword, undershirt, boxers, shoes). New
+    // characters no longer wear it, but its exported defs and art stay; the
+    // sword and shoes are worth 0 in the WZ.
+    public static readonly int[] BeginnerKit = { 1302000, 1040002, 1060026, 1072833 };
+
+    // The starter kit of the Fire/Poison Mage: the 140-level Pensalir
+    // Magician set (setItemID 448), six pieces with base stats only. The
+    // other classes are not playable yet and start with nothing worn.
     public const int StarterHat = 1004230; // Pensalir Mage Sallet (Cp)
     public const int StarterOverall = 1052800; // Pensalir Robe (MaPn)
     public const int StarterGloves = 1082609; // Pensalir Gloves (Gv)
@@ -305,6 +311,8 @@ public sealed class ItemData
     public const int StarterCape = 1102719; // Pensalir Cape (Sr)
     public const int StarterWand = 1372207; // Utgard Wand (Wp, short staff)
     public static readonly int[] StarterEquips = { StarterHat, StarterOverall, StarterGloves, StarterShoes, StarterCape, StarterWand };
+
+    public static int[] StarterEquipsOf(int job) => job == StatTables.FirePoisonMage ? StarterEquips : Array.Empty<int>();
 
     // Demo/test gear for every extended slot: the demo bag wears these in
     // --wear, and the tests use the same ids. Some have only icons in this
