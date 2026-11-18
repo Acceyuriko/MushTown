@@ -419,12 +419,12 @@ public sealed class MobWorld
     }
 
     // One WZ damage skill cast at (x, y). A skill with a ball (BallFrames) throws it: the ball appears at the body
-    // action's attack frame, then flies to the end of the range ahead, or to the nearest mob ahead within range (at
-    // the box height) when the skill is rectBasedOnTarget (Energy Bolt). The damage lands only after the attack-frame
-    // delay and the flight (the first tick after both, so a client never sees a number before the explosion). The
-    // target is picked at the cast: the box stays where the ball was sent even if that mob moves or dies on the way.
-    // The cast returns no hits for a ball; they come out of Tick. A skill with no ball judges at once: the box on the
-    // caster, or on the nearest mob ahead when it is rectBasedOnTarget (no mob: no hit).
+    // action's attack frame, then flies to the end of the range ahead, or to the nearest mob ahead within range (its
+    // body overlapping the box height) when the skill is rectBasedOnTarget (Energy Bolt). The damage lands only after
+    // the attack-frame delay and the flight (the first tick after both, so a client never sees a number before the
+    // explosion). The target is picked at the cast: the box stays where the ball was sent even if that mob moves or
+    // dies on the way. The cast returns no hits for a ball; they come out of Tick. A skill with no ball judges at
+    // once: the box on the caster, or on the nearest mob ahead when it is rectBasedOnTarget (no mob: no hit).
     private List<Hit> WzStrike(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, int pct, int attacker)
     {
         // Every number the damage needs is read here, in the cast, where a bad skill file fails the caster's call. A ball
@@ -439,14 +439,13 @@ public sealed class MobWorld
         int attackDelay = wz.AttackDelayMs; // the ball appears when the body action reaches its attack frame
         bool onTarget = wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1";
         float range = (float)wz.Value("range", wz.MaxLevel);
-        float height = Math.Max(-wz.Vectors["lt"][1], wz.Vectors["rb"][1]);
         Mob? first = null;
         if (onTarget)
             foreach (var m in _lives)
             {
                 float dx = m.X - x;
                 bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
-                if (m.Map != map || !ahead || Math.Abs(dx) > range || Math.Abs(m.Y - y) > height) continue;
+                if (m.Map != map || !ahead || Math.Abs(dx) > range || !wz.BodyOverlapsY(m.Y - y, m.BodyH)) continue;
                 if (first == null || Math.Abs(dx) < Math.Abs(first.X - x)) first = m;
             }
         if (!ball)
@@ -478,8 +477,8 @@ public sealed class MobWorld
         return new List<Hit>();
     }
 
-    // The damage of one WZ cast whose box has its origin at (ox, oy): the mobs in the box lt..rb, mirrored by
-    // facing (WzSkillData.InRect), taken nearest first, at most mobCount. Each takes attackCount separate rolls
+    // The damage of one WZ cast whose box has its origin at (ox, oy): the mobs whose body overlaps the box lt..rb,
+    // mirrored by facing (WzSkillData.InBodyRect), taken nearest first, at most mobCount. Each takes attackCount separate rolls
     // (a hit each, so the numbers equal the segments); a mob that dies stops taking them. The element comes
     // from the skill; a mob with Elemental Weakness takes the extra magic damage. Before its segments a mob may get
     // marked (Elemental Weakness): the mark counts in this cast's segments too.
@@ -491,7 +490,7 @@ public sealed class MobWorld
         foreach (var m in _lives)
         {
             float dx = m.X - ox, dy = m.Y - oy;
-            if (m.Map == map && wz.InRect(dx, dy, facingRight)) inBox.Add((dx * dx + dy * dy, m));
+            if (m.Map == map && wz.InBodyRect(dx, dy, m.BodyH, facingRight)) inBox.Add((dx * dx + dy * dy, m));
         }
         inBox.Sort((a, b) => a.dist2.CompareTo(b.dist2));
         var hits = new List<Hit>();

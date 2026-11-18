@@ -38,7 +38,7 @@ public sealed class WzSkillData
     public List<string> CastFrames { get; set; } = new(); // the cast effect art (png paths), only for a damage skill
     public List<string> HitFrames { get; set; } = new();  // the hit spark art (hit/0), only for a damage skill
     public List<string> BallFrames { get; set; } = new(); // the flying ball art (ball), only for a skill that throws one (Energy Bolt)
-    public List<string> SpecialFrames { get; set; } = new(); // the art that plays on every mob the skill hits (special), only for a skill that has one (Energy Bolt)
+    public List<string> SpecialFrames { get; set; } = new(); // the landing explosion art (special), only for a skill that has one (Energy Bolt)
     // The WZ origin and delay of every frame of the art that is drawn the WZ way: "effect", "hit", "ball", "special"
     // (the same order as the frame lists). The cast effect uses both its WZ delay and its WZ origin.
     public Dictionary<string, WzArt> Art { get; set; } = new();
@@ -80,13 +80,23 @@ public sealed class WzSkillData
         _ => throw new InvalidDataException($"skill {SkillId} has the element {ElemAttr}, not handled yet"),
     };
 
-    // The WZ box lt..rb: is the point (dx, dy) from the box origin inside it? The box is written for a caster
-    // that faces left (the raw art faces left), so a caster that faces right mirrors x. Edges count as inside.
-    public bool InRect(float dx, float dy, bool facingRight)
+    // The vertical part of the WZ box: [lt.y, rb.y] relative to the box origin overlaps the mob body
+    // [feetY - bodyH, feetY]. Edges count as inside.
+    public bool BodyOverlapsY(float feetDy, int bodyH)
+    {
+        var lt = Vectors["lt"];
+        var rb = Vectors["rb"];
+        return feetDy >= lt[1] && feetDy - bodyH <= rb[1];
+    }
+
+    // The WZ box lt..rb against a mob body: x is the feet point, y is [feetY - bodyH, feetY].
+    // The box is written for a caster that faces left (the raw art faces left), so a caster that faces
+    // right mirrors x. Edges count as inside.
+    public bool InBodyRect(float dx, float feetDy, int bodyH, bool facingRight)
     {
         if (facingRight) dx = -dx;
         var lt = Vectors["lt"];
         var rb = Vectors["rb"];
-        return dx >= lt[0] && dx <= rb[0] && dy >= lt[1] && dy <= rb[1];
+        return dx >= lt[0] && dx <= rb[0] && BodyOverlapsY(feetDy, bodyH);
     }
 }

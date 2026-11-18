@@ -43,10 +43,12 @@ public class FirePoisonCombatTests
     private static readonly Build Mage = new(1000, 100, 200, 0, 0, 0, Level: 200, WeaponType: (int)WeaponType.ShortStaff);
 
     // One world: mobs of 1,000,000,000 HP at the given (x, y) feet, level 200, DEF 10%.
-    private static MobWorld World(TempAssets assets, params (int x, int y)[] mobs)
+    private static MobWorld World(TempAssets assets, params (int x, int y)[] mobs) => World(assets, 0, mobs);
+
+    private static MobWorld World(TempAssets assets, int bodyH, params (int x, int y)[] mobs)
     {
         assets.AddMap(7, "[" + string.Join(",", mobs.Select(m => $$"""{"MobId":100000,"X":{{m.x}},"Cy":{{m.y}}}""")) + "]", Floor);
-        assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200);
+        assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200, bodyH: bodyH);
         var world = new MobWorld(assets.Dir);
         world.EnterMap(7);
         Feet = world.MobsOn(7).ToDictionary(m => m.Uid, m => (int)m.X);
@@ -70,22 +72,37 @@ public class FirePoisonCombatTests
 
     // The WZ box is written for a caster that faces left: a caster that faces right mirrors x. The edges are inside.
     [TestMethod]
-    public void InRect_MirroredByFacing_EdgesInside()
+    public void InBodyRect_MirroredByFacing_EdgesInside()
     {
         var box = BoltData(false, lt: new[] { -200, -50 }, rb: new[] { 30, 50 });
-        Assert.IsTrue(box.InRect(-200, 0, false));
-        Assert.IsFalse(box.InRect(-201, 0, false));
-        Assert.IsTrue(box.InRect(30, 0, false));
-        Assert.IsFalse(box.InRect(31, 0, false));
-        Assert.IsTrue(box.InRect(0, -50, false));
-        Assert.IsFalse(box.InRect(0, -51, false));
-        Assert.IsTrue(box.InRect(0, 50, false));
-        Assert.IsFalse(box.InRect(0, 51, false));
-        Assert.IsTrue(box.InRect(200, 0, true)); // facing right: the same box, mirrored
-        Assert.IsFalse(box.InRect(201, 0, true));
-        Assert.IsTrue(box.InRect(-30, 0, true));
-        Assert.IsFalse(box.InRect(-31, 0, true));
-        Assert.IsFalse(box.InRect(-200, 0, true)); // the left edge of a left-facing caster is not hit by a right-facing one
+        Assert.IsTrue(box.InBodyRect(-200, 0, 0, false));
+        Assert.IsFalse(box.InBodyRect(-201, 0, 0, false));
+        Assert.IsTrue(box.InBodyRect(30, 0, 0, false));
+        Assert.IsFalse(box.InBodyRect(31, 0, 0, false));
+        Assert.IsTrue(box.InBodyRect(0, -50, 0, false));
+        Assert.IsFalse(box.InBodyRect(0, -51, 0, false));
+        Assert.IsTrue(box.InBodyRect(0, 50, 0, false));
+        Assert.IsFalse(box.InBodyRect(0, 51, 0, false));
+        Assert.IsTrue(box.InBodyRect(200, 0, 0, true)); // facing right: the same box, mirrored
+        Assert.IsFalse(box.InBodyRect(201, 0, 0, true));
+        Assert.IsTrue(box.InBodyRect(-30, 0, 0, true));
+        Assert.IsFalse(box.InBodyRect(-31, 0, 0, true));
+        Assert.IsFalse(box.InBodyRect(-200, 0, 0, true)); // the left edge of a left-facing caster is not hit by a right-facing one
+    }
+
+    // The vertical test uses the whole mob body, not only its feet: a body that touches the box counts, and a body
+    // that stays above or below it does not. Energy Bolt's box is +-75, so a 50 px body at feet +100 overlaps it,
+    // while feet +126 puts the body top at +76 and misses by one pixel.
+    [TestMethod]
+    public void InBodyRect_UsesTheWholeMobBody()
+    {
+        var box = BoltData(false);
+        Assert.IsTrue(box.BodyOverlapsY(100, 50));
+        Assert.IsTrue(box.BodyOverlapsY(125, 50)); // body top 75: touches the bottom edge
+        Assert.IsFalse(box.BodyOverlapsY(126, 50));
+        Assert.IsTrue(box.BodyOverlapsY(-25, 50)); // body bottom -25: inside
+        Assert.IsTrue(box.BodyOverlapsY(-75, 50)); // body bottom -75: touches the top edge
+        Assert.IsFalse(box.BodyOverlapsY(-76, 50));
     }
 
     // A box on the caster (no rectBasedOnTarget): the mobs inside it are hit, facing left and right see mirrored sides.
@@ -99,6 +116,38 @@ public class FirePoisonCombatTests
         CollectionAssert.AreEqual(new[] { -200, -31, 30 }, UidsHit(world, left)); // (0, 151) is 51 px below the box
         var right = world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
         CollectionAssert.AreEqual(new[] { 30, 31, 200 }, UidsHit(world, right));
+    }
+
+    // The first search uses the whole mob body: a body that overlaps the box height is a target even when its feet
+    // are more than 75 px from the caster. One pixel further, the body misses and the next mob is picked.
+    [TestMethod]
+    public void WzStrike_TargetSearch_UsesTheWholeMobBody()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BoltData());
+        var world = World(assets, 50, (100, 200), (200, 100));
+        world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
+        Assert.AreEqual(100, world.TakeLaunches().Single().ToX); // body 150..200 touches the box 25..175
+
+        using var assets2 = new TempAssets();
+        assets2.AddWzSkill(BoltData());
+        var world2 = World(assets2, 50, (100, 226), (200, 100));
+        world2.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
+        Assert.AreEqual(200, world2.TakeLaunches().Single().ToX); // body 176..226 is above the box
+    }
+
+    // The splash box also uses the whole mob body: a body standing 100 px below the box origin still touches it;
+    // one more 26 px down misses by one pixel.
+    [TestMethod]
+    public void WzStrike_SplashBox_UsesTheWholeMobBody()
+    {
+        using var assets = new TempAssets();
+        var data = BoltData();
+        data.BallFrames.Clear(); // no ball: the box judges at once, before the mobs can move
+        assets.AddWzSkill(data);
+        var world = World(assets, 50, (100, 100), (150, 200), (200, 226));
+        var hits = world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
+        CollectionAssert.AreEqual(new[] { 100, 150 }, UidsHit(world, hits));
     }
 
     // Energy Bolt: the bolt flies to the nearest mob ahead within the reach (340), then the box (240 x 150) hangs on

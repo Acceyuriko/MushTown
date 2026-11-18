@@ -76,7 +76,7 @@ public partial class MushTownGame
         fx.Delays = wz.Art[art].Delays;
     }
 
-    // The explosion of every ball that arrived this step: the skill's hit spark at the end point (also when
+    // The landing special of every ball that arrived this step: one explosion at the end point (also when
     // nothing was there). The damage numbers come from the judge in the same step or later, never before.
     // Only call this outside the tree step (it adds nodes).
     private void SpawnImpacts()
@@ -85,13 +85,13 @@ public partial class MushTownGame
         {
             if (!b.Flight!.Arrived) continue;
             var spark = TakeFx();
-            UseArt(spark, _wzSkills[b.Skill], "hit");
+            UseArt(spark, _wzSkills[b.Skill], "special");
             spark.X = b.Flight.ToX; spark.Y = b.Flight.ToY; spark.FacingRight = true;
         }
     }
 
     // Skill effects: WZ art uses its origin, bare frames stay centered, and both flip like avatars (raw art faces
-    // left). Cast effects and hit sparks sit where they spawned; only a buff loop keeps following the player.
+    // left). Cast effects, hit sparks and landing specials sit where they spawned; only a buff loop keeps following the player.
     private void DrawFx()
     {
         DrawFxList(_balls); // the balls first: the explosion sparks cover them

@@ -109,7 +109,7 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, MobArt> _mobs = new();
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<FloatingNumber> _numbers = new();
-    private readonly List<SkillFx> _fx = new(); // skill effects in flight: casts, hit sparks, buff loops
+    private readonly List<SkillFx> _fx = new(); // skill effects in flight: casts, hit sparks, landing specials, buff loops
     private readonly Stack<FloatingNumber> _numberPool = new(); // freelists: spawn pops, removal pushes, live order untouched
     private readonly Stack<SkillFx> _fxPool = new();
     private readonly List<SkillFx> _balls = new(); // balls in the air (Energy Bolt): each node holds a Projectile and a SkillFx

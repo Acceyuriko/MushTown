@@ -3,9 +3,10 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // One skill effect in flight: a cast effect (WZ origin on the caster's feet, or centered for an old bare frame), a
-// hit spark (its WZ origin on the mob's body), a buff loop (riding the player until the buff ends), or a flying ball
-// (a loop that sits where its Projectile is until it arrives). A one-shot plays once and ends its own life; a loop
-// wraps forever and the buff end (or the arrival) takes it away.
+// hit spark (its WZ origin on the mob's body), a landing special (its WZ origin at the ball's end point), a buff loop
+// (riding the player until the buff ends), or a flying ball (a loop that sits where its Projectile is until it
+// arrives). A one-shot plays once and ends its own life; a loop wraps forever and the buff end (or the arrival) takes
+// it away.
 public sealed class SkillFx : Component
 {
     private const int Delay = 100; // effects without WZ frame delays (and old exports) use one 100 ms delay

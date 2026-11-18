@@ -126,15 +126,14 @@ public partial class MushTownGame
         var num = TakeNumber();
         num.Text = damage.ToString(); num.X = m.X; num.Y = headY - stack * FloatingNumber.StackPx;
         if (mine) num.Skin = Hero?.DamageSkin ?? 0;
-        // A skill with a ball explodes once at the end of its flight (SpawnImpacts, the hit art); the art on each mob
-        // it hits is its special. Another WZ skill plants its hit art on each mob.
+        // A skill with a ball plays its special once at the landing (SpawnImpacts); each mob it hits gets its hit art.
+        // Another WZ skill plants its hit art on each mob.
         _wzSkills.TryGetValue(skill, out var wz);
-        string? art = wz == null ? null : wz.BallFrames.Count > 0 ? "special" : "hit";
-        var hitArt = skill == 0 ? null : wz == null ? _skills[skill].Hit : ArtFrames(wz, art!);
+        var hitArt = skill == 0 ? null : wz == null ? _skills[skill].Hit : ArtFrames(wz, "hit");
         if (hitArt is { Count: > 0 } && firstOfMob)
         {
             var spark = TakeFx();
-            if (wz != null) UseArt(spark, wz, art!);
+            if (wz != null) UseArt(spark, wz, "hit");
             else spark.Frames = hitArt;
             spark.X = m.X; spark.Y = m.Y - bodyH / 2; spark.FacingRight = true;
         }
