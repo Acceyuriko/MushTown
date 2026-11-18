@@ -46,18 +46,13 @@ public partial class MushTownGame
     private List<SkillView> _skillPage = new();
     private int SkillScrollMax => Math.Max(0, (_skillPage.Count + 1) / 2 - SkillRows);
 
-    // The name and the book of each page (the blue bar), the skill ids of each job page.
-    private static readonly string[] SkillTabNames = { "Legendary Skill", "Warrior", "Fighter", "Crusader", "4th Job", "5th Job" };
-    private static readonly string?[] SkillTabBooks = { "ui/skill_book000.png", "ui/skill_book100.png", "ui/skill_book110.png", "ui/skill_book111.png", null, null };
-    private static readonly int[][] SkillTabs = new[]
-    {
-        Array.Empty<int>(), // the beginner page lists the default passives, not skill ids
-        new[] { SkillData.SlashBlast, SkillData.IronBody, SkillData.WarLeap, SkillData.WarriorMastery, SkillData.LeapAttack, SkillData.GuardianArmor },
-        new[] { SkillData.Brandish, SkillData.WeaponMastery, SkillData.SpiritBlade, SkillData.ComboAttack, SkillData.FlashBlade, SkillData.AgileArms, SkillData.FinalAttack, SkillData.PhysicalTraining },
-        new[] { SkillData.IntrepidSlash, SkillData.BeamBlade, SkillData.Rush, SkillData.ScarringSword, SkillData.ComboSynergy, SkillData.SelfRecovery, SkillData.ChanceAttack, SkillData.Endure },
-        Array.Empty<int>(), // IV: no skills yet
-        Array.Empty<int>(), // V: no skills yet
-    };
+    // The name and the book of each page (the blue bar). Only the Hero's pages have book art.
+    private static readonly string[] HeroTabNames = { "Legendary Skill", "Warrior", "Fighter", "Crusader", "4th Job", "5th Job" };
+    private static readonly string[] FirePoisonTabNames = { "Legendary Skill", "Magician", "Wizard", "Mage", "4th Job", "5th Job" };
+    private static readonly string?[] HeroTabBooks = { "ui/skill_book000.png", "ui/skill_book100.png", "ui/skill_book110.png", "ui/skill_book111.png", null, null };
+
+    // The job of the character whose skill window this is.
+    private int SkillJob => _save?.Slots[_slot]?.Job ?? 0;
 
     // Where the skill window is (the macro list docks beside it).
     internal Point SkillSpot => _skillDragged ? _skillPos : new Point(_skillLay.Get("x", 326), _skillLay.Get("y", 130));
@@ -68,7 +63,7 @@ public partial class MushTownGame
     // The cells of one page: the default passives or the skills of the job.
     private List<SkillView> SkillPageOf(int tab) => tab == SkillTabBeginner
         ? _passives.Rows.Select(r => new SkillView(r.Name, r.Icon, r.Icon, r.MaxLevel, r.Desc, r.Effect, 0, true)).ToList()
-        : SkillTabs[tab].Select(id =>
+        : JobSkills.Pages(SkillJob)[tab - 1].Select(id =>
         {
             var s = _skills[id];
             return new SkillView(s.Name, s.Icon, s.Disabled, s.MaxLevel, s.Desc, new[] { SkillText.Effect(s, s.MaxLevel) }, id, s.Kind == SkillData.KindPassive);
@@ -89,7 +84,7 @@ public partial class MushTownGame
         var bar = new GameObject();
         bar.Add(new Rect(new Rectangle(_skillLay.Get("barX", 8), _skillLay.Get("barY", 47), _skillLay.Get("barW", 304), _skillLay.Get("barH", 45))));
         bar.Add(new Picture("ui/skill_bar.png", 0, 0)); // the blue bar: the name of the page
-        bar.Add(new SkillPageBar(SkillTabNames[_skillTab], SkillTabBooks[_skillTab]));
+        bar.Add(new SkillPageBar((SkillJob == StatTables.Hero ? HeroTabNames : FirePoisonTabNames)[_skillTab], SkillJob == StatTables.Hero ? HeroTabBooks[_skillTab] : null));
         body.AddChild(bar);
         for (int t = 0; t <= SkillTabLast; t++)
         {

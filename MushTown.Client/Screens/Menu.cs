@@ -535,7 +535,7 @@ public partial class MushTownGame
             var skill = LoadJson<SkillData>(f);
             _skills[skill.SkillId] = skill;
         }
-        foreach (var tab in SkillTabs)
+        foreach (var tab in JobSkills.Pages(StatTables.Hero))
             foreach (int id in tab)
                 if (!_skills.ContainsKey(id))
                     throw new InvalidDataException($"skill tab lists {id} with no exported def");

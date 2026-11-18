@@ -50,7 +50,7 @@ public partial class MushTownGame
     private readonly CarryHand _hand = new(); // game-level: a panel rebuilds its content, the held piece survives
     private readonly GameObject _talkHost = new() { Modal = true, Z = TalkZ }; // the NPC dialog: one root carries the modal flag
     private bool _invBuilt, _statBuilt, _skillBuilt, _questBuilt, _settingsBuilt, _shopBuilt; // built at least once
-    private int _invBuiltTab = -1, _skillBuiltTab = -1; // baked Rects follow tab flips
+    private int _invBuiltTab = -1, _skillBuiltTab = -1, _skillBuiltJob; // baked Rects follow tab flips (the skill pages also follow the job)
     private readonly int[] _invScroll = new int[TabCount]; // one scroll row per tab
     private ScrollBar? _invBar;
     private int _invWheel; // the last wheel value the inventory saw
@@ -520,7 +520,7 @@ public partial class MushTownGame
             _invBuilt = true;
         }
         if (!_statBuilt) { BuildStatScene(); _statBuilt = true; }
-        if (!_skillBuilt || _skillTab != _skillBuiltTab) { BuildSkillScene(); _skillBuilt = true; _skillBuiltTab = _skillTab; }
+        if (!_skillBuilt || _skillTab != _skillBuiltTab || SkillJob != _skillBuiltJob) { BuildSkillScene(); _skillBuilt = true; _skillBuiltTab = _skillTab; _skillBuiltJob = SkillJob; }
         if (_showQuest) // the rows cost a list each call, and a hidden panel is not drawn: skip it
         {
             string key = QuestWindowKey();

@@ -34,7 +34,7 @@ public partial class MushTownGame : Game
     private readonly string? _shotScreen;
     private readonly (int X, int Y)? _shotHover; // --hover <x,y>: where the shot puts the mouse
     private readonly int _shotTalk; // --talk <npc>: which NPC the talk shot opens
-    private readonly int _shotJob; // --job <id>: which class the job shot poses
+    private readonly int _shotJob; // --job <id>: which class the job shot poses (stat and skill shots: the demo plays it)
     private readonly bool _shotHit;
     private readonly int _shotSkill; // --skill <id>: 0 means no skill pose
     private readonly int _shotSkillTab; // --skilltab: which tab the skill window opens on (0 beginner, 1 Warrior, ...)

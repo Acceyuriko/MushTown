@@ -124,7 +124,7 @@ if (shotSkill != 0 && shotScreen != null && shotScreen != "skill") ok = false; /
 if ((shotHit ? 1 : 0) + (shotSkill != 0 ? 1 : 0) + (shotDrop ? 1 : 0) + (shotDmg > 0 ? 1 : 0) + (shotHurt ? 1 : 0) > 1) ok = false; // one pose per shot
 if (shotScreen is not ("skill" or "skillscroll") && shotSkillTab != 1) ok = false; // --skilltab needs the skill window
 if (shotTalk != 0 && shotScreen is not ("talk" or "shop" or "shopscroll" or "shopnotice")) ok = false; // --talk rides only with the talk/shop screens
-if (shotJob != 0 && shotScreen is not ("job" or "job2" or "setup" or "stat" or "stat2" or "stat200")) ok = false; // --job rides only with the job screens and the stat window
+if (shotJob != 0 && shotScreen is not ("job" or "job2" or "setup" or "stat" or "stat2" or "stat200" or "skill")) ok = false; // --job rides only with the job screens, the stat window and the skill window
 if (shotScreen == "talk" && shotTalk == 0) ok = false; // the talk screen needs its NPC
 if ((shotScreen is "shop" or "shopscroll" or "shopnotice") && shotTalk == 0) ok = false; // the shop screens need their keeper
 if (shotTravel != 0 && shotScreen is not (null or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter")) ok = false; // --travel needs the game, the world map or the minimap
