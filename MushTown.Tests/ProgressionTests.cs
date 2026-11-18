@@ -90,6 +90,26 @@ public class ProgressionTests
         Assert.IsTrue(lines.Any(l => l.Label == "Skill" && l.Bucket && l.Value == 20));
     }
 
+    // A worn equip with incMHP / incMMP adds flat max HP/MP, and the hover lists it under the Equipment group.
+    [TestMethod]
+    public void WornEquip_AddsFlatMaxHpMp_AndShowsAsEquipmentSource()
+    {
+        var gear = new Dictionary<int, ItemData> { [1] = new ItemData { ItemId = 1, Slot = "Ri", MaxHp = 70, MaxMp = 55 } };
+        var worn = ItemData.EquipBonus(new List<int> { 1 }, gear);
+        var baseMods = StatTables.Vitals(StatTables.FirePoisonMage, 200).ToList();
+        var bare = StatAggregator.Aggregate(baseMods);
+        var mods = baseMods.Concat(new[]
+        {
+            new StatModifier(StatKey.MAX_HP, StatValueType.FLAT, worn.hp, StatSource.Equipment),
+            new StatModifier(StatKey.MAX_MP, StatValueType.FLAT, worn.mp, StatSource.Equipment),
+        });
+        var dressed = StatAggregator.Aggregate(mods);
+        Assert.AreEqual(bare.IntValue(StatKey.MAX_HP) + 70, dressed.IntValue(StatKey.MAX_HP));
+        Assert.IsTrue(dressed.IntValue(StatKey.MAX_MP) >= bare.IntValue(StatKey.MAX_MP) + 55); // the MP Boost percent multiplies it too
+        Assert.IsTrue(StatDisplay.Sources(dressed, 0).Any(l => l.Label == "Equipment" && !l.Bucket && l.Value == 70));
+        Assert.IsTrue(StatDisplay.Sources(dressed, 1).Any(l => l.Label == "Equipment" && !l.Bucket && l.Value == 55));
+    }
+
     [TestMethod]
     public void Vitals_AboveInt_StayLong()
     {

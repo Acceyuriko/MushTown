@@ -72,6 +72,8 @@ public partial class MushTownGame
         mods.Add(new(StatKey.DEF, StatValueType.FLAT, worn.def, StatSource.Equipment));
         mods.Add(new(StatKey.STR, StatValueType.FLAT, worn.str, StatSource.Equipment));
         mods.Add(new(StatKey.DEX, StatValueType.FLAT, worn.dex, StatSource.Equipment));
+        mods.Add(new(StatKey.MAX_HP, StatValueType.FLAT, worn.hp, StatSource.Equipment));
+        mods.Add(new(StatKey.MAX_MP, StatValueType.FLAT, worn.mp, StatSource.Equipment));
 
         mods.AddRange(DefaultPassives.All);
         mods.Add(DefaultPassives.MapleWarrior(StatKey.STR, chara.Str));

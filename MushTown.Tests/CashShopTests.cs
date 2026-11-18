@@ -114,26 +114,6 @@ public class CashShopTests
     }
 
     [TestMethod]
-    public void ResetSkills_ClearsLevelsAndReturnsSp()
-    {
-        var hero = Hero(0);
-        hero.SkillLv = new Dictionary<int, int> { [1] = 3, [2] = 2 };
-        hero.Sp = 4;
-        Assert.IsTrue(CashShop.ResetSkills(hero));
-        Assert.AreEqual(0, hero.SkillLv.Count);
-        Assert.AreEqual(9, hero.Sp);
-    }
-
-    [TestMethod]
-    public void ResetSkills_NoLearnedSkills_Fails()
-    {
-        var hero = Hero(0);
-        hero.Sp = 4;
-        Assert.IsFalse(CashShop.ResetSkills(hero));
-        Assert.AreEqual(4, hero.Sp);
-    }
-
-    [TestMethod]
     public void Rename_ChangesOnlyTheChosenHero()
     {
         var store = new SaveStore();

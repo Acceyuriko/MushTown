@@ -155,17 +155,15 @@ public partial class MushTownGame
             {
                 // Fixed extra payouts so the shot proves several icons lay out
                 // in one row; source data still comes from the exported defs.
-                world.BonusDrops = (_, _) => new List<(int kind, int id, int count, long amount)>
-                {
-                    // The table already pays the copper pile on this map; these
-                    // three complete the four tiers in the evidence shot.
-                    (DropKind.Mesos, 0, 0, 60),
-                    (DropKind.Mesos, 0, 0, 500),
-                    (DropKind.Mesos, 0, 0, 5000),
-                    (DropKind.Item, 2000002, 1, 0),
-                    (DropKind.Item, 2000006, 1, 0),
-                    (DropKind.Item, 1302007, 1, 0),
-                };
+                // Map 20000's table already pays the copper pile; the three extra
+                // meso piles complete the four tiers in its evidence shot only.
+                var bonus = new List<(int kind, int id, int count, long amount)>();
+                if (_mapId == 20000)
+                    bonus.AddRange(new[] { (DropKind.Mesos, 0, 0, 60L), (DropKind.Mesos, 0, 0, 500L), (DropKind.Mesos, 0, 0, 5000L) });
+                bonus.Add((DropKind.Item, 2000002, 1, 0));
+                bonus.Add((DropKind.Item, 2000006, 1, 0));
+                bonus.Add((DropKind.Item, 1302007, 1, 0));
+                world.BonusDrops = (_, _) => bonus;
                 // swing until the first kill (one fixed seed: same corpse, same loot)
                 var rng = new Random(0);
                 bool killed = false;

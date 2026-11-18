@@ -67,9 +67,6 @@ public static class Progression
     public static int SkillDamage(SkillData data, int lv) =>
         data.MaxLevel <= 1 ? data.DmgLo : data.DmgLo + (data.DmgHi - data.DmgLo) * (lv - 1) / (data.MaxLevel - 1);
 
-    // The SP one skill level cost (the SP Reset coupon still refunds with it).
-    public const int SkillSpCost = 1;
-
     // Adds EXP, levels up while the bar is full. Each level: auto stat points
     // (+4 STR +1 DEX warrior ratio), pools refilled to the maxes supplied
     // by the caller. Returns levels gained (0 when the bar is not full yet).

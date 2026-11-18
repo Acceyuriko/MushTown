@@ -395,7 +395,7 @@ public sealed class CashShopWindow : UiWindow
     {
         _page = CashShopPage.Utility;
         _tab = 2;
-        _checkoutId = 5051001;
+        _checkoutId = 5400000;
         _dialog = CashShopDialog.Single;
         _selectedId = 0;
         Dirty = true;

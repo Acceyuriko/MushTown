@@ -440,12 +440,11 @@ public sealed class MobWorld
     }
 
     private float DropWidth(int kind, int id, long amount) => kind == DropKind.Mesos
-        ? amount >= 1000 ? 32f : amount >= 100 ? 31f : 23f
+        ? MesoArt.Widths[MesoArt.Tier(amount)]
         : IconWidth(id);
 
-    // The WZ origin x of the four meso pictures; keep in step with the client.
-    private static int MesoOriginX(long amount) =>
-        amount >= 1000 ? 0 : amount >= 100 ? -1 : -5;
+    // The WZ origin x of the meso picture of this amount.
+    private static int MesoOriginX(long amount) => MesoArt.Origins[MesoArt.Tier(amount)].X;
 
     private string DropBag(int kind, int id) =>
         kind == DropKind.Mesos ? "" : DropBagRule.ForMonster(ItemDef(id));

@@ -33,7 +33,7 @@ public class ItemTests
         var defs = new Dictionary<int, ItemData>
         {
             [ItemData.Mop] = new ItemData { ItemId = ItemData.Mop, Slot = "Wp", Atk = 47 },
-            [ItemData.Sergeant] = new ItemData { ItemId = ItemData.Sergeant, Slot = "Ma", Def = 25, Dex = 1 },
+            [ItemData.Sergeant] = new ItemData { ItemId = ItemData.Sergeant, Slot = "Ma", Def = 25, Dex = 1, MaxHp = 70, MaxMp = 55 },
             [ItemData.RedPotion] = new ItemData { ItemId = ItemData.RedPotion, Hp = 50 },
         };
 
@@ -42,7 +42,8 @@ public class ItemTests
         Assert.AreEqual(0, b.str);
         Assert.AreEqual(1, b.dex);
         Assert.AreEqual(25, b.def);
-        Assert.AreEqual((0, 0, 0, 0), ItemData.EquipBonus(null, defs));
-        Assert.AreEqual((0, 0, 0, 0), ItemData.EquipBonus(new List<int> { 999, ItemData.RedPotion }, defs));
+        Assert.AreEqual((70, 55), (b.hp, b.mp)); // WZ incMHP / incMMP
+        Assert.AreEqual((0, 0, 0, 0, 0, 0), ItemData.EquipBonus(null, defs));
+        Assert.AreEqual((0, 0, 0, 0, 0, 0), ItemData.EquipBonus(new List<int> { 999, ItemData.RedPotion }, defs));
     }
 }

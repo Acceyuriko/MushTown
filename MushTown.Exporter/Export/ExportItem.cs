@@ -141,18 +141,16 @@ public static partial class Export
 
     // The four ground meso tiers: Item/Special/0900.img, iconRaw frame 0.
     // The client picks the tier from the amount and draws by the WZ origin.
-    private static readonly int[] MesoIconIds = { 9000000, 9000001, 9000002, 9000003 };
-
     private static bool ExportMesoIcons(WzRoot item, string outDir)
     {
-        foreach (int id in MesoIconIds)
+        foreach (int id in MesoArt.Ids)
         {
             string key = id.ToString("D8");
             if (!UiPng.Save(item, "Item", $"Special/0900.img/{key}/iconRaw/0",
                     Path.Combine(outDir, "item", $"meso_{key}.png")))
                 return false;
         }
-        Console.WriteLine($"meso icons: {string.Join(" ", MesoIconIds)}");
+        Console.WriteLine($"meso icons: {string.Join(" ", MesoArt.Ids)}");
         return true;
     }
 
@@ -248,7 +246,7 @@ public static partial class Export
             {
                 // Demo icon rows only need the icon; their combat stats are
                 // not part of the v1 gear model.
-                if (c.Text.StartsWith("inc") && c.Text is not ("incPAD" or "incPDD" or "incSTR" or "incDEX") &&
+                if (c.Text.StartsWith("inc") && c.Text is not ("incPAD" or "incPDD" or "incSTR" or "incDEX" or "incMHP" or "incMMP") &&
                     !ItemData.DemoSlotGear.Contains(id))
                 {
                     Console.WriteLine($"equip {id} has unsupported stat {c.Text}");
@@ -304,6 +302,8 @@ public static partial class Export
                 Def = Int(info, "incPDD"),
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),
+                MaxHp = Int(info, "incMHP"),
+                MaxMp = Int(info, "incMMP"),
                 Price = Int(info, "price"),
                 ReqLevel = Int(info, "reqLevel"),
                 NameTag = tag,

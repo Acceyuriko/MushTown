@@ -1,6 +1,6 @@
 namespace MushTown.Shared;
 
-// Buying cash shop items and the two Utility effects. Every method checks the
+// Buying cash shop items and the rename Utility effect. Every method checks the
 // whole price before it changes the character.
 public static class CashShop
 {
@@ -22,18 +22,6 @@ public static class CashShop
         if (price > chara.Mesos || !Inventory.CanAdd(chara, "dec", id, 1)) return false;
         chara.Mesos -= price;
         return Inventory.Add(chara, "dec", id, 1);
-    }
-
-    // Clears every learned skill and gives its levels back as SP. Returns
-    // false when there is nothing to reset.
-    public static bool ResetSkills(CharaSlot chara)
-    {
-        int points = 0;
-        foreach (int lv in chara.SkillLv.Values) points += lv * Progression.SkillSpCost;
-        if (points == 0) return false;
-        chara.SkillLv.Clear();
-        chara.Sp += points;
-        return true;
     }
 
     // Renames one hero when the name follows the creation rules and is not

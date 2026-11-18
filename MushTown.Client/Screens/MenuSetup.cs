@@ -15,7 +15,7 @@ public partial class MushTownGame
     // the board (the top card plus the lower card under it); the doll's feet
     // are an absolute screen spot. The official CustomizeChar/12200 ones are
     // the name box 27,90 and the buttons 12,231 and 186,231. className is the
-    // box the class-name art centres in, and the art keeps its own size.
+    // box the class-name art centres in; it keeps its own size unless it is bigger.
     private static Rectangle PanelRect() =>
         new(SetupLayout.Panel.X, SetupLayout.Panel.Y, SetupLayout.CardSize.W, SetupLayout.CardSize.H);
     private static Rectangle PanelBotRect() =>
@@ -62,17 +62,20 @@ public partial class MushTownGame
         panelBot.Add(new Rect(PanelBotRect()));
         panelBot.Add(new Picture("ui/setup_panel_bot.png"));
         _menuScene.Add(panelBot);
-        // The picked class name sits where the layout puts it: the art keeps
-        // its own size and centres in the className box (the Job row).
+        // The picked class name sits where the layout puts it: the art centres in
+        // the className box (the Job row) at its own size, and shrinks to fit when
+        // it is wider or taller (the long names, like Arch Mage Fire, Poison).
         var job = Picked;
         LoadTexture(job.Name);
         var jtex = _textures[job.Name];
+        float fit = Math.Min(1f, Math.Min((float)SetupLayout.ClassNameSize.W / jtex.Width, (float)SetupLayout.ClassNameSize.H / jtex.Height));
+        int jw = (int)(jtex.Width * fit), jh = (int)(jtex.Height * fit);
         var jobO = new GameObject { NoHit = true };
         jobO.Add(new Rect(new Rectangle(
-            SetupLayout.Panel.X + SetupLayout.ClassName.X + (SetupLayout.ClassNameSize.W - jtex.Width) / 2,
-            SetupLayout.Panel.Y + SetupLayout.ClassName.Y + (SetupLayout.ClassNameSize.H - jtex.Height) / 2,
-            jtex.Width, jtex.Height)));
-        jobO.Add(new Picture(job.Name, 0, 0) { Tint = new Color(SetupLayout.ClassTint.R, SetupLayout.ClassTint.G, SetupLayout.ClassTint.B) });
+            SetupLayout.Panel.X + SetupLayout.ClassName.X + (SetupLayout.ClassNameSize.W - jw) / 2,
+            SetupLayout.Panel.Y + SetupLayout.ClassName.Y + (SetupLayout.ClassNameSize.H - jh) / 2,
+            jw, jh)));
+        jobO.Add(new Picture(job.Name) { Tint = new Color(SetupLayout.ClassTint.R, SetupLayout.ClassTint.G, SetupLayout.ClassTint.B) });
         _menuScene.Add(jobO);
         var field = new GameObject();
         field.Add(new Rect(NameFieldRect()));

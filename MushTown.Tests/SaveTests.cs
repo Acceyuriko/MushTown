@@ -194,6 +194,14 @@ public class SaveTests
         }
     }
 
+    // The dropped SP fields stay in old files: the reader ignores them and keeps the rest.
+    [TestMethod]
+    public void Load_SlotWithDroppedSpFields_ReadsTheRest()
+    {
+        var slot = JsonSerializer.Deserialize<CharaSlot>("""{"Name":"mage","Job":210,"Level":200,"Int":1018,"Sp":3,"SkillLv":{"1":2}}""")!;
+        Assert.AreEqual(("mage", 210, 200, 1018L), (slot.Name, slot.Job, slot.Level, slot.Int));
+    }
+
     [TestMethod]
     public void Load_OldSlot_MissingVitalsDefault()
     {

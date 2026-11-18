@@ -163,18 +163,17 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "cashusereset" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "keys" or "quickedit" or "quickeditswap" or "quickeditnocap" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "keys" or "quickedit" or "quickeditswap" or "quickeditnocap" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
             if (shotScreen == "chars2") _slot = PageSlots; // empty slot: no start/delete on the empty-page shot
             if (shotScreen == "use") // the coupon tooltip shot: one damage skin coupon in the USE tab
                 Inventory.Add(_save!.Slots[_slot]!, "use", _items.Values.First(d => d.DamageSkin == 1426).ItemId, 1);
-            if (shotScreen is "inv" or "use" or "dropqty" or "dropqtymax" or "cashuserename" or "cashusereset" or "dec" or "hud") _showInv = true;
+            if (shotScreen is "inv" or "use" or "dropqty" or "dropqtymax" or "cashuserename" or "dec" or "hud") _showInv = true;
             if (shotScreen == "use") _invTab = 1;
             if (shotScreen == "dec") _invTab = 5; // the DEC bag only: no equipment window
-            if (shotScreen is "cashuserename" or "cashusereset")
-                PoseCashUse(shotScreen == "cashuserename" ? 5400000 : 5051001);
+            if (shotScreen == "cashuserename") PoseCashUse(5400000);
             if (shotScreen is "dropqty" or "dropqtymax") PoseDropQuantity(shotScreen == "dropqtymax");
             if (shotScreen == "invscroll") { _showInv = true; _invTab = 1; FillInvScrollShot(); }
             if (shotScreen == "stat200") // a hero fresh from the create page: its level, vitals and stats ride on the demo hero

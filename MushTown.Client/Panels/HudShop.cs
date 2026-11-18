@@ -29,6 +29,7 @@ public partial class MushTownGame
     private string _shopBuiltKey = "";
     private int _shopQtyId; // the row whose quantity popup is open (0 = none)
     private bool _shopQtySelling;
+    private bool _shopQtyBack; // the popup buys back a sold row (the row's own count is the cap)
     private string _shopQtyTab = ""; // the bag the sold row came from
     private readonly TextField _shopQtyField = new(_shopLay) { DigitsOnly = true, Limit = 10 };
     private int _shopWheel; // the last wheel value the shop saw
@@ -238,10 +239,11 @@ public partial class MushTownGame
 
     // Double-click on a stock or bag row opens the shared quantity popup. The
     // field starts at 1 and is already focused; Enter confirms, Escape closes.
-    private void OpenQuantityPopup(bool selling, int id, string tab = "")
+    private void OpenQuantityPopup(bool selling, int id, string tab = "", bool back = false)
     {
         _shopQtyId = id;
         _shopQtySelling = selling;
+        _shopQtyBack = back;
         _shopQtyTab = tab;
         _shopWheel = _input.Wheel;
         _shopQtyField.SetText("1");
@@ -270,23 +272,37 @@ public partial class MushTownGame
         BuyFromShop(id, count);
     }
 
+    private void ConfirmBuyBack()
+    {
+        int count = ShopQuantityCount();
+        int id = _shopQtyId;
+        string tab = _shopQtyTab;
+        CloseQuantityPopup();
+        BuyBackFromShop(id, tab, count);
+    }
+
+    // Enter and the OK button: the popup's three jobs.
+    private void ConfirmQuantity()
+    {
+        if (_shopQtySelling) ConfirmSell();
+        else if (_shopQtyBack) ConfirmBuyBack();
+        else ConfirmBuy();
+    }
+
     // The quantity field owns the keys while its popup is open.
     private void UpdateShopPopupKeys(KeyboardState kb, float dtMs)
     {
-        bool selling = _shopQtySelling;
         var key = _shopQtyField.Read(kb, dtMs);
         ClampQuantity();
         if (key == FieldKey.Leave) CloseQuantityPopup();
-        else if (key == FieldKey.Submit)
-        {
-            if (selling) ConfirmSell();
-            else ConfirmBuy();
-        }
+        else if (key == FieldKey.Submit) ConfirmQuantity();
     }
 
     // The field always shows the number that will be bought or sold: at least
     // 1, at most the cap.
-    private int ShopQuantityMax() => _shopQtySelling ? ShopBagCount(_shopQtyTab, _shopQtyId) : MaxBuyQuantity;
+    private int ShopQuantityMax() => _shopQtySelling ? ShopBagCount(_shopQtyTab, _shopQtyId)
+        : _shopQtyBack ? ShopBuyback().Rows.First(r => r.id == _shopQtyId && r.tab == _shopQtyTab).count
+        : MaxBuyQuantity;
 
     private void ClampQuantity()
     {
@@ -355,19 +371,20 @@ public partial class MushTownGame
         return true;
     }
 
-    private void BuyBackFromShop(int id, string tab)
+    private void BuyBackFromShop(int id, string tab, int count)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null) return;
         var def = _items[id];
-        if (!Shop.Buy(chara, id, def.Price, tab))
+        long total = (long)def.Price * count;
+        if (!Shop.Buy(chara, id, def.Price, tab, count))
         {
-            _shopNotice = $"Not enough mesos.\nYou need {def.Price:#,##0} mesos.";
+            _shopNotice = $"Not enough mesos.\nYou need {total:#,##0} mesos.";
             return;
         }
-        ShopBuyback().Take(id, tab);
+        ShopBuyback().Take(id, tab, count);
         _shopNotice = "";
-        LogEvent($"bought back {def.Name} for {def.Price:#,##0} mesos");
+        LogEvent($"bought back {def.Name} x{count} for {total:#,##0} mesos");
         PlaySfx("shopbuy");
     }
 
@@ -378,7 +395,7 @@ public partial class MushTownGame
         string bag = string.Join("/", Enumerable.Range(0, 6).Select(tab =>
             string.Join("|", ShopBagRows(tab).Select(r => $"{r.id}:{r.count}"))));
         string buyback = string.Join("|", ShopBuyback().Rows.Select(r => $"{r.id}:{r.count}:{r.tab}"));
-        return $"{_shopTab}:{_shopInvTab}:{ShopNpc()}:{_shopNotice}:{_shopQtyId}:{_shopQtySelling}:{_shopStock?.Count}|{bag}|{buyback}";
+        return $"{_shopTab}:{_shopInvTab}:{ShopNpc()}:{_shopNotice}:{_shopQtyId}:{_shopQtySelling}:{_shopQtyBack}:{_shopStock?.Count}|{bag}|{buyback}";
     }
 
     private void LoadShopArt()
@@ -474,8 +491,8 @@ public partial class MushTownGame
     private GameObject ShopQuantityPopup()
     {
         var popup = SysPopUi.BuildQuantity(ShopPopupRect(),
-            () => _shopQtySelling ? "How many do you want to sell?" : "How many do you want to buy?",
-            _shopQtyField, () => ShopQuantityMax(), () => { if (_shopQtySelling) ConfirmSell(); else ConfirmBuy(); },
+            () => _shopQtySelling ? "How many do you want to sell?" : _shopQtyBack ? "How many do you want to buy back?" : "How many do you want to buy?",
+            _shopQtyField, () => ShopQuantityMax(), ConfirmQuantity,
             CloseQuantityPopup, _shopLay);
 
         var root = new GameObject { Modal = true };
@@ -552,7 +569,8 @@ public partial class MushTownGame
                 var (id, count, tab) = list[i];
                 var def = _items[id];
                 body.AddChild(ShopScrollRow(ShopRow(ShopRowRect(0), false, id, def.Name, count,
-                    $"{def.Price:#,##0}", "shopbuyback" + i, tab, () => BuyBackFromShop(id, tab)), i, false));
+                    $"{def.Price:#,##0}", "shopbuyback" + i, tab,
+                    () => { if (count > 1) OpenQuantityPopup(false, id, tab, back: true); else BuyBackFromShop(id, tab, 1); }), i, false));
             }
         }
         body.AddChild(ShopScrollBar(false));
@@ -719,10 +737,10 @@ public sealed class ShopBuybackList
         else _rows.Add((id, count, tab));
     }
 
-    public void Take(int id, string tab)
+    public void Take(int id, string tab, int count = 1)
     {
         int at = _rows.FindIndex(r => r.id == id && r.tab == tab);
-        if (_rows[at].count <= 1) _rows.RemoveAt(at);
-        else _rows[at] = (id, _rows[at].count - 1, tab);
+        if (_rows[at].count <= count) _rows.RemoveAt(at);
+        else _rows[at] = (id, _rows[at].count - count, tab);
     }
 }

@@ -679,20 +679,15 @@ public partial class MushTownGame
         }
     }
 
-    // CASH tab double-click: Character Name Change opens the input popup;
-    // SP Reset Scroll opens its confirmation. Every other cash item has no
-    // use in this week.
+    // CASH tab double-click: Character Name Change opens the input popup.
+    // Every other cash item has no use in this week.
     private void OpenCashUse(int id)
     {
-        if (id is not (5400000 or 5051001)) return;
+        if (id != 5400000) return;
         _cashUseId = id;
         _cashUseNotice = "";
-        var chara = _save?.Slots[_slot];
-        if (id == 5400000)
-        {
-            _cashUseField.SetText(chara?.Name ?? "");
-            _cashUseField.Focus(Keyboard.GetState());
-        }
+        _cashUseField.SetText(_save?.Slots[_slot]?.Name ?? "");
+        _cashUseField.Focus(Keyboard.GetState());
         BuildInvScene();
         _invBuilt = true;
     }
@@ -710,32 +705,24 @@ public partial class MushTownGame
     {
         int w = _cashLay.Get("utilityPopW", 318), h = _cashLay.Get("utilityPopH", 160);
         var box = new Rectangle((GameWidth - w) / 2 - _invPos.X, (GameHeight - h) / 2 - _invPos.Y, w, h);
-        var lines = _cashUseNotice != ""
-            ? new[] { _cashUseNotice }
-            : _cashUseId == 5400000
-                ? new[] { "Enter a new character name." }
-                : new[] { "Reset all skills and refund their SP?" };
-        var popup = SysPopUi.Build(box, lines,
-            _cashUseId == 5400000 ? ConfirmCashName : ConfirmCashReset, CloseCashUse, _cashLay,
+        var lines = new[] { _cashUseNotice != "" ? _cashUseNotice : "Enter a new character name." };
+        var popup = SysPopUi.Build(box, lines, ConfirmCashName, CloseCashUse, _cashLay,
             _cashLay.Get("utilityPopTextY", 34));
-        if (_cashUseId == 5400000)
-        {
-            popup.AddChild(PictureAt("ui/wm_pop_textbox.png", 0, _cashLay.Get("utilityTextBoxY", 47), w,
-                _cashLay.Get("utilityTextBoxH", 44)));
-            var input = new GameObject();
-            input.Add(new Rect(new Rectangle(
-                _cashLay.Get("utilityNameFieldX", 48), _cashLay.Get("utilityNameFieldY", 62),
-                _cashLay.Get("utilityNameFieldW", 200), _cashLay.Get("utilityNameFieldH", 20))));
-            input.Add(_cashUseField);
-            popup.AddChild(input);
-        }
+        popup.AddChild(PictureAt("ui/wm_pop_textbox.png", 0, _cashLay.Get("utilityTextBoxY", 47), w,
+            _cashLay.Get("utilityTextBoxH", 44)));
+        var input = new GameObject();
+        input.Add(new Rect(new Rectangle(
+            _cashLay.Get("utilityNameFieldX", 48), _cashLay.Get("utilityNameFieldY", 62),
+            _cashLay.Get("utilityNameFieldW", 200), _cashLay.Get("utilityNameFieldH", 20))));
+        input.Add(_cashUseField);
+        popup.AddChild(input);
         var root = new GameObject { Modal = true };
         root.AddChild(PanelButton(new Rectangle(-_invPos.X, -_invPos.Y, GameWidth, GameHeight), "cashuseblock", () => { }, ButtonKind.Silent));
         root.AddChild(popup);
         return root;
     }
 
-    // --screen cashuserename/cashusereset: open the popup over the CASH tab.
+    // --screen cashuserename: open the popup over the CASH tab.
     internal void PoseCashUse(int id)
     {
         _invTab = 4; // 0 Equip, 1 Use, 2 Etc, 3 Set-up, 4 Cash, 5 Dec
@@ -789,27 +776,8 @@ public partial class MushTownGame
         CloseCashUse();
     }
 
-    private void ConfirmCashReset()
-    {
-        var chara = _save?.Slots[_slot];
-        if (chara == null) return;
-        if (!CashShopData.ResetSkills(chara))
-        {
-            _cashUseNotice = "You have no skills to reset.";
-            BuildInvScene();
-            _invBuilt = true;
-            return;
-        }
-        Inventory.Remove(chara, "cash", _cashUseId, 1);
-        SaveChara();
-        PushBuild();
-        _skillBuilt = false;
-        CloseCashUse();
-    }
-
     private void UpdateCashUseKeys(KeyboardState kb, float dtMs)
     {
-        if (_cashUseId != 5400000) return;
         if (_cashUseField.Read(kb, dtMs) == FieldKey.Submit) ConfirmCashName();
     }
 

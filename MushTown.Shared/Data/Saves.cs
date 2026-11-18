@@ -193,8 +193,6 @@ public sealed class SaveData
 // Use null means an empty bag. The four *Order lists hold cell positions;
 // null/0 means empty and CreateHero creates them through Inventory.Ensure.
 // CashWorn/DecBag hold the free default coupons and are set on creation.
-// SkillLv and Sp are old skill-point fields: no skill is leveled any more (every skill is at its
-// max level), only the SP Reset coupon still reads and clears them.
 public sealed class CharaSlot
 {
     public string Name { get; set; } = "";
@@ -205,7 +203,6 @@ public sealed class CharaSlot
     public int? X { get; set; }
     public int? Y { get; set; }
     public long Mesos { get; set; }
-    public int Sp { get; set; }
     public long Hp { get; set; } = Progression.MaxHp(1);
     public long Mp { get; set; } = Progression.MaxMp(1);
     public long Str { get; set; } = 4;
@@ -236,7 +233,6 @@ public sealed class CharaSlot
     public List<List<string>>? QuickKeys { get; set; } // three lists of the 32 strip key names, row by row, one per preset (null = defaults)
     public int ActivePreset { get; set; } // which of the three is live (0..2)
     public List<int>? Equips { get; set; } // worn equip ids (null = nothing worn)
-    public Dictionary<int, int> SkillLv { get; set; } = new();
     public List<List<int>>? Macros { get; set; } // five macros of three skill ids each (0 = empty slot; null = the old save: all empty)
     public List<int> Quests { get; set; } = new(); // accepted quest ids
     public List<int> QuestsDone { get; set; } = new(); // turned-in quest ids

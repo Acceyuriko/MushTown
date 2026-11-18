@@ -361,11 +361,11 @@ public sealed class ItemData
         return 0;
     }
 
-    // Worn bonuses: the weapon's attack, the armour's stats.
-    public static (int weapon, int str, int dex, int def) EquipBonus(List<int>? worn, IReadOnlyDictionary<int, ItemData> defs)
+    // Worn bonuses: the weapon's attack, the armour's stats and max HP/MP.
+    public static (int weapon, int str, int dex, int def, int hp, int mp) EquipBonus(List<int>? worn, IReadOnlyDictionary<int, ItemData> defs)
     {
-        int weapon = 0, str = 0, dex = 0, def = 0;
-        if (worn == null) return (weapon, str, dex, def);
+        int weapon = 0, str = 0, dex = 0, def = 0, hp = 0, mp = 0;
+        if (worn == null) return (weapon, str, dex, def, hp, mp);
         foreach (int id in worn)
         {
             if (!defs.TryGetValue(id, out var d) || d.Slot == null) continue;
@@ -373,8 +373,10 @@ public sealed class ItemData
             str += d.Str;
             dex += d.Dex;
             def += d.Def;
+            hp += d.MaxHp;
+            mp += d.MaxMp;
         }
-        return (weapon, str, dex, def);
+        return (weapon, str, dex, def, hp, mp);
     }
 
     public int ItemId { get; set; }
@@ -393,6 +395,8 @@ public sealed class ItemData
     public int Def { get; set; } // WZ incPDD
     public int Str { get; set; } // WZ incSTR
     public int Dex { get; set; } // WZ incDEX
+    public int MaxHp { get; set; } // WZ incMHP: the max HP a worn equip adds (Hp above is a potion's heal)
+    public int MaxMp { get; set; } // WZ incMMP
     public int NameTag { get; set; } // WZ info/nameTag: UI NameTag.img node (0 = plain black box)
     public int ChatBalloon { get; set; } // WZ info/chatBalloon: the style of the speech balloon (0 = the plain one)
     public bool HasArt { get; set; } // the exporter wrote doll frames for this equip (rings carry none)

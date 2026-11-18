@@ -794,7 +794,7 @@ public sealed class ChatScrollBar : Component, IDrawable
 // The official system popup (Basic.img/sysPop): a top cap, a stretchable
 // middle and a bottom bar that carries the two buttons. The world map uses it
 // for its teleport question; the quest window uses the same popup for its own;
-// the CASH Utility popup (HudInventory) uses it for rename and SP reset.
+// the CASH Utility popup (HudInventory) uses it for rename.
 // The button row is centered here, so every caller shares one layout rule.
 public static class SysPopUi
 {

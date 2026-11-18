@@ -299,8 +299,14 @@ public partial class MushTownGame
                 var rows = ShopBagRows(1);
                 if (rows.Count == 0)
                     throw new InvalidDataException("shopbuyback shot needs a potion in the bag");
-                SellToShop(rows[0].id, 1, TabKind(1));
+                bool many = shotName.Contains("qty"); // buybackqty: five sold, the popup asks how many to take back
+                SellToShop(rows[0].id, many ? Math.Min(5, rows[0].count) : 1, TabKind(1));
                 _shopTab = 1;
+                if (many)
+                {
+                    OpenQuantityPopup(false, rows[0].id, TabKind(1), back: true);
+                    _shopQtyField.SetText("3");
+                }
             }
             else if (shotName.Contains("sell"))
             {

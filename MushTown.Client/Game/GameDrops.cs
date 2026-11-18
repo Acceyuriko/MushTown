@@ -8,17 +8,8 @@ namespace MushTown.Client;
 // Drops: ground loot views, spawn/take application.
 public partial class MushTownGame
 {
-    // Ground meso art: the four official tiers in amount order (1-49, 50-99,
-    // 100-999, 1000+), and the WZ origin each picture is drawn by.
-    private static readonly string[] MesoImages =
-    {
-        "item/meso_09000000.png", "item/meso_09000001.png",
-        "item/meso_09000002.png", "item/meso_09000003.png",
-    };
-    private static readonly (int X, int Y)[] MesoOrigins = { (-5, 28), (-5, 28), (-1, 32), (0, 32) };
-
-    private static int MesoTier(long amount) =>
-        amount >= 1000 ? 3 : amount >= 100 ? 2 : amount >= 50 ? 1 : 0;
+    // Ground meso art: the four tiers and their WZ origins live in MesoArt (Shared).
+    private static readonly string[] MesoImages = Enumerable.Range(0, MesoArt.Ids.Length).Select(MesoArt.Image).ToArray();
 
     private void ClearDrops()
     {
@@ -32,7 +23,7 @@ public partial class MushTownGame
     private void DrawDrop(DropArt d)
     {
         bool mesos = d.Kind == DropKind.Mesos;
-        int tier = mesos ? MesoTier(d.Amount) : 0;
+        int tier = mesos ? MesoArt.Tier(d.Amount) : 0;
         string image = mesos ? MesoImages[tier] : _items[d.Id].Image;
         var tex = _textures[image];
         float x = d.X, y = d.Y;
@@ -53,7 +44,7 @@ public partial class MushTownGame
         var centre = new Vector2(tex.Width / 2f, tex.Height / 2f);
         if (mesos)
         {
-            var origin = new Vector2(MesoOrigins[tier].X, MesoOrigins[tier].Y);
+            var origin = new Vector2(MesoArt.Origins[tier].X, MesoArt.Origins[tier].Y);
             var topLeft = new Vector2(x - _camera.X - origin.X, y - _camera.Y - origin.Y + bob);
             _spriteBatch.Draw(tex, topLeft + centre, null, Color.White,
                 d.Rotation, centre, 1f, SpriteEffects.None, 0f);

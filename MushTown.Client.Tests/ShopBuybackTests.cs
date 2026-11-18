@@ -39,6 +39,17 @@ public class ShopBuybackTests
     }
 
     [TestMethod]
+    public void Take_SeveralCopies_SubtractsThem()
+    {
+        var list = new ShopBuybackList();
+        list.Add(100, 5, "cash");
+        list.Take(100, "cash", 3);
+        Assert.AreEqual(2, list.Rows[0].count);
+        list.Take(100, "cash", 2);
+        Assert.AreEqual(0, list.Count);
+    }
+
+    [TestMethod]
     public void Take_LastCopy_RemovesTheRow()
     {
         var list = new ShopBuybackList();
