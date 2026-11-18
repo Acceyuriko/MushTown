@@ -181,7 +181,7 @@ public partial class MushTownGame
     // stay). Returns true on death: the caller drops the rest of the frame's touches (judged at the
     // corpse, not the spawn). A Touch-0 mob is harmless.
     // The touch rolls the dodge first (MobTouch.DodgeChance): a dodged touch does no damage, no knockback and
-    // gives no invincible time; the word Miss rises. dodgeRoll (0..1) is the roll; the shots pass one.
+    // no hit pose, but it starts the same invincible window as a hit; the word Miss rises. dodgeRoll (0..1) is the roll; the shots pass one.
     private bool ApplyHurt(long mobAtk, int mobUid, int mobId, double? dodgeRoll = null)
     {
         var chara = _save?.Slots[_slot];
@@ -193,6 +193,7 @@ public partial class MushTownGame
             var miss = TakeNumber();
             miss.Text = "Miss"; miss.Skin = FloatingNumber.HurtSkin;
             miss.X = _mover.X; miss.Y = _mover.Y - 90;
+            _hurt.Dodge(); // the invincible time of a hit, without its pose
             return false;
         }
         long damage = mobAtk <= 0 ? 0 : DamageChain.TakenDamage(_stats,
@@ -213,13 +214,17 @@ public partial class MushTownGame
         return false;
     }
 
+    // The time scale of a swing or cast, read from the panel's attack speed stage (so a buff or a potion that
+    // changes the stage needs nothing more).
+    private float AttackScale() => (float)StatTables.DelayScale(_stats.Value(StatKey.ATTACK_SPEED));
+
     // The hit pose loops the two alert frames of the WZ invincible action
     // (frame 1 for 90ms, frame 0 for 360ms), counted in game frames: 5 + 22.
     private int HurtFrame() => _hurt.ElapsedFrames % 27 < 5 ? 1 : 0;
 
     // Purple on the first flash step, normal on the next, for the whole hurt state.
     private Color? HurtTint =>
-        _hurt.Invincible && (_hurt.ElapsedFrames / HurtGuard.FlashFrames & 1) == 0 ? HurtPurple : null;
+        _hurt.HitShown && (_hurt.ElapsedFrames / HurtGuard.FlashFrames & 1) == 0 ? HurtPurple : null;
 
     // Swings and damaging casts need a judge: net play sends, the local
     // world strikes right here. The disconnect frame has neither yet.
@@ -316,7 +321,7 @@ public partial class MushTownGame
     private void CastActive(int id)
     {
         RollSwing(); // the cast poses with a swing too
-        _fighter.AttackLock = _skills[id].CastLockMs;
+        _fighter.StartAttack(_skills[id].CastLockMs, AttackScale());
         PlaySfx(SwingKey()); // v1 skills whoosh like swings (no per-skill sounds yet)
         SpawnCastFx(id, _mover.X, _mover.Y, _mover.FacingRight);
         int pct = CastPct(id);

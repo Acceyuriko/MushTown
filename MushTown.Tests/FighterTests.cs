@@ -63,4 +63,35 @@ public sealed class FighterTests
         f.Tick(1f);
         Assert.IsTrue(f.RegenDue);
     }
+
+    // A swing of 800 ms at stage 4 (scale 1.0) and at stage 8 (scale 0.75): the lock runs 800 and 600 ms, counted in 60 Hz frames (within one frame).
+    [TestMethod]
+    public void StartAttack_LockFollowsTheStage_Stage4Against8()
+    {
+        static double MsLocked(int stage)
+        {
+            var f = new Fighter();
+            f.StartAttack(800, (float)StatTables.DelayScale(stage));
+            int frames = 0;
+            while (f.AttackLock > 0)
+            {
+                f.Tick(1000f / 60f);
+                frames++;
+            }
+            return frames * 1000.0 / 60.0;
+        }
+        Assert.AreEqual(800, MsLocked(4), 17); // within one frame
+        Assert.AreEqual(600, MsLocked(8), 17);
+        Assert.AreEqual(500, MsLocked(10), 17);
+        Assert.AreEqual(950, MsLocked(1), 17);
+    }
+
+    [TestMethod]
+    public void StartAttack_RemembersTheScaleForTheSwingFrames()
+    {
+        var f = new Fighter();
+        f.StartAttack(800, 0.75f);
+        Assert.AreEqual(600f, f.AttackLock, 0.001f);
+        Assert.AreEqual(0.75f, f.AttackScale);
+    }
 }

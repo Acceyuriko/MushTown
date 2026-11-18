@@ -232,4 +232,26 @@ public class StatsTests
         Assert.AreEqual(0, new MobData().Level);
         Assert.AreEqual("", new MobData().ElemAttr);
     }
+
+    // The time scale (20 - stage) / 16, the stage kept in 1..10.
+    [DataTestMethod]
+    [DataRow(1, 1.1875)]
+    [DataRow(2, 1.125)]
+    [DataRow(3, 1.0625)]
+    [DataRow(4, 1.0)]
+    [DataRow(5, 0.9375)]
+    [DataRow(6, 0.875)]
+    [DataRow(7, 0.8125)]
+    [DataRow(8, 0.75)]
+    [DataRow(9, 0.6875)]
+    [DataRow(10, 0.625)]
+    public void DelayScale_EveryStage(int stage, double scale) => Assert.AreEqual(scale, StatTables.DelayScale(stage), 1e-12);
+
+    [TestMethod]
+    public void DelayScale_StageIsKeptInOneToTen()
+    {
+        Assert.AreEqual(1.1875, StatTables.DelayScale(0)); // no weapon: stage 0 counts as 1
+        Assert.AreEqual(1.1875, StatTables.DelayScale(-5)); // the WZ weapon with attackSpeed 15 is stage -5
+        Assert.AreEqual(0.625, StatTables.DelayScale(11));
+    }
 }

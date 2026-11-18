@@ -71,6 +71,12 @@ public static class StatTables
     public const int MageAttackSpeed = 4;
     public static int AttackSpeedStage(int wzAttackSpeed) => 10 - wzAttackSpeed;
 
+    // The time scale of a swing or a cast by the panel stage (StrategyWiki MapleStory/Formulas, Attack Speed; not
+    // verified in the game): the WZ delays are written for stage 4, so the time is x (20 - stage) / 16, the stage kept in
+    // 1..10 (the WZ panel text: +1 is the slowest, +10 the fastest; no soft cap). A stage of 0 (no weapon) counts as 1.
+    // Stage 4 is 1.0, stage 8 is 0.75, stage 10 is 0.625.
+    public static double DelayScale(double stage) => (20.0 - Math.Clamp(stage, 1.0, 10.0)) / 16.0;
+
     // The attack speed record of a character: a mage has the fixed stage, the others take the
     // stage of the worn weapon (WZ value 0 or no weapon: no record).
     public static StatModifier? AttackSpeed(bool mage, int weaponWzAttackSpeed) =>

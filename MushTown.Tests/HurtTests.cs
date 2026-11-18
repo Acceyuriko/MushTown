@@ -76,4 +76,23 @@ public class HurtTests
         guard.Tick();
         Assert.IsFalse(guard.Invincible, "frame 60: over");
     }
+
+    // A dodge starts the same invincible window as a hit, but shows no hit pose.
+    [TestMethod]
+    public void Dodge_GivesTheInvincibleWindowWithoutTheHitShown()
+    {
+        var chara = new CharaSlot { Hp = 100 };
+        var guard = new HurtGuard();
+        guard.Dodge();
+        Assert.IsTrue(guard.Invincible);
+        Assert.IsFalse(guard.HitShown);
+        Assert.AreEqual(0L, guard.Apply(chara, 10)); // a touch inside the window does no damage
+        Assert.AreEqual(100L, chara.Hp);
+        for (int i = 0; i < HurtGuard.HurtFrames; i++) guard.Tick();
+        Assert.IsFalse(guard.Invincible);
+        Assert.AreEqual(10L, guard.Apply(chara, 10)); // after the same 60 frames a hit lands, and it shows
+        Assert.IsTrue(guard.HitShown);
+        guard.Clear();
+        Assert.IsFalse(guard.Invincible);
+    }
 }

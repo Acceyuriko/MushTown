@@ -51,13 +51,13 @@ public static class SetRules
     public static IEnumerable<StatModifier> Modifiers(IReadOnlyDictionary<int, SetData> sets, IReadOnlyCollection<int>? worn) =>
         sets.Values.SelectMany(set => set.Tiers
             .Where(tier => TierActive(set, tier, worn))
-            .SelectMany(tier => tier.Effects.SelectMany(e => Records(e, $"{set.Name} ({tier.Count})"))));
+            .SelectMany(tier => tier.Effects.SelectMany(Records)));
 
     // incMDD, incACC and incEVA have no stat key: the official game removed those stats (research acc-eva-mdd),
     // so they stay tooltip text. Ignore defense is a multiplier: two 10% lines make 1 - 0.9 x 0.9.
-    private static StatModifier[] Records(SetEffect e, string label)
+    private static StatModifier[] Records(SetEffect e)
     {
-        StatModifier Rec(StatKey key, StatValueType type, double value) => new(key, type, value, StatSource.Set, label);
+        StatModifier Rec(StatKey key, StatValueType type, double value) => new(key, type, value, StatSource.Set);
         double v = e.Value;
         return e.Key switch
         {

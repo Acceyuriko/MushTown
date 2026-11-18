@@ -5,7 +5,7 @@ namespace MushTown.Shared;
 // One line of the hover source list: the label, the number, which key it
 // came from, and whether the number is a PERCENT bucket (a share of the
 // fixed values) instead of points of the key itself.
-public readonly record struct StatSourceLine(string Label, double Value, StatKey Key, bool Bucket);
+public readonly record struct StatSourceLine(string Label, double Value, StatKey Key, bool Bucket, string? Text = null);
 
 public enum StatFormat
 {
@@ -100,6 +100,7 @@ public static class StatDisplay
     // One source line of the hover, in the format of its row.
     public static string LineText(int row, StatSourceLine line)
     {
+        if (line.Text != null) return line.Text;
         if (line.Bucket) return Plain(line.Value) + "%";
         if (row == CooldownRow && line.Key == StatKey.CDR_SECONDS) return Plain(line.Value) + " sec";
         return Format(Rows[row].Format, line.Value);
@@ -112,8 +113,7 @@ public static class StatDisplay
 
     public static string SourceName(StatSource source) => source switch
     {
-        StatSource.Equipment => "Equipment",
-        StatSource.Set => "Set Effect",
+        StatSource.Equipment or StatSource.Set => "Equipment", // a set effect is listed with the equipment
         StatSource.Skill => "Skill",
         StatSource.Buff => "Buff",
         StatSource.UnionMember => "Union Member",
@@ -133,13 +133,23 @@ public static class StatDisplay
         _ => Grouped(s, Rows[row].Keys),
     };
 
+    // One line per source; the equipment records (the set effects too) are one line, every value listed
+    // ("10.00%,10.00%"), the line's value is the product of them.
     private static List<StatSourceLine> Multiplied(StatSnapshot s, StatKey key, Func<double, double> toPoints)
     {
-        return s.Modifiers
+        var records = s.Modifiers
             .Where(m => m.Key == key && m.Type == StatValueType.MULTIPLIER && m.Source != StatSource.Base && toPoints(m.Value) != 0.0)
-            .OrderBy(m => m.Source)
-            .Select(m => new StatSourceLine(m.Label != "" ? m.Label : SourceName(m.Source), toPoints(m.Value), key, false))
             .ToList();
+        var lines = new List<StatSourceLine>();
+        var gear = records.Where(m => m.Source is StatSource.Equipment or StatSource.Set).ToList();
+        if (gear.Count > 0)
+            lines.Add(new StatSourceLine(SourceName(StatSource.Equipment), toPoints(gear.Aggregate(1.0, (product, m) => product * m.Value)), key, false,
+                string.Join(",", gear.Select(m => Format(StatFormat.Pct2, toPoints(m.Value))))));
+        lines.AddRange(records
+            .Where(m => m.Source is not (StatSource.Equipment or StatSource.Set))
+            .OrderBy(m => m.Source)
+            .Select(m => new StatSourceLine(m.Label != "" ? m.Label : SourceName(m.Source), toPoints(m.Value), key, false)));
+        return lines;
     }
 
     private static List<StatSourceLine> Grouped(StatSnapshot s, StatKey[] keys)
@@ -147,13 +157,13 @@ public static class StatDisplay
         var lines = new List<StatSourceLine>();
         foreach (var source in Enum.GetValues<StatSource>())
         {
-            if (source == StatSource.Base) continue;
+            if (source is StatSource.Base or StatSource.Set) continue; // a set effect counts as equipment
             foreach (var key in keys)
             {
                 double points = 0, bucket = 0;
                 foreach (var m in s.Modifiers)
                 {
-                    if (m.Key != key || m.Source != source) continue;
+                    if (m.Key != key || (m.Source != source && !(source == StatSource.Equipment && m.Source == StatSource.Set))) continue;
                     if (m.Type is StatValueType.FLAT or StatValueType.FINAL_FLAT) points += m.Value;
                     else if (m.Type == StatValueType.PERCENT) bucket += m.Value;
                 }

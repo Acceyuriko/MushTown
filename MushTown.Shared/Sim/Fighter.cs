@@ -11,6 +11,7 @@ public sealed class Fighter : Component
     private const int RegenTickMs = 10000; // Self Recovery pays out every 10s, in combat too
 
     public float AttackLock; // ms of swing left: movement frozen until it hits 0
+    public float AttackScale = 1f; // the time scale the lock was set with (StatTables.DelayScale): the swing frames run by it
     public Dictionary<int, float> Cooldowns = new(); // ms left per cooling skill (clamped, never removed)
     public Dictionary<int, float> Buffs = new(); // ms left per live buff (removed on expiry)
     public int Orbs; // combo orbs held (Combo Attack live only)
@@ -20,6 +21,13 @@ public sealed class Fighter : Component
     public bool RegenDue; // the recovery timer fired: pay out both pools
 
     private float _regenMs = RegenTickMs; // ms to the next Self Recovery tick
+
+    // Starts a swing or a cast: the lock is the base time x the scale (stage 4 = 1.0).
+    public void StartAttack(float baseMs, float scale)
+    {
+        AttackLock = baseMs * scale;
+        AttackScale = scale;
+    }
 
     public void Tick(float dtMs)
     {

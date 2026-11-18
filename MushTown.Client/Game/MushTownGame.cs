@@ -715,7 +715,7 @@ public partial class MushTownGame : Game
         if (!blocked && _input.Fire(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
             string attackAction = RollSwing();
-            _fighter.AttackLock = Delays(attackAction, Hero?.Skin ?? 0).Sum();
+            _fighter.StartAttack(Delays(attackAction, Hero?.Skin ?? 0).Sum(), AttackScale());
             PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
             else if (_localWorld != null)
@@ -815,7 +815,7 @@ public partial class MushTownGame : Game
 
         // The hurt state swaps the default stand for alert; any other
         // action (walk, climb, prone, a swing) keeps its own pose.
-        bool hurtPose = _hurt.Invincible && _mover.Action == "stand1"; // in the air the jump pose stays
+        bool hurtPose = _hurt.HitShown && _mover.Action == "stand1"; // in the air the jump pose stays
         if (hurtPose)
         {
             _mover.Action = "alert";
@@ -832,7 +832,7 @@ public partial class MushTownGame : Game
         // A moving pose advances; a still ladder holds its frame.
         if (!hurtPose && (_mover.Climb == null || _mover.ClimbMoving))
         {
-            _frameMs += dtMs;
+            _frameMs += _fighter.AttackLock > 0 ? dtMs / _fighter.AttackScale : dtMs; // a locked swing plays as long as its lock
             _frame = Idle.Frame(_shownAction, Delays(_shownAction, Hero?.Skin ?? 0), _frameMs);
         }
 

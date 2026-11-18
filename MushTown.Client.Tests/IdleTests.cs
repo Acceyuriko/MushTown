@@ -96,4 +96,29 @@ public class IdleTests
         }
         return data;
     }
+
+    // The swing frames run at dt / scale while the lock runs (the game loop's rule), so the last frame of the swing is
+    // reached when the lock ends: an 800 ms swing at stage 8 (scale 0.75) shows its frames in 600 ms.
+    [DataTestMethod]
+    [DataRow(4, 800)]
+    [DataRow(8, 600)]
+    [DataRow(10, 500)]
+    public void SwingFrames_RunByTheScaleAndEndWithTheLock(int stage, int lockMs)
+    {
+        int[] delays = { 300, 150, 350 }; // swingO1: 800 ms at stage 4
+        float scale = (float)StatTables.DelayScale(stage);
+        var fighter = new Fighter();
+        fighter.StartAttack(delays.Sum(), scale);
+        float frameMs = 0;
+        float dt = 1000f / 60f;
+        float elapsed = 0;
+        while (fighter.AttackLock > 0)
+        {
+            frameMs += dt / fighter.AttackScale;
+            fighter.Tick(dt);
+            elapsed += dt;
+        }
+        Assert.AreEqual(lockMs, elapsed, 1.5 * dt); // the lock took the scaled time, within a frame
+        Assert.AreEqual(800, frameMs, 1.5 * dt / scale); // having played the whole swing once
+    }
 }

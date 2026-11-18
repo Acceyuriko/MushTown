@@ -176,13 +176,34 @@ public class SetTests
     }
 
     [TestMethod]
-    public void Hover_ListsTheSetAsASource()
+    public void Hover_ListsTheSetUnderEquipment()
     {
         var six = WithSet(6);
-        Assert.IsTrue(StatDisplay.Sources(six, 11).Any(l => l.Label == "Set Effect" && l.Value == 20)); // row 11: normal enemy damage
-        Assert.IsTrue(StatDisplay.Sources(six, 4).Any(l => l.Label == "Set Effect" && l.Value == 24)); // row 4: INT
-        var ied = StatDisplay.Sources(six, StatDisplay.IedRow);
-        Assert.AreEqual(2, ied.Count);
-        Assert.IsTrue(ied.All(l => l.Label == "8th Magician Set (5)" || l.Label == "8th Magician Set (6)"));
+        var normal = StatDisplay.Sources(six, 11); // row 11: normal enemy damage; the points add up in one Equipment line
+        Assert.AreEqual(1, normal.Count);
+        Assert.IsTrue(normal[0].Label == "Equipment" && normal[0].Value == 20);
+        var intLines = StatDisplay.Sources(six, 4); // row 4: INT
+        Assert.IsTrue(intLines.Count == 1 && intLines[0].Label == "Equipment" && intLines[0].Value == 24);
+        var ied = StatDisplay.Sources(six, StatDisplay.IedRow); // the two 10% lines are one Equipment line, both values listed
+        Assert.AreEqual(1, ied.Count);
+        Assert.AreEqual("Equipment", ied[0].Label);
+        Assert.AreEqual("10.00%,10.00%", StatDisplay.LineText(StatDisplay.IedRow, ied[0]));
+        Assert.AreEqual(19.0, ied[0].Value, 1e-9);
+    }
+
+    // Gear and set records of one multiplied key share the Equipment line, the other sources keep their own.
+    [TestMethod]
+    public void Hover_EquipmentAndSetMultipliersMergeSkillStaysApart()
+    {
+        var mods = new List<StatModifier>
+        {
+            new(StatKey.IED_PCT, StatValueType.MULTIPLIER, 0.8, StatSource.Equipment),
+            new(StatKey.IED_PCT, StatValueType.MULTIPLIER, 0.9, StatSource.Set),
+            new(StatKey.IED_PCT, StatValueType.MULTIPLIER, 0.7, StatSource.Skill, "Some Skill"),
+        };
+        var lines = StatDisplay.Sources(StatAggregator.Aggregate(mods), StatDisplay.IedRow);
+        CollectionAssert.AreEqual(new[] { "Equipment", "Some Skill" }, lines.Select(l => l.Label).ToArray());
+        Assert.AreEqual("20.00%,10.00%", StatDisplay.LineText(StatDisplay.IedRow, lines[0]));
+        Assert.AreEqual("30.00%", StatDisplay.LineText(StatDisplay.IedRow, lines[1]));
     }
 }

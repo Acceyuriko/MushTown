@@ -11,11 +11,24 @@ public sealed class HurtGuard : Component
 
     public int LeftFrames { get; private set; }
     public bool Invincible => LeftFrames > 0;
+    public bool Dodged { get; private set; } // the window was started by a dodge: invincible, but no hit pose, flash or shove
+    public bool HitShown => Invincible && !Dodged; // the hit pose and the purple flash run
     public int ElapsedFrames => HurtFrames - LeftFrames;
 
     public void Tick() => LeftFrames = Math.Max(0, LeftFrames - 1);
 
-    public void Clear() => LeftFrames = 0;
+    public void Clear()
+    {
+        LeftFrames = 0;
+        Dodged = false;
+    }
+
+    // A touch that missed: the same window as a hit (one timer), without the hit.
+    public void Dodge()
+    {
+        LeftFrames = HurtFrames;
+        Dodged = true;
+    }
 
     // Returns the damage actually dealt. A blocked touch returns 0 and does
     // not change HP or restart the window.
@@ -23,7 +36,11 @@ public sealed class HurtGuard : Component
     {
         if (Invincible) return 0;
         long dealt = Progression.ApplyHurt(chara, damage);
-        if (dealt > 0) LeftFrames = HurtFrames;
+        if (dealt > 0)
+        {
+            LeftFrames = HurtFrames;
+            Dodged = false;
+        }
         return dealt;
     }
 
