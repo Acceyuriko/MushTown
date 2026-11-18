@@ -180,6 +180,11 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
+        if (!ExportSets(etc, item, str, chara, outDir))
+        {
+            Environment.ExitCode = 1;
+            return;
+        }
         // Quests run after items: reward validation reads the exported defs.
         if (!ExportQuests(baseRoot, outDir))
         {

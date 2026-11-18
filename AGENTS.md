@@ -37,7 +37,7 @@ dotnet run --project MushTown.Exporter -- cat <分类> <路径>  # 打印长字�
 dotnet run --project MushTown.Exporter -- raw <分类> <路径> <输出>  # 保存 raw 节点字节
 dotnet run --project MushTown.Exporter -- spine <skel 文件> [bone]  # 看 .skel 的骨骼、槽位、时间轴
 dotnet run --project MushTown.Exporter -- spinebake [id|all]  # 烘焙职业 Spine 到 assets/spine/（缺 id=全烘焙）
-dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录]  # 导出 assets/；拉到起始装备改动后必须重跑一次 `export`（起始装备换成芬萨利尔六件，缺文件客户端启动就报错）；拉到挥击动作改动后也必须重跑一次 `export`（身体、发型、脸型和所有已导出装备多了 swingO2、swingO3，缺文件客户端启动就报错）
+dotnet run --project MushTown.Exporter -- export [Data路径] [输出目录]  # 导出 assets/；拉到起始装备改动后必须重跑一次 `export`（起始装备换成芬萨利尔六件，缺文件客户端启动就报错）；拉到装备 tooltip 改版后也必须重跑一次 `export`（新增套装表 `assets/set/448.json`、装备 json 的需求属性/分类/套装号、`ui/etip_*.png` 美术；`panel stat` 也会导出 etip 美术，缺文件或旧 json 客户端启动就报错）；拉到挥击动作改动后也必须重跑一次 `export`（身体、发型、脸型和所有已导出装备多了 swingO2、swingO3，缺文件客户端启动就报错）
 dotnet run --project MushTown.Exporter -- sound [输出目录]  # 只导出声音（音效 + 每张图的 bgm + 登录曲）；拉到这个改动后必须重跑一次（解码器换了，所有 wav 重新编码）
 dotnet run --project MushTown.Exporter -- panel <inventory|equip|stat|skill|passive|quest|map|keys|menu|quickmenu|chat|shop|buff|guide|party|cashshop|death|damageskin> [输出目录]  # 只导出一个面板的美术（passive 例外：导出技能窗新手页的默认被动，名字、说明、满级数值、图标，写进 assets/skill/passive/；改了 DefaultPassiveSkills 或拉到这个改动后必须重跑一次 `panel passive` 和 `panel skill`，客户端发现不一致会直接报错；`panel skill` 还导出宏列表窗和 5 个宏图标 macro_*.png，拉到宏这个改动后必须重跑一次 `panel skill`，缺文件客户端启动就报错；`panel map` 还导出小地图商店 NPC 的三角图标 mini_dot_shop.png 和 npclist_shop.png，拉到小地图商店图标这个改动后必须重跑一次 `panel map`，缺这两个文件客户端启动就报错）
 dotnet run --project MushTown.Exporter -- find <节点名> [分类]  # 按名字定位 WZ 节点（带分类就在该分类里找，名字可以只写一部分）

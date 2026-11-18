@@ -193,7 +193,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "keys" or "quickedit" or "quickeditswap" or "quickeditnocap" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "equipsetpart" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "keys" or "quickedit" or "quickeditswap" or "quickeditnocap" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -213,8 +213,10 @@ public partial class MushTownGame
                 (demo.Job, demo.Level, demo.Exp, demo.Hp, demo.Mp) = (fresh.Job, fresh.Level, fresh.Exp, fresh.Hp, fresh.Mp);
                 (demo.Str, demo.Dex, demo.Int, demo.Luk) = (fresh.Str, fresh.Dex, fresh.Int, fresh.Luk);
             }
-            if (shotScreen is "stat" or "stat2" or "stat200" or "equipui" or "decorations" or "hud")
+            if (shotScreen is "stat" or "stat2" or "stat200" or "equipui" or "equipsetpart" or "decorations" or "hud")
                 DressDemoForShot(shotScreen is "equipui" or "decorations");
+            if (shotScreen == "equipsetpart") // three of the six set pieces worn: hat, overall, wand
+                _save!.Slots[_slot]!.Equips!.RemoveAll(id => id is ItemData.StarterGloves or ItemData.StarterShoes or ItemData.StarterCape);
             if (shotScreen == "fashionworn")
             {
                 DressDemoForShot();
@@ -227,7 +229,7 @@ public partial class MushTownGame
             }
             if (shotScreen is "stat" or "stat2" or "stat200" or "hud") _showStat = true;
             if (shotScreen == "stat2") _statPage = 1;
-            if (shotScreen is "equipui" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask")
+            if (shotScreen is "equipui" or "equipsetpart" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask")
             {
                 var equip = (EquipWindow)WindowFor(HotkeyAction.Equip)!;
                 if (shotScreen == "decorations") equip.ShowOutfits();
@@ -475,6 +477,13 @@ public partial class MushTownGame
             var item = LoadJson<ItemData>(f);
             _items[item.ItemId] = item;
         }
+        string setDir = Path.Combine(_assetsDir, "set");
+        RequireExportDir(setDir);
+        foreach (string f in Directory.GetFiles(setDir, "*.json"))
+        {
+            var set = LoadJson<SetData>(f);
+            _sets[set.Id] = set;
+        }
         string cashDir = Path.Combine(_assetsDir, "cashitem");
         RequireExportDir(cashDir);
         foreach (string f in Directory.GetFiles(cashDir, "*.json"))
@@ -499,6 +508,10 @@ public partial class MushTownGame
         }
         foreach (var (id, item) in _items)
         {
+            if (item.SetId != 0 && !_sets.ContainsKey(item.SetId)) // the tooltip reads the set table
+                throw new InvalidDataException($"item {id} names set {item.SetId} with no set/{item.SetId}.json (rerun export)");
+            if (item.Slot != null && item.Category == "") // old jsons have no category line
+                throw new InvalidDataException($"equip {id} has no category (rerun export)");
             if (item.Slot != null) // equips: every known slot has a box; rings name a plate
             {
                 if (!EquipSlots.KnownSlots.Contains(item.Slot))

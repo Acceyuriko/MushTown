@@ -414,6 +414,12 @@ public sealed class ItemData
     public int Eva { get; set; } // WZ incEVA (shown only)
     public int Speed { get; set; } // WZ incSpeed (shown only)
     public int Jump { get; set; } // WZ incJump (shown only)
+    public int ReqStr { get; set; } // WZ reqSTR (shown only)
+    public int ReqDex { get; set; } // WZ reqDEX
+    public int ReqInt { get; set; } // WZ reqINT
+    public int ReqLuk { get; set; } // WZ reqLUK
+    public int SetId { get; set; } // WZ info/setItemID: the equipment set this piece belongs to (assets/set/<id>.json; 0 = none)
+    public string Category { get; set; } = ""; // the tooltip's category line (ItemCategory)
     public int ReqJob { get; set; } // WZ info/reqJob bit mask: 1 Warrior, 2 Magician, 4 Bowman, 8 Thief, 16 Pirate (0 = any)
     public int MaxHp { get; set; } // WZ incMHP: the max HP a worn equip adds (Hp above is a potion's heal)
     public int MaxMp { get; set; } // WZ incMMP

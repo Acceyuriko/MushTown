@@ -33,6 +33,17 @@ public static partial class Export
         // The item tooltip frame: four corners, four edges, one center.
         foreach (string piece in new[] { "nw", "ne", "sw", "se", "n", "s", "w", "e", "c" })
             files.Add(($"UIToolTip.img/Default/frame/flexible/{piece}", $"tip_{piece}.png"));
+        // The equipment tooltip (UIToolTip.img/Item/Equip): the left frame, the set frame on the right,
+        // the category bar (the job row), the icon box and the empty star.
+        foreach (string part in new[] { "top", "mid", "btm", "line" })
+            files.Add(($"UIToolTip.img/Item/Equip/frame/common/{part}", $"etip_{part}.png"));
+        foreach (string part in new[] { "w", "c", "e" })
+            files.Add(($"UIToolTip.img/Item/Equip/frame/common/category/{part}", $"etip_cat_{part}.png"));
+        foreach (string part in new[] { "top", "mid", "btm", "line" })
+            files.Add(($"UIToolTip.img/Item/Equip/frame/set/{part}", $"etip_set_{part}.png"));
+        files.Add(("UIToolTip.img/Item/Equip/itemIcon/base", "etip_icon_base.png"));
+        files.Add(("UIToolTip.img/Item/Equip/itemIcon/shade", "etip_icon_shade.png"));
+        files.Add(("UIToolTip.img/Item/Equip/textIcon/starForce/empty", "etip_star_empty.png"));
         foreach ((string node, string file) in files)
             if (!UiPng.Save(ui, node, Path.Combine(outDir, "ui", file)))
                 return false;

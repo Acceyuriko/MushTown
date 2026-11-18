@@ -13,6 +13,13 @@ public static class ItemLines
         (1, "Warrior"), (2, "Magician"), (4, "Bowman"), (8, "Thief"), (16, "Pirate"),
     };
 
+    // The six jobs of the equipment tooltip's job bar. A job lights up when
+    // the item asks for it; reqJob 0 means every job, a mask has no Beginner bit.
+    public static readonly string[] JobBar = { "Beginner", "Warrior", "Magician", "Bowman", "Thief", "Pirate" };
+
+    public static bool JobLit(ItemData data, int i) =>
+        data.ReqJob == 0 || (i > 0 && (data.ReqJob & (1 << (i - 1))) != 0);
+
     // A potion's own String.wz description already says what it restores, so
     // only a worn equip's max HP/MP (Hp/Mp are the potion heal) gets a line.
     public static List<string> Detail(ItemData data)
@@ -20,6 +27,14 @@ public static class ItemLines
         var lines = new List<string>();
         if (data.ReqLevel > 0) lines.Add($"Required Level Lv. {data.ReqLevel}");
         if (data.ReqJob != 0) lines.Add("Job: " + string.Join(", ", Jobs.Where(j => (data.ReqJob & j.Bit) != 0).Select(j => j.Name)));
+        lines.AddRange(Bonuses(data));
+        return lines;
+    }
+
+    // Only the bonus lines (the equipment tooltip prints the level and job its own way).
+    public static List<string> Bonuses(ItemData data)
+    {
+        var lines = new List<string>();
         if (data.Atk != 0) lines.Add($"Attack +{data.Atk}");
         if (data.Mad != 0) lines.Add($"Magic Attack +{data.Mad}");
         if (data.Def != 0) lines.Add($"Defense +{data.Def}");

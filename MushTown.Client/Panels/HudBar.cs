@@ -25,6 +25,7 @@ public partial class MushTownGame
         "party_head_graduation.png", "party_head_bar.png", "party_head_gauge.png",
     };
     private readonly Dictionary<int, ItemData> _items = new();
+    private readonly Dictionary<int, SetData> _sets = new(); // assets/set/<id>.json, loaded with the items
     private CashShopCatalog _cashShop = new();
     private ManifestData _manifest = null!;
 
@@ -426,6 +427,7 @@ public partial class MushTownGame
         _uiScene.Add(held);
         var tips = new GameObject { NoHit = true, Z = TipZ }; // the last thing drawn: no layer can cover a tip
         tips.Add(new TipAnchor());
+        tips.Add(new EquipTip(() => Hero?.Equips, _sets, PanelLayout.Load(Path.Combine(LayoutsDir, "panel-itemtip.json"))));
         tips.Add(new Tips(this, () => _hand.Empty && !Holding && !WornHeld, _items, _invLay, _statLay));
         _uiScene.Add(tips);
         SyncLayers(); // shots skip Update: without this the panels and windows draw empty there (first Update no-ops)

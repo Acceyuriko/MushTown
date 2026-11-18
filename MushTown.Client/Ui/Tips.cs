@@ -41,6 +41,11 @@ public sealed class Tips : Component, IDrawable
     private void DrawItem(UiGfx gfx, TipAnchor anchor, int itemId)
     {
         if (itemId == 0 || !_items.TryGetValue(itemId, out var item)) return; // an empty or unknown cell has nothing to show
+        if (item.Slot != null) // gear has its own tooltip (and the set pane)
+        {
+            Owner.Get<EquipTip>()!.Draw(gfx, anchor, item);
+            return;
+        }
         var name = gfx.Ui.GetSmall(item.Name);
         var lines = new List<Texture2D>();
         foreach (string text in ItemLines.Detail(item)) lines.Add(gfx.Ui.GetSmall(text));

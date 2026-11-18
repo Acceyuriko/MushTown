@@ -278,6 +278,11 @@ public static partial class Export
                 Console.WriteLine($"equip {id} has no slot");
                 return null;
             }
+            if (ItemCategory.Of(id, slot) == null)
+            {
+                Console.WriteLine($"equip {id} has no tooltip category (slot {slot}): add it to ItemCategory");
+                return null;
+            }
             // Cash gear often ships only iconRaw; the ordinary gear has icon.
             string icon = info.Nodes["icon"] != null ? "info/icon" : "info/iconRaw";
             int tag = Int(info, "nameTag");
@@ -323,6 +328,12 @@ public static partial class Export
                 Speed = Int(info, "incSpeed"),
                 Jump = Int(info, "incJump"),
                 ReqJob = Int(info, "reqJob"),
+                ReqStr = Int(info, "reqSTR"),
+                ReqDex = Int(info, "reqDEX"),
+                ReqInt = Int(info, "reqINT"),
+                ReqLuk = Int(info, "reqLUK"),
+                SetId = SetIds.Contains(Int(info, "setItemID")) ? Int(info, "setItemID") : 0, // only the supported sets (ExportSet.cs)
+                Category = ItemCategory.Of(id, slot) ?? "",
                 MaxHp = Int(info, "incMHP"),
                 MaxMp = Int(info, "incMMP"),
                 Price = Int(info, "price"),

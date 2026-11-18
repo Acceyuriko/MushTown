@@ -40,6 +40,8 @@ public partial class MushTownGame
             "stat_label_main.png", "stat_label_mp.png", "stat_label_attack.png", "stat_label_utility.png", "stat_label_defense.png",
             "tip_nw.png", "tip_ne.png", "tip_sw.png", "tip_se.png", "tip_n.png", "tip_s.png",
             "tip_w.png", "tip_e.png", "tip_c.png",
+            "etip_top.png", "etip_mid.png", "etip_btm.png", "etip_line.png", "etip_cat_w.png", "etip_cat_c.png", "etip_cat_e.png", "etip_icon_base.png", "etip_icon_shade.png", "etip_star_empty.png",
+            "etip_set_top.png", "etip_set_mid.png", "etip_set_btm.png", "etip_set_line.png",
         })
             LoadTexture("ui/" + f);
     }
