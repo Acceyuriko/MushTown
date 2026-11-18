@@ -71,19 +71,14 @@ public class CombatPowerTests
         Assert.AreEqual(plain, CombatPower.Calculate(StatAggregator.Aggregate(mods), job, 1.2));
     }
 
-    // What skills and buffs give is not in the combat power; the other sources are.
+    // Every source counts: the Skill and Buff records move the combat power like the others.
     [TestMethod]
-    public void SkillAndBuffRecords_DoNotMoveIt_OtherSourcesDo()
+    public void EverySourceMovesIt()
     {
         var job = StatTables.Job(StatTables.FirePoisonMage);
         var mods = new List<StatModifier> { B(StatKey.INT, 1000), B(StatKey.LUK, 100), B(StatKey.MATT, 100) };
         long plain = CombatPower.Calculate(StatAggregator.Aggregate(mods), job, 1.2);
-        mods.Add(new StatModifier(StatKey.INT, StatValueType.FLAT, 500, StatSource.Skill));
-        mods.Add(new StatModifier(StatKey.MATT, StatValueType.FLAT, 300, StatSource.Buff));
-        mods.Add(new StatModifier(StatKey.DAMAGE_PCT, StatValueType.FLAT, 40, StatSource.Skill));
-        mods.Add(new StatModifier(StatKey.CRIT_DAMAGE, StatValueType.FLAT, 20, StatSource.Buff));
-        Assert.AreEqual(plain, CombatPower.Calculate(StatAggregator.Aggregate(mods), job, 1.2));
-        foreach (var source in new[] { StatSource.Equipment, StatSource.UnionMember, StatSource.UnionAttacker, StatSource.HyperStat, StatSource.Trait })
+        foreach (var source in Enum.GetValues<StatSource>())
         {
             var more = mods.Append(new StatModifier(StatKey.MATT, StatValueType.FLAT, 100, source));
             Assert.IsTrue(CombatPower.Calculate(StatAggregator.Aggregate(more), job, 1.2) > plain, source.ToString());

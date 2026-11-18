@@ -214,7 +214,7 @@ public partial class MushTownGame
         return $"{lo:#,##0}~{hi:#,##0}";
     }
 
-    // The combat power: the wiki formula of CombatPower; it drops the Skill and Buff records from the snapshot itself before it counts.
+    // The combat power: the wiki formula of CombatPower, read from the full snapshot (every source, as the panel).
     private long CurrentCombatPower() =>
         CombatPower.Calculate(_stats, CurrentJob(), StatTables.MaxWeaponCoefficient(_save?.Slots[_slot]?.Job ?? 0));
 }
