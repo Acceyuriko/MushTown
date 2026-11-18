@@ -82,6 +82,7 @@ public partial class MushTownGame : Game
     private int _frame;
     private float _frameMs; // the shown action's clock: Idle.Frame reads it
     private readonly Fighter _fighter = new(); // combat clocks, ticked at frame-top (never in the world step)
+    private readonly SwingActions _swing; // the swing of the basic attack and the casts (a fixed seed in a --shot)
     private readonly DeathState _death = new(); // dead from HP 0 to the revive click
     private readonly HurtGuard _hurt = new(); // player hurt state: 60 frames, one timer with the invincibility
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
@@ -128,6 +129,7 @@ public partial class MushTownGame : Game
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
+        _swing = new SwingActions(shotPath != null ? new Random(1) : new Random());
         _shotMap = shotMap;
         _shotTravel = shotTravel;
         _shotAction = shotAction;
@@ -710,7 +712,7 @@ public partial class MushTownGame : Game
         // No swing without a judge (the disconnect frame has neither yet).
         if (!blocked && _input.Fire(HotkeyAction.Attack) && _mover.Climb == null && _fighter.AttackLock <= 0 && HasJudge() && HasWeapon())
         {
-            string attackAction = AttackAction();
+            string attackAction = RollSwing();
             _fighter.AttackLock = Delays(attackAction, Hero?.Skin ?? 0).Sum();
             PlaySfx(SwingKey());
             if (_net != null && _net.Connected) _net.SendAttack();
@@ -773,7 +775,7 @@ public partial class MushTownGame : Game
         // The feet step in Shared: snapshot in, outputs drained after. Skills
         // above already poked the state (leaps, dashes); travel and respawn
         // land after the step, same frame.
-        _mover.AttackAction = AttackAction();
+        _mover.AttackAction = _swing.Current;
         _mover.Input = new PlayerInput
         {
             Dir = dirNow,

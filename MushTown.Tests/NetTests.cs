@@ -121,9 +121,12 @@ public sealed class NetTests
         Assert.AreEqual(30f, atA.X);
         Assert.AreEqual(Net.ActJump, atA.Action);
 
-        // newest action must pass the filter too (pins the Enqueue bound)
-        b.SendState(10000, 31, 41, Net.ActSwing, 0, true);
-        Assert.AreEqual(Net.ActSwing, WaitTake(a).Action);
+        // the three swings, the newest last, must pass the filter too (pins the Enqueue bound)
+        foreach (byte swing in new[] { Net.ActSwing, Net.ActSwingO2, Net.ActSwingO3 })
+        {
+            b.SendState(10000, 31, 41, swing, 0, true);
+            Assert.AreEqual(swing, WaitTake(a).Action);
+        }
     }
 
     [TestMethod]
@@ -141,7 +144,7 @@ public sealed class NetTests
     {
         foreach (string name in Net.Actions)
             Assert.AreEqual(name, Net.ActionName(Net.ActionCode(name)));
-        for (byte code = 0; code <= Net.ActGhostStand; code++)
+        for (byte code = 0; code <= Net.ActSwingO3; code++)
             Assert.AreEqual(code, Net.ActionCode(Net.ActionName(code)));
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionCode("xxx"));
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionName(99));

@@ -304,6 +304,7 @@ public partial class MushTownGame
     // send (net). The cast-time pct folds skill level and combo orbs.
     private void CastActive(int id)
     {
+        RollSwing(); // the cast poses with a swing too
         _fighter.AttackLock = _skills[id].CastLockMs;
         PlaySfx(SwingKey()); // v1 skills whoosh like swings (no per-skill sounds yet)
         SpawnCastFx(id, _mover.X, _mover.Y, _mover.FacingRight);
@@ -402,8 +403,8 @@ public partial class MushTownGame
     }
 
     // Ctrl is a weapon swing: no weapon in hand means no swing at all.
-    // The attack art follows the appearance: cash weapon first, then gear.
-    private string AttackAction() => Progression.AttackAction(Hero, _items);
+    // The swing is rolled from the pool of the appearance: cash weapon first, then gear.
+    private string RollSwing() => _swing.Roll(Progression.SwingPool(Hero, _items));
 
     // Our look, so peers draw our skin, hair, face and worn pieces (CLI
     // sessions have no chara: skip).

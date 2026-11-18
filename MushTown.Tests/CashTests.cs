@@ -195,35 +195,35 @@ public sealed class CashTests
     }
 
     [TestMethod]
-    public void AttackAction_MapsWeaponCodes()
+    public void SwingPool_MapsWeaponCodes()
     {
         var defs = Defs();
         var weapon = new ItemData { ItemId = 99, Slot = "Wp" };
         defs[99] = weapon;
         var chara = new CharaSlot { Equips = new List<int> { 99 } };
-        var cases = new (int Code, string Action)[]
+        var cases = new (int Code, string[] Pool)[]
         {
-            (0, "swingO1"), (1, "swingO1"), (2, "swingT1"), (3, "swingP1"),
-            (4, "stabO1"), (5, "stabT1"), (6, "swingO1"), (7, "swingO1"),
+            (0, new[] { "swingO1" }), (1, new[] { "swingO1" }), (2, new[] { "swingT1" }), (3, new[] { "swingP1" }),
+            (4, new[] { "stabO1" }), (5, new[] { "stabT1" }), (6, new[] { "swingO1", "swingO2", "swingO3" }), (7, new[] { "swingO1" }),
         };
-        foreach (var (code, action) in cases)
+        foreach (var (code, pool) in cases)
         {
             weapon.Attack = code;
-            Assert.AreEqual(action, Progression.AttackAction(chara, defs));
+            CollectionAssert.AreEqual(pool, Progression.SwingPool(chara, defs));
         }
     }
 
     [TestMethod]
-    public void AttackAction_CashWeaponWinsThenGearThenBeginner()
+    public void SwingPool_CashWeaponWinsThenGearThenBeginner()
     {
         var defs = Defs();
         var chara = Chara();
-        Assert.AreEqual("swingO1", Progression.AttackAction(chara, defs));
+        CollectionAssert.AreEqual(new[] { "swingO1" }, Progression.SwingPool(chara, defs));
 
         chara.Equips = new List<int> { GearSword };
-        Assert.AreEqual("swingT1", Progression.AttackAction(chara, defs));
+        CollectionAssert.AreEqual(new[] { "swingT1" }, Progression.SwingPool(chara, defs));
 
         chara.CashWorn!.Add(CashSword2);
-        Assert.AreEqual("stabO1", Progression.AttackAction(chara, defs)); // cash Attack 4 wins
+        CollectionAssert.AreEqual(new[] { "stabO1" }, Progression.SwingPool(chara, defs)); // cash Attack 4 wins
     }
 }

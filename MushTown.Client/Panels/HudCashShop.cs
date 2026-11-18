@@ -70,6 +70,7 @@ public sealed class CashShopWindow : UiWindow
     private int _previewFace;
     private int _lastClickId;
     private float _lastClickMs;
+    private readonly SwingActions _swing = new(new Random()); // the preview's swing
     private float _attackLeftMs;
     private float _attackStartMs;
     private int _previewFrame;
@@ -807,7 +808,7 @@ public sealed class CashShopWindow : UiWindow
         if (ctrl && !wasCtrl && _preview.Climb == null && _attackLeftMs <= 0)
         {
             var chara = _previewChara;
-            string action = Progression.AttackAction(chara, _game.Items);
+            string action = _swing.Roll(Progression.SwingPool(chara, _game.Items));
             _preview.AttackAction = action;
             _attackStartMs = _game.TimeMs;
             _attackLeftMs = _game.Delays(action, chara?.Skin ?? 0).Sum();

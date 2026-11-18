@@ -275,9 +275,25 @@ public static class Progression
         return true;
     }
 
-    // The attack action name for the current appearance: a cash weapon wins,
-    // then the worn gear weapon, then the beginner one-handed sword.
-    public static string AttackAction(CharaSlot? chara, IReadOnlyDictionary<int, ItemData> defs)
+    // The swing actions of a basic attack by weapon group (WZ info/attack):
+    // the swing is rolled from the group's pool. Groups 2 to 5 keep their old
+    // single action (not checked against the WZ yet); 6 is the wand and staff
+    // group: they swing O1, O2 or O3 (their shoot1 is the cast pose, the same
+    // art as swingO2). Any other group swings O1.
+    public static readonly Dictionary<int, string[]> SwingPools = new()
+    {
+        [2] = new[] { "swingT1" },
+        [3] = new[] { "swingP1" },
+        [4] = new[] { "stabO1" },
+        [5] = new[] { "stabT1" },
+        [6] = new[] { "swingO1", "swingO2", "swingO3" },
+    };
+
+    private static readonly string[] DefaultSwingPool = { "swingO1" };
+
+    // The swing pool for the current appearance: a cash weapon wins, then the
+    // worn gear weapon, then the beginner one-handed sword.
+    public static string[] SwingPool(CharaSlot? chara, IReadOnlyDictionary<int, ItemData> defs)
     {
         int? weapon = null;
         if (chara?.CashWorn != null)
@@ -286,14 +302,7 @@ public static class Progression
         if (weapon == null && chara?.Equips != null)
             foreach (int id in chara.Equips)
                 if (defs.TryGetValue(id, out var data) && data.Slot == "Wp") { weapon = data.Attack; break; }
-        return (weapon ?? 1) switch
-        {
-            2 => "swingT1",
-            3 => "swingP1",
-            4 => "stabO1",
-            5 => "stabT1",
-            _ => "swingO1", // 6 is the WZ wand/staff group: they swing (their shoot1 is the cast pose, the same art as swingO2)
-        };
+        return SwingPools.GetValueOrDefault(weapon ?? 1, DefaultSwingPool);
     }
 
     // One cast's checks: learned, MP, cooldown (the character level does not matter: every

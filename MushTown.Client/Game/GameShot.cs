@@ -130,7 +130,7 @@ public partial class MushTownGame
             _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
             ResetMotion();
             _mover.FacingRight = true;
-            _mover.Action = AttackAction();
+            _mover.Action = RollSwing();
             _frame = 1;
             // fixed seed: the evidence shot shows the same number every run
             if (_shotSkill != 0)

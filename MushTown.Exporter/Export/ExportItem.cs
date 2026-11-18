@@ -70,6 +70,9 @@ public static partial class Export
         new GearRow(@"Accessory\01012091.img", null, true),
         new GearRow(@"Accessory\01022271.img", null, true),
         new GearRow(@"Accessory\01032020.img", null, true),
+        // Two items exported before the roster was pinned down; their export stays.
+        new GearRow(@"Accessory\01032001.img", null, true),
+        new GearRow(@"Cape\01102079.img", null, true),
         new GearRow(@"Accessory\01122013.img", null, false),
         new GearRow(@"Accessory\01132017.img", null, false),
         new GearRow(@"Accessory\01140002.img", null, false),
