@@ -322,7 +322,8 @@ public static class Progression
     }
 }
 
-// The attacker's combat stats. Str/Dex are the final main/sub values;
+// The attacker's combat stats. Str/Dex hold the final main and sub stat of the job (a Fire/Poison Mage: INT and
+// LUK; the names stay).
 // WeaponAtk is the final total attack. FinalPct is the Final Attack proc
 // chance (not final damage; the chain has its own FinalDamagePct).
 public readonly record struct Build(

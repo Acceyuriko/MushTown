@@ -153,7 +153,7 @@ public static class DamageChain
     {
         var panel = Panel(
             StatValue(stats.IntValue(job.Main), stats.IntValue(job.Sub)),
-            TotalAttack(stats),
+            TotalAttack(stats, job.Main == StatKey.INT), // a mage hits with magic attack
             (int)stats.IntValue(StatKey.DAMAGE_PCT),
             FinalDamageMultiplier(stats),
             StatTables.Weapon(job.Weapon));

@@ -390,6 +390,25 @@ public sealed class ItemData
         return (weapon, str, dex, def, hp, mp);
     }
 
+    // The Equipment records of the worn gear (the weapon's physical attack is not here: the client adds it
+    // when a real weapon is worn). Every number is a sum over the worn pieces. WZ incSpeed / incJump are
+    // percent points of the base value, so they are PERCENT records; the rest are FLAT.
+    // incMDD / incACC / incEVA are not here: no stat key or formula reads them yet.
+    public static IEnumerable<StatModifier> EquipModifiers(List<int>? worn, IReadOnlyDictionary<int, ItemData> defs)
+    {
+        var gear = (worn ?? new List<int>()).Select(id => defs.GetValueOrDefault(id)).Where(d => d?.Slot != null).Select(d => d!).ToList();
+        yield return new(StatKey.STR, StatValueType.FLAT, gear.Sum(d => d.Str), StatSource.Equipment);
+        yield return new(StatKey.DEX, StatValueType.FLAT, gear.Sum(d => d.Dex), StatSource.Equipment);
+        yield return new(StatKey.INT, StatValueType.FLAT, gear.Sum(d => d.Int), StatSource.Equipment);
+        yield return new(StatKey.LUK, StatValueType.FLAT, gear.Sum(d => d.Luk), StatSource.Equipment);
+        yield return new(StatKey.MAX_HP, StatValueType.FLAT, gear.Sum(d => d.MaxHp), StatSource.Equipment);
+        yield return new(StatKey.MAX_MP, StatValueType.FLAT, gear.Sum(d => d.MaxMp), StatSource.Equipment);
+        yield return new(StatKey.DEF, StatValueType.FLAT, gear.Sum(d => d.Def), StatSource.Equipment);
+        yield return new(StatKey.MATT, StatValueType.FLAT, gear.Sum(d => d.Mad), StatSource.Equipment);
+        yield return new(StatKey.SPEED, StatValueType.PERCENT, gear.Sum(d => d.Speed), StatSource.Equipment);
+        yield return new(StatKey.JUMP, StatValueType.PERCENT, gear.Sum(d => d.Jump), StatSource.Equipment);
+    }
+
     public int ItemId { get; set; }
     public string Name { get; set; } = ""; // String.wz name (Consume/Eqp): the exporter fails loud when missing
     public string Desc { get; set; } = ""; // the flavour text of String.wz: potions, cash coupons and cash rings have one

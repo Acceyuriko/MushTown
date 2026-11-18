@@ -69,11 +69,9 @@ public partial class MushTownGame
         // A mage has the fixed stage; the others take the stage of the worn weapon (no weapon: no stage).
         if (StatTables.AttackSpeed(CurrentJob().Main == StatKey.INT, WornWeapon(chara)?.AttackSpeed ?? 0) is { } speed)
             mods.Add(speed);
-        mods.Add(new(StatKey.DEF, StatValueType.FLAT, worn.def, StatSource.Equipment));
-        mods.Add(new(StatKey.STR, StatValueType.FLAT, worn.str, StatSource.Equipment));
-        mods.Add(new(StatKey.DEX, StatValueType.FLAT, worn.dex, StatSource.Equipment));
-        mods.Add(new(StatKey.MAX_HP, StatValueType.FLAT, worn.hp, StatSource.Equipment));
-        mods.Add(new(StatKey.MAX_MP, StatValueType.FLAT, worn.mp, StatSource.Equipment));
+        mods.AddRange(ItemData.EquipModifiers(chara.Equips, _items));
+        if (_hasWeapon) // the weapon type's own crit rate (a wand has 5%)
+            mods.Add(new(StatKey.CRIT_RATE, StatValueType.FLAT, StatTables.Weapon(_weaponType).CritPct, StatSource.Equipment));
 
         mods.AddRange(DefaultPassives.All);
         mods.Add(DefaultPassives.MapleWarrior(StatKey.STR, chara.Str));
@@ -162,10 +160,11 @@ public partial class MushTownGame
         var chara = _save?.Slots[_slot];
         if (chara == null) return Progression.Beginner;
         int finalAttack = _skills[SkillData.FinalAttack].ProcPct * SkillLv(SkillData.FinalAttack);
+        var job = CurrentJob(); // the class picks the main and sub stat and physical or magic attack
         return new Build(
-            _stats.IntValue(StatKey.STR),
-            _stats.IntValue(StatKey.DEX),
-            DamageChain.TotalAttack(_stats),
+            _stats.IntValue(job.Main),
+            _stats.IntValue(job.Sub),
+            DamageChain.TotalAttack(_stats, job.Main == StatKey.INT),
             (int)_stats.IntValue(StatKey.DAMAGE_PCT),
             (int)_stats.IntValue(StatKey.CRIT_RATE),
             finalAttack,
@@ -175,7 +174,7 @@ public partial class MushTownGame
             (int)_stats.IntValue(StatKey.CRIT_DAMAGE),
             (int)Math.Round((1 - DamageChain.IedMultiplier(_stats)) * 100),
             chara.Level,
-            (int)CurrentJob().Weapon);
+            (int)job.Weapon);
     }
 
     private void ClampPoolsToMax()
