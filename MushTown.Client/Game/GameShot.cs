@@ -1,3 +1,4 @@
+using MushTown.Server;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -15,7 +16,7 @@ public partial class MushTownGame
         StartLocalWorld();
         if (_shotJob != 0) { _save ??= new SaveData(); (_save.Slots[_slot] ??= DemoChara()).Job = _shotJob; } // --job on a stat shot: the demo plays that class
         RefreshStats();
-        if (_shotScreen == "stat200") ClampPoolsToMax(); // shots never update: the new hero's first frame is done here
+        if (_shotScreen == "stat200" || (_shotScreen == null && _shotJob != 0)) ClampPoolsToMax(); // shots never update: the new hero's first frame is done here
         if (_shotHit && _shotDmgSkin is { } hitSkin) Hero!.DamageSkin = hitSkin; // --dmgskin: the --hit number reads the demo's own skin
         if (_shotDmg > 0)
         {
@@ -58,9 +59,10 @@ public partial class MushTownGame
             RefreshStats();
             BuildStatScene(); // the Character Info portrait shows the worn items: bake them in
         }
-        if (_shotSkill != 0 && !_skills.ContainsKey(_shotSkill))
+        bool wzSkill = _wzSkills.ContainsKey(_shotSkill); // a Fire/Poison skill: its own table, no buff poses yet
+        if (_shotSkill != 0 && !wzSkill && !_skills.ContainsKey(_shotSkill))
             throw new InvalidDataException($"unknown skill: {_shotSkill}");
-        if (_shotSkill != 0 && _skills[_shotSkill].Kind == SkillData.KindBuff)
+        if (_shotSkill != 0 && !wzSkill && _skills[_shotSkill].Kind == SkillData.KindBuff)
         {
             // buff shots run the real path (pay, cast): a demo that
             // cannot afford the pose fails loud instead of faking it
@@ -124,14 +126,21 @@ public partial class MushTownGame
             var world = _localWorld!; // StartLocalWorld just built it
             var first = world.MobsOn(_mapId).FirstOrDefault()
                 ?? throw new InvalidDataException($"--hit/--skill/--drop needs mobs, map {_mapId} has none");
-            _mover.X = first.X - 50;
+            bool right = !wzSkill || _shotFacingRight; // the warrior poses face right; a WZ skill follows --facing
+            _mover.X = first.X + (right ? -50 : 50);
             _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, (int)first.Y)
                 ?? throw new InvalidDataException($"--hit/--skill/--drop found no ground near mob {first.Mob}");
             _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
             ResetMotion();
-            _mover.FacingRight = true;
+            _mover.FacingRight = right;
             _mover.Action = RollSwing();
             _frame = 1;
+            if (wzSkill)
+            {
+                PoseWzSkill(world, _wzSkills[_shotSkill]);
+                SnapCamera();
+                return;
+            }
             // fixed seed: the evidence shot shows the same number every run
             if (_shotSkill != 0)
             {
@@ -196,6 +205,28 @@ public partial class MushTownGame
         }
         RunShotAi();
         SnapCamera();
+    }
+
+    // A WZ damage skill (Energy Bolt): pay best-effort, pose the cast effect mid-play, let the mobs gather
+    // (--aiticks), then judge the cast with a fixed seed, so the numbers are the same every run. The shown cast
+    // does not roll the mark itself (chance 0), so the plain shot has no mark. --weak casts once before with a
+    // 100% Elemental Weakness chance (another seed, its numbers are not shown): the shown cast then has the same
+    // rolls as the plain shot, with the mark on the mobs (+20 damage %).
+    private void PoseWzSkill(MobWorld world, WzSkillData wz)
+    {
+        if (wz.Kind != SkillData.KindActive || !wz.Common.ContainsKey("damage"))
+            throw new InvalidDataException($"--skill {wz.SkillId} is not a WZ damage skill (no pose)");
+        TryPayWzSkill(wz); // best-effort, like the window shots: the demo has no one to fail
+        SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
+        _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
+        RunShotAi();
+        int pct = (int)wz.Value("damage", wz.MaxLevel);
+        var build = CurrentBuild() with { WeaknessProp = 0 };
+        if (_shotWeak)
+            world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { WeaknessProp = 100 }, wz.SkillId, pct);
+        foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(0), build, wz.SkillId, pct))
+            ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+        DrainDrops(world, animate: false);
     }
 
     // --aiticks <n>: n 100ms AI steps at the posed feet. Moves and respawns

@@ -159,6 +159,10 @@ public partial class MushTownGame
             //   stat poses the character info window, stat2 its second page; stat200 poses a hero fresh from the
             //     create page (level 200); --job picks its class (default 110), stat/stat2/skill take --job too, so the
             //     demo plays that class (look at a mage's attack speed, or a job's skill pages).
+            //   --job on a game pose shot (--hit, --skill, --hurt; no --screen) poses a fresh level 200 hero of that class, in the
+            //     starter kit, like stat200 (the demo is level 7: a Fire/Poison cast on a level 200 mob would do 1 damage).
+            //     --skill with a WZ skill (Energy Bolt) follows --facing, lets --aiticks gather the mobs first and --weak
+            //     marks them first (the cast is the last thing the shot does).
             //   death poses the death scene: the tombstone landed, the ghost with its head, the name, the revive popup.
             //   fashionworn poses a world character wearing cash fashion. settings poses the volume window.
             //   shop (with --talk) poses the shop.
@@ -206,14 +210,14 @@ public partial class MushTownGame
             if (shotScreen == "cashuserename") PoseCashUse(5400000);
             if (shotScreen is "dropqty" or "dropqtymax") PoseDropQuantity(shotScreen == "dropqtymax");
             if (shotScreen == "invscroll") { _showInv = true; _invTab = 1; FillInvScrollShot(); }
-            if (shotScreen == "stat200") // a hero fresh from the create page: its level, vitals and stats ride on the demo hero
+            if (shotScreen == "stat200" || (shotScreen == null && _shotJob != 0)) // a hero fresh from the create page: its level, vitals and stats ride on the demo hero
             {
                 var fresh = new SaveStore().CreateHero(0, 0, "hero", _shotJob != 0 ? _shotJob : 110);
                 var demo = _save!.Slots[0]!;
                 (demo.Job, demo.Level, demo.Exp, demo.Hp, demo.Mp) = (fresh.Job, fresh.Level, fresh.Exp, fresh.Hp, fresh.Mp);
                 (demo.Str, demo.Dex, demo.Int, demo.Luk) = (fresh.Str, fresh.Dex, fresh.Int, fresh.Luk);
             }
-            if (shotScreen is "stat" or "stat2" or "stat200" or "equipui" or "equipsetpart" or "decorations" or "hud")
+            if (shotScreen is "stat" or "stat2" or "stat200" or "equipui" or "equipsetpart" or "decorations" or "hud" || (shotScreen == null && _shotJob != 0))
                 DressDemoForShot(shotScreen is "equipui" or "decorations");
             if (shotScreen == "equipsetpart") // three of the six set pieces worn: hat, overall, wand
                 _save!.Slots[_slot]!.Equips!.RemoveAll(id => id is ItemData.StarterGloves or ItemData.StarterShoes or ItemData.StarterCape);
@@ -595,6 +599,8 @@ public partial class MushTownGame
         foreach (string f in Directory.GetFiles(wzDir, "*.json"))
         {
             var wz = LoadJson<WzSkillData>(f);
+            if (wz.Common.ContainsKey("damage") && (wz.CastFrames.Count == 0 || wz.HitFrames.Count == 0))
+                throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
             _wzSkills[wz.SkillId] = wz;
         }
         foreach (var tab in JobSkills.Pages(StatTables.FirePoisonMage))
@@ -659,7 +665,13 @@ public partial class MushTownGame
             foreach (string f in skill.Hit) LoadTexture(f);
             foreach (string f in skill.Affected) LoadTexture(f);
         }
-        foreach (var wz in _wzSkills.Values) { LoadTexture(wz.Icon); LoadTexture(wz.Disabled); }
+        foreach (var wz in _wzSkills.Values)
+        {
+            LoadTexture(wz.Icon);
+            LoadTexture(wz.Disabled);
+            foreach (string f in wz.CastFrames) LoadTexture(f);
+            foreach (string f in wz.HitFrames) LoadTexture(f);
+        }
         for (int i = 0; i < MacroBook.Count; i++) LoadTexture($"ui/macro_icon{i}.png"); // the keys and the quick slots draw them
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
         LoadNpcTextures(); // NPC stand textures (quest json already loaded in Initialize)

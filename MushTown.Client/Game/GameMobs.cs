@@ -117,13 +117,20 @@ public partial class MushTownGame
         PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, m.Data.Boss) : "hit");
         float bodyH = m.Frames[0].OriginY; // origin to feet: where the head is
         float headY = m.Y - bodyH;
+        // The hits of one WZ multi-hit cast land in the same frame: each number rises one step above the last
+        // (numbers of mobs closer than StackNearPx count, they would overlap; a mob with none yet this frame
+        // starts at the head), and only the first of a mob plants the spark. The warrior skills keep their one spot.
+        bool wzHit = _wzSkills.ContainsKey(skill);
+        int stack = wzHit ? _numbers.Count(n => n.Age == 0 && Math.Abs(n.X - m.X) < FloatingNumber.StackNearPx) : 0;
+        bool firstOfMob = !wzHit || !_numbers.Any(n => n.Age == 0 && n.X == m.X);
         var num = TakeNumber();
-        num.Text = damage.ToString(); num.X = m.X; num.Y = headY;
+        num.Text = damage.ToString(); num.X = m.X; num.Y = headY - stack * FloatingNumber.StackPx;
         if (mine) num.Skin = Hero?.DamageSkin ?? 0;
-        if (skill != 0 && _skills[skill].Hit.Count > 0)
+        var hitArt = skill == 0 ? null : _wzSkills.TryGetValue(skill, out var wz) ? wz.HitFrames : _skills[skill].Hit;
+        if (hitArt is { Count: > 0 } && firstOfMob)
         {
             var spark = TakeFx();
-            spark.Frames = _skills[skill].Hit;
+            spark.Frames = hitArt;
             spark.X = m.X; spark.Y = m.Y - bodyH / 2; spark.FacingRight = true;
         }
         if (mine && skill != SkillData.FinalAttack && _fighter.Buffs.ContainsKey(SkillData.ComboAttack))

@@ -314,10 +314,14 @@ public static class Progression
     // One mob touch that already went through DEF and the damage-taken zone (MobTouch,
     // DamageChain.TakenDamage): HP floors at 0. Returns the damage dealt (the client shows
     // it; Hp 0 means dead). A Touch-0 mob is harmless: 0 in, 0 out.
-    public static long ApplyHurt(CharaSlot chara, long damage)
+    // mpPct is Magic Guard: that share of the damage (rounded down) is paid by MP, the rest by HP.
+    // When the MP runs out the unpaid part goes to HP too. 0 means no Magic Guard.
+    public static long ApplyHurt(CharaSlot chara, long damage, int mpPct = 0)
     {
         if (damage <= 0) return 0;
-        chara.Hp = Math.Max(0, chara.Hp - damage);
+        long fromMp = Math.Min(chara.Mp, damage * mpPct / 100);
+        chara.Mp -= fromMp;
+        chara.Hp = Math.Max(0, chara.Hp - (damage - fromMp));
         return damage;
     }
 }
@@ -326,6 +330,7 @@ public static class Progression
 // LUK; the names stay).
 // WeaponAtk is the final total attack. FinalPct is the Final Attack proc
 // chance (not final damage; the chain has its own FinalDamagePct).
+// WeaknessProp is Elemental Weakness: the chance, in percent, that one of our hits marks the mob (0 = not learned).
 public readonly record struct Build(
     long Str,
     long Dex,
@@ -339,4 +344,5 @@ public readonly record struct Build(
     int CritDamage = 0,
     int IedPct = 0,
     int Level = 1,
-    int WeaponType = 0);
+    int WeaponType = 0,
+    int WeaknessProp = 0);

@@ -9,6 +9,9 @@ namespace MushTown.Exporter;
 // tooltip text of String.wz with the max-level numbers filled in. Writes assets/skill/wz/<id>.json
 // plus the icon and the disabled icon. Only the 1st job (200.img) is exported for now: the formula
 // reader is general, the other jobs are added with their own tickets.
+// A skill with a damage line also gets its cast effect (effect/) and hit spark (hit/) frames, and CastFrames and
+// HitFrames in the json. After pulling a change to this export run `export` again: an old json with no frames makes the
+// client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
 {
     // The skill ids to export: the ones on the job pages, plus the skills the window does not list
@@ -22,6 +25,7 @@ public static partial class Export
     // str the String category.
     public static bool ExportWzSkills(WzRoot baseRoot, WzRoot skill, WzRoot str, string outDir)
     {
+        var saved = new HashSet<string>();
         foreach (int id in WzSkillIds)
         {
             var data = ReadWzSkill(baseRoot, id);
@@ -40,6 +44,7 @@ public static partial class Export
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
+            if (data.Common.ContainsKey("damage") && !SaveWzSkillArt(skill, id, data, outDir, saved)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child)) data.Children.Add(ReadWzSkill(baseRoot, child));
             WriteJson(Path.Combine(outDir, "skill", "wz", $"{id}.json"), data);
             string kind = data.Kind == SkillData.KindPassive ? "passive" : data.Kind == SkillData.KindBuff ? "buff" : "active";
@@ -49,6 +54,22 @@ public static partial class Export
             Console.WriteLine($"    {string.Join(" / ", data.Effect)}");
         }
         return true;
+    }
+
+    // A damage skill draws its cast effect (effect) and its hit spark (hit/0). The ball (the flying bolt),
+    // special and the other nodes are not drawn yet.
+    private static bool SaveWzSkillArt(WzRoot skill, int id, WzSkillData data, string outDir, HashSet<string> saved)
+    {
+        var node = skill.Find($@"_Canvas\{id / 10000}.img\skill\{id}");
+        var effect = node?.Nodes["effect"];
+        var hit = node?.Nodes["hit"]?.Nodes["0"];
+        if (effect == null || hit == null)
+        {
+            Console.WriteLine($"skill {id} has no effect or no hit 0");
+            return false;
+        }
+        return SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)
+            && SaveSkillFrames(hit, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id);
     }
 
     private static Wz_Node WzSkillNode(WzRoot baseRoot, int id) =>

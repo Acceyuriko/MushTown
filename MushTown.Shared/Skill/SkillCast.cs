@@ -18,6 +18,19 @@ public sealed class SkillCost : Component
         cooldowns[skill] = def.CooldownMs;
         return true;
     }
+
+    // The same for a WZ skill at the level lv (0 = not learned): mpCon of the level, and the cooltime
+    // (seconds in WZ) when the skill has one.
+    public bool Pay(CharaSlot? chara, WzSkillData skill, int lv, IDictionary<int, float> cooldowns)
+    {
+        if (chara == null || lv <= 0) return false;
+        cooldowns.TryGetValue(skill.SkillId, out float left);
+        int mp = (int)skill.Value("mpCon", lv);
+        if (chara.Mp < mp || left > 0) return false;
+        chara.Mp -= mp;
+        cooldowns[skill.SkillId] = skill.Common.ContainsKey("cooltime") ? (float)skill.Value("cooltime", lv) * 1000f : 0f;
+        return true;
+    }
 }
 
 public sealed class SkillDamage : Component

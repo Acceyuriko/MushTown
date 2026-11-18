@@ -320,7 +320,7 @@ public sealed partial class GameServer : IDisposable
             OnSkill(id, BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5));
             return;
         }
-        if (payload[0] == Net.Build && payload.Length == 65)
+        if (payload[0] == Net.Build && payload.Length == 69)
         {
             lock (_mobLock)
                 _builds[id] = new Build(
@@ -336,7 +336,8 @@ public sealed partial class GameServer : IDisposable
                     BitConverter.ToInt32(payload, 49),
                     BitConverter.ToInt32(payload, 53),
                     BitConverter.ToInt32(payload, 57),
-                    BitConverter.ToInt32(payload, 61));
+                    BitConverter.ToInt32(payload, 61),
+                    BitConverter.ToInt32(payload, 65));
             return;
         }
         if (payload[0] != Net.State || payload.Length != 20)

@@ -14,9 +14,9 @@ public static class Damage
         DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, 100, boss).TotalDamage;
 
     // Damaging skill: pct is the cast-time skill percentage (level and orbs
-    // already folded in by the caster).
+    // already folded in by the caster). extraDmgPct is the damage % the mob's statuses add to a magic hit.
     public static long SkillCalc(double roll01, double crit01, double def, Build build, int pct,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
-        bool boss = false) =>
-        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, pct, boss).TotalDamage;
+        bool boss = false, double extraDmgPct = 0) =>
+        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, pct, boss, 0, extraDmgPct).TotalDamage;
 }

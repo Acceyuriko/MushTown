@@ -207,10 +207,12 @@ public static class DamageChain
     // The production chain. Build carries the snapshot values; the target's
     // level and ElemAttr are passed separately because they are not attacker
     // stats. Step 8 keeps one hit per call; TotalDamage is the production
-    // return value used by Damage.
+    // return value used by Damage. extraDmgPct is what the mob's own statuses add to the damage
+    // percent (Elemental Weakness on a magic hit: 20; 0 = none): it goes into the same additive sum as
+    // damage % and normal/boss %, not on top of the final damage.
     public static DamageResult Calculate(Build build, double roll01, double crit01, double mobDef,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
-        int skillPct = 100, bool boss = false, double ignoreElemPct = 0)
+        int skillPct = 100, bool boss = false, double ignoreElemPct = 0, double extraDmgPct = 0)
     {
         var weapon = StatTables.Weapon((WeaponType)build.WeaponType);
         long statValue = StatValue(build.Str, build.Dex);
@@ -218,7 +220,7 @@ public static class DamageChain
             1.0 + build.FinalDamagePct / 100.0, weapon);
         var (minActual, maxActual, minPanel, maxPanel) = panel;
         double damage = build.DmgPct;
-        double target = 1.0 + (damage + (boss ? build.BossPct : build.NormalPct)) / 100.0;
+        double target = 1.0 + (damage + extraDmgPct + (boss ? build.BossPct : build.NormalPct)) / 100.0;
         double minSkill = minPanel / (1.0 + damage / 100.0) * skillPct / 100.0 * target;
         double maxSkill = maxPanel / (1.0 + damage / 100.0) * skillPct / 100.0 * target;
         double actual = minSkill + (maxSkill - minSkill) * Math.Clamp(roll01, 0.0, 1.0);

@@ -34,10 +34,12 @@ public sealed class Mob : Component
     public int Speed;
     public int Aggro;
     public bool Boss;
+    public readonly MobStatuses Statuses = new(); // marks from skills (Elemental Weakness): they run out on the AI steps
 
-    // One AI step: cool the touch down, then walk the line or fall off it.
+    // One AI step: run the statuses down, cool the touch down, then walk the line or fall off it.
     public void Step(int ms, MapData map, List<(int id, int map, float x, float y)> players)
     {
+        Statuses.Step(ms);
         if (TouchMs > 0) TouchMs = Math.Max(0, TouchMs - ms);
         float dt = ms / 1000f;
         if (SceneMath.StepTo(map.Footholds, (int)Math.Floor(X), (int)Math.Floor(Y)) == null)

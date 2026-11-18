@@ -198,7 +198,7 @@ public partial class MushTownGame
         }
         long damage = mobAtk <= 0 ? 0 : DamageChain.TakenDamage(_stats,
             MobTouch.Damage(mobAtk, mob.Level, chara.Level, OwnDef(), _map.Info.BarrierArc, PlayerArc, Random.Shared.NextDouble()));
-        long dealt = _hurt.Apply(chara, damage);
+        long dealt = _hurt.Apply(chara, damage, MagicGuardPct(chara)); // Magic Guard: MP pays its share, HP the rest
         if (dealt == 0) return false; // invincible or harmless touch: no number, no death
         var num = TakeNumber();
         num.Text = dealt.ToString(); num.Skin = FloatingNumber.HurtSkin;
@@ -213,6 +213,10 @@ public partial class MushTownGame
             _mover.Knock(HurtGuard.KnockDir(_mover.X, source.X));
         return false;
     }
+
+    // Magic Guard: the share of a touch that MP pays (0 = the character does not have the skill).
+    private int MagicGuardPct(CharaSlot chara) =>
+        JobSkills.Has(chara.Job, WzSkillData.MagicGuard) ? WzSkillStats.MagicGuardPct(_wzSkills) : 0;
 
     // The time scale of a swing or cast, read from the panel's attack speed stage (so a buff or a potion that
     // changes the stage needs nothing more).
@@ -238,6 +242,14 @@ public partial class MushTownGame
     // sessions carry no character (no pools), so they cannot cast, like potions.
     private bool TryPaySkill(int id) =>
         _skillCost.Pay(_save?.Slots[_slot], id, SkillLv(id), _fighter.Cooldowns);
+
+    // The same for a WZ skill: it stands at its max level when the character's job has it.
+    private bool TryPayWzSkill(WzSkillData wz)
+    {
+        var chara = _save?.Slots[_slot];
+        int lv = chara != null && JobSkills.Has(chara.Job, wz.SkillId) ? wz.MaxLevel : 0;
+        return _skillCost.Pay(chara, wz, lv, _fighter.Cooldowns);
+    }
 
     // Every skill of the character's own job stands at its max level (no skill points); a skill of
     // another job is not learned. CLI sessions have no character.
@@ -299,6 +311,14 @@ public partial class MushTownGame
                 }
                 return;
             default:
+                if (_wzSkills.TryGetValue(id, out var wz))
+                {
+                    // Only a damage skill casts so far; a passive and the moves (Teleport, Mana Wave) are ignored.
+                    if (wz.Kind == SkillData.KindActive && wz.Common.ContainsKey("damage") && _mover.Climb == null
+                        && _fighter.AttackLock <= 0 && HasJudge() && TryPayWzSkill(wz))
+                        CastWzActive(wz);
+                    return;
+                }
                 // A bound passive is ignored and a bound buff casts as a
                 // buff: only an active skill may strike (the server's
                 // SkillStrike rejects zero mob count / range).
@@ -329,6 +349,25 @@ public partial class MushTownGame
         else if (_localWorld != null)
         {
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), id, pct))
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+            DrainDrops(_localWorld);
+        }
+    }
+
+    // A paid WZ damage cast: the pose is a weapon swing and its lock is that swing's time x the attack speed
+    // scale, like a basic swing. The cast-time pct is the skill's damage at its level. The judge is the
+    // local world or the server (rectangle and segments, MobWorld.WzStrike).
+    private void CastWzActive(WzSkillData wz)
+    {
+        string action = RollSwing();
+        _fighter.StartAttack(Delays(action, Hero?.Skin ?? 0).Sum(), AttackScale());
+        PlaySfx(SwingKey());
+        SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
+        int pct = (int)wz.Value("damage", wz.MaxLevel);
+        if (_net != null && _net.Connected) _net.SendSkillCast(wz.SkillId, pct);
+        else if (_localWorld != null)
+        {
+            foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), wz.SkillId, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
             DrainDrops(_localWorld);
         }
@@ -412,9 +451,10 @@ public partial class MushTownGame
     // Casts without art (Iron Body, Combo Attack) skip silently.
     private void SpawnCastFx(int skill, float x, float y, bool facingRight)
     {
-        if (_skills[skill].Effect.Count == 0) return;
+        var frames = _wzSkills.TryGetValue(skill, out var wz) ? wz.CastFrames : _skills[skill].Effect;
+        if (frames.Count == 0) return;
         var fx = TakeFx();
-        fx.Frames = _skills[skill].Effect;
+        fx.Frames = frames;
         fx.X = x; fx.Y = y - SkillFx.CastDy; fx.FacingRight = facingRight;
     }
 

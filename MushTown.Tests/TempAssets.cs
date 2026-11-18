@@ -1,6 +1,7 @@
 namespace MushTown.Tests;
 
 using System.Globalization;
+using MushTown.Shared;
 
 // A throwaway assets dir with minimal map/mob json (the server reads
 // Life/Footholds/VR plus mob stats, so Actions and art stay out). Deleted on dispose.
@@ -68,6 +69,13 @@ public sealed class TempAssets : IDisposable
         Directory.CreateDirectory(Path.Combine(Dir, "skill"));
         File.WriteAllText(Path.Combine(Dir, "skill", $"{skill}.json"),
             $"{{\"SkillId\":{skill},\"Kind\":{kind},\"DmgLo\":{dmgLo},\"Range\":{range},\"MobCount\":{mobCount}}}");
+    }
+
+    // A WZ skill (the Fire/Poison table): the server reads the whole json (common, vectors, info, element).
+    public void AddWzSkill(WzSkillData skill)
+    {
+        Directory.CreateDirectory(Path.Combine(Dir, "skill", "wz"));
+        File.WriteAllText(Path.Combine(Dir, "skill", "wz", $"{skill.SkillId}.json"), System.Text.Json.JsonSerializer.Serialize(skill));
     }
 
     public void Dispose()

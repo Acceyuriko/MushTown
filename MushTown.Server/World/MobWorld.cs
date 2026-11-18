@@ -79,6 +79,7 @@ public sealed class MobWorld
     private readonly Dictionary<int, MapData> _maps = new();
     private readonly Dictionary<int, (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr, int bodyH)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
+    private readonly Dictionary<int, WzSkillData> _wzSkills = new(); // the Fire/Poison skills (skill/wz/<id>.json), loaded when first needed
     private readonly Dictionary<int, DropTable> _dropTables = new();
     private readonly Dictionary<int, ItemData> _itemDefs = new();
     private readonly List<Mob> _lives = new();
@@ -283,6 +284,7 @@ public sealed class MobWorld
             float dx = m.X - x;
             bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
+            TryWeaken(m, build, rng);
             long damage = Damage.Calc(rng.NextDouble(), rng.NextDouble(), m.Def, build, m.Level, m.ElemAttr,
                 AttackElement.Physical, m.Boss);
             m.Hp = Math.Max(0, m.Hp - damage);
@@ -296,19 +298,37 @@ public sealed class MobWorld
 
     // Cast routing: damaging actives are judged, everything else (War Leap
     // utility, buffs) only relays its effect. Unknown ids mean a foreign
-    // client. Files load once and cache like mob stats.
+    // client. Files load once and cache like mob stats. A skill is a warrior
+    // skill (skill/<id>.json) or a WZ skill (skill/wz/<id>.json); a WZ skill is a
+    // damage skill when its common has a damage line.
     public bool IsDamageSkill(int skill)
     {
+        if (_wzSkills.TryGetValue(skill, out var wz)) return IsWzDamage(wz);
         if (!_skills.TryGetValue(skill, out var st))
         {
             string path = Path.Combine(_assetsDir, "skill", $"{skill}.json");
             if (!File.Exists(path))
-                throw new InvalidDataException($"bad skill id {skill}");
+            {
+                if (!File.Exists(WzPath(skill)))
+                    throw new InvalidDataException($"bad skill id {skill}");
+                return IsWzDamage(Wz(skill));
+            }
             var data = LoadJson<SkillData>(path);
             st = (data.Kind, data.DmgLo, data.MobCount, data.Range);
             _skills[skill] = st;
         }
         return st.kind == SkillData.KindActive && st.dmgLo > 0;
+    }
+
+    private static bool IsWzDamage(WzSkillData wz) => wz.Kind == SkillData.KindActive && wz.Common.ContainsKey("damage");
+
+    private string WzPath(int skill) => Path.Combine(_assetsDir, "skill", "wz", $"{skill}.json");
+
+    private WzSkillData Wz(int skill)
+    {
+        if (!_wzSkills.TryGetValue(skill, out var wz))
+            _wzSkills[skill] = wz = LoadJson<WzSkillData>(WzPath(skill));
+        return wz;
     }
 
     // One damaging skill cast at (x, y): every live mob inside the skill's
@@ -321,6 +341,7 @@ public sealed class MobWorld
     public List<Hit> SkillStrike(int map, float x, float y, bool facingRight, Random rng, Build build, int skill, int pct, int attacker = 0)
     {
         IsDamageSkill(skill); // loads and caches (a buff id here is a caller bug, caught below)
+        if (_wzSkills.TryGetValue(skill, out var wz)) return WzStrike(map, x, y, facingRight, rng, build, wz, pct, attacker);
         var st = _skills[skill];
         if (st.mobCount <= 0 || st.range <= 0)
             throw new InvalidDataException($"skill {skill} has bad damage stats");
@@ -349,13 +370,72 @@ public sealed class MobWorld
         return hits;
     }
 
+    // One WZ damage skill cast at (x, y). The box lt..rb of the skill picks the mobs, mirrored by facing
+    // (WzSkillData.InRect). When the skill is rectBasedOnTarget (Energy Bolt) the box is not on the caster:
+    // the bolt flies ahead to the nearest mob within range (at the box height) and the box is centered on
+    // that one. The mobs in the box are taken nearest first, at most mobCount. Each takes attackCount
+    // separate rolls (a hit each, so the numbers equal the segments); a mob that dies stops taking
+    // them. The element comes from the skill; a mob with Elemental Weakness takes the extra magic damage.
+    // Before its segments a mob may get marked (Elemental Weakness): the mark counts in this cast's segments too.
+    // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
+    private List<Hit> WzStrike(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, int pct, int attacker)
+    {
+        int mobCount = (int)wz.Value("mobCount", wz.MaxLevel);
+        int segments = (int)wz.Value("attackCount", wz.MaxLevel);
+        float ox = x, oy = y;
+        if (wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1")
+        {
+            float range = (float)wz.Value("range", wz.MaxLevel);
+            float height = Math.Max(-wz.Vectors["lt"][1], wz.Vectors["rb"][1]);
+            Mob? first = null;
+            foreach (var m in _lives)
+            {
+                float dx = m.X - x;
+                bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
+                if (m.Map != map || !ahead || Math.Abs(dx) > range || Math.Abs(m.Y - y) > height) continue;
+                if (first == null || Math.Abs(dx) < Math.Abs(first.X - x)) first = m;
+            }
+            if (first == null) return new List<Hit>();
+            ox = first.X;
+            oy = first.Y;
+        }
+        var inBox = new List<(float dist2, Mob m)>();
+        foreach (var m in _lives)
+        {
+            float dx = m.X - ox, dy = m.Y - oy;
+            if (m.Map == map && wz.InRect(dx, dy, facingRight)) inBox.Add((dx * dx + dy * dy, m));
+        }
+        inBox.Sort((a, b) => a.dist2.CompareTo(b.dist2));
+        var hits = new List<Hit>();
+        foreach ((float _, Mob m) in inBox.Take(mobCount).ToList())
+        {
+            TryWeaken(m, build, rng);
+            for (int i = 0; i < segments && m.Hp > 0; i++)
+                hits.Add(HitOne(m, wz.SkillId, rng, build, pct, attacker, wz.Element(), m.Statuses.MagicExtraDamagePct));
+        }
+        return hits;
+    }
+
+    // Elemental Weakness: one of our attacks marks the mob (rolled once per mob, before its damage) with the chance of the build (prop, in percent;
+    // 0 means the skill is not learned and no random number is spent). The mark adds x to the damage % of
+    // magic hits on the mob for time seconds (the numbers of skill/wz/2000007.json at its max level). A mark on the mob
+    // refreshes.
+    private void TryWeaken(Mob m, Build build, Random rng)
+    {
+        if (build.WeaknessProp <= 0 || rng.NextDouble() * 100 >= build.WeaknessProp) return;
+        var weak = Wz(WzSkillData.ElementalWeakness);
+        m.Statuses.Add(MobStatusKind.ElementalWeakness, weak.Value("x", weak.MaxLevel), (int)weak.Value("time", weak.MaxLevel) * 1000);
+    }
+
     // One damage roll applied to one live mob. The dead leave the world, a
     // grave (respawn), and their drops: mesos always, a potion sometimes
-    // (the boss always pays its purse).
-    private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker)
+    // (the boss always pays its purse). A warrior skill hits physical with no mob mark;
+    // a WZ skill passes its element and the mob's extra damage %.
+    private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker,
+        AttackElement element = AttackElement.Physical, double extraDmgPct = 0)
     {
         long damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
-            m.Level, m.ElemAttr, AttackElement.Physical, m.Boss);
+            m.Level, m.ElemAttr, element, m.Boss, extraDmgPct);
         m.Hp = Math.Max(0, m.Hp - damage);
         if (m.Hp == 0)
         {

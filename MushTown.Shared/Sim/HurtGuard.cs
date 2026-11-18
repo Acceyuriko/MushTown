@@ -31,11 +31,11 @@ public sealed class HurtGuard : Component
     }
 
     // Returns the damage actually dealt. A blocked touch returns 0 and does
-    // not change HP or restart the window.
-    public long Apply(CharaSlot chara, long damage)
+    // not change HP or restart the window. mpPct is Magic Guard (see Progression.ApplyHurt).
+    public long Apply(CharaSlot chara, long damage, int mpPct = 0)
     {
         if (Invincible) return 0;
-        long dealt = Progression.ApplyHurt(chara, damage);
+        long dealt = Progression.ApplyHurt(chara, damage, mpPct);
         if (dealt > 0)
         {
             LeftFrames = HurtFrames;

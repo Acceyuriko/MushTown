@@ -174,7 +174,8 @@ public partial class MushTownGame
             (int)_stats.IntValue(StatKey.CRIT_DAMAGE),
             (int)Math.Round((1 - DamageChain.IedMultiplier(_stats)) * 100),
             chara.Level,
-            (int)job.Weapon);
+            (int)job.Weapon,
+            chara.Job == StatTables.FirePoisonMage ? WzSkillStats.WeaknessProp(_wzSkills) : 0); // Elemental Weakness: the Fire/Poison Mage marks mobs
     }
 
     private void ClampPoolsToMax()
