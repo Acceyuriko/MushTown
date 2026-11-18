@@ -88,6 +88,53 @@ public class SaveTests
         CollectionAssert.AreEquivalent(ItemData.StarterEquips, chara.Equips);
     }
 
+    // The WZ slot of each starter piece and the window box it fills.
+    private static readonly (int Id, string Slot, string Box)[] StarterSlots =
+    {
+        (1004230, "Cp", "hat"),
+        (1052800, "MaPn", "top"),
+        (1082609, "Gv", "gloves"),
+        (1072968, "So", "shoes"),
+        (1102719, "Sr", "cape"),
+        (1372207, "Wp", "weapon"),
+    };
+
+    [TestMethod]
+    public void CreateHero_WearsThePensalirSet()
+    {
+        var chara = new SaveStore().CreateHero(0, 0, "hero", 110);
+        CollectionAssert.AreEqual(StarterSlots.Select(x => x.Id).ToArray(), chara.Equips);
+        var defs = StarterSlots.ToDictionary(x => x.Id, x => new ItemData { ItemId = x.Id, Slot = x.Slot });
+        foreach (var (id, _, box) in StarterSlots)
+            Assert.IsTrue(EquipSlots.Accepts(box, id, defs), $"{id} fits {box}");
+        Assert.AreEqual(0, chara.EquipBag?.Count ?? 0); // nothing extra goes in the bag
+    }
+
+    [TestMethod]
+    public void CreateHero_FireMageWearsThePensalirSet()
+    {
+        var mage = new SaveStore().CreateHero(0, 1, "mage", 210);
+        CollectionAssert.AreEqual(StarterSlots.Select(x => x.Id).ToArray(), mage.Equips);
+    }
+
+    [TestMethod]
+    public void Save_Load_KeepsThePensalirSet()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"saves-starter-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new SaveStore();
+            store.CreateHero(0, 0, "hero", 110);
+            store.Save(path);
+            CollectionAssert.AreEqual(StarterSlots.Select(x => x.Id).ToArray(),
+                SaveStore.Load(path).Saves[0]!.Slots[0]!.Equips);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [TestMethod]
     public void CreateHero_GivesDefaultCoupons()
     {

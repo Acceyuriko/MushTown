@@ -296,12 +296,15 @@ public sealed class ItemData
     public const int LongSword = 1302007; // Long Sword (Wp, PAD 27): the shop of Sid (11000)
     public const int LolicoArmor = 1040015; // Brown Lolico Armor (Ma, PDD 15): the shop of Pan (21000)
 
-    // The classic beginner kit: every new character wears these four.
-    public const int StarterSword = 1302000; // Sword (Wp, PAD 15)
-    public const int StarterTop = 1040002; // White Undershirt (Ma, PDD 2)
-    public const int StarterPants = 1060026; // Blue-Striped Boxers (Pn, PDD 1)
-    public const int StarterShoes = 1072833; // Yellow Adventure Shoes (So, PDD 2)
-    public static readonly int[] StarterEquips = { StarterSword, StarterTop, StarterPants, StarterShoes };
+    // The starter kit: every new character wears the 140-level Pensalir
+    // Magician set (setItemID 448), six pieces with base stats only.
+    public const int StarterHat = 1004230; // Pensalir Mage Sallet (Cp)
+    public const int StarterOverall = 1052800; // Pensalir Robe (MaPn)
+    public const int StarterGloves = 1082609; // Pensalir Gloves (Gv)
+    public const int StarterShoes = 1072968; // Pensalir Boots (So)
+    public const int StarterCape = 1102719; // Pensalir Cape (Sr)
+    public const int StarterWand = 1372207; // Utgard Wand (Wp, short staff)
+    public static readonly int[] StarterEquips = { StarterHat, StarterOverall, StarterGloves, StarterShoes, StarterCape, StarterWand };
 
     // Demo/test gear for every extended slot: the demo bag wears these in
     // --wear, and the tests use the same ids. Some have only icons in this
@@ -337,7 +340,7 @@ public sealed class ItemData
     public const int AltFace = 20002;
 
     // Beginner img per worn slot: the export and item validation use this row
-    // to know which beginner art a gear slot replaces. The starter kit's
+    // to know which beginner art a gear slot replaces. The beginner
     // top, pants, shoes and sword are the pieces a later item of the same
     // slot replaces. An overall replaces the beginner longcoat and locks the
     // Bottom box, so no pants are worn under it.
@@ -395,6 +398,15 @@ public sealed class ItemData
     public int Def { get; set; } // WZ incPDD
     public int Str { get; set; } // WZ incSTR
     public int Dex { get; set; } // WZ incDEX
+    public int Int { get; set; } // WZ incINT (shown only: no formula reads it yet)
+    public int Luk { get; set; } // WZ incLUK (shown only)
+    public int Mad { get; set; } // WZ incMAD (shown only)
+    public int Mdd { get; set; } // WZ incMDD (shown only)
+    public int Acc { get; set; } // WZ incACC (shown only)
+    public int Eva { get; set; } // WZ incEVA (shown only)
+    public int Speed { get; set; } // WZ incSpeed (shown only)
+    public int Jump { get; set; } // WZ incJump (shown only)
+    public int ReqJob { get; set; } // WZ info/reqJob bit mask: 1 Warrior, 2 Magician, 4 Bowman, 8 Thief, 16 Pirate (0 = any)
     public int MaxHp { get; set; } // WZ incMHP: the max HP a worn equip adds (Hp above is a potion's heal)
     public int MaxMp { get; set; } // WZ incMMP
     public int NameTag { get; set; } // WZ info/nameTag: UI NameTag.img node (0 = plain black box)

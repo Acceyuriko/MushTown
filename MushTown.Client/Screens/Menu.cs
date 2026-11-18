@@ -365,8 +365,8 @@ public partial class MushTownGame
     }
 
     // The character info and the equipment window show the starter kit every
-    // new hero gets: sword, shirt, boxers and shoes. The extended demo gear
-    // fills the equipment window only: stat and hud shots keep the old values.
+    // new hero gets: the six Pensalir pieces. The extended demo gear
+    // fills the other slots of the equipment window only; the stat and hud shots wear the six alone.
     // The demo bag's old shop gear goes, so the inventory page keeps the demo
     // ring. The backup coupons and cash armor prove the W5 look in the static
     // shots.
@@ -382,6 +382,7 @@ public partial class MushTownGame
             Inventory.Remove(chara, "equip", ItemData.IslandRing, 1);
             foreach (int id in ItemData.DemoSlotGear)
             {
+                if (chara.Equips.Any(worn => _items[worn].Slot == _items[id].Slot)) continue; // the starter kit already fills this slot
                 chara.Equips.Add(id);
                 Inventory.Remove(chara, "equip", id, 1);
             }
@@ -486,6 +487,9 @@ public partial class MushTownGame
         foreach (int id in _manifest.Potions.Concat(_manifest.Equips).Concat(_manifest.CashItems)) // the ship list proves complete: listed but unscanned fails here
             if (!_items.ContainsKey(id))
                 throw new InvalidDataException($"manifest lists item {id} with no exported def");
+        foreach (int id in ItemData.StarterEquips) // the starter kit must be exported: an old assets/ lacks it
+            if (!_items.ContainsKey(id))
+                throw new InvalidDataException($"starter equip {id} has no exported def (rerun export)");
         foreach (int skin in _manifest.DamageSkins) // a listed skin needs its numbers and a coupon that gives it
         {
             if (!File.Exists(Path.Combine(_assetsDir, "effect", $"dmg{skin}.json")))
@@ -504,7 +508,7 @@ public partial class MushTownGame
                 if (ItemData.BeginnerImgs.ContainsKey(item.Slot) && !item.HasArt)
                     throw new InvalidDataException($"equip {id} has no art");
             }
-            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0 && !ItemData.StarterEquips.Contains(id) && !ItemData.DemoSlotGear.Contains(id)) // stale jsons price 0, except cash items, rings, starter kit and demo samples
+            if (item.Price <= 0 && !item.Cash && item.NameTag == 0 && item.ChatBalloon == 0 && !ItemData.DemoSlotGear.Contains(id)) // stale jsons price 0, except cash items, rings and demo samples
                 throw new InvalidDataException($"item {id} has a bad price");
             if (item.Name == "") // pre-name jsons would print blank labels
                 throw new InvalidDataException($"item {id} has no name");

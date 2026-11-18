@@ -17,11 +17,14 @@ public static partial class Export
 
     private static readonly GearRow[] Gears = new[]
     {
-        // The classic beginner kit every new character wears.
-        new GearRow(@"Weapon\01302000.img", BeginnerSword, true),
-        new GearRow(@"Coat\01040002.img", BeginnerLongcoat, true),
-        new GearRow(@"Pants\01060026.img", BeginnerBoxers, true),
-        new GearRow(@"Shoes\01072833.img", BeginnerShoes, true),
+        // The starter kit every new character wears: the 140-level Pensalir
+        // Magician set, base stats only.
+        new GearRow(@"Weapon\01372207.img", BeginnerSword, true),
+        new GearRow(@"Longcoat\01052800.img", BeginnerLongcoat, true),
+        new GearRow(@"Shoes\01072968.img", BeginnerShoes, true),
+        new GearRow(@"Cap\01004230.img", null, true),
+        new GearRow(@"Glove\01082609.img", null, true),
+        new GearRow(@"Cape\01102719.img", null, true),
         new GearRow(@"Coat\01040039.img", BeginnerLongcoat, true),
         new GearRow(@"Weapon\01442004.img", BeginnerSword, true),
         new GearRow(@"Ring\01112134.img", null, false),
@@ -225,8 +228,8 @@ public static partial class Export
 
     // One def + icon per wearable gear: Slot, bonuses and reqLevel come from
     // the img's info node. v1 ships only all-supported stats: any other inc*
-    // fails loud (a half-working item must never sneak in); reqJob/pose/sfx/
-    // speed/tuc/cash sit unused by design (ItemData documents the rules).
+    // fails loud (a half-working item must never sneak in); pose/sfx/tuc
+    // sit unused by design (ItemData documents the rules).
     // ReadEquips checks every row before the doll bake (a bad pairing must
     // not bake wrong art); WriteEquips writes the defs after it (a failed
     // bake must not leave a def whose art is missing).
@@ -246,7 +249,7 @@ public static partial class Export
             {
                 // Demo icon rows only need the icon; their combat stats are
                 // not part of the v1 gear model.
-                if (c.Text.StartsWith("inc") && c.Text is not ("incPAD" or "incPDD" or "incSTR" or "incDEX" or "incMHP" or "incMMP") &&
+                if (c.Text.StartsWith("inc") && c.Text is not ("incPAD" or "incPDD" or "incSTR" or "incDEX" or "incMHP" or "incMMP" or "incINT" or "incLUK" or "incMAD" or "incMDD" or "incACC" or "incEVA" or "incSpeed" or "incJump") &&
                     !ItemData.DemoSlotGear.Contains(id))
                 {
                     Console.WriteLine($"equip {id} has unsupported stat {c.Text}");
@@ -302,6 +305,15 @@ public static partial class Export
                 Def = Int(info, "incPDD"),
                 Str = Int(info, "incSTR"),
                 Dex = Int(info, "incDEX"),
+                Int = Int(info, "incINT"),
+                Luk = Int(info, "incLUK"),
+                Mad = Int(info, "incMAD"),
+                Mdd = Int(info, "incMDD"),
+                Acc = Int(info, "incACC"),
+                Eva = Int(info, "incEVA"),
+                Speed = Int(info, "incSpeed"),
+                Jump = Int(info, "incJump"),
+                ReqJob = Int(info, "reqJob"),
                 MaxHp = Int(info, "incMHP"),
                 MaxMp = Int(info, "incMMP"),
                 Price = Int(info, "price"),
@@ -312,7 +324,7 @@ public static partial class Export
                 Cash = Int(info, "cash") != 0,
                 IconW = UiPng.Width(chara, "Character", $@"{row.gear}\{icon}"),
             };
-            if (data.Price <= 0 && !data.Cash && !ItemData.StarterEquips.Contains(id) && !ItemData.DemoSlotGear.Contains(id)) // cash gear and demo samples are free
+            if (data.Price <= 0 && !data.Cash && !ItemData.DemoSlotGear.Contains(id)) // cash gear and demo samples are free
             {
                 Console.WriteLine($"equip {id} has a bad price {data.Price}");
                 return null;
