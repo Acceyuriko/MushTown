@@ -3,8 +3,15 @@ namespace MushTown.Shared;
 // One skill read straight from the WZ skill node (the Fire/Poison line): the numbers of every level
 // (the common formulas, already worked out), the rectangles, the flags, and the tooltip text at max
 // level. This is a table of its own: the warrior SkillData is a hand-made feel table and is not
-// extended. Energy Bolt is cast (the rectangle, the segments, the art); Magic Guard, Elemental Weakness,
+// extended. Energy Bolt is cast (the ball flies, the rectangle and the segments judge on arrival, the art); Magic Guard, Elemental Weakness,
 // Magic Armor and MP Boost take effect; Teleport and Mana Wave are not cast yet.
+// The frame meta of one art: per frame, the origin (x, y: the point of the png that sits on the anchor) and the delay in ms.
+public sealed class WzArt
+{
+    public int[][] Origins { get; set; } = Array.Empty<int[]>();
+    public int[] Delays { get; set; } = Array.Empty<int>();
+}
+
 public sealed class WzSkillData
 {
     // 200 Magician.
@@ -29,6 +36,11 @@ public sealed class WzSkillData
     public List<string> Actions { get; set; } = new(); // action/0.. names
     public List<string> CastFrames { get; set; } = new(); // the cast effect art (png paths), only for a damage skill
     public List<string> HitFrames { get; set; } = new();  // the hit spark art (hit/0), only for a damage skill
+    public List<string> BallFrames { get; set; } = new(); // the flying ball art (ball), only for a skill that throws one (Energy Bolt)
+    public List<string> SpecialFrames { get; set; } = new(); // the art that plays on every mob the skill hits (special), only for a skill that has one (Energy Bolt)
+    // The WZ origin and delay of every frame of the art that is drawn the WZ way: "hit", "ball", "special" (the same
+    // order as the frame lists). The cast effect is drawn bare and centered, with one delay.
+    public Dictionary<string, WzArt> Art { get; set; } = new();
     public Dictionary<string, string> Info { get; set; } = new(); // info/*: flags and types as written
     // Every number field of common: index 0 is level 1.
     public Dictionary<string, double[]> Common { get; set; } = new();

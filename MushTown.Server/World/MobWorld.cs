@@ -32,10 +32,10 @@ public sealed class MobWorld
     public sealed record Drop(int Uid, int Map, float X, float Y, int Kind, int Id, int Count, long Amount,
         float FromX = 0, float FromY = 0, bool Fresh = true, string Tab = "");
 
-    // One tick's events, in wire order: moves snap poses, hurts drain HP,
-    // spawns re-plant the respawned, takes clear expired drops. Kill drops
-    // ride TakeDrops instead (they land at judge time, not tick time).
-    public sealed record TickEvents(List<Move> Moves, List<Hurt> Hurts, List<Spawn> Spawns,
+    // One tick's events, in wire order: strikes are the damage of the balls that arrived (with the caster
+    // who threw them), moves snap poses, hurts drain HP, spawns re-plant the respawned, takes clear expired
+    // drops. Kill drops ride TakeDrops instead (they land at judge time, not tick time).
+    public sealed record TickEvents(List<(Hit hit, int attacker)> Strikes, List<Move> Moves, List<Hurt> Hurts, List<Spawn> Spawns,
         List<(int uid, int map)> Takes);
 
     // Swing reach in pixels: a mob is hit when roughly at swing height and
@@ -43,7 +43,10 @@ public sealed class MobWorld
     private const int ReachX = 90;
     private const int ReachY = 60;
     private const int BehindX = 10;
+    public const int TickMs = 100; // the server tick: a ball lands on the first tick after it arrived, never before
     private const int PushPx = 60; // Rush knocks mobs this far along the dash
+    private const int LaunchDx = 40; // a ball starts this far in front of the caster...
+    private const int LaunchDy = 40; // ...at the torso (the height of the cast effect); a proposal, WZ has no start point
     private const int RespawnMs = 10000; // graves re-plant after 10s
     private const int BossRespawnMs = 300000; // the boss rests 5 min between fights
     private const int DropMs = 60000; // drops fade after 60s unclaimed
@@ -57,6 +60,24 @@ public sealed class MobWorld
         public float X;
         public float Y;
         public float MsLeft;
+    }
+
+    // A ball in the air: its cast waits here until the flight time runs out, then the box judges where it lands.
+    private sealed class Pending
+    {
+        public int Map;
+        public float X; // the center of the box (the mob feet, or the end of the range)
+        public float Y;
+        public bool FacingRight;
+        public int MsLeft;
+        public Random Rng = null!;
+        public Build Build;
+        public WzSkillData Wz = null!;
+        public AttackElement Element; // read at the cast: the landing in the tick loop must not throw
+        public int MobCount;
+        public int Segments;
+        public int Pct;
+        public int Attacker;
     }
 
     private sealed class GroundDrop
@@ -86,6 +107,8 @@ public sealed class MobWorld
     private readonly List<Grave> _graves = new();
     private readonly List<GroundDrop> _drops = new();
     private readonly List<Drop> _fresh = new(); // kill drops waiting for broadcast
+    private readonly List<Pending> _pending = new(); // balls in the air
+    private readonly List<BallEvent> _launches = new(); // balls thrown, waiting for broadcast (the flight time is Projectile.FlightMs of the four numbers, the same rule on the client)
     private readonly HashSet<int> _spawned = new();
     private int _nextUid = 1;
     private int _nextDrop = 1;
@@ -191,6 +214,20 @@ public sealed class MobWorld
     // (no random turns or pauses): the same ticks always walk the same line.
     public TickEvents Tick(int ms, List<(int id, int map, float x, float y)> players)
     {
+        var strikes = new List<(Hit hit, int attacker)>();
+        for (int i = 0; i < _pending.Count;) // the balls land in the order they were thrown
+        {
+            var p = _pending[i];
+            p.MsLeft -= ms;
+            if (p.MsLeft > 0)
+            {
+                i++;
+                continue;
+            }
+            _pending.RemoveAt(i);
+            foreach (var h in WzHits(p.Map, p.X, p.Y, p.FacingRight, p.Rng, p.Build, p.Wz, p.Element, p.MobCount, p.Segments, p.Pct, p.Attacker))
+                strikes.Add((h, p.Attacker));
+        }
         var onMap = new HashSet<int>();
         foreach (var p in players) onMap.Add(p.map);
         var moves = new List<Move>();
@@ -228,7 +265,18 @@ public sealed class MobWorld
             _drops.RemoveAt(i);
             takes.Add((d.Uid, d.Map));
         }
-        return new TickEvents(moves, hurts, spawns, takes);
+        return new TickEvents(strikes, moves, hurts, spawns, takes);
+    }
+
+    // The balls of one caster that are still in the air vanish with no damage (the caster left the game or changed map).
+    public void CancelBalls(int attacker) => _pending.RemoveAll(p => p.Attacker == attacker);
+
+    // Balls thrown by the casts since the last call (the caller broadcasts them to the map).
+    public List<BallEvent> TakeLaunches()
+    {
+        var list = new List<BallEvent>(_launches);
+        _launches.Clear();
+        return list;
     }
 
     // Kill drops waiting for broadcast (the judge fills it, the caller drains it).
@@ -370,24 +418,29 @@ public sealed class MobWorld
         return hits;
     }
 
-    // One WZ damage skill cast at (x, y). The box lt..rb of the skill picks the mobs, mirrored by facing
-    // (WzSkillData.InRect). When the skill is rectBasedOnTarget (Energy Bolt) the box is not on the caster:
-    // the bolt flies ahead to the nearest mob within range (at the box height) and the box is centered on
-    // that one. The mobs in the box are taken nearest first, at most mobCount. Each takes attackCount
-    // separate rolls (a hit each, so the numbers equal the segments); a mob that dies stops taking
-    // them. The element comes from the skill; a mob with Elemental Weakness takes the extra magic damage.
-    // Before its segments a mob may get marked (Elemental Weakness): the mark counts in this cast's segments too.
-    // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
+    // One WZ damage skill cast at (x, y). A skill with a ball (BallFrames) throws it: the ball flies to the end of
+    // the range ahead, or to the nearest mob ahead within range (at the box height) when the skill is
+    // rectBasedOnTarget (Energy Bolt), and the damage lands only after it arrived (the first tick after
+    // Projectile.FlightMs, so a client never sees a number before the explosion). The target is picked at the
+    // cast: the box stays where the ball was sent even if that mob moves or dies on the way. The cast returns no
+    // hits for a ball; they come out of Tick. A skill with no ball judges at once: the box on the caster, or on the
+    // nearest mob ahead when it is rectBasedOnTarget (no mob: no hit).
     private List<Hit> WzStrike(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, int pct, int attacker)
     {
+        // Every number the damage needs is read here, in the cast, where a bad skill file fails the caster's call. A ball
+        // lands later in the tick loop, which must not throw (it would end the loop for everyone).
+        var element = wz.Element();
         int mobCount = (int)wz.Value("mobCount", wz.MaxLevel);
         int segments = (int)wz.Value("attackCount", wz.MaxLevel);
-        float ox = x, oy = y;
-        if (wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1")
-        {
-            float range = (float)wz.Value("range", wz.MaxLevel);
-            float height = Math.Max(-wz.Vectors["lt"][1], wz.Vectors["rb"][1]);
-            Mob? first = null;
+        // The mark reads the Elemental Weakness file the first time it is used. Load it now, in the cast: the tick loop
+        // that lands the ball must not read files (a missing file would throw there and end the loop).
+        if (build.WeaknessProp > 0) Wz(WzSkillData.ElementalWeakness);
+        bool ball = wz.BallFrames.Count > 0;
+        bool onTarget = wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1";
+        float range = (float)wz.Value("range", wz.MaxLevel);
+        float height = Math.Max(-wz.Vectors["lt"][1], wz.Vectors["rb"][1]);
+        Mob? first = null;
+        if (onTarget)
             foreach (var m in _lives)
             {
                 float dx = m.X - x;
@@ -395,10 +448,44 @@ public sealed class MobWorld
                 if (m.Map != map || !ahead || Math.Abs(dx) > range || Math.Abs(m.Y - y) > height) continue;
                 if (first == null || Math.Abs(dx) < Math.Abs(first.X - x)) first = m;
             }
-            if (first == null) return new List<Hit>();
-            ox = first.X;
-            oy = first.Y;
-        }
+        if (!ball)
+            return !onTarget ? WzHits(map, x, y, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker)
+                : first == null ? new List<Hit>() : WzHits(map, first.X, first.Y, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker);
+        float boxX = first?.X ?? x + (facingRight ? range : -range);
+        float boxY = first?.Y ?? y;
+        float toX = boxX;
+        float toY = first == null ? y - LaunchDy : first.Y - first.BodyH / 2f; // the explosion is at the mob body
+        float fromX = facingRight ? Math.Min(x + LaunchDx, toX) : Math.Max(x - LaunchDx, toX); // a mob right in front: the ball does not fly back
+        float fromY = y - LaunchDy;
+        _launches.Add(new BallEvent(wz.SkillId, map, fromX, fromY, toX, toY));
+        _pending.Add(new Pending
+        {
+            Map = map,
+            X = boxX,
+            Y = boxY,
+            FacingRight = facingRight,
+            MsLeft = Projectile.FlightMs(fromX, fromY, toX, toY) + TickMs,
+            Rng = rng,
+            Build = build,
+            Wz = wz,
+            Element = element,
+            MobCount = mobCount,
+            Segments = segments,
+            Pct = pct,
+            Attacker = attacker,
+        });
+        return new List<Hit>();
+    }
+
+    // The damage of one WZ cast whose box has its origin at (ox, oy): the mobs in the box lt..rb, mirrored by
+    // facing (WzSkillData.InRect), taken nearest first, at most mobCount. Each takes attackCount separate rolls
+    // (a hit each, so the numbers equal the segments); a mob that dies stops taking them. The element comes
+    // from the skill; a mob with Elemental Weakness takes the extra magic damage. Before its segments a mob may get
+    // marked (Elemental Weakness): the mark counts in this cast's segments too.
+    // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
+    private List<Hit> WzHits(int map, float ox, float oy, bool facingRight, Random rng, Build build, WzSkillData wz,
+        AttackElement element, int mobCount, int segments, int pct, int attacker)
+    {
         var inBox = new List<(float dist2, Mob m)>();
         foreach (var m in _lives)
         {
@@ -411,7 +498,7 @@ public sealed class MobWorld
         {
             TryWeaken(m, build, rng);
             for (int i = 0; i < segments && m.Hp > 0; i++)
-                hits.Add(HitOne(m, wz.SkillId, rng, build, pct, attacker, wz.Element(), m.Statuses.MagicExtraDamagePct));
+                hits.Add(HitOne(m, wz.SkillId, rng, build, pct, attacker, element, m.Statuses.MagicExtraDamagePct));
         }
         return hits;
     }

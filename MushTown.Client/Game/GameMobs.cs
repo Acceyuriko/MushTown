@@ -126,11 +126,16 @@ public partial class MushTownGame
         var num = TakeNumber();
         num.Text = damage.ToString(); num.X = m.X; num.Y = headY - stack * FloatingNumber.StackPx;
         if (mine) num.Skin = Hero?.DamageSkin ?? 0;
-        var hitArt = skill == 0 ? null : _wzSkills.TryGetValue(skill, out var wz) ? wz.HitFrames : _skills[skill].Hit;
+        // A skill with a ball explodes once at the end of its flight (SpawnImpacts, the hit art); the art on each mob
+        // it hits is its special. Another WZ skill plants its hit art on each mob.
+        _wzSkills.TryGetValue(skill, out var wz);
+        string? art = wz == null ? null : wz.BallFrames.Count > 0 ? "special" : "hit";
+        var hitArt = skill == 0 ? null : wz == null ? _skills[skill].Hit : ArtFrames(wz, art!);
         if (hitArt is { Count: > 0 } && firstOfMob)
         {
             var spark = TakeFx();
-            spark.Frames = hitArt;
+            if (wz != null) UseArt(spark, wz, art!);
+            else spark.Frames = hitArt;
             spark.X = m.X; spark.Y = m.Y - bodyH / 2; spark.FacingRight = true;
         }
         if (mine && skill != SkillData.FinalAttack && _fighter.Buffs.ContainsKey(SkillData.ComboAttack))
@@ -184,7 +189,8 @@ public partial class MushTownGame
         DropNumbers();
         DropFx();
         RespawnBuffLoops(); // buff timers survive the switch, so their loops re-hang
-        _localWorld!.EnterMap(_mapId);
+        _localWorld!.CancelBalls(0); // the balls in the air did not cross the map change (DropFx took their art)
+        _localWorld.EnterMap(_mapId);
         foreach (var s in _localWorld.MobsOn(_mapId))
             ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);
         foreach (var d in _localWorld.DropsOn(_mapId))

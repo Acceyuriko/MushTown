@@ -10,8 +10,10 @@ namespace MushTown.Exporter;
 // plus the icon and the disabled icon. Only the 1st job (200.img) is exported for now: the formula
 // reader is general, the other jobs are added with their own tickets.
 // A skill with a damage line also gets its cast effect (effect/) and hit spark (hit/) frames, and CastFrames and
-// HitFrames in the json. After pulling a change to this export run `export` again: an old json with no frames makes the
-// client fail at start (Menu.cs), and a missing png makes it fail too.
+// HitFrames in the json; a skill with a ball node (Energy Bolt) also gets the flying bolt (ball/) and BallFrames, and one
+// with a special node the art for every mob it hits (special/) and SpecialFrames.
+// After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
+// json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
 {
     // The skill ids to export: the ones on the job pages, plus the skills the window does not list
@@ -44,7 +46,7 @@ public static partial class Export
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
-            if (data.Common.ContainsKey("damage") && !SaveWzSkillArt(skill, id, data, outDir, saved)) return false;
+            if (data.Common.ContainsKey("damage") && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child)) data.Children.Add(ReadWzSkill(baseRoot, child));
             WriteJson(Path.Combine(outDir, "skill", "wz", $"{id}.json"), data);
             string kind = data.Kind == SkillData.KindPassive ? "passive" : data.Kind == SkillData.KindBuff ? "buff" : "active";
@@ -56,9 +58,11 @@ public static partial class Export
         return true;
     }
 
-    // A damage skill draws its cast effect (effect) and its hit spark (hit/0). The ball (the flying bolt),
-    // special and the other nodes are not drawn yet.
-    private static bool SaveWzSkillArt(WzRoot skill, int id, WzSkillData data, string outDir, HashSet<string> saved)
+    // A damage skill draws its cast effect (effect) and its hit spark (hit/0), and its ball (the flying bolt) and
+    // its special (the art on each mob hit) when it has them. The other nodes are not drawn yet.
+    // The hit, the ball and the special also keep their WZ origins and delays (the node in Base has them; the png
+    // node of the canvas does not).
+    private static bool SaveWzSkillArt(WzRoot baseRoot, WzRoot skill, int id, WzSkillData data, string outDir, HashSet<string> saved)
     {
         var node = skill.Find($@"_Canvas\{id / 10000}.img\skill\{id}");
         var effect = node?.Nodes["effect"];
@@ -68,8 +72,29 @@ public static partial class Export
             Console.WriteLine($"skill {id} has no effect or no hit 0");
             return false;
         }
-        return SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)
-            && SaveSkillFrames(hit, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id);
+        var meta = WzSkillNode(baseRoot, id);
+        data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);
+        if (!SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)
+            || !SaveSkillFrames(hit, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id))
+            return false;
+        foreach ((string name, List<string> into) in new[] { ("ball", data.BallFrames), ("special", data.SpecialFrames) })
+        {
+            if (node!.Nodes[name] is not { } frames) continue;
+            if (!SaveSkillFrames(frames, $"skill/wz/{id}/{name}", into, outDir, saved, id)) return false;
+            data.Art[name] = ReadWzArt(meta.Nodes[name]!);
+        }
+        return true;
+    }
+
+    // The origin and delay of each int-named frame, in frame order (the order SaveSkillFrames numbers the pngs).
+    private static WzArt ReadWzArt(Wz_Node list)
+    {
+        var frames = list.Nodes.Where(f => int.TryParse(f.Text, out _)).OrderBy(f => int.Parse(f.Text, CultureInfo.InvariantCulture)).ToList();
+        return new WzArt
+        {
+            Origins = frames.Select(f => f.Nodes["origin"]!.Value is Wz_Vector v ? new[] { v.X, v.Y } : throw new InvalidDataException($"frame {f.Text} has no origin")).ToArray(),
+            Delays = frames.Select(f => int.Parse(Text(f.Nodes["delay"]), CultureInfo.InvariantCulture)).ToArray(),
+        };
     }
 
     private static Wz_Node WzSkillNode(WzRoot baseRoot, int id) =>

@@ -45,6 +45,7 @@ public static class Net
     public const byte CashShop = 36; // client -> server: no body (the player stepped out of the map; the next State returns)
     public const byte DropItem = 37; // client -> server: int itemId, int count, byte tab (drop at the last State's map/x/y; tab 4 = mesos, the two ints are a long amount)
     public const byte Appearance = 38; // client -> server: appearance body; the server relays int id + body to the same map
+    public const byte Ball = 39; // server -> client: int skill, int map, float fromX, fromY, toX, toY (a ball is thrown; its damage comes as MobHit when it arrives)
 
     // A meso drop rides DropItem with tab 4: itemId holds the high 32 bits and
     // count the low 32, so the amount stays one long without a new command.
@@ -219,6 +220,10 @@ public readonly record struct MobEvent(
 // or left. The caster plays its own effect live and never gets this echo.
 // Clients drop effects for other maps, like states.
 public readonly record struct SkillFxEvent(int Attacker, int Skill, int Map, float X, float Y, bool FacingRight);
+
+// One ball thrown by a cast (Energy Bolt): Skill's art flies from From to To on Map. Every client on the map
+// gets it, the caster too. The flight time is Projectile.FlightMs of the four numbers.
+public readonly record struct BallEvent(int Skill, int Map, float FromX, float FromY, float ToX, float ToY);
 
 // One mob step from the server: Uid now stands at X/Y facing right or left.
 // Clients drop moves for other maps and for mobs mid-flinch (hit1/die1 own

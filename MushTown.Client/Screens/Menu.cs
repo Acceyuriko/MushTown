@@ -162,7 +162,10 @@ public partial class MushTownGame
             //   --job on a game pose shot (--hit, --skill, --hurt; no --screen) poses a fresh level 200 hero of that class, in the
             //     starter kit, like stat200 (the demo is level 7: a Fire/Poison cast on a level 200 mob would do 1 damage).
             //     --skill with a WZ skill (Energy Bolt) follows --facing, lets --aiticks gather the mobs first and --weak
-            //     marks them first (the cast is the last thing the shot does).
+            //     marks them first (the cast is the last thing the shot does). A ball skill judges when its ball arrives:
+            //     --flyms <ms> then runs the world that long after the cast (the ball in the air, the explosion, the numbers).
+            //     --standoff <px> moves the caster away from the first mob (default 250): out of reach, the ball has no target.
+            //     The big blue ball that stays on the caster is the cast effect (WZ effect, 16 frames), not a second ball.
             //   death poses the death scene: the tombstone landed, the ghost with its head, the name, the revive popup.
             //   fashionworn poses a world character wearing cash fashion. settings poses the volume window.
             //   shop (with --talk) poses the shop.
@@ -601,6 +604,8 @@ public partial class MushTownGame
             var wz = LoadJson<WzSkillData>(f);
             if (wz.Common.ContainsKey("damage") && (wz.CastFrames.Count == 0 || wz.HitFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
+            if ((wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1" || wz.BallFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
+                throw new InvalidDataException($"skill {wz.SkillId} throws a ball but has no ball or special art: run the exporter (export)");
             _wzSkills[wz.SkillId] = wz;
         }
         foreach (var tab in JobSkills.Pages(StatTables.FirePoisonMage))
@@ -671,6 +676,8 @@ public partial class MushTownGame
             LoadTexture(wz.Disabled);
             foreach (string f in wz.CastFrames) LoadTexture(f);
             foreach (string f in wz.HitFrames) LoadTexture(f);
+            foreach (string f in wz.BallFrames) LoadTexture(f);
+            foreach (string f in wz.SpecialFrames) LoadTexture(f);
         }
         for (int i = 0; i < MacroBook.Count; i++) LoadTexture($"ui/macro_icon{i}.png"); // the keys and the quick slots draw them
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);

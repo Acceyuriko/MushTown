@@ -401,8 +401,8 @@ public partial class MushTownGame
         var hpmp = new GameObject { NoHit = true };
         hpmp.Add(new Rect(HpRect()));
         hpmp.Add(new Picture("ui/hud_hpbg.png"));
-        hpmp.Add(new Picture("ui/hud_hpfill.png", 4, 4)); // fills at bg+(4,4)/(4,25), cover at bg+(3,3), numbers centered on x+101. Bars always full: nothing drains HP/MP until W13 mob hits (W13 adds the clip then).
-        hpmp.Add(new Picture("ui/hud_mpfill.png", 4, 25));
+        hpmp.Add(new FillPicture("ui/hud_hpfill.png", 4, 4, HpFill)); // fills at bg+(4,4)/(4,25), cover at bg+(3,3), numbers centered on x+101. Each fill is cut from the left to HP/max and MP/max.
+        hpmp.Add(new FillPicture("ui/hud_mpfill.png", 4, 25, MpFill));
         hpmp.Add(new BarNumber(HpText, 101, 7));
         hpmp.Add(new BarNumber(MpText, 101, 28));
         hpmp.Add(new Picture("ui/hud_hpcover.png", 3, 3));
@@ -454,6 +454,11 @@ public partial class MushTownGame
                 return (_mobData[m.Mob].Name, m.Hp, m.MaxHp);
         return null;
     }
+
+    // The share of the bars: the live pool over its max (CLI sessions have no character: full).
+    private (long Value, long Max) HpFill() => (_save?.Slots[_slot]?.Hp ?? MaxHpNow(), MaxHpNow());
+
+    private (long Value, long Max) MpFill() => (_save?.Slots[_slot]?.Mp ?? MaxMpNow(), MaxMpNow());
 
     private string HpText()
     {

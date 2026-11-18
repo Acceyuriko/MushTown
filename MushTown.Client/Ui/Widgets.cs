@@ -153,6 +153,23 @@ public sealed class Bar : Component, IDrawable
     }
 }
 
+// A fill drawn raw at an offset and cut from the left to its share of the amount (the HP and MP fills of the HUD).
+public sealed class FillPicture : Component, IDrawable
+{
+    private readonly string _key;
+    private readonly int _dx, _dy;
+    private readonly Func<(long Value, long Max)> _amount;
+    public FillPicture(string key, int dx, int dy, Func<(long Value, long Max)> amount) { _key = key; _dx = dx; _dy = dy; _amount = amount; }
+    public void Draw(UiGfx gfx)
+    {
+        var r = Owner.Get<Rect>()!.Screen;
+        var f = gfx.Tex(_key);
+        var (v, m) = _amount();
+        int w = SceneMath.BarWidth(f.Width, v, m);
+        if (w > 0) gfx.Sb.Draw(f, new Vector2(r.X + _dx, r.Y + _dy), new Rectangle(0, 0, w, f.Height), Color.White);
+    }
+}
+
 // Fixed art: stretched to the Owner rect, or raw at an offset.
 public sealed class Picture : Component, IDrawable
 {

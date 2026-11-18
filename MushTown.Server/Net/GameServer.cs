@@ -91,7 +91,7 @@ public sealed partial class GameServer : IDisposable
     // The AI clock: 10Hz ticks drive mob steps, touches, respawns, and drop
     // expiry. Judge and tick share the mob lock, so a swing and a step never
     // interleave mid-list.
-    private const int TickMs = 100;
+    private const int TickMs = MobWorld.TickMs;
 
     private async Task TickLoop(CancellationToken ct)
     {
@@ -105,6 +105,9 @@ public sealed partial class GameServer : IDisposable
                     var players = new List<(int id, int map, float x, float y)>();
                     foreach (var kv in _pos) players.Add((kv.Key, kv.Value.map, kv.Value.x, kv.Value.y));
                     var ev = _mobs.Tick(TickMs, players);
+                    foreach (var s in ev.Strikes) // the balls that arrived: their damage lands now
+                        BroadcastHit(s.hit, s.attacker);
+                    BroadcastFreshDrops();
                     foreach (var mv in ev.Moves)
                         Broadcast(Net.Encode(Net.MobMove, w =>
                         {
@@ -191,9 +194,10 @@ public sealed partial class GameServer : IDisposable
         {
             _log($"client {id} error: {ex.Message}");
         }
-        _clients.TryRemove(id, out _);
-        lock (_mobLock)
+        lock (_mobLock) // the client leaves the table and the balls it threw leave the air together: a late hit has no one to credit
         {
+            _clients.TryRemove(id, out _);
+            _mobs.CancelBalls(id);
             _pos.Remove(id);
             _away.Remove(id);
             _builds.Remove(id);
@@ -357,7 +361,10 @@ public sealed partial class GameServer : IDisposable
             switched = !first && old.map != map;
             _pos[id] = (map, x, y, facing);
             if (switched)
+            {
+                _mobs.CancelBalls(id); // the balls it threw on the old map do not land
                 Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
+            }
             if (first || switched)
             {
                 PushMobs(id, map);
@@ -598,7 +605,9 @@ public sealed partial class GameServer : IDisposable
     }
 
     // A skill cast: damaging actives are judged from the sender's last State
-    // and Build like a swing (their hits carry the skill id for hit sparks);
+    // and Build like a swing (their hits carry the skill id for hit sparks); a
+    // skill that throws a ball (Energy Bolt) only sends the ball here, and the
+    // hits come from the tick loop when it arrives;
     // utility (War Leap) and buffs move on the caster's own screen, so the
     // server only relays the effect. The caster plays its own effect live
     // and skips this echo. Unknown skill ids mean a foreign client. No
@@ -623,6 +632,16 @@ public sealed partial class GameServer : IDisposable
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;
             foreach (var h in _mobs.SkillStrike(p.map, p.x, p.y, p.facing, Random.Shared, build, skill, pct, id))
                 BroadcastHit(h, id);
+            foreach (var b in _mobs.TakeLaunches()) // a ball is thrown: everyone sees it fly, the damage comes on arrival
+                Broadcast(Net.Encode(Net.Ball, w =>
+                {
+                    w.Write(b.Skill);
+                    w.Write(b.Map);
+                    w.Write(b.FromX);
+                    w.Write(b.FromY);
+                    w.Write(b.ToX);
+                    w.Write(b.ToY);
+                }));
             BroadcastFreshDrops();
         }
     }

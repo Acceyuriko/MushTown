@@ -47,6 +47,8 @@ public partial class MushTownGame : Game
     private readonly int? _shotDmgSkin; // --dmgskin <id>: that number's skin
     private readonly bool _shotHurt; // --hurt: the player takes one posed hit
     private readonly bool _shotWeak; // --weak: the --skill cast lands on mobs already marked by Elemental Weakness
+    private readonly int _shotStandoff; // --standoff <px>: how far from the first mob a WZ --skill caster stands (0 = the default 250)
+    private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (the ball flies, explodes, the numbers rise)
     private readonly bool _shotHurtBlink; // --hurtblink: the same arc in the purple flash step
     private readonly bool _shotHurtPre; // --hurtpre: the same stage before the hit
     private readonly bool _shotHurtMiss; // --hurtmiss: the touch rolls a dodge that always lands
@@ -110,6 +112,8 @@ public partial class MushTownGame : Game
     private readonly List<SkillFx> _fx = new(); // skill effects in flight: casts, hit sparks, buff loops
     private readonly Stack<FloatingNumber> _numberPool = new(); // freelists: spawn pops, removal pushes, live order untouched
     private readonly Stack<SkillFx> _fxPool = new();
+    private readonly List<SkillFx> _balls = new(); // balls in the air (Energy Bolt): each node holds a Projectile and a SkillFx
+    private readonly Stack<SkillFx> _ballPool = new();
     private readonly Dictionary<int, DmgData> _dmg = new(); // damage skins by key, loaded once each
 
     private readonly Dictionary<int, DropArt> _drops = new();
@@ -127,7 +131,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -157,6 +161,8 @@ public partial class MushTownGame : Game
         _shotHurtPre = shotHurtPre;
         _shotHurtMiss = shotHurtMiss;
         _shotWeak = shotWeak;
+        _shotFlyms = shotFlyms;
+        _shotStandoff = shotStandoff;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
         _deathHost.Add(new Rect(new Rectangle(0, 0, GameWidth, GameHeight))); // the popup root covers the screen; BuildDeathScene only refills its children
         _panelHosts = new[] { _invHost, _statHost, _skillHost, _questHost, _settingsHost, _shopHost }; // the panel-id order the Z row and the hit lookups use
@@ -797,10 +803,12 @@ public partial class MushTownGame : Game
         // Before the draw: a corpse and a finished effect both sit on
         // Frame == Frames.Count, and the draw reads that frame. A number does
         // not crash, it just keeps drawing and ageing. All three belong here.
+        SpawnImpacts(); // a ball that arrived explodes (before the sweep takes it away)
         MobArt.CollectDead(_mobs, _world);
         DropArt.CollectDead(_drops, _world);
         PoolSweep.CollectDead(_numbers, _world, _numberPool);
         PoolSweep.CollectDead(_fx, _world, _fxPool);
+        PoolSweep.CollectDead(_balls, _world, _ballPool);
         if (_mover.JumpSfx) PlaySfx("jump");
         if (_mover.Travel != null)
         {
@@ -884,6 +892,11 @@ public partial class MushTownGame : Game
             {
                 if (f.Map != _mapId) continue; // another map's cast: not shown here
                 SpawnCastFx(f.Skill, f.X, f.Y, f.FacingRight);
+            }
+            while (_net.TryTakeBall(out var b))
+            {
+                if (b.Map != _mapId) continue; // another map's ball: not shown here
+                SpawnBall(b.Skill, b.FromX, b.FromY, b.ToX, b.ToY);
             }
             if (!_net.Connected && _remotes.Count > 0)
                 ClearPeers(); // link lost: peers vanish, the local world takes over

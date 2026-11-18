@@ -3,9 +3,10 @@ using MushTown.Shared;
 namespace MushTown.Client;
 
 // One skill effect in flight: a cast effect (centered on the caster), a hit
-// spark (centered on the mob's body), or a buff loop (riding the player until
-// the buff ends). A one-shot plays once and ends its own life; a loop wraps
-// forever and the buff end takes it away.
+// spark (centered on the mob's body), a buff loop (riding the player until
+// the buff ends), or a flying ball (a loop that sits where its Projectile is
+// until it arrives). A one-shot plays once and ends its own life; a loop wraps
+// forever and the buff end (or the arrival) takes it away.
 public sealed class SkillFx : Component
 {
     private const int Delay = 100; // skill effect frames share one delay (WZ ships no delays for them)
@@ -20,6 +21,11 @@ public sealed class SkillFx : Component
     public float X;
     public float Y;
     public PlayerMover? Rider; // a buff loop rides the player; one-shots leave it null
+    public int[][]? Origins; // the WZ origin of each frame (the art of a ball, a special, a ball skill's hit); null: the frame is centered
+    public int[]? Delays;    // the WZ delay of each frame; null: the shared Delay
+    // A ball sits where its projectile is (the same node holds both); the rest leave it null. The Projectile must be
+    // added to the node before this SkillFx: components update in the order they were added, and this one reads X and Y.
+    public Projectile? Flight;
 
     // The buff ended: drop the loop of that skill, and only that one. A cast
     // effect of the same skill keeps playing. The node must leave the tree, or
@@ -41,6 +47,8 @@ public sealed class SkillFx : Component
     {
         Loop = false;
         Rider = null;
+        Origins = null;
+        Delays = null;
         Frames = null!;
         Frame = 0;
         Timer = 0;
@@ -54,9 +62,15 @@ public sealed class SkillFx : Component
             X = Rider.X;
             Y = Rider.Y - CastDy;
         }
+        if (Flight != null) // a ball follows its projectile (added before this component, so it moved already)
+        {
+            X = Flight.X;
+            Y = Flight.Y;
+        }
         Timer += dt * 1000f;
-        if (Timer < Delay) return;
-        Timer -= Delay; // keep the overflow (single step: 100ms delays, 16ms ticks)
+        int delay = Delays?[Frame] ?? Delay;
+        if (Timer < delay) return;
+        Timer -= delay; // keep the overflow (single step: 100ms delays, 16ms ticks)
         if (Loop)
         {
             Frame = (Frame + 1) % Frames.Count;

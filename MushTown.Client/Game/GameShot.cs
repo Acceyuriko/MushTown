@@ -127,7 +127,8 @@ public partial class MushTownGame
             var first = world.MobsOn(_mapId).FirstOrDefault()
                 ?? throw new InvalidDataException($"--hit/--skill/--drop needs mobs, map {_mapId} has none");
             bool right = !wzSkill || _shotFacingRight; // the warrior poses face right; a WZ skill follows --facing
-            _mover.X = first.X + (right ? -50 : 50);
+            int standOff = wzSkill ? (_shotStandoff > 0 ? _shotStandoff : 250) : 50; // a ball needs room to fly: a WZ skill stands 250 px from the first mob
+            _mover.X = first.X + (right ? -standOff : standOff);
             _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, (int)first.Y)
                 ?? throw new InvalidDataException($"--hit/--skill/--drop found no ground near mob {first.Mob}");
             _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
@@ -207,40 +208,69 @@ public partial class MushTownGame
         SnapCamera();
     }
 
-    // A WZ damage skill (Energy Bolt): pay best-effort, pose the cast effect mid-play, let the mobs gather
-    // (--aiticks), then judge the cast with a fixed seed, so the numbers are the same every run. The shown cast
-    // does not roll the mark itself (chance 0), so the plain shot has no mark. --weak casts once before with a
-    // 100% Elemental Weakness chance (another seed, its numbers are not shown): the shown cast then has the same
-    // rolls as the plain shot, with the mark on the mobs (+20 damage %).
+    // A WZ damage skill (Energy Bolt): pay best-effort, let the mobs gather (--aiticks), then cast with a fixed
+    // seed, so the numbers are the same every run. A skill with a ball judges when the ball arrives, so --flyms <ms>
+    // runs the world that long after the cast (16 ms steps): the cast effect and the ball are drawn, the ball
+    // flies, explodes, and the numbers rise on arrival. Without --flyms the shot is the cast the moment it is thrown,
+    // with the cast effect posed mid-play. The shown cast does not roll the mark itself (chance 0), so the plain shot
+    // has no mark. --weak casts once before with a 100% Elemental Weakness chance (another seed; its ball flies
+    // 800 ms unseen, so it has landed and its numbers are not shown): the shown cast then has the same rolls
+    // as the plain shot, with the mark on the mobs (+20 damage %). The unseen flight moves the mobs 8 more AI steps:
+    // give the plain shot 8 more --aiticks to compare the two.
     private void PoseWzSkill(MobWorld world, WzSkillData wz)
     {
         if (wz.Kind != SkillData.KindActive || !wz.Common.ContainsKey("damage"))
             throw new InvalidDataException($"--skill {wz.SkillId} is not a WZ damage skill (no pose)");
         TryPayWzSkill(wz); // best-effort, like the window shots: the demo has no one to fail
-        SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
-        _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
         RunShotAi();
         int pct = (int)wz.Value("damage", wz.MaxLevel);
         var build = CurrentBuild() with { WeaknessProp = 0 };
         if (_shotWeak)
+        {
             world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { WeaknessProp = 100 }, wz.SkillId, pct);
+            world.TakeLaunches(); // unseen: the ball is not drawn
+            for (int i = 0; i < 8; i++) ShotTick(100, showStrikes: false);
+        }
+        SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
+        if (_shotFlyms == 0) _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
         foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(0), build, wz.SkillId, pct))
             ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+        foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY);
         DrainDrops(world, animate: false);
+        for (int left = _shotFlyms; left > 0; left -= 16)
+        {
+            int ms = Math.Min(16, left);
+            foreach (var f in _balls) TreeUpdate.UpdateObject(f.Owner, ms / 1000f); // the effects and the numbers age; the mobs and the hero stay posed
+            foreach (var f in _fx) TreeUpdate.UpdateObject(f.Owner, ms / 1000f);
+            foreach (var n in _numbers) TreeUpdate.UpdateObject(n.Owner, ms / 1000f);
+            SpawnImpacts();
+            PoolSweep.CollectDead(_balls, _world, _ballPool);
+            PoolSweep.CollectDead(_fx, _world, _fxPool);
+            PoolSweep.CollectDead(_numbers, _world, _numberPool);
+            ShotTick(ms);
+        }
     }
 
     // --aiticks <n>: n 100ms AI steps at the posed feet. Moves and respawns
     // show; touches don't (the demo must not die mid-pose). Zero ticks skips.
     private void RunShotAi()
     {
+        for (int i = 0; i < _shotAiticks; i++) ShotTick(100);
+    }
+
+    // One world step at the posed feet: the balls that arrived strike (shown unless asked not to), the mobs move.
+    private void ShotTick(int ms, bool showStrikes = true)
+    {
         var world = _localWorld!; // StartLocalWorld just built it
         var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _mover.X, _mover.Y) };
-        for (int i = 0; i < _shotAiticks; i++)
+        var ev = world.Tick(ms, players);
+        if (showStrikes)
         {
-            var ev = world.Tick(100, players);
-            foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
-            ApplySpawns(ev.Spawns);
-            foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);
+            foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill);
+            DrainDrops(world, animate: false);
         }
+        foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
+        ApplySpawns(ev.Spawns);
+        foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);
     }
 }

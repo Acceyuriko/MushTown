@@ -38,17 +38,73 @@ public partial class MushTownGame
 
     private void DropNumbers() => PoolSweep.DropAll(_numbers, _world, _numberPool);
 
-    private void DropFx() => PoolSweep.DropAll(_fx, _world, _fxPool);
+    private void DropFx()
+    {
+        PoolSweep.DropAll(_fx, _world, _fxPool);
+        PoolSweep.DropAll(_balls, _world, _ballPool);
+    }
+
+    // A ball in the air: one node with a Projectile (the flight) and a SkillFx (the looping art that follows it).
+    // Our own cast, a peer's cast and the shots all come through here (the local world or the Ball message).
+    private void SpawnBall(int skill, float fromX, float fromY, float toX, float toY)
+    {
+        if (!_ballPool.TryPop(out var fx))
+        {
+            var o = new GameObject();
+            var flight = o.Add(new Projectile());
+            fx = o.Add(new SkillFx());
+            fx.Flight = flight;
+        }
+        fx.Reset();
+        _world.AddChild(fx.Owner);
+        _balls.Add(fx);
+        fx.Skill = skill;
+        fx.Loop = true;
+        UseArt(fx, _wzSkills[skill], "ball");
+        fx.FacingRight = toX >= fromX;
+        fx.Flight!.Launch(fromX, fromY, toX, toY);
+    }
+
+    // Plays the frames of one WZ art (hit, ball, special) with the origins and delays the WZ gives it.
+    private static List<string> ArtFrames(WzSkillData wz, string art) =>
+        art switch { "ball" => wz.BallFrames, "special" => wz.SpecialFrames, _ => wz.HitFrames };
+
+    private static void UseArt(SkillFx fx, WzSkillData wz, string art)
+    {
+        fx.Frames = ArtFrames(wz, art);
+        fx.Origins = wz.Art[art].Origins;
+        fx.Delays = wz.Art[art].Delays;
+    }
+
+    // The explosion of every ball that arrived this step: the skill's hit spark at the end point (also when
+    // nothing was there). The damage numbers come from the judge in the same step or later, never before.
+    // Only call this outside the tree step (it adds nodes).
+    private void SpawnImpacts()
+    {
+        foreach (var b in _balls)
+        {
+            if (!b.Flight!.Arrived) continue;
+            var spark = TakeFx();
+            UseArt(spark, _wzSkills[b.Skill], "hit");
+            spark.X = b.Flight.ToX; spark.Y = b.Flight.ToY; spark.FacingRight = true;
+        }
+    }
 
     // Skill effects: bare frames centered on their anchor, flipped like
     // avatars (raw art faces left). Cast effects and hit sparks sit where they
     // spawned; only a buff loop keeps following the player.
     private void DrawFx()
     {
-        foreach (var f in _fx)
+        DrawFxList(_balls); // the balls first: the explosion sparks cover them
+        DrawFxList(_fx);
+    }
+
+    private void DrawFxList(List<SkillFx> list)
+    {
+        foreach (var f in list)
         {
             var tex = _textures[f.Frames[f.Frame]];
-            var o = new Vector2(tex.Width / 2f, tex.Height / 2f);
+            var o = f.Origins == null ? new Vector2(tex.Width / 2f, tex.Height / 2f) : new Vector2(f.Origins[f.Frame][0], f.Origins[f.Frame][1]);
             _spriteBatch.Draw(tex, new Vector2(f.X - _camera.X, f.Y - _camera.Y), null, Color.White,
                 0f, o, 1f, f.FacingRight ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         }
@@ -356,7 +412,9 @@ public partial class MushTownGame
 
     // A paid WZ damage cast: the pose is a weapon swing and its lock is that swing's time x the attack speed
     // scale, like a basic swing. The cast-time pct is the skill's damage at its level. The judge is the
-    // local world or the server (rectangle and segments, MobWorld.WzStrike).
+    // local world or the server (rectangle and segments, MobWorld.WzStrike). A skill with a ball judges when the
+    // ball arrives: the local world hands the ball out here and the hits later through its tick; the server sends
+    // the ball to everyone (Net.Ball) and the hits later as MobHit.
     private void CastWzActive(WzSkillData wz)
     {
         string action = RollSwing();
@@ -369,6 +427,7 @@ public partial class MushTownGame
         {
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), wz.SkillId, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+            foreach (var l in _localWorld.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY);
             DrainDrops(_localWorld);
         }
     }
