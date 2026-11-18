@@ -453,19 +453,16 @@ public class MobAiTests
         }
     }
 
-    // ApplyHurt: DEF% blocks its share (min 1 gets through), HP floors at 0.
+    // ApplyHurt only takes HP (DEF and the damage-taken zone are already in the number): HP floors at 0.
     // Returns the damage dealt (the client shows it; Hp 0 means dead).
     [TestMethod]
-    public void ApplyHurt_BlocksDefAndFloorsAtZero()
+    public void ApplyHurt_TakesHpAndFloorsAtZero()
     {
         var chara = new CharaSlot { Hp = 50 };
-        Assert.AreEqual(10, Progression.ApplyHurt(chara, 10, 0));
+        Assert.AreEqual(10, Progression.ApplyHurt(chara, 10));
         Assert.AreEqual(40, chara.Hp);
-        Assert.AreEqual(5, Progression.ApplyHurt(chara, 10, 50));
-        Assert.AreEqual(35, chara.Hp);
-        Assert.AreEqual(1, Progression.ApplyHurt(chara, 1, 90)); // min 1
         chara.Hp = 3;
-        Assert.AreEqual(100, Progression.ApplyHurt(chara, 100, 0));
+        Assert.AreEqual(100, Progression.ApplyHurt(chara, 100));
         Assert.AreEqual(0, chara.Hp);
     }
 
@@ -474,7 +471,7 @@ public class MobAiTests
     public void ApplyHurt_ZeroTouchIsHarmless()
     {
         var chara = new CharaSlot { Hp = 50 };
-        Assert.AreEqual(0, Progression.ApplyHurt(chara, 0, 0));
+        Assert.AreEqual(0, Progression.ApplyHurt(chara, 0));
         Assert.AreEqual(50, chara.Hp);
     }
 

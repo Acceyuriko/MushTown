@@ -129,7 +129,7 @@ public partial class MushTownGame
         var ev = _localWorld.Tick(dtMs, players);
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
         foreach (var h in ev.Hurts)
-            if (ApplyHurt(h.Damage, h.Uid))
+            if (ApplyHurt(h.Damage, h.Uid, h.Mob))
                 break;
         ApplySpawns(ev.Spawns);
         foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);

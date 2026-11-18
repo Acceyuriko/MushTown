@@ -116,6 +116,10 @@ public partial class MushTownGame
             mods.Add(new(StatKey.ATT_PCT, StatValueType.PERCENT,
                 _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade), StatSource.Buff));
 
+        // The stat part of Defense reads the final STR, DEX and LUK, so it is added after a first pass.
+        var total = StatAggregator.Aggregate(mods);
+        mods.Add(new(StatKey.DEF, StatValueType.FLAT,
+            StatTables.BaseDefense(total.IntValue(StatKey.STR), total.IntValue(StatKey.DEX), total.IntValue(StatKey.LUK)), StatSource.Base));
         _stats = StatAggregator.Aggregate(mods);
     }
 
@@ -181,7 +185,7 @@ public partial class MushTownGame
 
     private long MaxHpNow() => _stats.IntValue(StatKey.MAX_HP);
     private long MaxMpNow() => _stats.IntValue(StatKey.MAX_MP);
-    private int OwnDef() => (int)_stats.IntValue(StatKey.DEF);
+    private double OwnDef() => _stats.Value(StatKey.DEF);
     private int OwnKnockbackResistance() => (int)_stats.IntValue(StatKey.KNOCKBACK_RESISTANCE);
     private float OwnWalk() => (float)_stats.DoubleValue(StatKey.SPEED);
     private float OwnJump() => (float)_stats.DoubleValue(StatKey.JUMP);

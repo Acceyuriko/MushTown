@@ -864,7 +864,7 @@ public partial class MushTownGame : Game
             while (_net.TryTakeHurt(out var h))
             {
                 if (h.Map != _mapId) continue; // another map's touch: not ours (we moved since)
-                if (!ApplyHurt(h.Damage, h.Uid)) continue;
+                if (!ApplyHurt(h.Damage, h.Uid, h.Mob)) continue;
                 while (_net.TryTakeHurt(out _)) { } // died: drop touches judged at the corpse
                 break;
             }

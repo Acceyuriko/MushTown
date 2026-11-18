@@ -30,6 +30,11 @@ public static class StatTables
     public const int Hero = 110;
     public const int FirePoisonMage = 210;
 
+    // The stat part of Defense (research/stat-formulas.md, StrategyWiki Defense):
+    // Defense = [1.5 x STR + 0.4 x (DEX + LUK) + added DEF] x (1 + DEF% / 100). The added DEF and the DEF%
+    // are the other DEF records of the snapshot; this is the base record built from the final STR, DEX, LUK.
+    public static double BaseDefense(long str, long dex, long luk) => 1.5 * str + 0.4 * (dex + luk);
+
     public static JobProfile Job(int jobId) => jobId switch
     {
         Hero => new(StatKey.STR, StatKey.DEX, WeaponType.HeroTwoHand),

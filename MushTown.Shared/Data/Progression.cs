@@ -303,14 +303,14 @@ public static class Progression
     public static bool CanCast(CharaSlot chara, SkillData skill, int lv, float cdLeftMs) =>
         lv > 0 && chara.Mp >= skill.Mp && cdLeftMs <= 0;
 
-    // One mob touch: DEF% blocks its share (min 1 when damage lands), HP
-    // floors at 0. Returns the damage dealt (the client shows it; Hp 0 means dead).
-    public static long ApplyHurt(CharaSlot chara, long damage, int defPct)
+    // One mob touch that already went through DEF and the damage-taken zone (MobTouch,
+    // DamageChain.TakenDamage): HP floors at 0. Returns the damage dealt (the client shows
+    // it; Hp 0 means dead). A Touch-0 mob is harmless: 0 in, 0 out.
+    public static long ApplyHurt(CharaSlot chara, long damage)
     {
-        if (damage <= 0) return 0; // a Touch-0 mob is harmless, not chip damage
-        long dealt = Math.Max(1, damage * (100 - defPct) / 100);
-        chara.Hp = Math.Max(0, chara.Hp - dealt);
-        return dealt;
+        if (damage <= 0) return 0;
+        chara.Hp = Math.Max(0, chara.Hp - damage);
+        return damage;
     }
 }
 

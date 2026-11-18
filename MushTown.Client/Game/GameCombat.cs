@@ -172,15 +172,21 @@ public partial class MushTownGame
         return LoadDmg(skin).Sample is { } sample ? _textures[sample.Image] : null;
     }
 
-    // One touch that landed on us: DEF folds in, the number shows what got
-    // through, death respawns at the map spawn with full pools (buffs stay).
-    // Returns true on death: the caller drops the rest of the frame's touches
-    // (judged at the corpse, not the spawn).
-    private bool ApplyHurt(long damage, int mobUid)
+    // The player's Arcane Force. The ARC system (T-20261114000523) is not made, so this is 0 for now
+    // (so a map with a barrierArc is the hardest tier, x2.8); read the real value here when it exists.
+    private static int PlayerArc => 0;
+
+    // One touch that landed on us: the mob's attack goes through DEF (MobTouch) and the damage-taken
+    // zone, the number shows what got through, death respawns at the map spawn with full pools (buffs
+    // stay). Returns true on death: the caller drops the rest of the frame's touches (judged at the
+    // corpse, not the spawn). A Touch-0 mob is harmless.
+    private bool ApplyHurt(long mobAtk, int mobUid, int mobId)
     {
         var chara = _save?.Slots[_slot];
         if (chara == null || _death.Dead) return false; // CLI sessions have no one to hurt, and a tombstone cannot be hit
-        long dealt = _hurt.Apply(chara, damage, OwnDef());
+        long damage = mobAtk <= 0 ? 0 : DamageChain.TakenDamage(_stats,
+            MobTouch.Damage(mobAtk, _mobData[mobId].Level, chara.Level, OwnDef(), _map.Info.BarrierArc, PlayerArc, Random.Shared.NextDouble()));
+        long dealt = _hurt.Apply(chara, damage);
         if (dealt == 0) return false; // invincible or harmless touch: no number, no death
         var num = TakeNumber();
         num.Text = dealt.ToString(); num.Skin = FloatingNumber.HurtSkin;

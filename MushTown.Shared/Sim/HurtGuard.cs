@@ -19,10 +19,10 @@ public sealed class HurtGuard : Component
 
     // Returns the damage actually dealt. A blocked touch returns 0 and does
     // not change HP or restart the window.
-    public long Apply(CharaSlot chara, long damage, int defPct)
+    public long Apply(CharaSlot chara, long damage)
     {
         if (Invincible) return 0;
-        long dealt = Progression.ApplyHurt(chara, damage, defPct);
+        long dealt = Progression.ApplyHurt(chara, damage);
         if (dealt > 0) LeftFrames = HurtFrames;
         return dealt;
     }

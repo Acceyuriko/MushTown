@@ -95,7 +95,7 @@ public partial class MushTownGame
             if (_shotHurtPre) return;
             var standGround = _mover.Ground;
             float standY = _mover.Y;
-            ApplyHurt(10, first.Uid);
+            ApplyHurt(_mobData[first.Mob].Touch, first.Uid, first.Mob); // the real formula: the shot shows the real number
             if (_shotAction != "stand1") // --action: the pose a moving or swinging player keeps while hurt, on the ground
             {
                 _mover.Reset();

@@ -11,15 +11,15 @@ public class HurtTests
         var chara = new CharaSlot { Hp = 100 };
         var guard = new HurtGuard();
 
-        Assert.AreEqual(10L, guard.Apply(chara, 10, 0));
+        Assert.AreEqual(10L, guard.Apply(chara, 10));
         Assert.AreEqual(90L, chara.Hp);
 
-        Assert.AreEqual(0L, guard.Apply(chara, 10, 0));
+        Assert.AreEqual(0L, guard.Apply(chara, 10));
         Assert.AreEqual(90L, chara.Hp, "the second touch inside the window must not change HP");
 
         for (int i = 0; i < HurtGuard.HurtFrames; i++) guard.Tick();
         Assert.IsFalse(guard.Invincible);
-        Assert.AreEqual(10L, guard.Apply(chara, 10, 0));
+        Assert.AreEqual(10L, guard.Apply(chara, 10));
         Assert.AreEqual(80L, chara.Hp);
     }
 
@@ -66,12 +66,12 @@ public class HurtTests
         var chara = new CharaSlot { Hp = 100 };
         var guard = new HurtGuard();
         Assert.IsFalse(guard.Invincible);
-        guard.Apply(chara, 10, 0);
+        guard.Apply(chara, 10);
         Assert.AreEqual(60, HurtGuard.HurtFrames);
         Assert.AreEqual(60, guard.LeftFrames);
         for (int i = 0; i < 59; i++) guard.Tick();
         Assert.IsTrue(guard.Invincible, "frame 59: still hurt");
-        Assert.AreEqual(0L, guard.Apply(chara, 10, 0));
+        Assert.AreEqual(0L, guard.Apply(chara, 10));
         Assert.AreEqual(1, guard.LeftFrames, "a blocked touch does not restart the state");
         guard.Tick();
         Assert.IsFalse(guard.Invincible, "frame 60: over");

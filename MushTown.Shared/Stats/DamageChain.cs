@@ -28,6 +28,74 @@ public readonly record struct DamageResult(
     double LevelMultiplier,
     long TotalDamage);
 
+// The mob touch numbers (a mob hits the player), all in one place.
+// Source: StrategyWiki MapleStory/Formulas, section Defense, checked against BWIKI "game non-damage formulas"
+// 1.10.1 (research/mob-touch-damage.md section 7). The numbers in the tables are a paraphrase; there is no verbatim
+// text. alpha = player level - mob level.
+//   min = A x (0.85 x mobAtk - min(B x DEF, 0.68 x mobAtk))
+//   max = A x (mobAtk - min(B x DEF, 0.80 x mobAtk))
+// The map modifier (Arcane Force) multiplies A. Two assumptions the page does not state: the damage is spread uniformly
+// between the min and the max, and a touch is hit against the physical DEF (one DEF value).
+public static class MobTouch
+{
+    public const double MinAtkShare = 0.85;
+    public const double MinDefCap = 0.68; // B x DEF cuts at most 68% of the mob attack in the min
+    public const double MaxDefCap = 0.80; // and 80% in the max
+
+    // A: the overall level-gap factor.
+    public static double A(int alpha) => alpha switch
+    {
+        >= 10 => 0.775,
+        >= 0 => 0.85 - 0.0075 * alpha,
+        >= -15 => 0.85,
+        >= -20 => 0.8575,
+        >= -25 => 0.865,
+        >= -30 => 0.8725,
+        _ => 0.88,
+    };
+
+    // B: how much of the DEF counts (it falls only when the player is the lower level).
+    public static double B(int alpha) => alpha switch
+    {
+        >= 0 => 1.0,
+        >= -10 => 1.0 + 0.01 * alpha,
+        >= -29 => 1.1 + 0.02 * alpha,
+        _ => 0.5,
+    };
+
+    // Arcane Force map modifier by the force met, in whole percent (the page says "rounded down"; the formula
+    // player ARC / map barrierArc x 100 is our reading, not the page's). A map with no barrierArc has no force: x1.
+    public static double ArcaneForce(int barrierArc, int playerArc)
+    {
+        if (barrierArc <= 0) return 1.0;
+        long pct = (long)playerArc * 100 / barrierArc;
+        return pct switch
+        {
+            < 10 => 2.8,
+            < 30 => 2.4,
+            < 50 => 1.8,
+            < 70 => 1.6,
+            < 100 => 1.4,
+            < 110 => 1.0,
+            < 130 => 0.8,
+            < 150 => 0.4,
+            _ => 0.0, // 150% and more: the mob does the minimum
+        };
+    }
+
+    // One touch before the damage-taken zone: roll01 (0..1) picks the spot between the min and the max.
+    // At least 1 (the 150% force and a weak mob land on 1).
+    public static long Damage(long mobAtk, int mobLevel, int playerLevel, double def, int barrierArc, int playerArc, double roll01)
+    {
+        int alpha = playerLevel - mobLevel;
+        double a = A(alpha) * ArcaneForce(barrierArc, playerArc);
+        double b = B(alpha);
+        double min = a * (MinAtkShare * mobAtk - Math.Min(b * def, MinDefCap * mobAtk));
+        double max = a * (mobAtk - Math.Min(b * def, MaxDefCap * mobAtk));
+        return Math.Max(1L, (long)Math.Floor(min + (max - min) * roll01 + 1e-9)); // 1e-9: 0.85 x 12720 must not land on 10811.999...
+    }
+}
+
 // Pure 8-step damage chain. PanelRange reads the stat snapshot directly;
 // the production chain reads Build and shares Panel() with the panel.
 public static class DamageChain
