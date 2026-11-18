@@ -70,6 +70,7 @@ public partial class MushTownGame
         if (StatTables.AttackSpeed(CurrentJob().Main == StatKey.INT, WornWeapon(chara)?.AttackSpeed ?? 0) is { } speed)
             mods.Add(speed);
         mods.AddRange(ItemData.EquipModifiers(chara.Equips, _items));
+        mods.AddRange(SetRules.Modifiers(_sets, chara.Equips));
         if (_hasWeapon) // the weapon type's own crit rate (a wand has 5%)
             mods.Add(new(StatKey.CRIT_RATE, StatValueType.FLAT, StatTables.Weapon(_weaponType).CritPct, StatSource.Equipment));
 

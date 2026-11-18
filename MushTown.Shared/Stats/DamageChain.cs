@@ -83,6 +83,17 @@ public static class MobTouch
         };
     }
 
+    public const double MaxDodgePct = 90.0;
+
+    // The chance, in percent, that a touch is dodged. Source: StrategyWiki MapleStory/Formulas, Dodge Rate (not
+    // verified: the page text came through a fetch tool, research/acc-eva-mdd.md section 2.2):
+    //   [sqrt(DEX + 2 x LUK) - sqrt(mob accuracy) - 2 x (mob level - player level)] x (1 + Evasion%), at most 90%.
+    // The page's Evasion% has no source in this game yet, so it counts as 0. Below 0 counts as 0 (our reading).
+    // The 2%p the page says a lower-level player loses is not applied. The formula's result is the
+    // result: a much lower mob is dodged 90% of the time, a same-level mob with a high accuracy 0%.
+    public static double DodgeChance(long dex, long luk, int mobAcc, int mobLevel, int playerLevel) =>
+        Math.Clamp(Math.Sqrt(dex + 2.0 * luk) - Math.Sqrt(mobAcc) - 2.0 * (mobLevel - playerLevel), 0.0, MaxDodgePct);
+
     // One touch before the damage-taken zone: roll01 (0..1) picks the spot between the min and the max.
     // At least 1 (the 150% force and a weak mob land on 1).
     public static long Damage(long mobAtk, int mobLevel, int playerLevel, double def, int barrierArc, int playerArc, double roll01)

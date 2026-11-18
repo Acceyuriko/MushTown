@@ -1,7 +1,7 @@
 namespace MushTown.Shared;
 
 // One equipment set (assets/set/<id>.json, exported from Etc.wz SetItemInfo.img):
-// its parts, and the effect lines each piece count adds. Only displayed so far.
+// its parts, and the effect lines each piece count adds.
 public sealed class SetData
 {
     public int Id { get; set; }
@@ -45,6 +45,39 @@ public static class SetRules
 
     public static bool TierActive(SetData set, SetTier tier, IReadOnlyCollection<int>? worn) =>
         WornCount(set, worn) >= tier.Count;
+
+    // The stat records of every set effect that is on: each tier whose piece count is reached adds its own lines
+    // (the tiers add up). Wearing a piece off drops the count, so the tiers above it are gone on the next refresh.
+    public static IEnumerable<StatModifier> Modifiers(IReadOnlyDictionary<int, SetData> sets, IReadOnlyCollection<int>? worn) =>
+        sets.Values.SelectMany(set => set.Tiers
+            .Where(tier => TierActive(set, tier, worn))
+            .SelectMany(tier => tier.Effects.SelectMany(e => Records(e, $"{set.Name} ({tier.Count})"))));
+
+    // incMDD, incACC and incEVA have no stat key: the official game removed those stats (research acc-eva-mdd),
+    // so they stay tooltip text. Ignore defense is a multiplier: two 10% lines make 1 - 0.9 x 0.9.
+    private static StatModifier[] Records(SetEffect e, string label)
+    {
+        StatModifier Rec(StatKey key, StatValueType type, double value) => new(key, type, value, StatSource.Set, label);
+        double v = e.Value;
+        return e.Key switch
+        {
+            "incPAD" => new[] { Rec(StatKey.ATT, StatValueType.FLAT, v) },
+            "incMAD" => new[] { Rec(StatKey.MATT, StatValueType.FLAT, v) },
+            "incPDD" => new[] { Rec(StatKey.DEF, StatValueType.FLAT, v) },
+            "incINT" => new[] { Rec(StatKey.INT, StatValueType.FLAT, v) },
+            "incAllStat" => new[]
+            {
+                Rec(StatKey.STR, StatValueType.FLAT, v), Rec(StatKey.DEX, StatValueType.FLAT, v),
+                Rec(StatKey.INT, StatValueType.FLAT, v), Rec(StatKey.LUK, StatValueType.FLAT, v),
+            },
+            "incMHPr" => new[] { Rec(StatKey.MAX_HP, StatValueType.PERCENT, v) },
+            "incMMPr" => new[] { Rec(StatKey.MAX_MP, StatValueType.PERCENT, v) },
+            "nbdR" => new[] { Rec(StatKey.NORMAL_PCT, StatValueType.FLAT, v) },
+            "ignoreTargetDEF" => new[] { Rec(StatKey.IED_PCT, StatValueType.MULTIPLIER, 1.0 - v / 100.0) },
+            "incMDD" or "incACC" or "incEVA" => Array.Empty<StatModifier>(),
+            _ => throw new InvalidDataException($"set effect {e.Key} is not supported"), // the exporter refuses it too
+        };
+    }
 
     // The set of an item, or null when it belongs to none. An item whose set
     // is not in the table is a stale export.

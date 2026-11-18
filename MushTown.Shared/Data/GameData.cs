@@ -233,6 +233,7 @@ public sealed class MobData
     public long MaxHp { get; set; }
     public double Def { get; set; } // fraction of damage blocked, 0-1 (PDRate/100)
     public long Exp { get; set; } // kill award (the WZ exp node)
+    public int Acc { get; set; } // WZ info/acc: the accuracy that cuts the player's dodge chance (0 = old JSON)
     public long Touch { get; set; } // contact damage (flat: mobs roll no variance in v1)
     public int Speed { get; set; } // walk px/s (100 + the WZ speed percent)
     public int Aggro { get; set; } // chase range in x px (0 = never chases)

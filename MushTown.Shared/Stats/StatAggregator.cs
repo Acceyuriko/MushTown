@@ -64,6 +64,7 @@ public enum StatSource
 {
     Base,
     Equipment,
+    Set, // the piece-count effects of an equipment set
     Skill, // class skills, Heroic and Link
     Buff,
     UnionMember,

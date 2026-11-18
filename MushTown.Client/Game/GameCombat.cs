@@ -67,16 +67,16 @@ public partial class MushTownGame
             int alpha = k < 0.7f ? 255 : (int)(255 * (1 - (k - 0.7f) / 0.3f));
             var tint = new Color(255, 255, 255, alpha);
             float baseY = n.Y - FloatingNumber.RisePx * k - _camera.Y;
-            if (n.Skin <= 0)
-            {
-                DrawBasicNumbers(n.Text, dmg, n.X, baseY, tint);
-                continue;
-            }
-            if (dmg.Words.FirstOrDefault(w => w.Name == n.Text) is { } word)
+            if (dmg.Words.FirstOrDefault(w => w.Name == n.Text) is { } word) // the hurt skin has Miss; the base skin has no words
             {
                 var wordTex = _textures[word.Image];
                 _spriteBatch.Draw(wordTex, new Vector2(n.X - word.Ox - _camera.X, baseY - word.Oy),
                     null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+                continue;
+            }
+            if (n.Skin <= 0)
+            {
+                DrawBasicNumbers(n.Text, dmg, n.X, baseY, tint);
                 continue;
             }
             if (!long.TryParse(n.Text, out long damage)) continue;
@@ -180,12 +180,23 @@ public partial class MushTownGame
     // zone, the number shows what got through, death respawns at the map spawn with full pools (buffs
     // stay). Returns true on death: the caller drops the rest of the frame's touches (judged at the
     // corpse, not the spawn). A Touch-0 mob is harmless.
-    private bool ApplyHurt(long mobAtk, int mobUid, int mobId)
+    // The touch rolls the dodge first (MobTouch.DodgeChance): a dodged touch does no damage, no knockback and
+    // gives no invincible time; the word Miss rises. dodgeRoll (0..1) is the roll; the shots pass one.
+    private bool ApplyHurt(long mobAtk, int mobUid, int mobId, double? dodgeRoll = null)
     {
         var chara = _save?.Slots[_slot];
-        if (chara == null || _death.Dead) return false; // CLI sessions have no one to hurt, and a tombstone cannot be hit
+        if (chara == null || _death.Dead || _hurt.Invincible) return false; // CLI sessions have no one to hurt, a tombstone cannot be hit, and an invincible player is not hit (so no dodge either)
+        var mob = _mobData[mobId];
+        if (mobAtk > 0 && (dodgeRoll ?? Random.Shared.NextDouble()) * 100.0
+            < MobTouch.DodgeChance(_stats.IntValue(StatKey.DEX), _stats.IntValue(StatKey.LUK), mob.Acc, mob.Level, chara.Level))
+        {
+            var miss = TakeNumber();
+            miss.Text = "Miss"; miss.Skin = FloatingNumber.HurtSkin;
+            miss.X = _mover.X; miss.Y = _mover.Y - 90;
+            return false;
+        }
         long damage = mobAtk <= 0 ? 0 : DamageChain.TakenDamage(_stats,
-            MobTouch.Damage(mobAtk, _mobData[mobId].Level, chara.Level, OwnDef(), _map.Info.BarrierArc, PlayerArc, Random.Shared.NextDouble()));
+            MobTouch.Damage(mobAtk, mob.Level, chara.Level, OwnDef(), _map.Info.BarrierArc, PlayerArc, Random.Shared.NextDouble()));
         long dealt = _hurt.Apply(chara, damage);
         if (dealt == 0) return false; // invincible or harmless touch: no number, no death
         var num = TakeNumber();

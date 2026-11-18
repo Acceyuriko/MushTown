@@ -422,8 +422,18 @@ public static partial class Export
                 return false;
             hurt.Digits.Add(new DmgDigit { Image = path, Oy = origin.Y });
         }
+        const string missNode = "BasicEff.img/NoViolet0/Miss"; // the word a dodged touch shows
+        var missOrigin = WzNodeUtil.ResolveUol(effect.Find(missNode))?.Nodes["origin"]?.Value as Wz_Vector;
+        if (missOrigin == null)
+        {
+            Console.WriteLine($"{missNode}: no origin");
+            return false;
+        }
+        if (!UiPng.Save(effect, "Effect", missNode, Path.Combine(outDir, "effect/hurtdmg/Miss.png")))
+            return false;
+        hurt.Words.Add(new DmgWord { Name = "Miss", Image = "effect/hurtdmg/Miss.png", Ox = missOrigin.X, Oy = missOrigin.Y });
         WriteJson(Path.Combine(outDir, "effect", "hurtdmg.json"), hurt);
-        Console.WriteLine("hurt damage skin: NoViolet0 0-9");
+        Console.WriteLine("hurt damage skin: NoViolet0 0-9 and Miss");
         return true;
     }
 }

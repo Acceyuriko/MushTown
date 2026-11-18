@@ -192,4 +192,40 @@ public class MobTouchTests
         Assert.AreEqual(1020, StatAggregator.Aggregate(new[] { baseDef, Record(StatTables.Hero) }).IntValue(StatKey.DEF));
         Assert.AreEqual(1000, StatAggregator.Aggregate(new[] { baseDef, Record(StatTables.FirePoisonMage) }).IntValue(StatKey.DEF));
     }
+
+    // The dodge chance (StrategyWiki Dodge Rate): [sqrt(DEX + 2 LUK) - sqrt(acc) - 2 x (mob level - player level)], 0..90.
+    [TestMethod]
+    public void Dodge_LukCountsDoubleDexAndAccCutsIt()
+    {
+        Assert.AreEqual(10.0, MobTouch.DodgeChance(100, 0, 0, 200, 200), 1e-9); // sqrt(100)
+        Assert.AreEqual(10.0, MobTouch.DodgeChance(0, 50, 0, 200, 200), 1e-9); // sqrt(2 x 50): a LUK point is two DEX points
+        Assert.AreEqual(6.0, MobTouch.DodgeChance(100, 0, 16, 200, 200), 1e-9); // 10 - sqrt(16)
+    }
+
+    [TestMethod]
+    public void Dodge_LevelGapMovesItTwoPointsPerLevel()
+    {
+        Assert.AreEqual(20.0, MobTouch.DodgeChance(100, 0, 0, 195, 200), 1e-9); // 5 levels above the mob: +10
+        Assert.AreEqual(4.0, MobTouch.DodgeChance(100, 0, 0, 203, 200), 1e-9);
+        Assert.AreEqual(0.0, MobTouch.DodgeChance(100, 0, 0, 205, 200), 1e-9);
+    }
+
+    [TestMethod]
+    public void Dodge_NeverBelowZeroNeverAboveNinety()
+    {
+        Assert.AreEqual(0.0, MobTouch.DodgeChance(0, 0, 100, 200, 200)); // -10 counts as 0
+        Assert.AreEqual(0.0, MobTouch.DodgeChance(100, 0, 0, 300, 200));
+        Assert.AreEqual(90.0, MobTouch.DodgeChance(100, 0, 0, 100, 200)); // 10 + 200
+        Assert.AreEqual(90.0, MobTouch.DodgeChance(100, 0, 0, 160, 200)); // 10 + 80 = 90 exactly
+    }
+
+    // Lv 200 mage with DEX 816 / LUK 980 (example values): sqrt(816 + 1960) = 52.6878.
+    //   Snail (level 1, acc 10):        52.6878 - 3.1623 + 398 = 447.5 -> the 90 cap
+    //   Happy Erda (level 200, acc 723): 52.6878 - 26.8887 = 25.7991
+    [TestMethod]
+    public void Dodge_LowMobIsCappedSameLevelHighAccMobIsLow()
+    {
+        Assert.AreEqual(90.0, MobTouch.DodgeChance(816, 980, 10, 1, 200));
+        Assert.AreEqual(25.7991, MobTouch.DodgeChance(816, 980, 723, 200, 200), 1e-4);
+    }
 }

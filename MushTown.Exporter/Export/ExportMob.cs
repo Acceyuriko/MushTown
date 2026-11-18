@@ -15,7 +15,7 @@ public static partial class Export
     // Every stat except Aggro comes from the mob's info node in the WZ: MaxHp =
     // maxHP, Exp = exp, Def = PDRate/100, Touch = PADamage, Speed = 100 + speed
     // px/s (the WZ speed is a percent; the player walks 140), Boss = boss,
-    // Level = level, ElemAttr = elemAttr. Aggro (chase range in x px) has no WZ
+    // Level = level, Acc = acc, ElemAttr = elemAttr. Aggro (chase range in x px) has no WZ
     // field, so it stays a v1 feel number.
     // Boss pin: the WZ carries no boss life, so v1 pins Mushmom to map
     // 2000000 (main ground y=527 runs -212..1440; the pin stands east of the
@@ -79,6 +79,7 @@ public static partial class Export
             MaxHp = maxHp,
             Def = Int(info, "PDRate", 0) / 100.0,
             Exp = Int(info, "exp", 0),
+            Acc = Int(info, "acc", 0),
             Touch = Int(info, "PADamage", 0),
             Speed = 100 + Int(info, "speed", 0),
             Aggro = Mobs[mobId].aggro,

@@ -113,6 +113,7 @@ public static class StatDisplay
     public static string SourceName(StatSource source) => source switch
     {
         StatSource.Equipment => "Equipment",
+        StatSource.Set => "Set Effect",
         StatSource.Skill => "Skill",
         StatSource.Buff => "Buff",
         StatSource.UnionMember => "Union Member",

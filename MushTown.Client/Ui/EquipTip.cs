@@ -39,7 +39,7 @@ public sealed class EquipTip : Component
 
         var stats = new List<string>();
         if (item.Category != "") stats.Add("Equipment Category: " + item.Category);
-        if (item.AttackSpeed != 0) stats.Add("Attack Speed: " + item.AttackSpeed);
+        if (item.AttackSpeed != 0) stats.Add("Attack Speed: " + StatTables.AttackSpeedStage(item.AttackSpeed));
         stats.AddRange(ItemLines.Bonuses(item));
         var desc = item.Desc.Length == 0 ? new List<string>() : gfx.Ui.Wrap(item.Desc, _lay.Get("descW", 290));
         int lineGap = _lay.Get("lineGap", 16);

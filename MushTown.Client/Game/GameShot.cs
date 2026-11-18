@@ -2,7 +2,7 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Shot staging: frozen local worlds for --hit/--skill/--drop/--dmg/--hurt/--hurtblink/--hurtpre/--aiticks.
+// Shot staging: frozen local worlds for --hit/--skill/--drop/--dmg/--hurt/--hurtblink/--hurtmiss/--hurtpre/--aiticks.
 public partial class MushTownGame
 {
     // Shot mode: a frozen local world. --hit plants the player mid-swing next
@@ -95,7 +95,7 @@ public partial class MushTownGame
             if (_shotHurtPre) return;
             var standGround = _mover.Ground;
             float standY = _mover.Y;
-            ApplyHurt(_mobData[first.Mob].Touch, first.Uid, first.Mob); // the real formula: the shot shows the real number
+            ApplyHurt(_mobData[first.Mob].Touch, first.Uid, first.Mob, _shotHurtMiss ? 0.0 : 1.0); // the real formula; the dodge roll is fixed so a shot never flips: 0 dodges, 1 never does
             if (_shotAction != "stand1") // --action: the pose a moving or swinging player keeps while hurt, on the ground
             {
                 _mover.Reset();
