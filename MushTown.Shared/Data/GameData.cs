@@ -459,8 +459,9 @@ public sealed class DmgData
     public List<DmgDigit> Digits { get; set; } = new();
 
     // The other WZ sets of a collected skin (assets/effect/dmg<id>.json):
-    // Digits is NoRed0, then the big normal, the small and the big critical
-    // digits. The base skin file has none of these.
+    // Digits is NoRed0; Red1, Cri0 and Cri1 are the big normal, small
+    // critical and big critical digits. The base skin carries Cri0, Cri1 and
+    // Effect3 (NoCri1/effect) so it can show a critical number too.
     public List<DmgDigit> Red1 { get; set; } = new(); // NoRed1
     public List<DmgDigit> Cri0 { get; set; } = new(); // NoCri0
     public List<DmgDigit> Cri1 { get; set; } = new(); // NoCri1

@@ -115,6 +115,7 @@ public partial class MushTownGame
     // Damage numbers: the digits of the number's skin, rising and fading
     // over FloatingNumber.LifeMs. Skin 0 and the hurt skin keep the original
     // left-to-right layout; collected skins use their origins and spacing.
+    // A critical number uses NoCri1 plus the skin's effect3 prefix.
     private void DrawNumbers()
     {
         if (_numbers.Count == 0) return;
@@ -130,6 +131,13 @@ public partial class MushTownGame
                 var wordTex = _textures[word.Image];
                 _spriteBatch.Draw(wordTex, new Vector2(n.X - word.Ox - _camera.X, baseY - word.Oy),
                     null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+                continue;
+            }
+            if (n.Crit)
+            {
+                if (!long.TryParse(n.Text, out long critDamage)) continue;
+                DrawSkinNumbers(dmg.Unit != null ? DmgUnit.Format(critDamage) : n.Text, dmg, n.X, baseY, tint,
+                    dmg.Cri1, true);
                 continue;
             }
             if (n.Skin <= 0)
@@ -164,14 +172,16 @@ public partial class MushTownGame
     // A unit skin's "." and K/M/B come from DmgUnit: DotSpace after the dot,
     // and the unit letter follows its number with no extra gap, bottom-aligned
     // with the digits.
-    private void DrawSkinNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint)
+    private void DrawSkinNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint,
+        IReadOnlyList<DmgDigit>? digits = null, bool crit = false)
     {
+        var set = digits ?? dmg.Digits;
         var glyphs = new List<(Texture2D Tex, int Ox, int Oy, int SpaceBefore, int SpaceAfter)>();
         foreach (char c in text)
         {
             if (c is >= '0' and <= '9')
             {
-                var d = dmg.Digits[c - '0'];
+                var d = set[c - '0'];
                 glyphs.Add((_textures[d.Image], d.Ox, d.Oy, 0, dmg.NumberSpace));
             }
             else if (c == '.' && dmg.Unit != null)
@@ -186,7 +196,7 @@ public partial class MushTownGame
                 var d = dmg.Unit.Images[unit];
                 var tex = _textures[d.Image];
                 // The letter's bottom edge sits on the digits' bottom edge.
-                var digit = dmg.Digits[0];
+                var digit = set[0];
                 int oy = tex.Height - (_textures[digit.Image].Height - digit.Oy);
                 glyphs.Add((tex, d.Ox, oy, 0, 0));
             }
@@ -196,6 +206,12 @@ public partial class MushTownGame
             totalW += glyphs[i].SpaceBefore + glyphs[i].Tex.Width
                 + (i < glyphs.Count - 1 ? glyphs[i].SpaceAfter : 0);
         float x = centerX - totalW / 2f - _camera.X;
+        if (crit && dmg.Effect3 is { } effect)
+        {
+            var effectTex = _textures[effect.Image];
+            _spriteBatch.Draw(effectTex, new Vector2(x - effectTex.Width, baseY - effect.Oy),
+                null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+        }
         foreach (var g in glyphs)
         {
             x += g.SpaceBefore;
@@ -213,12 +229,14 @@ public partial class MushTownGame
         if (_dmg.TryGetValue(skin, out var data)) return data;
         string file = skin == FloatingNumber.HurtSkin ? "hurtdmg.json" : skin == 0 ? "dmg.json" : $"dmg{skin}.json";
         data = LoadJson<DmgData>(Path.Combine(_assetsDir, "effect", file));
-        if (data.Digits.Count != 10)
-            throw new InvalidDataException($"damage skin {skin} has {data.Digits.Count} digits, want 10");
+        if (data.Digits.Count != 10 || (skin != FloatingNumber.HurtSkin && data.Cri1.Count != 10))
+            throw new InvalidDataException($"damage skin {skin} has {data.Digits.Count} normal and {data.Cri1.Count} critical digits, want 10");
         foreach (var d in data.Digits) LoadTexture(d.Image);
+        foreach (var d in data.Cri1) LoadTexture(d.Image);
         foreach (var w in data.Words) LoadTexture(w.Image);
         if (data.Unit != null)
             foreach (var u in data.Unit.Images) LoadTexture(u.Image);
+        if (data.Effect3 != null) LoadTexture(data.Effect3.Image);
         if (data.Sample != null) LoadTexture(data.Sample.Image);
         _dmg[skin] = data;
         return data;
@@ -407,7 +425,7 @@ public partial class MushTownGame
         else if (_localWorld != null)
         {
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), id, pct))
-                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
             DrainDrops(_localWorld);
         }
     }
@@ -428,7 +446,7 @@ public partial class MushTownGame
         else if (_localWorld != null)
         {
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), wz.SkillId, pct))
-                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
             foreach (var l in _localWorld.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
             DrainDrops(_localWorld);
         }

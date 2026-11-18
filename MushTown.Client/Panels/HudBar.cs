@@ -8,8 +8,7 @@ namespace MushTown.Client;
 // Bottom bar + panel dispatch (panels live in HudBags/HudQuest). Art is
 // official (StatusBar3, UIInventory, UICharacterInfo); all text baked.
 // Plate/slot positions are WZ vectors; the rest is tuned rects. HP/MP
-// numbers and EXP are live; nothing drains HP until W13 mob hits, so the
-// bars always draw full.
+// numbers and EXP are live; the HP/MP fills ease toward the live share.
 public partial class MushTownGame
 {
     // Must match the exporter: the HUD names come from ExportHud. Every
@@ -28,6 +27,8 @@ public partial class MushTownGame
     private readonly Dictionary<int, SetData> _sets = new(); // assets/set/<id>.json, loaded with the items
     private CashShopCatalog _cashShop = new();
     private ManifestData _manifest = null!;
+    private double _hpShown = -1, _mpShown = -1; // bar shares chase the live pools; -1 = not posed yet
+    private CharaSlot? _barOwner; // a new character snaps both bars instead of sliding from the old one
 
     // Scanned tab rosters (LoadItemDefs): consumables slot USE, equips slot
     // EQUIP, both in id order. Clicks and draws share them, so cell i is
@@ -116,6 +117,7 @@ public partial class MushTownGame
 
     private void UpdateHud(KeyboardState kb, bool click, bool held, int gx, int gy, float dtMs)
     {
+        UpdateBarAnim(dtMs);
         UpdateHudHover(gx, gy); // every frame (clicks return early below)
         if (_cashUseId != 0) UpdateCashUseKeys(kb, dtMs); // the CASH Utility input keeps its keys
         MenuKeys(kb); // the open MENU window takes the arrows, Tab and Enter
@@ -455,10 +457,38 @@ public partial class MushTownGame
         return null;
     }
 
-    // The share of the bars: the live pool over its max (CLI sessions have no character: full).
-    private (long Value, long Max) HpFill() => (_save?.Slots[_slot]?.Hp ?? MaxHpNow(), MaxHpNow());
+    // The HP/MP bars chase the live share instead of jumping: a simple
+    // exponential ease, snapped when the character changes.
+    private void UpdateBarAnim(float dtMs)
+    {
+        var chara = _save?.Slots[_slot];
+        long maxHp = MaxHpNow(), maxMp = MaxMpNow();
+        if (_barOwner != chara || _hpShown < 0)
+        {
+            _barOwner = chara;
+            _hpShown = BarShare(chara?.Hp ?? maxHp, maxHp);
+            _mpShown = BarShare(chara?.Mp ?? maxMp, maxMp);
+            return;
+        }
+        double step = 1 - Math.Exp(-dtMs / 80.0);
+        _hpShown += (BarShare(chara?.Hp ?? maxHp, maxHp) - _hpShown) * step;
+        _mpShown += (BarShare(chara?.Mp ?? maxMp, maxMp) - _mpShown) * step;
+    }
 
-    private (long Value, long Max) MpFill() => (_save?.Slots[_slot]?.Mp ?? MaxMpNow(), MaxMpNow());
+    private static double BarShare(long value, long max) => max <= 0 ? 0 : Math.Clamp((double)value / max, 0, 1);
+
+    // The share of the bars: the displayed share over max (CLI sessions have no character: full).
+    private (long Value, long Max) HpFill()
+    {
+        long max = MaxHpNow();
+        return (_hpShown < 0 ? (_save?.Slots[_slot]?.Hp ?? max) : (long)Math.Round(_hpShown * max), max);
+    }
+
+    private (long Value, long Max) MpFill()
+    {
+        long max = MaxMpNow();
+        return (_mpShown < 0 ? (_save?.Slots[_slot]?.Mp ?? max) : (long)Math.Round(_mpShown * max), max);
+    }
 
     private string HpText()
     {

@@ -404,8 +404,13 @@ public static partial class Export
                 return false;
             data.Digits.Add(new DmgDigit { Image = path, Oy = origin.Y });
         }
+        if (!ReadDigits(effect, "Effect", "BasicEff.img/NoCri0", "effect/dmg", "cri0_", data.Cri0, outDir)
+            || !ReadDigits(effect, "Effect", "BasicEff.img/NoCri1", "effect/dmg", "cri1_", data.Cri1, outDir))
+            return false;
+        data.Effect3 = ReadPicture(effect, "Effect", "BasicEff.img/NoCri1/effect", "effect/dmg/effect3.png", outDir);
+        if (data.Effect3 == null) return false;
         WriteJson(Path.Combine(outDir, "effect", "dmg.json"), data);
-        Console.WriteLine("damage skin: NoRed0 0-9");
+        Console.WriteLine("damage skin: NoRed0, NoCri0 and NoCri1 0-9 plus effect3");
 
         var hurt = new DmgData();
         for (int d = 0; d <= 9; d++)

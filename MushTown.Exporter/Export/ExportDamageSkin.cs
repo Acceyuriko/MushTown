@@ -7,7 +7,8 @@ namespace MushTown.Exporter;
 // of Etc/DamageSkin.img/<id>, and the coupon that gives each skin. Every
 // picture goes through UiPng, which follows _outlink: many nodes borrow
 // another skin's picture (1426 uses skin 0 digits and 208's sample), so no
-// path is built from the skin id. The base skin (dmg.json) is not touched.
+// path is built from the skin id. The base skin (dmg.json) is exported by
+// ExportUi.ExportDamageSkin.
 public static partial class Export
 {
     private static readonly DamageSkinRow[] DamageSkinList = ExportList.LoadDamageSkins();
@@ -34,20 +35,20 @@ public static partial class Export
         string dir = $"effect/dmg{skin}";
         var data = new DmgData();
         // NoRed0 keeps the plain file names (the base skin does the same).
-        if (!ReadDigits(etc, $"{root}/effect/NoRed0", dir, "", data.Digits, outDir)
-            || !ReadDigits(etc, $"{root}/effect/NoRed1", dir, "red1_", data.Red1, outDir)
-            || !ReadDigits(etc, $"{root}/effect/NoCri0", dir, "cri0_", data.Cri0, outDir)
-            || !ReadDigits(etc, $"{root}/effect/NoCri1", dir, "cri1_", data.Cri1, outDir))
+        if (!ReadDigits(etc, "Etc", $"{root}/effect/NoRed0", dir, "", data.Digits, outDir)
+            || !ReadDigits(etc, "Etc", $"{root}/effect/NoRed1", dir, "red1_", data.Red1, outDir)
+            || !ReadDigits(etc, "Etc", $"{root}/effect/NoCri0", dir, "cri0_", data.Cri0, outDir)
+            || !ReadDigits(etc, "Etc", $"{root}/effect/NoCri1", dir, "cri1_", data.Cri1, outDir))
             return false;
         foreach (string word in DamageSkinWords)
         {
             if (etc.Find($"{root}/effect/NoRed0/{word}") == null) continue; // a skin may lack shot/counter
-            var picture = ReadPicture(etc, $"{root}/effect/NoRed0/{word}", $"{dir}/word_{word}.png", outDir);
+            var picture = ReadPicture(etc, "Etc", $"{root}/effect/NoRed0/{word}", $"{dir}/word_{word}.png", outDir);
             if (picture == null) return false;
             data.Words.Add(new DmgWord { Name = word, Image = picture.Image, Ox = picture.Ox, Oy = picture.Oy });
         }
-        data.Effect3 = ReadPicture(etc, $"{root}/effect/NoCri1/effect3", $"{dir}/effect3.png", outDir);
-        data.Sample = ReadPicture(etc, $"{root}/sample", $"{dir}/sample.png", outDir);
+        data.Effect3 = ReadPicture(etc, "Etc", $"{root}/effect/NoCri1/effect3", $"{dir}/effect3.png", outDir);
+        data.Sample = ReadPicture(etc, "Etc", $"{root}/sample", $"{dir}/sample.png", outDir);
         if (data.Effect3 == null || data.Sample == null) return false;
         data.NumberSpace = Int(etc.Find($"{root}/effect/NoRed0"), "numberSpace");
         var custom = etc.Find($"{root}/effect/NoCustom/NoRed0");
@@ -56,7 +57,7 @@ public static partial class Export
             var unit = new DmgUnit { DotSpace = Int(custom, "dotSpace"), NumberSpace = Int(custom, "numberSpace") };
             for (int u = 0; u <= 3; u++)
             {
-                var picture = ReadPicture(etc, $"{root}/effect/NoCustom/NoRed0/{u}", $"{dir}/unit_{u}.png", outDir);
+                var picture = ReadPicture(etc, "Etc", $"{root}/effect/NoCustom/NoRed0/{u}", $"{dir}/unit_{u}.png", outDir);
                 if (picture == null) return false;
                 unit.Images.Add(picture);
             }
@@ -68,11 +69,11 @@ public static partial class Export
     }
 
     // Digits 0-9 of one WZ set; a missing digit fails the export.
-    private static bool ReadDigits(WzRoot etc, string setNode, string dir, string prefix, List<DmgDigit> into, string outDir)
+    private static bool ReadDigits(WzRoot root, string category, string setNode, string dir, string prefix, List<DmgDigit> into, string outDir)
     {
         for (int d = 0; d <= 9; d++)
         {
-            var picture = ReadPicture(etc, $"{setNode}/{d}", $"{dir}/{prefix}{d}.png", outDir);
+            var picture = ReadPicture(root, category, $"{setNode}/{d}", $"{dir}/{prefix}{d}.png", outDir);
             if (picture == null) return false;
             into.Add(picture);
         }
@@ -81,11 +82,11 @@ public static partial class Export
 
     // One picture: saved under outDir/path, the WZ origin kept (0 when the
     // node has none, like some samples).
-    private static DmgDigit? ReadPicture(WzRoot etc, string node, string path, string outDir)
+    private static DmgDigit? ReadPicture(WzRoot root, string category, string node, string path, string outDir)
     {
-        if (!UiPng.TryRead(etc, "Etc", node, out _, out var origin))
+        if (!UiPng.TryRead(root, category, node, out _, out var origin))
             return null;
-        if (!UiPng.Save(etc, "Etc", node, Path.Combine(outDir, path)))
+        if (!UiPng.Save(root, category, node, Path.Combine(outDir, path)))
             return null;
         return new DmgDigit { Image = path, Ox = origin?.X ?? 0, Oy = origin?.Y ?? 0 };
     }

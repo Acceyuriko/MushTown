@@ -11,7 +11,7 @@ public static class Net
     public const byte Leave = 4;   // server -> client: int id (a peer is gone)
     public const byte Attack = 5;  // client -> server: no body (server judges from the last State)
     public const byte MobSpawn = 6; // server -> client: int uid, int mob, int map, float x, float y, long maxHp, long hp
-    public const byte MobHit = 7;  // server -> client: int uid, int map, long damage, long hpLeft (0 = dead), int attacker, long exp, int skill (0 = basic)
+    public const byte MobHit = 7;  // server -> client: int uid, int map, long damage, long hpLeft (0 = dead), int attacker, long exp, int skill (0 = basic), byte crit
     public const byte Build = 8;   // client -> server: Build fields (resent on level-up/learn/buff)
     public const byte SkillCast = 9; // client -> server: int skill, int pct (cast-time damage pct, orbs folded in; buffs send 0)
     public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing
@@ -210,11 +210,12 @@ public readonly record struct AppearanceEvent(int Id, int Skin, int Hair, int Fa
 // One mob event from the server: a spawn (Spawn true, Mob/MaxHp set, HpLeft
 // is the live HP) or a hit (Spawn false, Damage/HpLeft set, HpLeft 0 means dead).
 // A hit also carries its Attacker id (kill credit goes to that client only),
-// the mob's Exp (awarded on the killing blow), and the Skill id (0 = basic
-// swing, else the skill whose hit spark each client plays on the mob).
+// the mob's Exp (awarded on the killing blow), the Skill id (0 = basic swing,
+// else the skill whose hit spark each client plays on the mob), and whether
+// the roll critted (the critical damage-number art).
 public readonly record struct MobEvent(
     bool Spawn, int Uid, int Mob, int Map, float X, float Y, long MaxHp, long Damage, long HpLeft,
-    int Attacker, long Exp, int Skill);
+    int Attacker, long Exp, int Skill, bool Crit = false);
 
 // One skill effect from the server: Attacker cast Skill at X/Y facing right
 // or left. The caster plays its own effect live and never gets this echo.

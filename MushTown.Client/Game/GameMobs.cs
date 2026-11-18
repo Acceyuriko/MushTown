@@ -109,7 +109,7 @@ public partial class MushTownGame
     // A skill hit also plants the skill's spark on the mob's body (skills
     // without spark art, like Scarring Sword, skip it). Our own hits feed
     // the combo orb while Combo Attack lives (its bonus hits don't recurse).
-    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill)
+    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
         m.Hp = hpLeft;
@@ -125,6 +125,7 @@ public partial class MushTownGame
         bool firstOfMob = !wzHit || !_numbers.Any(n => n.Age == 0 && n.X == m.X);
         var num = TakeNumber();
         num.Text = damage.ToString(); num.X = m.X; num.Y = headY - stack * FloatingNumber.StackPx;
+        num.Crit = crit;
         if (mine) num.Skin = Hero?.DamageSkin ?? 0;
         // A skill with a ball plays its special once at the landing (SpawnImpacts); each mob it hits gets its hit art.
         // Another WZ skill plants its hit art on each mob.

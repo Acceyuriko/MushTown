@@ -23,6 +23,7 @@ public partial class MushTownGame
             var num = TakeNumber();
             num.Text = _shotDmg.ToString();
             num.Skin = _shotDmgSkin ?? 0;
+            num.Crit = _shotCrit;
             num.X = _mover.X;
             num.Y = _mover.Y - 90;
         }
@@ -156,8 +157,8 @@ public partial class MushTownGame
                 if (world.IsDamageSkill(_shotSkill))
                 {
                     int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
-                    foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, true, new Random(0), CurrentBuild(), _shotSkill, pct))
-                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                    foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, true, new Random(0), ShotBuild(), _shotSkill, pct))
+                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
                     DrainDrops(world, animate: false);
                 }
             }
@@ -178,9 +179,9 @@ public partial class MushTownGame
                 var rng = new Random(0);
                 bool killed = false;
                 for (int i = 0; i < 20 && !killed; i++)
-                    foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, rng, CurrentBuild()))
+                    foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, rng, ShotBuild()))
                     {
-                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
                         killed |= h.HpLeft == 0;
                     }
                 if (!killed) throw new InvalidDataException($"--drop killed nothing in 20 swings, map {_mapId}");
@@ -199,8 +200,8 @@ public partial class MushTownGame
             }
             else
             {
-                foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, new Random(0), CurrentBuild()))
-                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, new Random(0), ShotBuild()))
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
                 DrainDrops(world, animate: false);
             }
         }
@@ -224,7 +225,7 @@ public partial class MushTownGame
         TryPayWzSkill(wz); // best-effort, like the window shots: the demo has no one to fail
         RunShotAi();
         int pct = (int)wz.Value("damage", wz.MaxLevel);
-        var build = CurrentBuild() with { WeaknessProp = 0 };
+        var build = ShotBuild() with { WeaknessProp = 0 };
         if (_shotWeak)
         {
             world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { WeaknessProp = 100 }, wz.SkillId, pct);
@@ -235,7 +236,7 @@ public partial class MushTownGame
         SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
         if (_shotFlyms == 0) _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
         foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(0), build, wz.SkillId, pct))
-            ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+            ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
         foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
         DrainDrops(world, animate: false);
         for (int left = _shotFlyms; left > 0; left -= 16)
@@ -259,6 +260,9 @@ public partial class MushTownGame
         for (int i = 0; i < _shotAiticks; i++) ShotTick(100);
     }
 
+    // The posed build; --crit forces a 100% crit rate so the real chain shows the critical number.
+    private Build ShotBuild() => _shotCrit ? CurrentBuild() with { CritPct = 100 } : CurrentBuild();
+
     // One world step at the posed feet: the balls that arrived strike (shown unless asked not to), the mobs move.
     private List<(MobWorld.Hit hit, int attacker)> ShotTick(int ms, bool showStrikes = true)
     {
@@ -267,7 +271,7 @@ public partial class MushTownGame
         var ev = world.Tick(ms, players);
         if (showStrikes)
         {
-            foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill);
+            foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit);
             DrainDrops(world, animate: false);
         }
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);

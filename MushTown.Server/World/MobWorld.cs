@@ -16,7 +16,8 @@ public sealed class MobWorld
     // One mob caught by a swing. HpLeft 0 means it died (no separate die message).
     // Exp is the mob's kill award (the killer's client claims it).
     // Skill is 0 for a basic swing, else the skill whose hit spark to play.
-    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob);
+    // Crit picks the critical damage-number art on every client.
+    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit);
 
     // One mob step (10Hz on the wire): Uid now stands at X/Y, facing along.
     public sealed record Move(int Uid, int Map, float X, float Y, bool FacingRight);
@@ -333,10 +334,11 @@ public sealed class MobWorld
             bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
             TryWeaken(m, build, rng);
-            long damage = Damage.Calc(rng.NextDouble(), rng.NextDouble(), m.Def, build, m.Level, m.ElemAttr,
+            var result = Damage.CalcResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, m.Level, m.ElemAttr,
                 AttackElement.Physical, m.Boss);
+            long damage = result.TotalDamage;
             m.Hp = Math.Max(0, m.Hp - damage);
-            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId));
+            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId, result.CritMultiplier > 1.0));
             if (m.Hp != 0) continue;
             _lives.RemoveAt(i);
             Bury(m, rng, attacker);
@@ -521,15 +523,16 @@ public sealed class MobWorld
     private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker,
         AttackElement element = AttackElement.Physical, double extraDmgPct = 0)
     {
-        long damage = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
+        var result = Damage.SkillResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
             m.Level, m.ElemAttr, element, m.Boss, extraDmgPct);
+        long damage = result.TotalDamage;
         m.Hp = Math.Max(0, m.Hp - damage);
         if (m.Hp == 0)
         {
             _lives.Remove(m);
             Bury(m, rng, attacker);
         }
-        return new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, tag, m.MobId);
+        return new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, tag, m.MobId, result.CritMultiplier > 1.0);
     }
 
     // One death's aftermath (swings and skills share it): a grave at home

@@ -35,6 +35,21 @@ public class CombatTests
         Assert.AreEqual(15, Damage.Calc(1.0, 0.0, 0.0, new Build(4, 4, 32, 50, 100, 0), -1)); // both stack
     }
 
+    // The judged hit carries the chain's crit result to the client.
+    [TestMethod]
+    public void MobWorld_Strike_CarriesCrit()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(7, """[{"MobId":100000,"X":0,"Cy":100}]""");
+        assets.AddMob(100000, 1_000_000);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        var noCrit = world.Strike(7, 0, 100, true, new Random(0), Progression.Beginner)[0];
+        var crit = world.Strike(7, 0, 100, true, new Random(0), Progression.Beginner with { CritPct = 100 })[0];
+        Assert.IsFalse(noCrit.Crit);
+        Assert.IsTrue(crit.Crit);
+    }
+
     [TestMethod]
     public void Damage_AboveInt_DoesNotOverflow()
     {
@@ -216,6 +231,7 @@ public class CombatTests
         Assert.AreEqual(0, hit.HpLeft);
         Assert.AreEqual(a.PlayerId, hit.Attacker); // the killer is named
         Assert.AreEqual(0, hit.Skill); // a basic swing tags no skill
+        Assert.IsFalse(hit.Crit); // beginner: 0% crit rate
     }
 
     // The server judges swings on the attacker's Build: a strong build
@@ -233,13 +249,14 @@ public class CombatTests
 
         a.SendState(9, -50, 100, Net.ActStand, 0, true);
         Assert.IsTrue(WaitTakeMob(a).Spawn);
-        a.SendBuild(new Build(99, 99, 99, 0, 0, 0)); // panel min 118: one swing kills a 40 HP mob
+        a.SendBuild(new Build(99, 99, 99, 0, 100, 0)); // 100% crit, panel min 177: one swing kills a 40 HP mob
         a.SendAttack();
         var hit = WaitTakeMob(a);
         Assert.IsFalse(hit.Spawn);
         Assert.AreEqual(0, hit.HpLeft);
         Assert.AreEqual(a.PlayerId, hit.Attacker);
         Assert.AreEqual(35, hit.Exp);
+        Assert.IsTrue(hit.Crit); // the wire carries the crit flag
     }
 
     // An empty hand cannot swing: the server drops the Attack. Sending a real

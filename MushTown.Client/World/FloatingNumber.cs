@@ -4,7 +4,8 @@ namespace MushTown.Client;
 
 // One damage number in flight: the digits rise and fade over LifeMs, then
 // the node ends its own life and the game pools it. The skin key picks the
-// digit set (0 = NoRed0 for monster damage, -1 = NoViolet0 for player hurt).
+// digit set (0 = NoRed0 for monster damage, -1 = NoViolet0 for player hurt);
+// Crit swaps in NoCri1 and draws the skin's effect3 prefix.
 public sealed class FloatingNumber : Component
 {
     public const float LifeMs = 800; // rise and fade over this long
@@ -15,6 +16,7 @@ public sealed class FloatingNumber : Component
 
     public string Text = "";
     public int Skin; // 0 = dmg.json, -1 = hurtdmg.json, other = dmg{key}.json
+    public bool Crit; // draw the critical digit set with its effect3 mark
     public float X; // head position when the hit landed
     public float Y;
     public float Age;
@@ -25,6 +27,7 @@ public sealed class FloatingNumber : Component
     {
         Age = 0;
         Skin = 0;
+        Crit = false;
         Owner.Dead = false;
     }
 

@@ -52,6 +52,7 @@ public partial class MushTownGame : Game
     private readonly bool _shotHurtBlink; // --hurtblink: the same arc in the purple flash step
     private readonly bool _shotHurtPre; // --hurtpre: the same stage before the hit
     private readonly bool _shotHurtMiss; // --hurtmiss: the touch rolls a dodge that always lands
+    private readonly bool _shotCrit; // --crit: force the posed hit/damage number to use the critical art
 
     private SpriteBatch _spriteBatch = null!;
     private RenderTarget2D _scene = null!;
@@ -131,7 +132,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -162,6 +163,7 @@ public partial class MushTownGame : Game
         _shotHurtMiss = shotHurtMiss;
         _shotWeak = shotWeak;
         _shotFlyms = shotFlyms;
+        _shotCrit = shotCrit;
         _shotStandoff = shotStandoff;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
         _deathHost.Add(new Rect(new Rectangle(0, 0, GameWidth, GameHeight))); // the popup root covers the screen; BuildDeathScene only refills its children
@@ -729,7 +731,7 @@ public partial class MushTownGame : Game
             else if (_localWorld != null)
             {
                 foreach (var h in _localWorld.Strike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild()))
-                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
                 DrainDrops(_localWorld);
             }
         }
@@ -868,7 +870,7 @@ public partial class MushTownGame : Game
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
                 if (m.Spawn) ApplySpawn(m.Uid, m.Mob, m.X, m.Y, m.MaxHp, m.HpLeft);
-                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp, m.Skill);
+                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp, m.Skill, m.Crit);
             }
             while (_net.TryTakeMove(out var mv))
             {

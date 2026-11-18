@@ -717,6 +717,7 @@ public sealed partial class GameServer : IDisposable
             w.Write(attacker);
             w.Write(exp);
             w.Write(h.Skill);
+            w.Write(h.Crit);
         }));
         if (h.HpLeft == 0)
             PushQuestKills(attacker, h.Mob);

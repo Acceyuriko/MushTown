@@ -359,6 +359,23 @@ public class FirePoisonCombatTests
         Assert.IsTrue(hits.Select(h => h.Damage).Distinct().Count() > 1); // not four copies of one roll
     }
 
+    // The skill judge also carries the chain's crit result on every segment.
+    [TestMethod]
+    public void WzStrike_CarriesCrit()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BoltData());
+        var critWorld = World(assets, (100, 100));
+        var critHits = Cast(critWorld, 7, 0, 100, true, new Random(5), Mage with { CritPct = 100 }, Bolt, 78);
+        Assert.IsTrue(critHits.All(h => h.Crit));
+
+        using var plainAssets = new TempAssets();
+        plainAssets.AddWzSkill(BoltData());
+        var plainWorld = World(plainAssets, (100, 100));
+        var plainHits = Cast(plainWorld, 7, 0, 100, true, new Random(5), Mage, Bolt, 78);
+        Assert.IsFalse(plainHits.Any(h => h.Crit));
+    }
+
     // A mob that dies stops taking segments; the cap (mobCount) keeps the nearest to the target.
     [TestMethod]
     public void WzStrike_DeadStopsSegments_CapKeepsNearest()
