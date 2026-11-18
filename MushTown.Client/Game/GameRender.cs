@@ -167,6 +167,9 @@ public partial class MushTownGame
         _spriteBatch.Draw(_textures[f.Image], new Vector2(mx - f.X, my - f.Y), Color.White);
     }
 
+    // A texture that LoadTexture has loaded (the minimap hover boxes read the dot sizes).
+    internal Texture2D Texture(string image) => _textures[image];
+
     internal void LoadTexture(string image)
     {
         if (_textures.ContainsKey(image)) return;

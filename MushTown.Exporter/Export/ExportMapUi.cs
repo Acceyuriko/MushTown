@@ -61,11 +61,11 @@ public static partial class Export
                 if (!UiPng.Save(ui, "UI", $"UIMap.img/MiniMap/{node}/{state}/0", Path.Combine(dir, $"mini_btn_{name}{suffix}.png"))) return false;
 
         // The dots on the map (MapHelper.img/minimap): the player, an ordinary
-        // NPC, the quest givers (their own mark) and a portal.
+        // NPC, the quest givers (their own mark), a shop NPC (the triangle) and a portal.
         var dots = new (string Node, string Name)[]
         {
             ("user", "user"), ("npc", "npc"), ("startnpc", "npcstart"),
-            ("endnpc", "npcend"), ("portal", "portal"),
+            ("endnpc", "npcend"), ("shop", "shop"), ("portal", "portal"),
         };
         var (mapCat, mapPre) = MapTree(map);
         foreach (var (node, name) in dots)
@@ -109,6 +109,7 @@ public static partial class Export
         // in front of every row.
         if (!UiPng.Save(ui, "UI", "UIMap.img/MiniMap/npcList/backgrnd", Path.Combine(dir, "npclist_bg.png"))) return false;
         if (!UiPng.Save(ui, "UI", "UIMap.img/MiniMap/npcList/icon/npc", Path.Combine(dir, "npclist_dot.png"))) return false;
+        if (!UiPng.Save(ui, "UI", "UIMap.img/MiniMap/npcList/icon/shop", Path.Combine(dir, "npclist_shop.png"))) return false;
         // The X button of the world map window and the world map window frame.
         foreach (var (state, name) in new[] { ("normal", "_n"), ("mouseOver", "_h"), ("pressed", "_p") })
             if (!UiPng.Save(ui, "UI", $"UIMap.img/WorldMap/button:close/{state}/0", Path.Combine(dir, $"map_x{name}.png"))) return false;

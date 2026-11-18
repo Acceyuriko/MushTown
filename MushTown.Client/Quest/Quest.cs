@@ -328,7 +328,7 @@ public partial class MushTownGame
     }
 
     // A keeper is an NPC with a stock file (shops/{npc}.json).
-    private bool NpcHasShop(int npc) => _shops.ContainsKey(npc);
+    internal bool NpcHasShop(int npc) => _shops.ContainsKey(npc);
 
     // Talk entry -> shop panel: talk closes, the shop opens on top. The
     // stock snapshots here: talk state clears, so the panel cannot re-ask.

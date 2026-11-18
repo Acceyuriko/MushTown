@@ -46,9 +46,11 @@ public partial class MushTownGame
     private List<SkillView> _skillPage = new();
     private int SkillScrollMax => Math.Max(0, (_skillPage.Count + 1) / 2 - SkillRows);
 
-    // The name and the book of each page (the blue bar). Only the Hero's pages have book art.
+    // The name and the book of each page (the blue bar). Only the Hero's pages have book art. The names of
+    // the Fire/Poison pages are the job names of its four stages (String.wz has no job name table; the
+    // Skill.img book names such as "Intro to Magic" are not the job names).
     private static readonly string[] HeroTabNames = { "Legendary Skill", "Warrior", "Fighter", "Crusader", "4th Job", "5th Job" };
-    private static readonly string[] FirePoisonTabNames = { "Legendary Skill", "Magician", "Wizard", "Mage", "4th Job", "5th Job" };
+    private static readonly string[] FirePoisonTabNames = { "Legendary Skill", "Magician", "Wizard (Fire, Poison)", "Mage (Fire, Poison)", JobNames.Of(StatTables.FirePoisonMage), "5th Job" };
     private static readonly string?[] HeroTabBooks = { "ui/skill_book000.png", "ui/skill_book100.png", "ui/skill_book110.png", "ui/skill_book111.png", null, null };
 
     // The job of the character whose skill window this is.

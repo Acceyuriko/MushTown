@@ -155,6 +155,36 @@ public partial class MushTownGame
             _store = DemoStore(_shotSkin ?? 0);
             _saveSlot = 0;
             _save = _store.Saves[0];
+            // What each --screen poses (the options and the shots Program.cs already describes are not repeated):
+            //   stat poses the character info window, stat2 its second page; stat200 poses a hero fresh from the
+            //     create page (level 200); --job picks its class (default 110), stat/stat2/skill take --job too, so the
+            //     demo plays that class (look at a mage's attack speed, or a job's skill pages).
+            //   death poses the death scene: the tombstone landed, the ghost with its head, the name, the revive popup.
+            //   fashionworn poses a world character wearing cash fashion. settings poses the volume window.
+            //   shop (with --talk) poses the shop.
+            //   skill poses the skill window; skillscroll poses the beginner page scrolled to its end (needs --skilltab 0).
+            //   minimap / minimapbig pose the small and the large layout; minimapnpc / minimapfilter add the NPC list
+            //     or the filter. --hover on an NPC dot of the minimap shows that NPC's tip.
+            //   worldmap poses the world map window: worldmapsearch with the search window, worldmapask the confirm box,
+            //     worldmapcombo the open area list, worldmapworld the open world list, worldmapmaps the open map list,
+            //     worldmaproot the Arcane River root page after Arcane River is picked in the first list.
+            //   keys poses the key window: quickedit has the Quick Slots button clicked and the Q cell picked, quickeditswap
+            //     has W pressed on the Q cell (two cells swap keys), quickeditnocap has Backspace, CapsLock, right Shift,
+            //     numpad 0 and the Windows key pressed on the first five cells (keys with no cap art: the cell draws the key name).
+            //   menu poses the big MENU window; guide the GUIDE content window, guidecard the small GUIDE card.
+            //   macro poses the skill window with the macro list (row 1 holds three skills, row 3 two); macrohold holds
+            //     an active skill in the hand (--hover points at a macro slot); macromove picks a skill up from a macro
+            //     slot (its slot draws blank; --hover); macrobind binds the macros to the 1 key and the G key of the key
+            //     window and to the first quick slot.
+            //   party poses the party window, partysearch the party search window, partyask the party invite popup.
+            //   cashshop poses Utility / Convenience, cashshopfashion Fashion / Weapons, cashshopfashionoutfits
+            //     Fashion / Outfits, cashshopreset and cashshopempty the search results, cashshopcart the preview cart,
+            //     cashshopladder the standing on the top of the ladder, cashshopbeauty Beauty / Hair Styles,
+            //     cashshopbeautygear Beauty + Fashion combined, cashshopface Beauty / Faces, cashshopfacegear
+            //     Beauty / Faces + Fashion combined, cashshopcheckout and cashshopbuyall the checkout and buy-all steps,
+            //     cashshopnotice the cash shop notice box ("The cart is full.").
+            //   job / job2 pose the job screen (--job picks the class; job2 the second card page); setup poses the
+            //     name confirm box (--job picks the class).
             _screen = shotScreen switch
             {
                 null => Screen.Game,

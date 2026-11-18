@@ -166,26 +166,24 @@ public sealed class MinimapWindow : UiWindow
         foreach (string name in new[] { "map", "npc", "filter", "zoomout", "zoomin" })
             foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
                 _game.LoadTexture($"ui/mini_btn_{name}{state}");
-        foreach (string dot in new[] { "user", "npc", "npcstart", "npcend", "portal" })
+        foreach (string dot in new[] { "user", "npc", "npcstart", "npcend", "shop", "portal" })
             _game.LoadTexture($"ui/mini_dot_{dot}.png");
         foreach (string state in new[] { "_n.png", "_h.png", "_p.png" })
             _game.LoadTexture($"ui/map_x{state}");
         _game.LoadTexture("ui/mini_filter_bg.png");
         _game.LoadTexture("ui/npclist_bg.png");
         _game.LoadTexture("ui/npclist_dot.png");
+        _game.LoadTexture("ui/npclist_shop.png");
         _game.LoadTexture("ui/check_0.png");
         _game.LoadTexture("ui/check_1.png");
         _game.LoadTexture(_game.GameMap.MiniMap.Image);
         string mark = _game.GameMap.MiniMap.Mark;
         if (mark != "") _game.LoadTexture($"ui/map_mark_{mark}.png");
-        // The tip of an NPC row of the list: the same box and grey rule the
+        // The tip of an NPC row of the list and of an NPC dot: the same box and grey rule the
         // world map tips use.
-        if (_state.NpcList)
-        {
-            foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se", "c" })
-                _game.LoadTexture($"ui/tip_{piece}.png");
-            _game.LoadTexture("ui/wm_tip_line.png");
-        }
+        foreach (string piece in new[] { "nw", "n", "ne", "w", "e", "sw", "s", "se", "c" })
+            _game.LoadTexture($"ui/tip_{piece}.png");
+        _game.LoadTexture("ui/wm_tip_line.png");
 
         Host.Clear();
         var root = new GameObject();
@@ -202,6 +200,19 @@ public sealed class MinimapWindow : UiWindow
         frame.Add(new Rect(Rect()));
         frame.Add(new Box(Frame, center: false));
         root.AddChild(frame);
+
+        // The NPC dots show the NPC tip on hover: one box per NPC, over the frame so the frame does not take the hover.
+        foreach (var n in _game.GameMap.Npcs)
+        {
+            var spot = new GameObject();
+            spot.Add(new Rect(new Rectangle(0, 0, 0, 0)));
+            var place = new MinimapNpcSpot { Game = _game, State = _state, Npc = n, Well = Well().Location, WellSize = Well().Size };
+            spot.Add(place);
+            spot.Add(new LifeStand { Game = _game, Kind = 0, Id = n.NpcId });
+            spot.Add(new LifeTip());
+            place.Place();
+            root.AddChild(spot);
+        }
 
         if (_state.Big)
         {
