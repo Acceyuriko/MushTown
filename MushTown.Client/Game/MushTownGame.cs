@@ -48,7 +48,7 @@ public partial class MushTownGame : Game
     private readonly bool _shotHurt; // --hurt: the player takes one posed hit
     private readonly bool _shotWeak; // --weak: the --skill cast lands on mobs already marked by Elemental Weakness
     private readonly int _shotStandoff; // --standoff <px>: how far from the first mob a WZ --skill caster stands (0 = the default 250)
-    private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (the ball flies, explodes, the numbers rise)
+    private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (effect, attack frame, ball, explosion, numbers)
     private readonly bool _shotHurtBlink; // --hurtblink: the same arc in the purple flash step
     private readonly bool _shotHurtPre; // --hurtpre: the same stage before the hit
     private readonly bool _shotHurtMiss; // --hurtmiss: the touch rolls a dodge that always lands
@@ -896,7 +896,7 @@ public partial class MushTownGame : Game
             while (_net.TryTakeBall(out var b))
             {
                 if (b.Map != _mapId) continue; // another map's ball: not shown here
-                SpawnBall(b.Skill, b.FromX, b.FromY, b.ToX, b.ToY);
+                SpawnBall(b.Skill, b.FromX, b.FromY, b.ToX, b.ToY, b.DelayMs);
             }
             if (!_net.Connected && _remotes.Count > 0)
                 ClearPeers(); // link lost: peers vanish, the local world takes over

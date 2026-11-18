@@ -383,10 +383,11 @@ public sealed class NetClient : IDisposable
             _fxEvents.Enqueue(new SkillFxEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
                 BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), p[21] != 0));
-        else if (p[0] == Net.Ball && p.Length == 25)
+        else if (p[0] == Net.Ball && p.Length == 29)
             _ballEvents.Enqueue(new BallEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),
-                BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), BitConverter.ToSingle(p, 21)));
+                BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), BitConverter.ToSingle(p, 21),
+                BitConverter.ToInt32(p, 25)));
         else if (p[0] == Net.MobMove && p.Length == 18)
             _moveEvents.Enqueue(new MoveEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),

@@ -10,8 +10,10 @@ namespace MushTown.Exporter;
 // plus the icon and the disabled icon. Only the 1st job (200.img) is exported for now: the formula
 // reader is general, the other jobs are added with their own tickets.
 // A skill with a damage line also gets its cast effect (effect/) and hit spark (hit/) frames, and CastFrames and
-// HitFrames in the json; a skill with a ball node (Energy Bolt) also gets the flying bolt (ball/) and BallFrames, and one
-// with a special node the art for every mob it hits (special/) and SpecialFrames.
+// HitFrames in the json; the effect, hit, ball and special art also keep their WZ origin and delay in Art. A skill
+// with a ball node (Energy Bolt) also gets the flying bolt (ball/) and BallFrames, and one with a special node the art
+// for every mob it hits (special/) and SpecialFrames. A skill with an action also gets AttackDelayMs: the body
+// action's attack frame from Character.wz/00002000.img/<action> (the Journey rule, see WzSkillData.AttackDelayFrom).
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -23,14 +25,14 @@ public static partial class Export
     // A skill node that another skill owns (WZ has no link between them): parent -> child.
     private static readonly Dictionary<int, int> WzSkillChildren = new() { [WzSkillData.ManaWave] = 2001012 }; // Mana Wave -> its held fall
 
-    // baseRoot must carry the Packs (the skill nodes live there), skill is the Skill category (the icon pngs),
-    // str the String category.
-    public static bool ExportWzSkills(WzRoot baseRoot, WzRoot skill, WzRoot str, string outDir)
+    // baseRoot must carry the Packs (the skill nodes live there), chara is the Character category (the action
+    // frames), skill is the Skill category (the icon pngs), str the String category.
+    public static bool ExportWzSkills(WzRoot baseRoot, WzRoot chara, WzRoot skill, WzRoot str, string outDir)
     {
         var saved = new HashSet<string>();
         foreach (int id in WzSkillIds)
         {
-            var data = ReadWzSkill(baseRoot, id);
+            var data = ReadWzSkill(baseRoot, chara, id);
             var strNode = str.Find($"Skill.img/{id:D7}");
             if (strNode == null)
             {
@@ -47,7 +49,7 @@ public static partial class Export
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
             if (data.Common.ContainsKey("damage") && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
-            if (WzSkillChildren.TryGetValue(id, out int child)) data.Children.Add(ReadWzSkill(baseRoot, child));
+            if (WzSkillChildren.TryGetValue(id, out int child)) data.Children.Add(ReadWzSkill(baseRoot, chara, child));
             WriteJson(Path.Combine(outDir, "skill", "wz", $"{id}.json"), data);
             string kind = data.Kind == SkillData.KindPassive ? "passive" : data.Kind == SkillData.KindBuff ? "buff" : "active";
             Console.WriteLine($"wz skill {id} {data.Name}: {kind}, max {data.MaxLevel}, common {string.Join(",", data.Common.Keys)}"
@@ -60,8 +62,8 @@ public static partial class Export
 
     // A damage skill draws its cast effect (effect) and its hit spark (hit/0), and its ball (the flying bolt) and
     // its special (the art on each mob hit) when it has them. The other nodes are not drawn yet.
-    // The hit, the ball and the special also keep their WZ origins and delays (the node in Base has them; the png
-    // node of the canvas does not).
+    // The effect, hit, ball and special also keep their WZ origins and delays (the node in Base has them; the png
+    // node of the canvas does not). The cast effect uses both its origin and its delay.
     private static bool SaveWzSkillArt(WzRoot baseRoot, WzRoot skill, int id, WzSkillData data, string outDir, HashSet<string> saved)
     {
         var node = skill.Find($@"_Canvas\{id / 10000}.img\skill\{id}");
@@ -73,6 +75,7 @@ public static partial class Export
             return false;
         }
         var meta = WzSkillNode(baseRoot, id);
+        data.Art["effect"] = ReadWzArt(meta.Nodes["effect"]!);
         data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);
         if (!SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)
             || !SaveSkillFrames(hit, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id))
@@ -105,7 +108,7 @@ public static partial class Export
         WzSkillNode(baseRoot, id).Nodes["common"]!.Nodes.Where(v => v.Value is not Wz_Vector).ToDictionary(v => v.Text, Text);
 
     // One node as the table: no name, icon or text (the caller adds them to a skill of the window).
-    private static WzSkillData ReadWzSkill(WzRoot baseRoot, int id)
+    private static WzSkillData ReadWzSkill(WzRoot baseRoot, WzRoot chara, int id)
     {
         var node = WzSkillNode(baseRoot, id);
         var common = node.Nodes["common"]!;
@@ -123,6 +126,7 @@ public static partial class Export
         foreach (Wz_Node v in node.Nodes["info"]!.Nodes) data.Info[v.Text] = Text(v);
         if (node.Nodes["action"] is { } action)
             foreach (Wz_Node v in action.Nodes) data.Actions.Add(Text(v));
+        if (data.Actions.Count > 0) data.AttackDelayMs = ReadAttackDelay(chara, data.Actions[0]);
         data.ElemAttr = Text(node.Nodes["elemAttr"]);
         data.Invisible = node.Nodes["invisible"] != null;
         // No mpCon: always on (passive). info.type 10: a timed self effect (buff). Else cast for an effect.
@@ -130,5 +134,20 @@ public static partial class Export
             : data.Info.GetValueOrDefault("type") == "10" ? SkillData.KindBuff
             : SkillData.KindActive;
         return data;
+    }
+
+    // Journey client's rule: in Character.wz/00002000.img/<action>, a frame whose delay is positive is the
+    // attack frame; its time is the sum of the absolute delays before it. Missing or zero delays count as 100 ms.
+    // Energy Bolt is -60, -330, +270, so the attack frame is at 390 ms.
+    private static int ReadAttackDelay(WzRoot chara, string action)
+    {
+        var node = chara.Find($@"00002000.img\{action}")
+            ?? throw new InvalidDataException($"character action {action} not found");
+        var delays = node.Nodes
+            .Where(f => int.TryParse(f.Text, out _))
+            .OrderBy(f => int.Parse(f.Text, CultureInfo.InvariantCulture))
+            .Select(f => f.Nodes["delay"]?.GetValueEx<int?>(null))
+            .ToList();
+        return WzSkillData.AttackDelayFrom(delays);
     }
 }

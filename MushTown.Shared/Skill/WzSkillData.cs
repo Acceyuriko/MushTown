@@ -33,13 +33,14 @@ public sealed class WzSkillData
     public string Disabled { get; set; } = "";
     public List<string> Desc { get; set; } = new();   // String.wz desc
     public List<string> Effect { get; set; } = new(); // String.wz h, the numbers filled at max level
-    public List<string> Actions { get; set; } = new(); // action/0.. names
+    public List<string> Actions { get; set; } = new(); // action/0.. names; the first names the body action for AttackDelayMs
+    public int AttackDelayMs { get; set; } // from the action start to its attack frame, from Character.wz (ms)
     public List<string> CastFrames { get; set; } = new(); // the cast effect art (png paths), only for a damage skill
     public List<string> HitFrames { get; set; } = new();  // the hit spark art (hit/0), only for a damage skill
     public List<string> BallFrames { get; set; } = new(); // the flying ball art (ball), only for a skill that throws one (Energy Bolt)
     public List<string> SpecialFrames { get; set; } = new(); // the art that plays on every mob the skill hits (special), only for a skill that has one (Energy Bolt)
-    // The WZ origin and delay of every frame of the art that is drawn the WZ way: "hit", "ball", "special" (the same
-    // order as the frame lists). The cast effect is drawn bare and centered, with one delay.
+    // The WZ origin and delay of every frame of the art that is drawn the WZ way: "effect", "hit", "ball", "special"
+    // (the same order as the frame lists). The cast effect uses both its WZ delay and its WZ origin.
     public Dictionary<string, WzArt> Art { get; set; } = new();
     public Dictionary<string, string> Info { get; set; } = new(); // info/*: flags and types as written
     // Every number field of common: index 0 is level 1.
@@ -53,6 +54,21 @@ public sealed class WzSkillData
     public List<WzSkillData> Children { get; set; } = new();
 
     public double Value(string field, int level) => Common[field][level - 1];
+
+    // Journey client's attack-frame rule: a frame whose raw delay is positive is the attack frame, and its
+    // time is the sum of the absolute delays of the frames before it. A missing or zero delay counts as
+    // 100 ms; the first positive frame wins. The caller reads the raw delays from Character.wz/<action>.
+    // Energy Bolt's -60, -330, +270 gives 60 + 330 = 390 ms.
+    public static int AttackDelayFrom(IReadOnlyList<int?> frameDelays)
+    {
+        int total = 0;
+        foreach (int? raw in frameDelays)
+        {
+            if (raw is > 0) return total;
+            total += Math.Abs(raw is null or 0 ? 100 : raw.Value);
+        }
+        throw new InvalidDataException("action has no attack frame (no positive delay)");
+    }
 
     // The element of the attack: "" is none (it hits like a physical attack), f fire, s poison. Any other
     // letter has no case yet (the next jobs add theirs): it fails loud.

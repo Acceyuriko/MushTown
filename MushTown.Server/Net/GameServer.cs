@@ -641,6 +641,7 @@ public sealed partial class GameServer : IDisposable
                     w.Write(b.FromY);
                     w.Write(b.ToX);
                     w.Write(b.ToY);
+                    w.Write(b.DelayMs);
                 }));
             BroadcastFreshDrops();
         }

@@ -44,9 +44,9 @@ public partial class MushTownGame
         PoolSweep.DropAll(_balls, _world, _ballPool);
     }
 
-    // A ball in the air: one node with a Projectile (the flight) and a SkillFx (the looping art that follows it).
-    // Our own cast, a peer's cast and the shots all come through here (the local world or the Ball message).
-    private void SpawnBall(int skill, float fromX, float fromY, float toX, float toY)
+    // A ball in the air: one node with a Projectile (the attack-frame delay and flight) and a SkillFx (the looping art
+    // that follows it). Our own cast, a peer's cast and the shots all come through here (the local world or the Ball message).
+    private void SpawnBall(int skill, float fromX, float fromY, float toX, float toY, int delayMs)
     {
         if (!_ballPool.TryPop(out var fx))
         {
@@ -62,7 +62,7 @@ public partial class MushTownGame
         fx.Loop = true;
         UseArt(fx, _wzSkills[skill], "ball");
         fx.FacingRight = toX >= fromX;
-        fx.Flight!.Launch(fromX, fromY, toX, toY);
+        fx.Flight!.Launch(fromX, fromY, toX, toY, delayMs);
     }
 
     // Plays the frames of one WZ art (hit, ball, special) with the origins and delays the WZ gives it.
@@ -90,9 +90,8 @@ public partial class MushTownGame
         }
     }
 
-    // Skill effects: bare frames centered on their anchor, flipped like
-    // avatars (raw art faces left). Cast effects and hit sparks sit where they
-    // spawned; only a buff loop keeps following the player.
+    // Skill effects: WZ art uses its origin, bare frames stay centered, and both flip like avatars (raw art faces
+    // left). Cast effects and hit sparks sit where they spawned; only a buff loop keeps following the player.
     private void DrawFx()
     {
         DrawFxList(_balls); // the balls first: the explosion sparks cover them
@@ -103,8 +102,11 @@ public partial class MushTownGame
     {
         foreach (var f in list)
         {
+            if (f.Flight is { Started: false }) continue; // the body action has not reached its attack frame
             var tex = _textures[f.Frames[f.Frame]];
-            var o = f.Origins == null ? new Vector2(tex.Width / 2f, tex.Height / 2f) : new Vector2(f.Origins[f.Frame][0], f.Origins[f.Frame][1]);
+            var ox = f.Origins == null ? tex.Width / 2f : f.Origins[f.Frame][0];
+            if (f.FacingRight) ox = tex.Width - ox;
+            var o = new Vector2(ox, f.Origins == null ? tex.Height / 2f : f.Origins[f.Frame][1]);
             _spriteBatch.Draw(tex, new Vector2(f.X - _camera.X, f.Y - _camera.Y), null, Color.White,
                 0f, o, 1f, f.FacingRight ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         }
@@ -427,7 +429,7 @@ public partial class MushTownGame
         {
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), wz.SkillId, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
-            foreach (var l in _localWorld.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY);
+            foreach (var l in _localWorld.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
             DrainDrops(_localWorld);
         }
     }
@@ -506,15 +508,29 @@ public partial class MushTownGame
         chara.Mp = Math.Min(chara.Mp + _skills[SkillData.SelfRecovery].RegenMp * lv, MaxMpNow());
     }
 
-    // Our own cast or a peer's echo: the effect centers on the torso.
-    // Casts without art (Iron Body, Combo Attack) skip silently.
+    // Our own cast or a peer's echo: a WZ effect anchors its WZ origin at the caster's feet; an old bare effect
+    // keeps the centered torso rule. Casts without art (Iron Body, Combo Attack) skip silently.
     private void SpawnCastFx(int skill, float x, float y, bool facingRight)
     {
-        var frames = _wzSkills.TryGetValue(skill, out var wz) ? wz.CastFrames : _skills[skill].Effect;
+        List<string> frames;
+        int[][]? origins = null;
+        int[]? delays = null;
+        if (_wzSkills.TryGetValue(skill, out var wz))
+        {
+            frames = wz.CastFrames;
+            if (wz.Art.TryGetValue("effect", out var art))
+            {
+                origins = art.Origins;
+                delays = art.Delays;
+            }
+        }
+        else frames = _skills[skill].Effect;
         if (frames.Count == 0) return;
         var fx = TakeFx();
         fx.Frames = frames;
-        fx.X = x; fx.Y = y - SkillFx.CastDy; fx.FacingRight = facingRight;
+        fx.Origins = origins;
+        fx.Delays = delays;
+        fx.X = x; fx.Y = origins == null ? y - SkillFx.CastDy : y; fx.FacingRight = facingRight;
     }
 
     // Ctrl is a weapon swing: no weapon in hand means no swing at all.

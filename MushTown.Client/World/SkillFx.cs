@@ -2,15 +2,14 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// One skill effect in flight: a cast effect (centered on the caster), a hit
-// spark (centered on the mob's body), a buff loop (riding the player until
-// the buff ends), or a flying ball (a loop that sits where its Projectile is
-// until it arrives). A one-shot plays once and ends its own life; a loop wraps
-// forever and the buff end (or the arrival) takes it away.
+// One skill effect in flight: a cast effect (WZ origin on the caster's feet, or centered for an old bare frame), a
+// hit spark (its WZ origin on the mob's body), a buff loop (riding the player until the buff ends), or a flying ball
+// (a loop that sits where its Projectile is until it arrives). A one-shot plays once and ends its own life; a loop
+// wraps forever and the buff end (or the arrival) takes it away.
 public sealed class SkillFx : Component
 {
-    private const int Delay = 100; // skill effect frames share one delay (WZ ships no delays for them)
-    public const int CastDy = 40; // cast effects center on the torso (bare frames: no WZ origins)
+    private const int Delay = 100; // effects without WZ frame delays (and old exports) use one 100 ms delay
+    public const int CastDy = 40; // old cast effects center on the torso (bare frames: no WZ origin)
 
     public int Skill; // which buff a loop belongs to; the spawn site's id
     public bool Loop;
@@ -21,7 +20,7 @@ public sealed class SkillFx : Component
     public float X;
     public float Y;
     public PlayerMover? Rider; // a buff loop rides the player; one-shots leave it null
-    public int[][]? Origins; // the WZ origin of each frame (the art of a ball, a special, a ball skill's hit); null: the frame is centered
+    public int[][]? Origins; // the WZ origin of each frame (cast effect, ball, special, hit); null: the frame is centered
     public int[]? Delays;    // the WZ delay of each frame; null: the shared Delay
     // A ball sits where its projectile is (the same node holds both); the rest leave it null. The Projectile must be
     // added to the node before this SkillFx: components update in the order they were added, and this one reads X and Y.
@@ -66,6 +65,12 @@ public sealed class SkillFx : Component
         {
             X = Flight.X;
             Y = Flight.Y;
+            if (!Flight.Started) // the attack frame has not arrived: the ball is not drawn and starts at frame 0
+            {
+                Frame = 0;
+                Timer = 0;
+                return;
+            }
         }
         Timer += dt * 1000f;
         int delay = Delays?[Frame] ?? Delay;

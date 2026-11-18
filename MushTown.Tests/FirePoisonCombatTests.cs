@@ -16,7 +16,7 @@ public class FirePoisonCombatTests
     private static WzSkillData BoltData(bool targetBox = true, string elem = "", int mobCount = 4, int segments = 4,
         int[]? lt = null, int[]? rb = null, bool ball = false)
     {
-        var data = new WzSkillData { SkillId = Bolt, MaxLevel = 20, Kind = SkillData.KindActive, ElemAttr = elem };
+        var data = new WzSkillData { SkillId = Bolt, MaxLevel = 20, Kind = SkillData.KindActive, ElemAttr = elem, AttackDelayMs = 390 };
         data.Common["mpCon"] = SkillFormula.Levels("24", 20);
         data.Common["damage"] = SkillFormula.Levels("78", 20);
         data.Common["attackCount"] = SkillFormula.Levels(segments.ToString(), 20);
@@ -129,8 +129,8 @@ public class FirePoisonCombatTests
 
     // The ball judges when it arrives. Caster (0, 100) facing right, a mob at x 100: the ball starts 40 px in front
     // of the caster at the torso (40, 60) and flies to the mob body (100, 100): sqrt(60^2 + 40^2) = 72.11 px at
-    // 600 px/s = 120.19 ms, so 121 ms. The damage waits one server tick (100 ms) more, so it never lands before the
-    // ball: the cast returns no hit; 220 ms later still none; at 221 ms the four segments land.
+    // 600 px/s = 120.19 ms, so 121 ms. The attack frame is 390 ms and the damage waits one server tick (100 ms) more,
+    // so it never lands before the ball: the cast returns no hit; 610 ms later still none; at 611 ms the four segments land.
     [TestMethod]
     public void Ball_JudgesWhenItArrives_NotAtTheCast()
     {
@@ -140,15 +140,32 @@ public class FirePoisonCombatTests
         Assert.AreEqual(0, world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78).Count);
         var launches = world.TakeLaunches();
         Assert.AreEqual(1, launches.Count);
-        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 100, 100), launches[0]);
+        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 100, 100, 390), launches[0]);
         Assert.AreEqual(121, Projectile.FlightMs(40, 60, 100, 100));
         Assert.AreEqual(0, world.TakeLaunches().Count); // handed out once
-        Assert.AreEqual(0, world.Tick(121, new()).Strikes.Count); // the ball has arrived, the tick is not up
-        Assert.AreEqual(0, world.Tick(99, new()).Strikes.Count);
+        Assert.AreEqual(0, world.Tick(610, new()).Strikes.Count); // the ball has arrived, the tick is not up
         var landed = world.Tick(1, new()).Strikes;
         Assert.AreEqual(4, landed.Count);
         Assert.IsTrue(landed.All(s => s.hit.Skill == Bolt && s.attacker == 0));
         Assert.AreEqual(0, world.Tick(1000, new()).Strikes.Count); // it lands once
+    }
+
+    // The ball waits for the attack frame, not for the cast effect: the effect here lasts 100 ms, but the ball still
+    // appears at 390 ms. The 121 ms flight and one server tick then put the four segments at 611 ms.
+    [TestMethod]
+    public void Ball_WaitsForTheAttackFrame_ThenFlies()
+    {
+        using var assets = new TempAssets();
+        var data = BoltData();
+        data.CastFrames.Add("skill/wz/2001008/effect/0.png");
+        data.CastFrames.Add("skill/wz/2001008/effect/1.png");
+        data.Art["effect"] = new WzArt { Delays = new[] { 60, 40 } };
+        assets.AddWzSkill(data);
+        var world = World(assets, (100, 100));
+        Assert.AreEqual(0, world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78).Count);
+        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 100, 100, 390), world.TakeLaunches().Single());
+        Assert.AreEqual(0, world.Tick(610, new()).Strikes.Count);
+        Assert.AreEqual(4, world.Tick(1, new()).Strikes.Count);
     }
 
     // No mob ahead within the reach: the ball flies the whole range (340 px) ahead and explodes there. The box
@@ -163,9 +180,9 @@ public class FirePoisonCombatTests
         var world = World(assets, (341, 100), (-11, 100), (100, 24), (461, 100));
         Assert.AreEqual(0, world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78).Count);
         var ball = world.TakeLaunches().Single();
-        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 340, 60), ball); // to the end of the range, at the torso height
+        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 340, 60, 390), ball); // to the end of the range, at the torso height
         Assert.AreEqual(500, Projectile.FlightMs(ball.FromX, ball.FromY, ball.ToX, ball.ToY)); // 300 px at 600 px/s
-        Assert.AreEqual(0, world.Tick(599, new()).Strikes.Count); // 500 ms of flight and one tick
+        Assert.AreEqual(0, world.Tick(989, new()).Strikes.Count); // 390 ms attack frame + 500 ms flight + one tick
         var landed = world.Tick(1, new()).Strikes;
         Assert.AreEqual(4, landed.Count);
         CollectionAssert.AreEqual(new[] { 341 }, UidsHit(world, landed.Select(s => s.hit).ToList())); // x 461 is one past the box (340 + 120)
@@ -174,7 +191,7 @@ public class FirePoisonCombatTests
         assets2.AddWzSkill(BoltData());
         var world2 = World(assets2, (340, 100));
         world2.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
-        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 340, 100), world2.TakeLaunches().Single());
+        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 340, 100, 390), world2.TakeLaunches().Single());
     }
 
     // A mob right in front of the caster (closer than the 40 px start): the ball does not fly back, it starts at the mob.
@@ -185,9 +202,9 @@ public class FirePoisonCombatTests
         assets.AddWzSkill(BoltData());
         var world = World(assets, (20, 100), (-20, 100));
         world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
-        Assert.AreEqual(new BallEvent(Bolt, 7, 20, 60, 20, 100), world.TakeLaunches().Single());
+        Assert.AreEqual(new BallEvent(Bolt, 7, 20, 60, 20, 100, 390), world.TakeLaunches().Single());
         world.SkillStrike(7, 0, 100, false, new Random(1), Mage, Bolt, 78);
-        Assert.AreEqual(new BallEvent(Bolt, 7, -20, 60, -20, 100), world.TakeLaunches().Single());
+        Assert.AreEqual(new BallEvent(Bolt, 7, -20, 60, -20, 100, 390), world.TakeLaunches().Single());
     }
 
     // The target dies while the ball flies: the box stays where the ball was sent, so the mob next to it takes the
@@ -243,7 +260,7 @@ public class FirePoisonCombatTests
         WaitSpawn(a);
         a.SendSkillCast(Bolt, 78);
         WaitBall(a);
-        a.SendState(10, 0, 100, Net.ActStand, 0, true); // gone before the ball lands (121 ms of flight and a tick)
+        a.SendState(10, 0, 100, Net.ActStand, 0, true); // gone before the ball lands (390 ms attack frame, 121 ms flight and a tick)
         Thread.Sleep(700);
         Assert.IsFalse(a.TryTakeMob(out _)); // no damage: the ball was cancelled
     }
@@ -258,7 +275,7 @@ public class FirePoisonCombatTests
         assets.AddWzSkill(BoltData(false, ball: true));
         var world = World(assets, (100, 100), (340, 100));
         world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
-        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 340, 60), world.TakeLaunches().Single()); // not at the mob at x 100
+        Assert.AreEqual(new BallEvent(Bolt, 7, 40, 60, 340, 60, 390), world.TakeLaunches().Single()); // not at the mob at x 100
         var landed = world.Tick(1000, new()).Strikes;
         CollectionAssert.AreEqual(new[] { 340 }, UidsHit(world, landed.Select(s => s.hit).ToList())); // x 100 is 240 px away: the box edge is 120
         using var assets2 = new TempAssets();
@@ -592,13 +609,18 @@ public class FirePoisonCombatTests
 
     // ---- Over the wire: the online server judges with the rectangle and the segments, and the Build carries the mark chance ----
 
-    // The ball goes to every client on the map (the caster too); the damage comes later, when the ball has arrived
-    // (the server tick, 100 ms), as the usual MobHit that every client gets. Caster (0, 100), mob at x 100: the flight is 121 ms.
+    // The ball goes to every client on the map (the caster too); the damage comes later, when the attack frame and
+    // flight are over (plus the server tick, 100 ms), as the usual MobHit that every client gets. Caster (0, 100),
+    // mob at x 100: 390 ms attack frame and 121 ms flight.
     [TestMethod]
     public void Loopback_EnergyBolt_BallFliesFirst_DamageLandsOnArrival_BothClientsSee()
     {
         using var assets = new TempAssets();
-        assets.AddWzSkill(BoltData());
+        var bolt = BoltData();
+        bolt.CastFrames.Add("skill/wz/2001008/effect/0.png");
+        bolt.CastFrames.Add("skill/wz/2001008/effect/1.png");
+        bolt.Art["effect"] = new WzArt { Delays = new[] { 60, 40 } };
+        assets.AddWzSkill(bolt);
         assets.AddWzSkill(WeaknessData());
         assets.AddMap(9, """[{"MobId":100000,"X":100,"Cy":100},{"MobId":100000,"X":300,"Cy":100}]""", Floor);
         assets.AddMob(100000, 2_000_000_000, 0.1, 0, speed: 1, level: 200);
@@ -619,12 +641,12 @@ public class FirePoisonCombatTests
         a.SendSkillCast(Bolt, 78);
         var ballA = WaitBall(a); // the caster gets its own ball from the server
         var ballB = WaitBall(b); // the other player sees the same ball fly
-        Assert.AreEqual(new BallEvent(Bolt, 9, 40, 60, 100, 100), ballA);
+        Assert.AreEqual(new BallEvent(Bolt, 9, 40, 60, 100, 100, 390), ballA); // the attack-frame delay rides the wire
         Assert.AreEqual(ballA, ballB);
         Assert.IsFalse(a.TryTakeMob(out _)); // the ball is in the air: no damage yet
         var first = Enumerable.Range(0, 4).Select(_ => WaitHit(a)).ToList();
         thrown.Stop();
-        Assert.IsTrue(thrown.ElapsedMilliseconds >= Projectile.FlightMs(40, 60, 100, 100)); // never before the flight time
+        Assert.IsTrue(thrown.ElapsedMilliseconds >= 390 + Projectile.FlightMs(40, 60, 100, 100)); // never before the attack frame and flight
         Assert.AreEqual(1, first.Select(h => h.Uid).Distinct().Count()); // only the mob at x 100: x 300 is past the box
         Assert.IsTrue(first.All(h => h.Skill == Bolt && h.Damage is >= 1824 and <= 9118)); // 4 segments, already marked by this cast (+20 damage %)
         var seen = Enumerable.Range(0, 4).Select(_ => WaitHit(b)).ToList(); // the other player sees the same four hits

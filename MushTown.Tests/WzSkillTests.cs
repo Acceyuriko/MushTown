@@ -94,6 +94,18 @@ public class WzSkillTests
         Check("20+5*x", 20, 25, 120);      // MP Boost lv2mmp
     }
 
+    // Journey's attack-frame rule: the first positive delay is the attack frame; the time is the sum of the
+    // absolute delays before it; missing and zero delays count as 100 ms.
+    [TestMethod]
+    public void AttackDelay_UsesTheFirstPositiveFrame_AndAbsoluteDelaysBeforeIt()
+    {
+        Assert.AreEqual(390, WzSkillData.AttackDelayFrom(new int?[] { -60, -330, 270 })); // Energy Bolt
+        Assert.AreEqual(200, WzSkillData.AttackDelayFrom(new int?[] { -100, 0, 50 })); // zero counts as 100
+        Assert.AreEqual(100, WzSkillData.AttackDelayFrom(new int?[] { null, 300 })); // missing counts as 100
+        Assert.AreEqual(90, WzSkillData.AttackDelayFrom(new int?[] { -90, 200, 10 })); // the first positive wins
+        Assert.ThrowsException<InvalidDataException>(() => WzSkillData.AttackDelayFrom(new int?[] { -60, -330 }));
+    }
+
     [TestMethod]
     public void MagicArmorAndMpBoost_BecomeStatRecords()
     {

@@ -58,4 +58,22 @@ public class ProjectileTests
         p.Update(0.016f);
         Assert.IsTrue(p.Arrived);
     }
+
+    // The attack-frame delay keeps the ball at its start until it ends, then the flight runs normally.
+    [TestMethod]
+    public void Delay_WaitsForTheAttackFrame_ThenFlies()
+    {
+        var p = Launched(40, 60, 340, 60);
+        p.Launch(40, 60, 340, 60, 100);
+        Assert.IsFalse(p.Started);
+        p.Update(0.05f);
+        Assert.IsFalse(p.Started);
+        Assert.AreEqual(40f, p.X);
+        p.Update(0.05f);
+        Assert.IsTrue(p.Started);
+        Assert.AreEqual(40f, p.X);
+        p.Update(0.25f);
+        Assert.AreEqual(190f, p.X, 0.01f);
+        Assert.IsFalse(p.Arrived);
+    }
 }

@@ -210,13 +210,13 @@ public partial class MushTownGame
 
     // A WZ damage skill (Energy Bolt): pay best-effort, let the mobs gather (--aiticks), then cast with a fixed
     // seed, so the numbers are the same every run. A skill with a ball judges when the ball arrives, so --flyms <ms>
-    // runs the world that long after the cast (16 ms steps): the cast effect and the ball are drawn, the ball
-    // flies, explodes, and the numbers rise on arrival. Without --flyms the shot is the cast the moment it is thrown,
-    // with the cast effect posed mid-play. The shown cast does not roll the mark itself (chance 0), so the plain shot
-    // has no mark. --weak casts once before with a 100% Elemental Weakness chance (another seed; its ball flies
-    // 800 ms unseen, so it has landed and its numbers are not shown): the shown cast then has the same rolls
-    // as the plain shot, with the mark on the mobs (+20 damage %). The unseen flight moves the mobs 8 more AI steps:
-    // give the plain shot 8 more --aiticks to compare the two.
+    // runs the world that long after the cast (16 ms steps): the cast effect starts at once, the ball appears at the
+    // body action's attack frame (Energy Bolt: 390 ms), then it flies, explodes, and the numbers rise on arrival.
+    // Without --flyms the shot is the cast the moment it is thrown, with the cast effect posed mid-play. The shown cast
+    // does not roll the mark itself (chance 0), so the plain shot has no mark. --weak casts once before with a 100%
+    // Elemental Weakness chance (another seed; the shot ticks the world until that cast's first strike lands, up to
+    // 3 s, so its ball is unseen and its numbers are not shown): the shown cast then has the same rolls as the plain
+    // shot, with the mark on the mobs (+20 damage %).
     private void PoseWzSkill(MobWorld world, WzSkillData wz)
     {
         if (wz.Kind != SkillData.KindActive || !wz.Common.ContainsKey("damage"))
@@ -229,13 +229,14 @@ public partial class MushTownGame
         {
             world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { WeaknessProp = 100 }, wz.SkillId, pct);
             world.TakeLaunches(); // unseen: the ball is not drawn
-            for (int i = 0; i < 8; i++) ShotTick(100, showStrikes: false);
+            for (int i = 0; i < 30; i++)
+                if (ShotTick(100, showStrikes: false).Count > 0) break;
         }
         SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
         if (_shotFlyms == 0) _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
         foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(0), build, wz.SkillId, pct))
             ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill);
-        foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY);
+        foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
         DrainDrops(world, animate: false);
         for (int left = _shotFlyms; left > 0; left -= 16)
         {
@@ -259,7 +260,7 @@ public partial class MushTownGame
     }
 
     // One world step at the posed feet: the balls that arrived strike (shown unless asked not to), the mobs move.
-    private void ShotTick(int ms, bool showStrikes = true)
+    private List<(MobWorld.Hit hit, int attacker)> ShotTick(int ms, bool showStrikes = true)
     {
         var world = _localWorld!; // StartLocalWorld just built it
         var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _mover.X, _mover.Y) };
@@ -272,5 +273,6 @@ public partial class MushTownGame
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
         ApplySpawns(ev.Spawns);
         foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);
+        return ev.Strikes;
     }
 }

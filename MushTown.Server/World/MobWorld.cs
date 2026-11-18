@@ -62,7 +62,7 @@ public sealed class MobWorld
         public float MsLeft;
     }
 
-    // A ball in the air: its cast waits here until the flight time runs out, then the box judges where it lands.
+    // A ball in the air: it waits here for its attack-frame delay and flight, then the box judges where it lands.
     private sealed class Pending
     {
         public int Map;
@@ -418,13 +418,13 @@ public sealed class MobWorld
         return hits;
     }
 
-    // One WZ damage skill cast at (x, y). A skill with a ball (BallFrames) throws it: the ball flies to the end of
-    // the range ahead, or to the nearest mob ahead within range (at the box height) when the skill is
-    // rectBasedOnTarget (Energy Bolt), and the damage lands only after it arrived (the first tick after
-    // Projectile.FlightMs, so a client never sees a number before the explosion). The target is picked at the
-    // cast: the box stays where the ball was sent even if that mob moves or dies on the way. The cast returns no
-    // hits for a ball; they come out of Tick. A skill with no ball judges at once: the box on the caster, or on the
-    // nearest mob ahead when it is rectBasedOnTarget (no mob: no hit).
+    // One WZ damage skill cast at (x, y). A skill with a ball (BallFrames) throws it: the ball appears at the body
+    // action's attack frame, then flies to the end of the range ahead, or to the nearest mob ahead within range (at
+    // the box height) when the skill is rectBasedOnTarget (Energy Bolt). The damage lands only after the attack-frame
+    // delay and the flight (the first tick after both, so a client never sees a number before the explosion). The
+    // target is picked at the cast: the box stays where the ball was sent even if that mob moves or dies on the way.
+    // The cast returns no hits for a ball; they come out of Tick. A skill with no ball judges at once: the box on the
+    // caster, or on the nearest mob ahead when it is rectBasedOnTarget (no mob: no hit).
     private List<Hit> WzStrike(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, int pct, int attacker)
     {
         // Every number the damage needs is read here, in the cast, where a bad skill file fails the caster's call. A ball
@@ -436,6 +436,7 @@ public sealed class MobWorld
         // that lands the ball must not read files (a missing file would throw there and end the loop).
         if (build.WeaknessProp > 0) Wz(WzSkillData.ElementalWeakness);
         bool ball = wz.BallFrames.Count > 0;
+        int attackDelay = wz.AttackDelayMs; // the ball appears when the body action reaches its attack frame
         bool onTarget = wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1";
         float range = (float)wz.Value("range", wz.MaxLevel);
         float height = Math.Max(-wz.Vectors["lt"][1], wz.Vectors["rb"][1]);
@@ -457,14 +458,14 @@ public sealed class MobWorld
         float toY = first == null ? y - LaunchDy : first.Y - first.BodyH / 2f; // the explosion is at the mob body
         float fromX = facingRight ? Math.Min(x + LaunchDx, toX) : Math.Max(x - LaunchDx, toX); // a mob right in front: the ball does not fly back
         float fromY = y - LaunchDy;
-        _launches.Add(new BallEvent(wz.SkillId, map, fromX, fromY, toX, toY));
+        _launches.Add(new BallEvent(wz.SkillId, map, fromX, fromY, toX, toY, attackDelay));
         _pending.Add(new Pending
         {
             Map = map,
             X = boxX,
             Y = boxY,
             FacingRight = facingRight,
-            MsLeft = Projectile.FlightMs(fromX, fromY, toX, toY) + TickMs,
+            MsLeft = attackDelay + Projectile.FlightMs(fromX, fromY, toX, toY) + TickMs,
             Rng = rng,
             Build = build,
             Wz = wz,

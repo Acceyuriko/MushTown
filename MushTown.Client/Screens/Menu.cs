@@ -163,9 +163,11 @@ public partial class MushTownGame
             //     starter kit, like stat200 (the demo is level 7: a Fire/Poison cast on a level 200 mob would do 1 damage).
             //     --skill with a WZ skill (Energy Bolt) follows --facing, lets --aiticks gather the mobs first and --weak
             //     marks them first (the cast is the last thing the shot does). A ball skill judges when its ball arrives:
-            //     --flyms <ms> then runs the world that long after the cast (the ball in the air, the explosion, the numbers).
-            //     --standoff <px> moves the caster away from the first mob (default 250): out of reach, the ball has no target.
-            //     The big blue ball that stays on the caster is the cast effect (WZ effect, 16 frames), not a second ball.
+            //     --flyms <ms> then runs the world that long after the cast. The cast effect starts at once; the ball
+            //     appears at the body action's attack frame (Energy Bolt: 390 ms), then flies, explodes and shows numbers
+            //     one server tick later. --standoff <px> moves the caster away from the first mob (default 250): out of
+            //     reach, the ball has no target. The big blue shape in front of the caster is the cast effect (WZ effect,
+            //     16 frames x 60 ms = 960 ms), not a second ball.
             //   death poses the death scene: the tombstone landed, the ghost with its head, the name, the revive popup.
             //   fashionworn poses a world character wearing cash fashion. settings poses the volume window.
             //   shop (with --talk) poses the shop.
@@ -604,6 +606,8 @@ public partial class MushTownGame
             var wz = LoadJson<WzSkillData>(f);
             if (wz.Common.ContainsKey("damage") && (wz.CastFrames.Count == 0 || wz.HitFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
+            if (wz.Common.ContainsKey("damage") && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
+                throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
             if ((wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1" || wz.BallFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} throws a ball but has no ball or special art: run the exporter (export)");
             _wzSkills[wz.SkillId] = wz;

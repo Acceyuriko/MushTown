@@ -33,9 +33,10 @@ CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 // --weak (with --skill) casts once first with a 100% Elemental Weakness chance and shows the second cast: the same
 // rolls, with the mark on the mobs (+20 damage %). A shown cast never rolls the mark itself.
 // --flyms <ms> (with --skill, a WZ skill that throws a ball) lets the world run that long after the cast, in 16 ms
-// steps like the game: 0 (the default) shows the cast the moment it is thrown, a smaller number shows the ball in
-// the air, the flight time (Projectile.FlightMs) shows the explosion, and the numbers come one server tick (100 ms) later.
-// The big blue ball on the caster in these shots is the cast effect (the WZ effect node, 1.6 s), not a second ball.
+// steps like the game: 0 (the default) shows the cast the moment it is thrown; a value before the body action's
+// attack frame (Energy Bolt: 390 ms) shows only the cast effect; from that frame it shows the ball at the caster,
+// the flight time (Projectile.FlightMs) shows the explosion, and the numbers come one server tick (100 ms) later.
+// The big blue shape in front of the caster in these shots is the cast effect (the WZ effect node), not a second ball.
 // --standoff <px> (with --skill, a WZ skill) sets how far from the first mob the caster stands (default 250): a big
 // number puts the caster out of reach, so the ball has no target and flies the whole range.
 // --drop swings until the first kill and shows its drops (game shots only).
