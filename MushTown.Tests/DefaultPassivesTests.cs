@@ -30,12 +30,12 @@ public class DefaultPassivesTests
     [TestMethod]
     public void Attack_FixedValueAndPercent()
     {
-        Assert.AreEqual(60, Snap.Flat(StatKey.ATT));
-        Assert.AreEqual(60, Snap.Flat(StatKey.MATT));
+        Assert.AreEqual(90, Snap.Flat(StatKey.ATT)); // 60 + the Monster Park Potion 30
+        Assert.AreEqual(90, Snap.Flat(StatKey.MATT));
         Assert.AreEqual(4, Snap.Percent(StatKey.ATT_PCT));
         Assert.AreEqual(4, Snap.Percent(StatKey.MATT_PCT));
-        Assert.AreEqual(62, DamageChain.TotalAttack(Snap)); // floor(60 * 1.04)
-        Assert.AreEqual(62, DamageChain.TotalAttack(Snap, magic: true));
+        Assert.AreEqual(93, DamageChain.TotalAttack(Snap)); // floor(90 * 1.04)
+        Assert.AreEqual(93, DamageChain.TotalAttack(Snap, magic: true));
     }
 
     [TestMethod]
@@ -85,9 +85,9 @@ public class DefaultPassivesTests
     [TestMethod]
     public void MaxHpAndMp()
     {
-        Assert.AreEqual(10200, Snap.Flat(StatKey.MAX_HP));
+        Assert.AreEqual(12200, Snap.Flat(StatKey.MAX_HP)); // 10200 + the Monster Park Potion 2000
         Assert.AreEqual(31, Snap.Percent(StatKey.MAX_HP));
-        Assert.AreEqual(7600, Snap.Flat(StatKey.MAX_MP));
+        Assert.AreEqual(9600, Snap.Flat(StatKey.MAX_MP));
         Assert.AreEqual(11, Snap.Percent(StatKey.MAX_MP));
     }
 

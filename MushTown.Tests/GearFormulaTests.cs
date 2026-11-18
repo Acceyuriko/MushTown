@@ -91,14 +91,11 @@ public class GearFormulaTests
         Assert.AreEqual(104.0, s.JumpPercent, 1e-9);
     }
 
-    // The wand brings 5% crit rate by itself; no other weapon type is given a number (not confirmed).
+    // The wand crit rate is not a weapon number any more: it is MP Boost's (WzSkillStats, WzSkillTests).
     [TestMethod]
-    public void Wand_HasFivePercentCrit()
+    public void Wand_IsTheShortStaffType()
     {
         Assert.AreEqual(WeaponType.ShortStaff, StatTables.WeaponTypeOf(1372207));
-        Assert.AreEqual(5.0, StatTables.Weapon(WeaponType.ShortStaff).CritPct);
-        foreach (var type in Enum.GetValues<WeaponType>().Where(t => t != WeaponType.ShortStaff))
-            Assert.AreEqual(0.0, StatTables.Weapon(type).CritPct, type.ToString());
     }
 
     // The mage hits with magic attack and INT/LUK: the damage range follows the MATT and INT the gear adds,

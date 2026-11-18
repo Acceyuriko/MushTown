@@ -21,9 +21,7 @@ public enum WeaponType
 public readonly record struct JobProfile(StatKey Main, StatKey Sub, WeaponType Weapon,
     int HpPerLevel = 28, int MpPerLevel = 12, int HpBonus = 700, int MpBonus = 300);
 
-// CritPct is the crit rate the weapon type brings by itself: a wand has 5% (user 2026-11-18). The other
-// types are 0 until they are confirmed.
-public readonly record struct WeaponProfile(double Coefficient, double MasteryPct, double CritPct = 0);
+public readonly record struct WeaponProfile(double Coefficient, double MasteryPct);
 
 // Coefficients follow character-stats.md §3.2. Unlisted weapon types use the
 // fallback coefficient.
@@ -90,7 +88,7 @@ public static class StatTables
         WeaponType.OneHandSword => new(1.24, 20),
         WeaponType.HeroTwoHand => new(1.44, 20),
         WeaponType.TwoHandSword => new(1.34, 20),
-        WeaponType.ShortStaff => new(1.20, 20, 5),
+        WeaponType.ShortStaff => new(1.20, 20),
         _ => new(1.20, 20),
     };
 

@@ -8,8 +8,8 @@ namespace MushTown.Shared;
 // it from String.wz (desc and h, with the level values put in for #x style
 // marks). A text is written here when the WZ one tells about an effect the game
 // does not have (cooldown, party, active use). IconId is the skill whose icon
-// is used when the skill has none (0 = its own).
-public sealed record DefaultPassiveSkill(string Label, int WzId, string? Desc = null, string? Effect = null, int IconId = 0);
+// is used when the skill has none (0 = its own). ItemIconId is the item whose icon is used (0 = none).
+public sealed record DefaultPassiveSkill(string Label, int WzId, string? Desc = null, string? Effect = null, int IconId = 0, int ItemIconId = 0);
 
 public static class DefaultPassiveSkills
 {
@@ -27,6 +27,13 @@ public static class DefaultPassiveSkills
         new("Hero's Echo", 1005,
             "Increases the Attack Power and Magic ATT.",
             "Attack Power and Magic ATT: +#x%"),
+        // The three Monster Park potions (red 2023125, green 2023126, blue 2023127; WZ Consume/0202.img spec) as one
+        // permanent passive, with the green potion's icon. Its text is written here: the numbers are the
+        // Monster Park Potion records of default-passives.json.
+        new("Monster Park Potion", 0,
+            "Potions from Monster Park. Permanently increases Weapon Speed, Max HP, Max MP, Attack Power and Magic ATT.",
+            "Attack Speed: +1\nMax HP: +2000, Max MP: +2000\nAttack Power: +30, Magic ATT: +30",
+            ItemIconId: 2023126),
         new("Link: Adventurer's Curiosity (Bowman)", 80002766,
             "Your curiosity and attention to detail grants you a bonus to Critical Rate.",
             "Critical Rate: +#cr%"),

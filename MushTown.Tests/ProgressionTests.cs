@@ -44,7 +44,7 @@ public class ProgressionTests
         var hero = StatAggregator.Aggregate(StatTables.Vitals(StatTables.Hero, 200).Concat(heroic));
         Assert.AreEqual(12_626, hero.IntValue(StatKey.MAX_HP)); // floor((6322 + 20 x 200 + 200) x 1.20)
         Assert.AreEqual(2_793, hero.IntValue(StatKey.MAX_MP)); // 2693 + 100
-        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200)).Concat(heroic));
+        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200, 0)).Concat(heroic));
         Assert.AreEqual(3_734, mage.IntValue(StatKey.MAX_HP)); // 3534 + 200
         Assert.AreEqual(35_019, mage.IntValue(StatKey.MAX_MP)); // floor((5083 + 120 x 200 + 100) x 1.20)
     }
@@ -55,18 +55,18 @@ public class ProgressionTests
     public void MaxHpMp_At200_WithDefaultPassives()
     {
         var hero = StatAggregator.Aggregate(StatTables.Vitals(StatTables.Hero, 200).Concat(DefaultPassives.All));
-        Assert.AreEqual(30_988, hero.IntValue(StatKey.MAX_HP)); // floor((6322 + 4000 + 10200) x 1.51)
-        Assert.AreEqual(11_425, hero.IntValue(StatKey.MAX_MP)); // floor((2693 + 7600) x 1.11)
-        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200)).Concat(DefaultPassives.All));
-        Assert.AreEqual(17_991, mage.IntValue(StatKey.MAX_HP)); // floor((3534 + 10200) x 1.31)
-        Assert.AreEqual(48_054, mage.IntValue(StatKey.MAX_MP)); // floor((5083 + 24000 + 7600) x 1.31)
+        Assert.AreEqual(34_008, hero.IntValue(StatKey.MAX_HP)); // floor((6322 + 4000 + 12200) x 1.51)
+        Assert.AreEqual(13_645, hero.IntValue(StatKey.MAX_MP)); // floor((2693 + 9600) x 1.11)
+        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200, 0)).Concat(DefaultPassives.All));
+        Assert.AreEqual(20_611, mage.IntValue(StatKey.MAX_HP)); // floor((3534 + 12200) x 1.31)
+        Assert.AreEqual(50_674, mage.IntValue(StatKey.MAX_MP)); // floor((5083 + 24000 + 9600) x 1.31)
     }
 
     // The 500,000 cap stays on the new records.
     [TestMethod]
     public void MaxHpMp_StayCapped()
     {
-        var huge = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 5_000).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 5_000)));
+        var huge = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 5_000).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 5_000, 0)));
         Assert.AreEqual(500_000, huge.IntValue(StatKey.MAX_MP));
     }
 
@@ -74,7 +74,7 @@ public class ProgressionTests
     [TestMethod]
     public void MaxMp_SourcesShowTheSkillPointsAndPercent()
     {
-        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200)));
+        var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200, 0)));
         var lines = StatDisplay.Sources(mage, 1); // row 1 is MP
         Assert.IsTrue(lines.Any(l => l.Label == "Skill" && !l.Bucket && l.Value == 24_000));
         Assert.IsTrue(lines.Any(l => l.Label == "Skill" && l.Bucket && l.Value == 20));
@@ -96,7 +96,7 @@ public class ProgressionTests
     {
         var gear = new Dictionary<int, ItemData> { [1] = new ItemData { ItemId = 1, Slot = "Ri", MaxHp = 70, MaxMp = 55 } };
         var worn = ItemData.EquipBonus(new List<int> { 1 }, gear);
-        var baseMods = StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200)).ToList();
+        var baseMods = StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200, 0)).ToList();
         var bare = StatAggregator.Aggregate(baseMods);
         var mods = baseMods.Concat(new[]
         {

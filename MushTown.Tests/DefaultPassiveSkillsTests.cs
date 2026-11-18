@@ -33,6 +33,38 @@ public class DefaultPassiveSkillsTests
             Assert.IsFalse(other.Contains(p.Label), p.Label);
     }
 
+    // The potion passive: green = attack speed +1, red = ATT +30 and max HP +2000, blue = MATT +30 and max MP +2000
+    // (WZ Consume/0202.img spec of 2023126, 2023125, 2023127), all under the Skill group, and the window text says the same numbers.
+    [TestMethod]
+    public void MonsterParkPotion_RecordsAndTextMatchTheWz()
+    {
+        var potion = DefaultPassives.All.Where(m => m.Label == "Monster Park Potion").ToList();
+        Assert.AreEqual(5, potion.Count);
+        Assert.IsTrue(potion.All(m => m.Source == StatSource.Skill && m.Type == StatValueType.FLAT));
+        double Of(StatKey key) => potion.Single(m => m.Key == key).Value;
+        Assert.AreEqual(1, Of(StatKey.ATTACK_SPEED));
+        Assert.AreEqual(30, Of(StatKey.ATT));
+        Assert.AreEqual(30, Of(StatKey.MATT));
+        Assert.AreEqual(2000, Of(StatKey.MAX_HP));
+        Assert.AreEqual(2000, Of(StatKey.MAX_MP));
+        var skill = DefaultPassiveSkills.All.Single(p => p.Label == "Monster Park Potion");
+        Assert.AreEqual(2023126, skill.ItemIconId);
+        Assert.AreEqual("Attack Speed: +1\nMax HP: +2000, Max MP: +2000\nAttack Power: +30, Magic ATT: +30", skill.Effect);
+        StringAssert.DoesNotMatch(skill.Desc!, new System.Text.RegularExpressions.Regex("30 minutes"));
+    }
+
+    // A mage: the fixed stage 4, MP Boost +1 and the potion +1 make stage 6 (the swing takes 14/16 of the stage 4 time).
+    [TestMethod]
+    public void MonsterParkPotion_MageAttackSpeedIsSix()
+    {
+        var mods = new List<StatModifier> { StatTables.AttackSpeed(true, 0)!.Value };
+        mods.AddRange(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200, 0));
+        mods.AddRange(DefaultPassives.All);
+        double stage = StatAggregator.Aggregate(mods).Value(StatKey.ATTACK_SPEED);
+        Assert.AreEqual(6.0, stage);
+        Assert.AreEqual(0.875, StatTables.DelayScale(stage));
+    }
+
     [TestMethod]
     public void Labels_AreUnique_AndEveryEntryHasItsText()
     {
@@ -42,7 +74,7 @@ public class DefaultPassiveSkillsTests
         {
             Assert.IsNotNull(p.Desc, p.Label);
             Assert.IsNotNull(p.Effect, p.Label);
-            Assert.AreNotEqual(0, p.IconId, p.Label);
+            Assert.IsTrue(p.IconId != 0 || p.ItemIconId != 0, p.Label);
         }
     }
 }

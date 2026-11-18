@@ -31,6 +31,9 @@ public sealed class WzSkillData
     public Dictionary<string, double[]> Common { get; set; } = new();
     // The vector fields of common (lt, rb): x, y.
     public Dictionary<string, int[]> Vectors { get; set; } = new();
+    // psdWT: the passive bonus by worn weapon. Key = the weapon code (the item id / 10000 - 100: a wand is
+    // 137, code 37), value = the fields of that weapon's bonus (cr = crit rate), every level like Common.
+    public Dictionary<int, Dictionary<string, double[]>> WeaponBonus { get; set; } = new();
     // The nodes this skill owns (the fire wall of Ignite, the blast of Creeping Toxin...): same table, no art.
     public List<WzSkillData> Children { get; set; } = new();
 

@@ -57,7 +57,7 @@ public partial class MushTownGame
         mods.Add(new(StatKey.INT, StatValueType.FLAT, chara.Int, StatSource.Base));
         mods.Add(new(StatKey.LUK, StatValueType.FLAT, chara.Luk, StatSource.Base));
         mods.AddRange(StatTables.Vitals(chara.Job, chara.Level)); // base vitals and the job skills that scale with the level
-        if (chara.Job == StatTables.FirePoisonMage) mods.AddRange(WzSkillStats.Modifiers(_wzSkills, chara.Level)); // Magic Armor, MP Boost
+        if (chara.Job == StatTables.FirePoisonMage) mods.AddRange(WzSkillStats.Modifiers(_wzSkills, chara.Level, WornWeapon(chara)?.ItemId ?? 0)); // Magic Armor, MP Boost (and its wand crit)
 
         var worn = ItemData.EquipBonus(chara.Equips, _items);
         _hasWeapon = worn.weapon > 0;
@@ -72,8 +72,6 @@ public partial class MushTownGame
             mods.Add(speed);
         mods.AddRange(ItemData.EquipModifiers(chara.Equips, _items));
         mods.AddRange(SetRules.Modifiers(_sets, chara.Equips));
-        if (_hasWeapon) // the weapon type's own crit rate (a wand has 5%)
-            mods.Add(new(StatKey.CRIT_RATE, StatValueType.FLAT, StatTables.Weapon(_weaponType).CritPct, StatSource.Equipment));
 
         mods.AddRange(DefaultPassives.All);
         mods.Add(DefaultPassives.MapleWarrior(StatKey.STR, chara.Str));

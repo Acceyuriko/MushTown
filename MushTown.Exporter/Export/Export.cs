@@ -20,7 +20,7 @@ public static partial class Export
     {
         if (name == "passive") // the default passives of the skill window beginner page: no UI art
             return ExportPassiveSkills(WzRoot.LoadBase(ExporterPaths.DataDir, packs: true), WzRoot.LoadCategory(ExporterPaths.DataDir, "Skill"),
-                WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir);
+                WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), WzRoot.LoadCategory(ExporterPaths.DataDir, "Item"), outDir);
         var ui = WzRoot.LoadCategory(ExporterPaths.DataDir, "UI");
         // The two map exporters read the same two categories, so load them once
         // (LoadCategory does not cache).
@@ -197,7 +197,7 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
-        if (!ExportPassiveSkills(baseRoot, skill, str, outDir) || !ExportWzSkills(baseRoot, skill, str, outDir))
+        if (!ExportPassiveSkills(baseRoot, skill, str, item, outDir) || !ExportWzSkills(baseRoot, skill, str, outDir))
         {
             Environment.ExitCode = 1;
             return;

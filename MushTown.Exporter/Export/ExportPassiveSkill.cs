@@ -12,8 +12,9 @@ namespace MushTown.Exporter;
 public static partial class Export
 {
     // baseRoot must carry the Packs (the skill nodes live there), skill is the
-    // Skill category (the icon pngs live there), str the String category.
-    public static bool ExportPassiveSkills(WzRoot baseRoot, WzRoot skill, WzRoot str, string outDir)
+    // Skill category (the icon pngs live there), str the String category, item the Item category (the icon of
+    // a passive that borrows an item icon).
+    public static bool ExportPassiveSkills(WzRoot baseRoot, WzRoot skill, WzRoot str, WzRoot item, string outDir)
     {
         var data = new DefaultPassiveSkillData();
         foreach (var p in DefaultPassiveSkills.All)
@@ -49,13 +50,15 @@ public static partial class Export
                     row.MaxLevel = int.Parse(level.Text, CultureInfo.InvariantCulture);
                 }
             }
-            else row.Name = p.Label.Split(' ')[0]; // Heroic: the first word of the label
+            else row.Name = p.Label.Split(" (")[0]; // Heroic: the label without its bracket
             row.Desc = Lines(Fill(desc, values, row.MaxLevel));
             row.Effect = Lines(Fill(effect, values, row.MaxLevel));
 
             int iconId = p.IconId != 0 ? p.IconId : p.WzId;
-            row.Icon = $"skill/passive/{iconId}.png";
-            if (!SavePassiveIcon(baseRoot, skill, iconId, Path.Combine(outDir, row.Icon))) return false;
+            row.Icon = p.ItemIconId != 0 ? $"skill/passive/item{p.ItemIconId}.png" : $"skill/passive/{iconId}.png";
+            if (!(p.ItemIconId != 0
+                ? UiPng.Save(item, "Item", $"Consume/{p.ItemIconId / 10000:D4}.img/{p.ItemIconId:D8}/info/icon", Path.Combine(outDir, row.Icon))
+                : SavePassiveIcon(baseRoot, skill, iconId, Path.Combine(outDir, row.Icon)))) return false;
             data.Rows.Add(row);
             Console.WriteLine($"passive {row.Name}: Lv.{row.MaxLevel}  {string.Join(" / ", row.Effect)}");
         }

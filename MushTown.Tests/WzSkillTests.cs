@@ -17,8 +17,18 @@ public class WzSkillTests
     internal static Dictionary<int, WzSkillData> FirePoisonPassives() => new()
     {
         [WzSkillData.MagicArmor] = Skill(WzSkillData.MagicArmor, 9, ("pddX", "10*x")),
-        [WzSkillData.MpBoost] = Skill(WzSkillData.MpBoost, 20, ("mmpR", "x"), ("lv2mmp", "20+5*x"), ("actionSpeed", "-1")),
+        [WzSkillData.MpBoost] = BoostWithWandCrit(),
     };
+
+    // psdWT/37/cr = 5 in 200.img: the wand (item family 137, weapon code 37) gives 5 crit rate.
+    private static WzSkillData BoostWithWandCrit()
+    {
+        var boost = Skill(WzSkillData.MpBoost, 20, ("mmpR", "x"), ("lv2mmp", "20+5*x"), ("actionSpeed", "-1"));
+        boost.WeaponBonus[37] = new() { ["cr"] = SkillFormula.Levels("5", 20) };
+        return boost;
+    }
+
+    private const int Wand = 1372207, Staff = 1382000;
 
     [TestMethod]
     public void Formula_PlainNumberAndVariable()
@@ -87,11 +97,23 @@ public class WzSkillTests
     [TestMethod]
     public void MagicArmorAndMpBoost_BecomeStatRecords()
     {
-        var mods = WzSkillStats.Modifiers(FirePoisonPassives(), 200).ToList();
+        var mods = WzSkillStats.Modifiers(FirePoisonPassives(), 200, 0).ToList();
         Assert.IsTrue(mods.Contains(new(StatKey.DEF, StatValueType.FLAT, 90, StatSource.Skill, "Magic Armor")));
         Assert.IsTrue(mods.Contains(new(StatKey.MAX_MP, StatValueType.FLAT, 24_000, StatSource.Skill, "MP Boost"))); // 120 x level 200
         Assert.IsTrue(mods.Contains(new(StatKey.MAX_MP, StatValueType.PERCENT, 20, StatSource.Skill, "MP Boost")));
         Assert.IsTrue(mods.Contains(new(StatKey.ATTACK_SPEED, StatValueType.FLAT, 1, StatSource.Skill, "MP Boost")));
+    }
+
+    // MP Boost: crit rate +5 while a wand is worn (WZ psdWT code 37). The staff (code 38) has no entry: +0.
+    [TestMethod]
+    public void MpBoost_WandCrit_OnlyWithAWand()
+    {
+        var crit = new StatModifier(StatKey.CRIT_RATE, StatValueType.FLAT, 5, StatSource.Skill, "MP Boost");
+        Assert.IsTrue(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Wand).Contains(crit));
+        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Staff).Any(m => m.Key == StatKey.CRIT_RATE));
+        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 0).Any(m => m.Key == StatKey.CRIT_RATE));
+        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 1302000).Any(m => m.Key == StatKey.CRIT_RATE)); // a sword
+        Assert.AreEqual(5.0, StatAggregator.Aggregate(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Wand)).Value(StatKey.CRIT_RATE));
     }
 
     // The max MP of an existing Fire/Poison save must not change: the old hard-coded rule was
@@ -103,7 +125,7 @@ public class WzSkillTests
     [DataRow(200)]
     public void MaxMp_SameAsTheOldHardCodedMpBoost(int level)
     {
-        var mods = StatTables.Vitals(StatTables.FirePoisonMage, level).Concat(WzSkillStats.Modifiers(FirePoisonPassives(), level));
+        var mods = StatTables.Vitals(StatTables.FirePoisonMage, level).Concat(WzSkillStats.Modifiers(FirePoisonPassives(), level, 0));
         long old = (long)Math.Floor((Progression.MaxMp(level, StatTables.FirePoisonMage) + 120.0 * level) * 1.2);
         Assert.AreEqual(old, StatAggregator.Aggregate(mods).IntValue(StatKey.MAX_MP));
     }
@@ -114,7 +136,7 @@ public class WzSkillTests
     {
         var mods = new List<StatModifier> { StatTables.AttackSpeed(true, 0)!.Value };
         Assert.AreEqual(4.0, StatAggregator.Aggregate(mods).Value(StatKey.ATTACK_SPEED));
-        mods.AddRange(WzSkillStats.Modifiers(FirePoisonPassives(), 200));
+        mods.AddRange(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 0));
         double stage = StatAggregator.Aggregate(mods).Value(StatKey.ATTACK_SPEED);
         Assert.AreEqual(5.0, stage);
         Assert.IsTrue(StatTables.DelayScale(stage) < StatTables.DelayScale(4));

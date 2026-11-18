@@ -66,7 +66,7 @@ public class JobSkillsTests
         var mage = StatAggregator.Aggregate(StatTables.Vitals(StatTables.FirePoisonMage, 200).Concat(DefaultPassives.All).Append(Record(StatTables.FirePoisonMage)));
         var hero = StatAggregator.Aggregate(StatTables.Vitals(StatTables.Hero, 200).Concat(DefaultPassives.All));
         var heroEndure = StatAggregator.Aggregate(StatTables.Vitals(StatTables.Hero, 200).Concat(DefaultPassives.All).Append(Record(StatTables.Hero)));
-        Assert.AreEqual(17_991, mage.IntValue(StatKey.MAX_HP));
+        Assert.AreEqual(20_611, mage.IntValue(StatKey.MAX_HP));
         Assert.IsTrue(heroEndure.IntValue(StatKey.MAX_HP) > hero.IntValue(StatKey.MAX_HP));
     }
 }

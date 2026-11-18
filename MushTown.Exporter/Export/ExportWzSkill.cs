@@ -70,6 +70,10 @@ public static partial class Export
             if (v.Value is Wz_Vector vec) data.Vectors[v.Text] = new[] { vec.X, vec.Y };
             else data.Common[v.Text] = SkillFormula.Levels(Text(v), data.MaxLevel);
         }
+        if (node.Nodes["psdWT"] is { } byWeapon)
+            foreach (Wz_Node weapon in byWeapon.Nodes)
+                data.WeaponBonus[int.Parse(weapon.Text, CultureInfo.InvariantCulture)] =
+                    weapon.Nodes.ToDictionary(v => v.Text, v => SkillFormula.Levels(Text(v), data.MaxLevel));
         foreach (Wz_Node v in node.Nodes["info"]!.Nodes) data.Info[v.Text] = Text(v);
         if (node.Nodes["action"] is { } action)
             foreach (Wz_Node v in action.Nodes) data.Actions.Add(Text(v));
