@@ -57,6 +57,7 @@ public partial class MushTownGame
         mods.Add(new(StatKey.INT, StatValueType.FLAT, chara.Int, StatSource.Base));
         mods.Add(new(StatKey.LUK, StatValueType.FLAT, chara.Luk, StatSource.Base));
         mods.AddRange(StatTables.Vitals(chara.Job, chara.Level)); // base vitals and the job skills that scale with the level
+        if (chara.Job == StatTables.FirePoisonMage) mods.AddRange(WzSkillStats.Modifiers(_wzSkills, chara.Level)); // Magic Armor, MP Boost
 
         var worn = ItemData.EquipBonus(chara.Equips, _items);
         _hasWeapon = worn.weapon > 0;

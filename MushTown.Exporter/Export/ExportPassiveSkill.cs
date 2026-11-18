@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 using MushTown.Shared;
 using WzComparerR2.WzLib;
 
@@ -67,11 +66,11 @@ public static partial class Export
     private static string Text(Wz_Node? node) => Convert.ToString(node?.Value, CultureInfo.InvariantCulture) ?? "";
 
     // The icon node is a 1x1 stub with an _outlink to the real canvas in the Skill category.
-    private static bool SavePassiveIcon(WzRoot baseRoot, WzRoot skill, int id, string path)
+    private static bool SavePassiveIcon(WzRoot baseRoot, WzRoot skill, int id, string path, string node = "icon")
     {
         string id7 = id.ToString("D7");
         string img = (id >= 80000000 ? id / 100 : id / 10000).ToString("D3") + ".img";
-        string? link = baseRoot.Find($"Skill/{img}/skill/{id7}/icon")?.Nodes["_outlink"]?.Value as string;
+        string? link = baseRoot.Find($"Skill/{img}/skill/{id7}/{node}")?.Nodes["_outlink"]?.Value as string;
         if (link == null || !link.StartsWith("Skill/"))
         {
             Console.WriteLine($"passive skill {id7}: no icon link");
@@ -82,80 +81,33 @@ public static partial class Export
 
     // The WZ text has the two characters backslash-n as a line break. Each #name is
     // the number of that name at the highest level: a name with no number fails
-    // loud (the text must never show a raw mark).
+    // loud (the text must never show a raw mark). #c ... # is a color span: the tooltip
+    // keeps its text and drops the marks (a name is tried first: #cooltime is a number).
     private static string Fill(string text, Dictionary<string, string> values, int level)
     {
         text = text.Replace(@"\r\n", "\n").Replace(@"\n", "\n");
-        return Regex.Replace(text, @"#(\w+)", m =>
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < text.Length; i++)
         {
-            if (!values.TryGetValue(m.Groups[1].Value, out string? formula))
-                throw new InvalidDataException($"passive text has no number for #{m.Groups[1].Value}: {text}");
-            return new Formula(formula, level).Value().ToString("0.##", CultureInfo.InvariantCulture);
-        });
+            if (text[i] != '#') { sb.Append(text[i]); continue; }
+            int end = i + 1;
+            while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '_')) end++;
+            string name = text[(i + 1)..end];
+            if (values.TryGetValue(name, out string? formula))
+            {
+                sb.Append(SkillFormula.Eval(formula, level).ToString("0.##", CultureInfo.InvariantCulture));
+                i = end - 1;
+            }
+            else if (name.StartsWith('c') && text.IndexOf('#', i + 2) is var close and > 0)
+            {
+                sb.Append(text, i + 2, close - i - 2);
+                i = close;
+            }
+            else throw new InvalidDataException($"skill text has no number for #{name}: {text}");
+        }
+        return sb.ToString();
     }
 
     private static List<string> Lines(string text) =>
         text.Split('\n').Select(l => l.Trim()).Where(l => l != "").ToList();
-
-    // The WZ number formulas of these skills: + * /, x = the level, u() rounds up,
-    // d() rounds down, logN() is the logarithm to base N. A plain number is a formula too.
-    private sealed class Formula
-    {
-        private readonly string _s;
-        private readonly double _level;
-        private int _i;
-
-        public Formula(string s, int level) { _s = s.Replace(" ", ""); _level = level; }
-
-        public double Value()
-        {
-            double v = Sum();
-            if (_i != _s.Length) throw new InvalidDataException($"bad formula: {_s}");
-            return v;
-        }
-
-        private double Sum()
-        {
-            double v = Product();
-            while (_i < _s.Length && _s[_i] == '+')
-            {
-                _i++;
-                v += Product();
-            }
-            return v;
-        }
-
-        private double Product()
-        {
-            double v = Unit();
-            while (_i < _s.Length && _s[_i] is '*' or '/')
-            {
-                char op = _s[_i++];
-                double r = Unit();
-                v = op == '*' ? v * r : v / r;
-            }
-            return v;
-        }
-
-        private double Unit()
-        {
-            int start = _i;
-            if (char.IsDigit(_s[_i]))
-            {
-                while (_i < _s.Length && (char.IsDigit(_s[_i]) || _s[_i] == '.')) _i++;
-                return double.Parse(_s[start.._i], CultureInfo.InvariantCulture);
-            }
-            while (_i < _s.Length && char.IsLetterOrDigit(_s[_i])) _i++;
-            string name = _s[start.._i];
-            if (name == "x") return _level;
-            if (_i >= _s.Length || _s[_i] != '(') throw new InvalidDataException($"bad formula: {_s}");
-            _i++;
-            double arg = Sum();
-            _i++; // the closing bracket
-            if (name == "u") return Math.Ceiling(arg);
-            if (name == "d") return Math.Floor(arg);
-            if (name.StartsWith("log")) return Math.Log(arg) / Math.Log(double.Parse(name[3..], CultureInfo.InvariantCulture));
-            throw new InvalidDataException($"bad formula: {_s}");
-        }
-    }
 }

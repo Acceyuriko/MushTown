@@ -67,6 +67,8 @@ public partial class MushTownGame
         ? _passives.Rows.Select(r => new SkillView(r.Name, r.Icon, r.Icon, r.MaxLevel, r.Desc, r.Effect, 0, true)).ToList()
         : JobSkills.Pages(SkillJob)[tab - 1].Select(id =>
         {
+            if (_wzSkills.TryGetValue(id, out var wz))
+                return new SkillView(wz.Name, wz.Icon, wz.Disabled, wz.MaxLevel, wz.Desc, wz.Effect, id, wz.Kind == SkillData.KindPassive);
             var s = _skills[id];
             return new SkillView(s.Name, s.Icon, s.Disabled, s.MaxLevel, s.Desc, new[] { SkillText.Effect(s, s.MaxLevel) }, id, s.Kind == SkillData.KindPassive);
         }).ToList();

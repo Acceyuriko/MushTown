@@ -589,6 +589,18 @@ public partial class MushTownGame
         foreach (int id in _manifest.Skills)
             if (!_skills.ContainsKey(id))
                 throw new InvalidDataException($"manifest lists skill {id} with no exported def");
+        // The Fire/Poison skills read from WZ: a table of their own (they are shown, not cast: no _skills entry).
+        string wzDir = Path.Combine(dir, "wz");
+        RequireExportDir(wzDir);
+        foreach (string f in Directory.GetFiles(wzDir, "*.json"))
+        {
+            var wz = LoadJson<WzSkillData>(f);
+            _wzSkills[wz.SkillId] = wz;
+        }
+        foreach (var tab in JobSkills.Pages(StatTables.FirePoisonMage))
+            foreach (int id in tab)
+                if (!_wzSkills.ContainsKey(id))
+                    throw new InvalidDataException($"skill tab lists {id} with no exported wz def");
         // The beginner page: one row per default passive skill, in the order of the
         // Shared table (an old export fails loud).
         _passives = LoadJson<DefaultPassiveSkillData>(Path.Combine(dir, "passive", "passives.json"));
@@ -647,6 +659,7 @@ public partial class MushTownGame
             foreach (string f in skill.Hit) LoadTexture(f);
             foreach (string f in skill.Affected) LoadTexture(f);
         }
+        foreach (var wz in _wzSkills.Values) { LoadTexture(wz.Icon); LoadTexture(wz.Disabled); }
         for (int i = 0; i < MacroBook.Count; i++) LoadTexture($"ui/macro_icon{i}.png"); // the keys and the quick slots draw them
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);
         LoadNpcTextures(); // NPC stand textures (quest json already loaded in Initialize)

@@ -46,18 +46,14 @@ public static class StatTables
 
     // The max HP / MP records of a job at a level: the base, plus the max-level job skills that raise it.
     // The skill numbers are WZ's (hp-mp.md section 3): Warrior Mastery lv2mhp 20 and Iron Body mhpR 20 at
-    // level 20; MP Boost lv2mmp 20 + 5 x 20 and mmpR 20 at level 20. lv2mhp / lv2mmp are per character
-    // level, so they are one FLAT record of coefficient x level. A job without a row plays the Hero's skills.
+    // level 20. lv2mhp is per character level, so it is one FLAT record of coefficient x level. The Fire/Poison
+    // Mage has no skill record here: its MP Boost is a real skill (WzSkillStats). A job without a row plays
+    // the Hero's skills.
     public static IEnumerable<StatModifier> Vitals(int jobId, int level)
     {
         yield return new(StatKey.MAX_HP, StatValueType.FLAT, Progression.MaxHp(level, jobId), StatSource.Base);
         yield return new(StatKey.MAX_MP, StatValueType.FLAT, Progression.MaxMp(level, jobId), StatSource.Base);
-        if (jobId == FirePoisonMage)
-        {
-            yield return new(StatKey.MAX_MP, StatValueType.FLAT, 120.0 * level, StatSource.Skill, "MP Boost");
-            yield return new(StatKey.MAX_MP, StatValueType.PERCENT, 20, StatSource.Skill, "MP Boost");
-        }
-        else
+        if (jobId != FirePoisonMage)
         {
             yield return new(StatKey.MAX_HP, StatValueType.FLAT, 20.0 * level, StatSource.Skill, "Warrior Mastery");
             yield return new(StatKey.MAX_HP, StatValueType.PERCENT, 20, StatSource.Skill, "Iron Body");
@@ -67,7 +63,7 @@ public static class StatTables
     // The attack speed stage of the panel (1 slowest .. 10 fastest). A weapon's
     // WZ attackSpeed counts the other way round (2 fastest .. 9 slowest), so the
     // stage is 10 minus it: a sword with 4 is stage 6, a wand with 6 is stage 4.
-    // A mage always has the fixed stage 4.
+    // A mage has the fixed stage 4 (the skills add to it: MP Boost +1).
     public const int MageAttackSpeed = 4;
     public static int AttackSpeedStage(int wzAttackSpeed) => 10 - wzAttackSpeed;
 

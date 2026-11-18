@@ -197,7 +197,7 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
-        if (!ExportPassiveSkills(baseRoot, skill, str, outDir))
+        if (!ExportPassiveSkills(baseRoot, skill, str, outDir) || !ExportWzSkills(baseRoot, skill, str, outDir))
         {
             Environment.ExitCode = 1;
             return;

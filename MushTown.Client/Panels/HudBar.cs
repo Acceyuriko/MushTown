@@ -36,6 +36,7 @@ public partial class MushTownGame
     private List<int> _equips = new();
 
     private readonly Dictionary<int, SkillData> _skills = new();
+    private readonly Dictionary<int, WzSkillData> _wzSkills = new(); // the Fire/Poison skills (shown, passives applied; the actives are not cast yet)
     private SkillCost _skillCost = null!; // live casts over _skills (same dict ref)
     private SkillDamage _skillDmg = null!;
     private int _skillTab = 1; // 0 Beginner (the default passives), 1..5 = I..V (Warrior, Fighter, Crusader, two empty pages)

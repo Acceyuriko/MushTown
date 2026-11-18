@@ -314,7 +314,7 @@ public partial class MushTownGame
 
     // The icon art of a skill id, or "" when it is not a skill of this
     // character (the key window draws the skill the draft put on a key).
-    internal string SkillIconTex(int id) => _skills.TryGetValue(id, out var s) ? s.Icon : "";
+    internal string SkillIconTex(int id) => _skills.TryGetValue(id, out var s) ? s.Icon : _wzSkills.TryGetValue(id, out var wz) ? wz.Icon : "";
 
     // One preset as an action -> key map (the key window). No character
     // (--host/--join) shows the defaults, like the live table.

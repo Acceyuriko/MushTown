@@ -14,10 +14,21 @@ public static class JobSkills
         Array.Empty<int>(), // V: no skills yet
     };
 
+    // Fire/Poison: the 1st job (200.img, the visible ones: Elemental Weakness is invisible in WZ). Pages II to V
+    // follow with their own jobs' tickets.
+    private static readonly int[][] FirePoison =
+    {
+        new[] { WzSkillData.EnergyBolt, WzSkillData.Teleport, WzSkillData.ManaWave, WzSkillData.MagicGuard, WzSkillData.MagicArmor, WzSkillData.MpBoost },
+        Array.Empty<int>(), // II
+        Array.Empty<int>(), // III
+        Array.Empty<int>(), // IV
+        Array.Empty<int>(), // V
+    };
+
     private static readonly int[][] None = { Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>() };
 
-    // The skill ids of pages I to V. A job with no skills yet (Fire/Poison) has five empty pages.
-    public static int[][] Pages(int job) => job == StatTables.Hero ? Hero : None;
+    // The skill ids of pages I to V. A job with no skills yet has five empty pages.
+    public static int[][] Pages(int job) => job == StatTables.Hero ? Hero : job == StatTables.FirePoisonMage ? FirePoison : None;
 
     public static bool Has(int job, int skillId) => Pages(job).Any(page => page.Contains(skillId));
 
