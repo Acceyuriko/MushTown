@@ -13,12 +13,12 @@ public static class ItemLines
         (1, "Warrior"), (2, "Magician"), (4, "Bowman"), (8, "Thief"), (16, "Pirate"),
     };
 
-    // The six jobs of the equipment tooltip's job bar. A job lights up when
-    // the item asks for it; reqJob 0 means every job, a mask has no Beginner bit.
-    public static readonly string[] JobBar = { "Beginner", "Warrior", "Magician", "Bowman", "Thief", "Pirate" };
+    // The five jobs of the equipment tooltip's job bar (no Beginner), one per reqJob bit. A job lights up when
+    // the item asks for it; reqJob 0 means every job.
+    public static readonly string[] JobBar = Array.ConvertAll(Jobs, j => j.Name);
 
     public static bool JobLit(ItemData data, int i) =>
-        data.ReqJob == 0 || (i > 0 && (data.ReqJob & (1 << (i - 1))) != 0);
+        data.ReqJob == 0 || (data.ReqJob & Jobs[i].Bit) != 0;
 
     // A potion's own String.wz description already says what it restores, so
     // only a worn equip's max HP/MP (Hp/Mp are the potion heal) gets a line.

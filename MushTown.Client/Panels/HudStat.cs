@@ -99,7 +99,7 @@ public partial class MushTownGame
         body.Add(new Picture("ui/stat_label_attack.png", bx + 11, by + 136)); // the attack stats
         // Page 1 is mesos / drop / exp, page 2 is defense / speed / knockback resistance; the art carries the dots.
         body.Add(new Picture(_statPage == 0 ? "ui/stat_label_utility.png" : "ui/stat_label_defense.png", bx + 12, by + 329));
-        body.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => CombatPower().ToString("#,##0"), bx + _statLay.Get("cpX", 437), by + _statLay.Get("cpY", 9), Color.White)); // combat power, at the right end of the bar
+        body.Add(new RightLabel((ui, s) => ui.GetSmall(s), () => CurrentCombatPower().ToString("#,##0"), bx + _statLay.Get("cpX", 437), by + _statLay.Get("cpY", 9), Color.White)); // combat power, at the right end of the bar
         var rows = StatRows();
         for (int i = 0; i < rows.Count; i++)
         {
@@ -214,15 +214,9 @@ public partial class MushTownGame
         return $"{lo:#,##0}~{hi:#,##0}";
     }
 
-    // The combat power: our own number, not the official one (the official
-    // formula is not in the WZ). It grows with the level, the attack and the
-    // main stats, so the gear and the skills move it.
-    private long CombatPower()
-    {
-        int level = _save?.Slots[_slot]?.Level ?? 1;
-        return level * 100L + DamageChain.TotalAttack(_stats) * 4
-            + _stats.IntValue(StatKey.STR) + _stats.IntValue(StatKey.DEX);
-    }
+    // The combat power: the wiki formula of CombatPower; it drops the Skill and Buff records from the snapshot itself before it counts.
+    private long CurrentCombatPower() =>
+        CombatPower.Calculate(_stats, CurrentJob(), StatTables.MaxWeaponCoefficient(_save?.Slots[_slot]?.Job ?? 0));
 }
 
 // The character name on the official blue plate: the plate grows with the

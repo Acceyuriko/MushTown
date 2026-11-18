@@ -39,7 +39,7 @@ public sealed class EquipTip : Component
 
         var stats = new List<string>();
         if (item.Category != "") stats.Add("Equipment Category: " + item.Category);
-        if (item.AttackSpeed != 0) stats.Add("Attack Speed: " + ItemCategory.Speed(item.AttackSpeed));
+        if (item.AttackSpeed != 0) stats.Add("Attack Speed: " + item.AttackSpeed);
         stats.AddRange(ItemLines.Bonuses(item));
         var desc = item.Desc.Length == 0 ? new List<string>() : gfx.Ui.Wrap(item.Desc, _lay.Get("descW", 290));
         int lineGap = _lay.Get("lineGap", 16);
@@ -93,7 +93,7 @@ public sealed class EquipTip : Component
         Text(gfx, $"REQ LUK : {item.ReqLuk:000}", rx, r2, Gray);
         Text(gfx, $"REQ INT : {item.ReqInt:000}", rx2, r2, Gray);
 
-        // the job bar: six names, the ones that can wear the item lit
+        // the job bar: five names, the ones that can wear the item lit
         int by = y + _lay.Get("jobY", 176);
         int bw = w - margin * 2;
         JobBar(gfx, new Rectangle(x + margin, by, bw, gfx.Tex("ui/etip_cat_c.png").Height));

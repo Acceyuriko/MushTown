@@ -85,7 +85,5 @@ public class SetTests
         Assert.AreEqual("Staff (One-Handed Weapon)", ItemCategory.Of(1382245, "Wp"));
         Assert.AreEqual("Hat", ItemCategory.Of(1004230, "Cp"));
         Assert.IsNull(ItemCategory.Of(1990000, "Wp")); // an unknown weapon group: the exporter refuses it
-        Assert.AreEqual("Slow (8)", ItemCategory.Speed(8));
-        Assert.AreEqual("Normal (6)", ItemCategory.Speed(6));
     }
 }

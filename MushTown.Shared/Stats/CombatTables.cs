@@ -78,6 +78,11 @@ public static class StatTables
         : weaponWzAttackSpeed > 0 ? new(StatKey.ATTACK_SPEED, StatValueType.FLAT, AttackSpeedStage(weaponWzAttackSpeed), StatSource.Equipment)
         : null;
 
+    // The highest weapon coefficient of a job, for the combat power: the job row's own weapon is its best one.
+    // That holds for the Hero (two-hand 1.44) and the Fire/Poison Mage (wand and staff 1.20, its only
+    // coefficient). Another job gets its own rule when it has a job table row.
+    public static double MaxWeaponCoefficient(int jobId) => Weapon(Job(jobId).Weapon).Coefficient;
+
     public static WeaponProfile Weapon(WeaponType type) => type switch
     {
         WeaponType.OneHandSword => new(1.24, 20),

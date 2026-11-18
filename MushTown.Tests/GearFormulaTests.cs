@@ -141,4 +141,19 @@ public class GearFormulaTests
         Assert.IsTrue(a.MaxPanel > b.MaxPanel * 4);
         Assert.IsTrue(a.TotalDamage > b.TotalDamage * 4);
     }
+
+    // The six pieces raise the mage's combat power: INT, LUK and magic attack all go up.
+    [TestMethod]
+    public void CombatPower_RisesWithTheSixPieces()
+    {
+        var job = StatTables.Job(StatTables.FirePoisonMage);
+        long Cp(IEnumerable<int> ids) => CombatPower.Calculate(StatAggregator.Aggregate(ItemData.EquipModifiers(ids.ToList(), Defs).Concat(new[]
+        {
+            new StatModifier(StatKey.INT, StatValueType.FLAT, 1000, StatSource.Base),
+            new StatModifier(StatKey.LUK, StatValueType.FLAT, 100, StatSource.Base),
+            new StatModifier(StatKey.MATT, StatValueType.FLAT, 50, StatSource.Base),
+        })), job, 1.2);
+        Assert.AreEqual((long)Math.Floor(0.01 * 4100 * 1.35 * 50), Cp(Array.Empty<int>()));      // INT 1000, LUK 100, MATT 50
+        Assert.AreEqual((long)Math.Floor(0.01 * 4408 * 1.35 * 207), Cp(All));                    // INT 1062, LUK 160, MATT 207
+    }
 }
