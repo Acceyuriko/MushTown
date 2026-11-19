@@ -18,6 +18,7 @@ public sealed class WzSkillData
     public const int EnergyBolt = 2001008;
     public const int Teleport = 2001009;
     public const int ManaWave = 2001011;
+    public const int ManaWaveFloat = 2001012; // Mana Wave's held slow fall: a child node of 2001011 (WZ has no link, see Export.WzSkillChildren)
     public const int MagicGuard = 2000002;
     public const int MagicArmor = 2000010;
     public const int MpBoost = 2000006;

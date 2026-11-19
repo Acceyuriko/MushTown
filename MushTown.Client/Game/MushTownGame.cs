@@ -51,6 +51,8 @@ public partial class MushTownGame : Game
     private readonly string? _shotTeleport; // --teleport <left|right|up|down>: cast Teleport that way from --at
     private readonly (int X, int? Y)? _shotAt; // --at <x>[,<y>]: the feet x (and height) of the --teleport pose
     private readonly int _shotHoldMs; // --hold <ms>: the Left/Right key stays held this long after the --teleport cast
+    private readonly string? _shotManaWave; // --manawave <boost|air|float>: play Mana Wave from --at
+    private readonly string? _shotTeleportFrom; // --teleportfrom <rope|swing>: the stage the --teleport cast starts from
     private readonly bool _shotTeleportPre; // --teleportpre: the stage before the cast
     private readonly int _shotRecastMs; // --recast <ms>: after --flyms the same cast again, then the world runs this long (the numbers of two casts on one mob)
     private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (effect, attack frame, ball, explosion, numbers)
@@ -84,6 +86,7 @@ public partial class MushTownGame : Game
     private readonly GameObject _world = new();
     private GameObject _mapObj = new(); // rebuilt per map load: portal + NPC children
     private readonly PlayerMover _mover = new();
+    private readonly AirMovement _air = new(); // Mana Wave's boost and slow fall: once per airtime each
     // The audio object: the music player is its component.
     private readonly GameObject _audio = new();
     private readonly BgmPlayer _bgm;
@@ -139,7 +142,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -175,6 +178,8 @@ public partial class MushTownGame : Game
         _shotAt = shotAt;
         _shotTeleportPre = shotTeleportPre;
         _shotHoldMs = shotHoldMs;
+        _shotManaWave = shotManaWave;
+        _shotTeleportFrom = shotTeleportFrom;
         _shotCrit = shotCrit;
         _shotStandoff = shotStandoff;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
@@ -253,6 +258,7 @@ public partial class MushTownGame : Game
         // so the pooled ones tick in spawn order. Camera and audio ride the
         // tree but do not tick.
         var player = new GameObject();
+        player.Add(_air); // before the mover: its fall cap is set before the feet fall
         player.Add(_mover);
         player.Add(_heroPlate);
         _world.AddChild(player);
@@ -802,6 +808,7 @@ public partial class MushTownGame : Game
         // The feet step in Shared: snapshot in, outputs drained after. Skills
         // above already poked the state (leaps, dashes); travel and respawn
         // land after the step, same frame.
+        UpdateManaWave(freshAlt, up);
         _mover.AttackAction = _swing.Current;
         _mover.Input = new PlayerInput
         {

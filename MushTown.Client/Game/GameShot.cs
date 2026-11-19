@@ -82,6 +82,11 @@ public partial class MushTownGame
             PoseTeleport();
             return;
         }
+        if (_shotManaWave != null)
+        {
+            PoseManaWave();
+            return;
+        }
         if (_shotHurt)
         {
             var world = _localWorld!; // StartLocalWorld just built it
@@ -228,6 +233,24 @@ public partial class MushTownGame
         _mover.FacingRight = _shotTeleport != "left";
         _mover.Action = "stand1";
         _frame = 0;
+        if (_shotTeleportFrom == "rope") // hangs on the rope or ladder at --at (its x, the --at height)
+        {
+            var rope = SceneMath.FindLadder(_map.Ladders, _mover.X, _shotAt!.Value.Y ?? _map.Info.SpawnY)
+                ?? throw new InvalidDataException("--teleportfrom rope found no ladder or rope at --at");
+            _mover.Climb = rope;
+            _mover.Ground = null;
+            _mover.X = rope.X;
+            _mover.Y = _shotAt!.Value.Y ?? _map.Info.SpawnY;
+            _mover.Action = rope.Ladder ? "ladder" : "rope";
+        }
+        if (_shotTeleportFrom == "swing") // the swing is on: the attack lock holds the pose
+        {
+            string swing = RollSwing();
+            _fighter.StartAttack(Delays(swing, Hero?.Skin ?? 0).Sum(), AttackScale());
+            _mover.AttackAction = swing;
+            _mover.Action = swing;
+        }
+        _shownAction = _mover.Action;
         SnapCamera();
         if (_shotTeleportPre && _shotHoldMs == 0) return;
         _upNow = _shotTeleport == "up";
@@ -238,10 +261,62 @@ public partial class MushTownGame
             CastTeleport(_wzSkills[WzSkillData.Teleport]);
             foreach (var f in _fx) f.Frame = 3;
         }
+        if (_shotTeleportFrom != null) // one step: the pose of the new place (a swing keeps its pose, a rope hero stands now)
+        {
+            _mover.Input = new PlayerInput { Locked = _fighter.AttackLock > 0, Walk = OwnWalk(), Jump = OwnJump() };
+            _mover.Update(1f / 60);
+            _shownAction = _mover.Action;
+            _frame = _fighter.AttackLock > 0 ? 1 : 0;
+        }
         if (_shotHoldMs == 0) return;
         _mover.Input = new PlayerInput { Dir = _dirNow, Walk = OwnWalk(), Jump = OwnJump() };
         for (int i = _shotHoldMs * 60 / 1000; i > 0; i--) _mover.Update(1f / 60);
         _shownAction = _mover.Action;
+    }
+
+    // --manawave <boost|air|float> --at <x>[,<y>] [--hold <ms>]: the hero stands as for --teleport and plays Mana Wave through the
+    // Client's own check (UpdateManaWave: the MP, the effect) and the air state and mover steps at 60 a second (see Program.cs).
+    private void PoseManaWave()
+    {
+        _mover.X = _shotAt!.Value.X;
+        _mover.Ground = SceneMath.GroundBelow(_map.Footholds, (int)_mover.X, _shotAt.Value.Y ?? _map.Info.SpawnY)
+            ?? throw new InvalidDataException($"--manawave found no ground at x {_mover.X}");
+        _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
+        float standY = _mover.Y;
+        ResetMotion();
+        _mover.FacingRight = true;
+        void Step(int frames, bool up, bool alt, bool fresh)
+        {
+            for (int i = 0; i < frames; i++)
+            {
+                UpdateManaWave(fresh && i == 0, up);
+                _mover.Input = new PlayerInput { Up = up, JumpHeld = alt, JumpPressed = fresh && i == 0, Walk = OwnWalk(), Jump = OwnJump() };
+                _air.Update(1f / 60);
+                _mover.Update(1f / 60);
+            }
+        }
+        int hold = _shotHoldMs > 0 ? _shotHoldMs : _shotManaWave == "float" ? 1000 : 250;
+        int frames = Math.Max(1, hold * 60 / 1000);
+        switch (_shotManaWave)
+        {
+            case "boost":
+                Step(frames, true, true, true);
+                break;
+            case "air":
+                Step(6, false, true, true); // the plain jump (no Up: nothing to cast on the ground)
+                Step(frames, true, true, true); // Up and Jump together in the air
+                break;
+            default:
+                Step(40, true, true, true); // the boost, to its top (a plain jump is only 75 px: the slow fall needs height)
+                Step(2, false, false, false); // the keys let go
+                Step(frames, false, true, true); // pressed again and held: the slow fall
+                break;
+        }
+        foreach (var f in _fx) f.Frame = Math.Min(f.Frames.Count - 1, hold / 60); // the boost effect, as far as it has played
+        Console.WriteLine($"manawave {_shotManaWave}: {hold} ms in, feet height {_mover.Y:F1} (stand {standY:F0}, so {standY - _mover.Y:F1} px up), speed {_mover.Vy:F1}, MP {_save!.Slots[_slot]!.Mp}");
+        _shownAction = _mover.Action;
+        _frame = 0;
+        SnapCamera();
     }
 
     // A WZ damage skill (Energy Bolt): pay best-effort, let the mobs gather (--aiticks), then cast with a fixed

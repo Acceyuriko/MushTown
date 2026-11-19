@@ -159,6 +159,40 @@ public sealed class NetTests
         Assert.IsFalse(a.TryTakeFx(out _)); // the caster draws its own effect
     }
 
+    // Mana Wave over the net: the boost is a SkillCast (the effect at the caster's place) and the flight and the slow fall are
+    // the ordinary State messages of every frame, so a peer sees the feet go up and then come down slowly.
+    [TestMethod]
+    public void Loopback_ManaWave_PeerSeesTheEffectAndTheFlightAndTheSlowFall()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(10000);
+        var wave = new WzSkillData { SkillId = WzSkillData.ManaWave, MaxLevel = 1, Kind = SkillData.KindActive };
+        wave.Common["mpCon"] = SkillFormula.Levels("10", 1);
+        assets.AddWzSkill(wave);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 74);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 74);
+        b.Connect("127.0.0.1", Net.Port + 74);
+
+        a.SendState(10000, 100, 215, Net.ActStand, 0, true);
+        Assert.AreEqual(215f, WaitTake(b).Y);
+        a.SendSkillCast(WzSkillData.ManaWave, 0);
+        SkillFxEvent fx = default;
+        for (int i = 0; i < 500 && !b.TryTakeFx(out fx); i++) Thread.Sleep(10);
+        Assert.AreEqual(WzSkillData.ManaWave, fx.Skill);
+        Assert.AreEqual(100f, fx.X);
+        Assert.AreEqual(215f, fx.Y);
+        Assert.IsFalse(a.TryTakeFx(out _)); // the caster draws its own effect
+        a.SendState(10000, 100, 150, Net.ActJump, 0, true); // rising
+        Assert.AreEqual(150f, WaitTake(b).Y);
+        a.SendState(10000, 100, 80, Net.ActJump, 0, true); // the top
+        Assert.AreEqual(80f, WaitTake(b).Y);
+        a.SendState(10000, 100, 81.5f, Net.ActJump, 0, true); // the slow fall: no message of its own, just the feet
+        Assert.AreEqual(81.5f, WaitTake(b).Y);
+    }
+
     [TestMethod]
     public void DropAmount_SplitsAndJoinsLong()
     {

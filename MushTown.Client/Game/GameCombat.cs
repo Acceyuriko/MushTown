@@ -343,7 +343,7 @@ public partial class MushTownGame
                 }
                 return;
             case WzSkillData.Teleport:
-                if (_mover.Climb == null && _fighter.AttackLock <= 0) CastTeleport(_wzSkills[id]);
+                CastTeleport(_wzSkills[id]); // the only skill that may fire during a swing or a cast, and on a ladder or rope (the user's rule)
                 return;
             default:
                 if (_wzSkills.TryGetValue(id, out var wz))
@@ -375,21 +375,48 @@ public partial class MushTownGame
     // Teleport key in one frame counts; the macro cast reads the same fields). Up or Down is the vertical jump (the y
     // field, Up wins over Down, and over Left/Right), Left or Right the horizontal one (the x field). No direction key
     // held: nothing happens (no cast, no MP, no cooldown, no effect). The landing is TeleportRules' (wall first, then the
-    // platform); a refused landing costs no MP. The feet move at once and the pose stays as it was (WZ has no
-    // action node). The cooldown (teleportCooltime, 480 ms) is checked by TryPayWzSkill: while it runs nothing moves,
+    // platform); a refused landing costs no MP. It works in the middle of a swing or another cast (the attack lock only
+    // holds the pose) and on a ladder or rope: the landing is the same, and the feet leave the ladder (PlayerMover.Land).
+    // The feet move at once and the pose stays as it was (WZ has no action node). The cooldown (teleportCooltime, 480 ms) is checked by TryPayWzSkill: while it runs nothing moves,
     // nothing is paid and no effect plays. The server learns the new place first, so the others see the effect where we land.
     private void CastTeleport(WzSkillData wz)
     {
         var land = TeleportRules.ForKeys(_map, _mover.X, _mover.Y, _upNow, _downNow, _dirNow, (int)wz.Value("x", wz.MaxLevel), (int)wz.Value("y", wz.MaxLevel));
         if (land is not { } to || !TryPayWzSkill(wz)) return;
-        _mover.Reset();
-        _mover.X = to.X;
-        _mover.Y = to.Y;
-        _mover.Ground = to.Ground;
+        if (_mover.Climb != null && !_upNow && !_downNow) _mover.FacingRight = _dirNow > 0; // the facing does not follow the keys on a ladder: turn to the cast
+        _mover.Land(to.X, to.Y, to.Ground);
         SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
         if (_net == null || !_net.Connected) return;
         _net.SendState(_mapId, _mover.X, _mover.Y, Net.ActionCode(_mover.Action), (byte)_frame, _mover.FacingRight);
         _net.SendSkillCast(wz.SkillId, 0);
+    }
+
+    // Mana Wave (WZ 2001011) has no key of its own: Jump pressed with Up held boosts (mpCon MP), on the ground (instead of
+    // the plain jump) or in the air; Jump pressed again in the air without Up slows the fall for as long as it is held, up
+    // to time seconds (the child 2001012, mpCon MP, paid once when it starts). Each once per airtime (AirMovement). Like the
+    // other skills (but Teleport) it does not fire during a swing or on a ladder. Others see it by the State messages (the
+    // feet every frame) and the boost effect (SkillCast); the slow fall has no message and no art yet (the special nodes
+    // of 2001012 are not drawn).
+    // Unverified (the WZ gives no unit): y 1200 is taken as the take-off speed in px per second (a peak of y^2 / 2 / gravity
+    // = 400 px, the plain jump is 75), and the child's v 95 as the slow fall speed in px per second; time 5 is seconds.
+    private void UpdateManaWave(bool freshAlt, bool up)
+    {
+        if (!freshAlt || _mover.Climb != null || _fighter.AttackLock > 0 || !_wzSkills.TryGetValue(WzSkillData.ManaWave, out var wave)) return;
+        if (up)
+        {
+            if (!_air.CanBoost || !TryPayWzSkill(wave)) return;
+            _air.Boost((float)wave.Value("y", wave.MaxLevel));
+            PlaySfx("jump");
+            SpawnCastFx(wave.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
+            if (_net != null && _net.Connected) _net.SendSkillCast(wave.SkillId, 0);
+            return;
+        }
+        var chara = _save?.Slots[_slot];
+        if (!_air.CanFloat || chara == null || !JobSkills.Has(chara.Job, wave.SkillId)) return;
+        var hold = wave.Children.Single(c => c.SkillId == WzSkillData.ManaWaveFloat); // the start check proves it is there
+        int lv = wave.MaxLevel; // the skill stands at its max level; the child has no level of its own to learn
+        if (!_skillCost.Pay(chara, hold, lv, _fighter.Cooldowns)) return;
+        _air.Float((float)hold.Value("time", lv), (float)hold.Value("v", lv));
     }
 
     // A paid damaging cast: lock the pose, play the effect, judge (local) or

@@ -27,7 +27,7 @@ public sealed class PlayerMover : Component
     public const float WalkSpeed = 140f; // px per second (the Client scales these two by Warrior Mastery)
     public const float JumpV0 = -520f; // take-off velocity, px per second
     private const float Gravity = 1800f; // pull-down, px per second squared
-    private const float MaxFall = 700f; // terminal velocity: long drops stop speeding up here
+    public const float MaxFall = 700f; // terminal velocity: long drops stop speeding up here
     private const float AirAccel = 100f; // weak air drift: a full jump shifts vx by ~60
     private const float ClimbSpeed = 120f; // ladder/rope slide, px per second
     private const int DropFrames = 3; // down+jump ignores landings for ~3 frames: just enough to clear the dropped line
@@ -39,6 +39,7 @@ public sealed class PlayerMover : Component
     // Feet position, horizontal/vertical speed, and the foothold stood on
     // (null means airborne, so there is no separate on-ground flag).
     public float X, Y, Vx, Vy;
+    public float FallCap = MaxFall; // the fastest the feet fall; AirMovement lowers it for a slow fall (Mana Wave)
     public FootholdItem? Ground;
     public LadderItem? Climb; // set while on a ladder or rope
     public bool ClimbMoving; // climb pose only animates while sliding
@@ -68,6 +69,17 @@ public sealed class PlayerMover : Component
         Climb = null;
         ClimbMoving = false;
         _dropFrames = 0;
+    }
+
+    // The feet are put at a new place at once (Teleport): still, off any ladder, on the given ground. A held Up or Down
+    // must not grab the ladder it left (or the one next to the landing) straight back.
+    public void Land(float x, float y, FootholdItem ground)
+    {
+        Reset();
+        X = x;
+        Y = y;
+        Ground = ground;
+        _grabCooldown = GrabCooldown;
     }
 
     // A hit shoves the feet away from the source (dir -1 left, 1 right): a
@@ -191,7 +203,7 @@ public sealed class PlayerMover : Component
         if (Ground == null && Climb == null)
         {
             Vy += Gravity * dt;
-            Vy = Math.Min(Vy, MaxFall);
+            Vy = Math.Min(Vy, FallCap);
             float ny = Y + Vy * dt;
             if (Vy > 0 && _dropFrames == 0)
             {

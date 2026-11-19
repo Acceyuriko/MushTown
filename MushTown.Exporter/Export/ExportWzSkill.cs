@@ -17,6 +17,9 @@ namespace MushTown.Exporter;
 // Teleport (no damage line) also gets its cast effect: WZ keeps four colors of it in effect/0..3 (0 blue, 1 orange,
 // 2 violet, 3 yellow; which job wears which is unknown), the Fire/Poison one uses 0. It has no hit node and no
 // action node in this WZ, so it has no HitFrames and an empty Actions.
+// Mana Wave (no damage line, no hit node, an effect of 8 pictures) also gets its cast effect (effect/): the WZ effect list
+// starts with a blank 1x1 frame of 120 ms (no origin, no picture in the canvas); it is left out, so the effect starts at once
+// (CastFrames, Art.Origins and Art.Delays keep the same count). Its child 2001012 (the slow fall) has no art here.
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -51,7 +54,7 @@ public static partial class Export
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
-            if ((data.Common.ContainsKey("damage") || id == WzSkillData.Teleport) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
+            if ((data.Common.ContainsKey("damage") || id is WzSkillData.Teleport or WzSkillData.ManaWave) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child)) data.Children.Add(ReadWzSkill(baseRoot, chara, child));
             WriteJson(Path.Combine(outDir, "skill", "wz", $"{id}.json"), data);
             string kind = data.Kind == SkillData.KindPassive ? "passive" : data.Kind == SkillData.KindBuff ? "buff" : "active";
@@ -71,9 +74,10 @@ public static partial class Export
     {
         var node = skill.Find($@"_Canvas\{id / 10000}.img\skill\{id}");
         bool teleport = id == WzSkillData.Teleport; // effect/0: the blue one, see the header
+        bool noHit = id is WzSkillData.Teleport or WzSkillData.ManaWave; // a cast effect only
         var effect = teleport ? node?.Nodes["effect"]?.Nodes["0"] : node?.Nodes["effect"];
         var hit = node?.Nodes["hit"]?.Nodes["0"];
-        if (effect == null || (hit == null && !teleport))
+        if (effect == null || (hit == null && !noHit))
         {
             Console.WriteLine($"skill {id} has no effect or no hit 0");
             return false;
@@ -98,7 +102,8 @@ public static partial class Export
     // The origin and delay of each int-named frame, in frame order (the order SaveSkillFrames numbers the pngs).
     private static WzArt ReadWzArt(Wz_Node list)
     {
-        var frames = list.Nodes.Where(f => int.TryParse(f.Text, out _)).OrderBy(f => int.Parse(f.Text, CultureInfo.InvariantCulture)).ToList();
+        // A frame with no origin is the blank lead-in of Mana Wave's effect: not a picture, left out.
+        var frames = list.Nodes.Where(f => int.TryParse(f.Text, out _) && f.Nodes["origin"] != null).OrderBy(f => int.Parse(f.Text, CultureInfo.InvariantCulture)).ToList();
         return new WzArt
         {
             Origins = frames.Select(f => f.Nodes["origin"]!.Value is Wz_Vector v ? new[] { v.X, v.Y } : throw new InvalidDataException($"frame {f.Text} has no origin")).ToArray(),

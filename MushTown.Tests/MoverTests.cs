@@ -159,6 +159,29 @@ public sealed class MoverTests
         Assert.IsTrue(m.X > 600f, $"x {m.X}");
     }
 
+    // A Teleport from a rope (the user's rule): the landing is the usual one, and the feet leave the rope. A held Up must not
+    // grab the rope again at once (the landing is at the rope's own top).
+    [TestMethod]
+    public void Teleport_FromARope_LeavesItAndHeldUpDoesNotGrabItBack()
+    {
+        var map = TestMap();
+        map.Footholds = new List<FootholdItem>
+        {
+            new() { X1 = 0, Y1 = 200, X2 = 1000, Y2 = 200 },
+            new() { X1 = 0, Y1 = 300, X2 = 1000, Y2 = 300 },
+        };
+        var m = new PlayerMover { Map = map, X = 500, Y = 250, Climb = map.Ladders[0] };
+        var land = TeleportRules.ForKeys(map, m.X, m.Y, true, false, 0, 190, 295)!.Value; // Up: the ground above
+        Assert.AreEqual(200, land.Y);
+        m.Land(land.X, land.Y, land.Ground);
+        Assert.IsNull(m.Climb);
+        Assert.AreSame(land.Ground, m.Ground);
+        m.Input = Input() with { Up = true };
+        for (int i = 0; i < 10; i++) m.Update(Dt);
+        Assert.IsNull(m.Climb);
+        Assert.AreEqual(200f, m.Y);
+    }
+
     [TestMethod]
     public void StopBeforeWall_BothDirections_AndNoWall()
     {
