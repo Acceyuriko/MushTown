@@ -12,11 +12,12 @@ public partial class FirePoisonCombatTests
     private const string Floor = """[{"X1":-1000,"Y1":100,"X2":1000,"Y2":100,"Layer":0}]""";
 
     // Energy Bolt as 200.img writes it at level 20 (box lt/rb, 4 segments, 4 mobs, reach 340). With
-    // targetBox false the box hangs on the caster (the generic WZ rule), with the asymmetric box given.
+    // targetBox false the box hangs on the caster (the generic WZ rule), with the asymmetric box given. A skill with no ball
+    // judges at its attack frame (attackDelayMs); 0 (no body action) judges in the cast itself.
     private static WzSkillData BoltData(bool targetBox = true, string elem = "", int mobCount = 4, int segments = 4,
-        int[]? lt = null, int[]? rb = null, bool ball = false)
+        int[]? lt = null, int[]? rb = null, bool ball = false, int attackDelayMs = 390)
     {
-        var data = new WzSkillData { SkillId = Bolt, MaxLevel = 20, Kind = SkillData.KindActive, ElemAttr = elem, AttackDelayMs = 390 };
+        var data = new WzSkillData { SkillId = Bolt, MaxLevel = 20, Kind = SkillData.KindActive, ElemAttr = elem, AttackDelayMs = attackDelayMs };
         data.Common["mpCon"] = SkillFormula.Levels("24", 20);
         data.Common["damage"] = SkillFormula.Levels("78", 20);
         data.Common["attackCount"] = SkillFormula.Levels(segments.ToString(), 20);
@@ -110,7 +111,7 @@ public partial class FirePoisonCombatTests
     public void WzStrike_CasterBox_FacesBothWays()
     {
         using var assets = new TempAssets();
-        assets.AddWzSkill(BoltData(false, lt: new[] { -200, -50 }, rb: new[] { 30, 50 }));
+        assets.AddWzSkill(BoltData(false, lt: new[] { -200, -50 }, rb: new[] { 30, 50 }, attackDelayMs: 0)); // no body action: judged in the cast, before the mobs can move
         var world = World(assets, (-201, 100), (-200, 100), (-31, 100), (30, 100), (31, 100), (200, 100), (201, 100), (0, 151));
         var left = world.SkillStrike(7, 0, 100, false, new Random(1), Mage, Bolt, 78);
         CollectionAssert.AreEqual(new[] { -200, -31, 30 }, UidsHit(world, left)); // (0, 151) is 51 px below the box
@@ -143,7 +144,8 @@ public partial class FirePoisonCombatTests
     {
         using var assets = new TempAssets();
         var data = BoltData();
-        data.BallFrames.Clear(); // no ball: the box judges at once, before the mobs can move
+        data.BallFrames.Clear(); // no ball: the box judges at once (no body action), before the mobs can move
+        data.AttackDelayMs = 0;
         assets.AddWzSkill(data);
         var world = World(assets, 50, (100, 100), (150, 200), (200, 226));
         var hits = world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
@@ -330,6 +332,7 @@ public partial class FirePoisonCombatTests
         using var assets2 = new TempAssets();
         var noBall = BoltData();
         noBall.BallFrames.Clear();
+        noBall.AttackDelayMs = 0; // no body action: at once
         assets2.AddWzSkill(noBall);
         var world2 = World(assets2, (100, 100));
         Assert.AreEqual(4, world2.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78).Count); // at once

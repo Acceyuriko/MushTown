@@ -45,6 +45,14 @@ public static class WzSkillStats
         return ((int)drain.Value("x", drain.MaxLevel), (int)drain.Value("y", drain.MaxLevel));
     }
 
+    // Meditation while its buff runs: magic attack (WZ indieMad = 10 + x) at max level, a Buff record. The buff lasts time seconds
+    // (WZ time = 40 + 10 * x, read by the caster). The party part (lt/rb) is not used: the buff is for the caster only.
+    public static StatModifier Meditation(IReadOnlyDictionary<int, WzSkillData> skills)
+    {
+        var meditation = skills[WzSkillData.Meditation];
+        return new(StatKey.MATT, StatValueType.FLAT, meditation.Value("indieMad", meditation.MaxLevel), StatSource.Buff, meditation.Name);
+    }
+
     public static IEnumerable<StatModifier> Modifiers(IReadOnlyDictionary<int, WzSkillData> skills, int level, int weaponItemId)
     {
         var armor = skills[WzSkillData.MagicArmor];

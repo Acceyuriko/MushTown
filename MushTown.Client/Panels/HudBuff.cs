@@ -32,7 +32,7 @@ public partial class MushTownGame
         foreach (string f in BuffFrameFiles) LoadTexture("ui/" + f);
         var bar = new GameObject { NoHit = true }; // art only: the clicks go through
         bar.Add(new Rect(BuffBarRect()));
-        bar.Add(new BuffBarArt(() => LiveBuffs(), id => _skills[id].Icon));
+        bar.Add(new BuffBarArt(() => LiveBuffs(), id => _wzSkills.TryGetValue(id, out var wz) ? wz.Icon : _skills[id].Icon));
         return bar;
     }
 

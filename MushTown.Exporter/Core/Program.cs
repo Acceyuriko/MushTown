@@ -32,6 +32,9 @@ using MushTown.Exporter;
 //           - the Fire/Poison 2nd-job passives were added (assets/skill/wz/2100000, 2100006, 2100007, 2100009, 2100011 .json and their
 //             icons; Agile Magic's attack speed is Common boosterActionSpeed). The skill window's page II shows them; an old export
 //             makes the client stop at start (no exported wz def for the page II ids).
+//           - the Fire/Poison 2nd-job actives were added (assets/skill/wz/2101001.json Meditation and 2101004.json Flame Orb, their icons
+//             and their art under assets/skill/wz/<id>/: effect, hit for Flame Orb, effect and affected for Meditation; the json has
+//             AffectedFrames and Art["affected"]). An old export makes the client stop at start.
 //           - the dodge changed (the mob json got Acc; an old one reads 0 and the dodge rate comes out wrong. effect/hurtdmg.json
 //             got the Miss word and effect/hurtdmg/Miss.png; an old hurtdmg.json has no Miss word and the client fails on a dodge).
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of

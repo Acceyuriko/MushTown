@@ -31,7 +31,11 @@ CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 // --skill <id> poses that skill: a buff casts for real (loop + timer), a
 // damage skill freezes mid-effect with judged hit sparks, a utility only
 // poses its effect. --skill rides with --screen skill for window shots
-// (buff timers, cooldowns); --skilltab picks the window tab.
+// (buff timers, cooldowns) and with --screen stat200 (a WZ buff, Meditation, with --job 210:
+// the stat window shows its magic attack); --skilltab picks the window tab.
+// A WZ buff (Meditation 2101001, --job 210) casts for real: the cast effect and the affected loop on the hero, the buff bar icon
+// and the stats; --flyms <ms> ages the effects (the loop is shown mid-play). Flame Orb (2101004) judges at the action's attack frame
+// (300 ms), so it needs --flyms 400 or more to show its numbers.
 // A WZ skill (Fire/Poison, ids 20xxxxx) follows --facing: left poses the caster
 // right of the first mob, facing left. It stands 250 px from the first mob (the other poses 50), so a ball has room to fly. With --job (a game pose shot, no --screen) the demo is a fresh
 // level 200 hero of that class, so the numbers are real ones. --aiticks runs BEFORE the
@@ -221,7 +225,7 @@ if (shotDots > 0 && shotSkill == 0) ok = false; // --dots puts the DoTs on the m
 if (shotFlyms > 0 && shotSkill == 0) ok = false; // --flyms runs the world after the --skill cast
 if (shotRecastMs > 0 && shotFlyms == 0) ok = false; // --recast casts again after the --flyms run
 if (shotStandoff > 0 && shotSkill == 0) ok = false; // --standoff places the --skill caster
-if (shotSkill != 0 && shotScreen != null && shotScreen != "skill") ok = false; // --skill rides only with the skill window
+if (shotSkill != 0 && shotScreen != null && shotScreen is not ("skill" or "stat200")) ok = false; // --skill rides only with the skill window and the fresh hero's stat window (a buff shows in its stats)
 if ((shotHit ? 1 : 0) + (shotSkill != 0 ? 1 : 0) + (shotDrop ? 1 : 0) + (shotDmg > 0 ? 1 : 0) + (shotHurt ? 1 : 0) + (shotTeleport != null ? 1 : 0) + (shotManaWave != null ? 1 : 0) > 1) ok = false; // one pose per shot
 if (shotScreen is not ("skill" or "skillscroll") && shotSkillTab != 1) ok = false; // --skilltab needs the skill window
 if (shotTalk != 0 && shotScreen is not ("talk" or "shop" or "shopscroll" or "shopnotice")) ok = false; // --talk rides only with the talk/shop screens

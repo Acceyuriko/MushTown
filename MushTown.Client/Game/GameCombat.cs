@@ -65,9 +65,9 @@ public partial class MushTownGame
         fx.Flight!.Launch(fromX, fromY, toX, toY, delayMs);
     }
 
-    // Plays the frames of one WZ art (hit, ball, special) with the origins and delays the WZ gives it.
+    // Plays the frames of one WZ art (hit, ball, special, affected) with the origins and delays the WZ gives it.
     private static List<string> ArtFrames(WzSkillData wz, string art) =>
-        art switch { "ball" => wz.BallFrames, "special" => wz.SpecialFrames, _ => wz.HitFrames };
+        art switch { "ball" => wz.BallFrames, "special" => wz.SpecialFrames, "affected" => wz.AffectedFrames, _ => wz.HitFrames };
 
     private static void UseArt(SkillFx fx, WzSkillData wz, string art)
     {
@@ -393,10 +393,12 @@ public partial class MushTownGame
             default:
                 if (_wzSkills.TryGetValue(id, out var wz))
                 {
-                    // Only a damage skill casts so far; a passive and the move Mana Wave are ignored.
+                    // A damage skill casts, a buff (Meditation) casts as a buff (a fresh key press refreshes it, a held key does not recast it); a passive and the move Mana Wave are ignored.
                     if (wz.Kind == SkillData.KindActive && wz.Common.ContainsKey("damage") && _mover.Climb == null
                         && _fighter.AttackLock <= 0 && HasJudge() && TryPayWzSkill(wz))
                         CastWzActive(wz);
+                    else if (wz.Kind == SkillData.KindBuff && _mover.Climb == null && _fighter.AttackLock <= 0 && _fighter.CanCastBuff(id, fresh) && TryPayWzSkill(wz))
+                        CastBuff(id);
                     return;
                 }
                 // A bound passive is ignored and a bound buff casts as a
@@ -513,10 +515,10 @@ public partial class MushTownGame
         _skillDmg.Pct(id, SkillLv(id), _fighter.Orbs, SkillLv(SkillData.ComboAttack), SkillLv(SkillData.ComboSynergy));
 
     // A paid buff cast: start the timer (recast refreshes), loop its art,
-    // relay the effect, push the new build (buff stats feed damage).
+    // relay the effect, push the new build (buff stats feed damage). A WZ buff (Meditation) lasts its time seconds at max level.
     private void CastBuff(int id)
     {
-        _fighter.Buffs[id] = _skills[id].BuffMs;
+        _fighter.Buffs[id] = _wzSkills.TryGetValue(id, out var wz) ? (float)wz.Value("time", wz.MaxLevel) * 1000f : _skills[id].BuffMs;
         PlaySfx("buff");
         StripLoopFx(id); // recasts re-hang one loop, never stack two
         SpawnLoopFx(id);
@@ -544,9 +546,18 @@ public partial class MushTownGame
         foreach (int id in _fighter.Buffs.Keys) SpawnLoopFx(id);
     }
 
-    // Buff loop art, riding the player (buffs without art skip silently).
+    // Buff loop art, riding the player (buffs without art skip silently). A WZ buff plays its affected art with the WZ origins
+    // and delays, anchored at the feet (Meditation).
     private void SpawnLoopFx(int id)
     {
+        if (_wzSkills.TryGetValue(id, out var wz))
+        {
+            var wzLoop = TakeFx();
+            wzLoop.Skill = id; wzLoop.Loop = true; wzLoop.Rider = _mover;
+            UseArt(wzLoop, wz, "affected");
+            wzLoop.X = _mover.X; wzLoop.Y = _mover.Y; wzLoop.FacingRight = _mover.FacingRight;
+            return;
+        }
         if (_skills[id].Affected.Count == 0) return;
         var loop = TakeFx();
         loop.Skill = id; loop.Loop = true; loop.Frames = _skills[id].Affected; loop.Rider = _mover;
@@ -579,6 +590,19 @@ public partial class MushTownGame
         if (chara == null || lv <= 0) return;
         chara.Hp = Math.Min(chara.Hp + _skills[SkillData.SelfRecovery].RegenHp * lv, MaxHpNow());
         chara.Mp = Math.Min(chara.Mp + _skills[SkillData.SelfRecovery].RegenMp * lv, MaxMpNow());
+    }
+
+    // A peer's buff cast (the SkillFx message): the loop of its affected art on that peer for the buff's time, so everyone
+    // on the map sees it. A recast of the same buff starts it over. A peer we do not see yet (its first State is not here) shows none.
+    private void SpawnPeerLoop(int attacker, int skill)
+    {
+        if (!_wzSkills.TryGetValue(skill, out var wz) || wz.Kind != SkillData.KindBuff || wz.AffectedFrames.Count == 0 || !_remotes.TryGetValue(attacker, out var peer)) return;
+        SkillFx.StripLoops(_fx, _world, _fxPool, skill, peer);
+        var loop = TakeFx();
+        loop.Skill = skill; loop.Loop = true; loop.Peer = peer;
+        loop.LifeMs = (float)wz.Value("time", wz.MaxLevel) * 1000f;
+        UseArt(loop, wz, "affected");
+        loop.X = peer.X; loop.Y = peer.Y; loop.FacingRight = peer.FacingRight;
     }
 
     // Our own cast or a peer's echo: a WZ effect anchors its WZ origin at the caster's feet; an old bare effect

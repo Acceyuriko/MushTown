@@ -895,6 +895,7 @@ public partial class MushTownGame : Game
             {
                 if (f.Map != _mapId) continue; // another map's cast: not shown here
                 SpawnCastFx(f.Skill, f.X, f.Y, f.FacingRight);
+                SpawnPeerLoop(f.Attacker, f.Skill);
             }
             while (_net.TryTakeBall(out var b))
             {

@@ -25,7 +25,7 @@ public class JobSkillsTests
     {
         Assert.AreEqual(5, JobSkills.Pages(StatTables.FirePoisonMage).Length);
         Assert.AreEqual(6, JobSkills.Pages(StatTables.FirePoisonMage)[0].Length);
-        Assert.AreEqual(5, JobSkills.Pages(StatTables.FirePoisonMage)[1].Length); // the 2nd job passives
+        Assert.AreEqual(7, JobSkills.Pages(StatTables.FirePoisonMage)[1].Length); // the 2nd job: five passives, Meditation, Flame Orb
         Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage).Skip(2).All(p => p.Length == 0));
         foreach (int id in JobSkills.Pages(StatTables.Hero).SelectMany(p => p))
             Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, id), $"Fire/Poison owns {id}");

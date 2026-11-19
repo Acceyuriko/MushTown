@@ -60,7 +60,7 @@ public partial class MushTownGame
             RefreshStats();
             BuildStatScene(); // the Character Info portrait shows the worn items: bake them in
         }
-        bool wzSkill = _wzSkills.ContainsKey(_shotSkill); // a Fire/Poison skill: its own table, no buff poses yet
+        bool wzSkill = _wzSkills.ContainsKey(_shotSkill); // a Fire/Poison skill: its own table
         if (_shotSkill != 0 && !wzSkill && !_skills.ContainsKey(_shotSkill))
             throw new InvalidDataException($"unknown skill: {_shotSkill}");
         if (_shotSkill != 0 && !wzSkill && _skills[_shotSkill].Kind == SkillData.KindBuff)
@@ -74,6 +74,20 @@ public partial class MushTownGame
                 throw new InvalidDataException($"--skill {_shotSkill} cannot cast: needs {data.Mp} MP");
             CastBuff(_shotSkill);
             RunShotAi();
+            SnapCamera();
+            return;
+        }
+        if (wzSkill && _wzSkills[_shotSkill].Kind == SkillData.KindBuff)
+        {
+            // a WZ buff (Meditation) runs the real path too: pay, cast (timer, loop, the stats); --flyms <ms> then ages the effects, so
+            // the cast effect and the affected loop are shown mid-play. The demo must be a Fire/Poison hero (--job 210).
+            _save ??= new SaveData();
+            _save.Slots[_slot] ??= DemoChara();
+            var buff = _wzSkills[_shotSkill];
+            if (!TryPayWzSkill(buff))
+                throw new InvalidDataException($"--skill {_shotSkill} cannot cast: the demo needs the job (--job 210) and {(int)buff.Value("mpCon", buff.MaxLevel)} MP");
+            CastBuff(_shotSkill);
+            RunShotFly(_shotFlyms);
             SnapCamera();
             return;
         }
@@ -335,8 +349,9 @@ public partial class MushTownGame
         SnapCamera();
     }
 
-    // A WZ damage skill (Energy Bolt): pay best-effort, let the mobs gather (--aiticks), then cast with a fixed
-    // seed, so the numbers are the same every run. A skill with a ball judges when the ball arrives, so --flyms <ms>
+    // A WZ damage skill (Energy Bolt, Flame Orb): pay best-effort, let the mobs gather (--aiticks), then cast with a fixed
+    // seed, so the numbers are the same every run. A skill with a ball judges when the ball arrives, and one with no ball but
+    // a body action (Flame Orb) at the action's attack frame (300 ms), so --flyms <ms>
     // runs the world that long after the cast (16 ms steps): the cast effect starts at once, the ball appears at the
     // body action's attack frame (Energy Bolt: 390 ms), then it flies, explodes, and the numbers rise on arrival.
     // Without --flyms the shot is the cast the moment it is thrown, with the cast effect posed mid-play. The shown cast

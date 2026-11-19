@@ -21,6 +21,10 @@ namespace MushTown.Exporter;
 // Mana Wave (no damage line, no hit node, an effect of 8 pictures) also gets its cast effect (effect/): the WZ effect list
 // starts with a blank 1x1 frame of 120 ms (no origin, no picture in the canvas); it is left out, so the effect starts at once
 // (CastFrames, Art.Origins and Art.Delays keep the same count). Its child 2001012 (the slow fall) gets the art of its special and specialAffected (SaveWzFloatArt).
+// The 2nd job actives (210.img): Flame Orb is a damage skill with no ball and no special: its effect (14 pictures, origins
+// walking from 172 to 583 along x) is the orb and its blast, and hit/0 is the spark on each mob. Meditation is a buff (info type 10):
+// its cast effect (effect, 19 pictures) and its loop on the buffed player (affected, AffectedFrames and Art["affected"]; the first
+// WZ frame of affected has only a delay of 270 ms and no picture, it is left out like Mana Wave's blank lead-in).
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -55,7 +59,7 @@ public static partial class Export
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
-            if ((data.Common.ContainsKey("damage") || id is WzSkillData.Teleport or WzSkillData.ManaWave) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
+            if ((data.Common.ContainsKey("damage") || data.Kind == SkillData.KindBuff || id is WzSkillData.Teleport or WzSkillData.ManaWave) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child))
             {
                 var childData = ReadWzSkill(baseRoot, chara, child);
@@ -80,7 +84,7 @@ public static partial class Export
     {
         var node = skill.Find($@"_Canvas\{id / 10000}.img\skill\{id}");
         bool teleport = id == WzSkillData.Teleport; // effect/0: the blue one, see the header
-        bool noHit = id is WzSkillData.Teleport or WzSkillData.ManaWave; // a cast effect only
+        bool noHit = id is WzSkillData.Teleport or WzSkillData.ManaWave || data.Kind == SkillData.KindBuff; // a cast effect only (a buff also has its affected loop)
         var effect = teleport ? node?.Nodes["effect"]?.Nodes["0"] : node?.Nodes["effect"];
         var hit = node?.Nodes["hit"]?.Nodes["0"];
         if (effect == null || (hit == null && !noHit))
@@ -96,7 +100,7 @@ public static partial class Export
             data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);
             if (!SaveSkillFrames(hit, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id)) return false;
         }
-        foreach ((string name, List<string> into) in new[] { ("ball", data.BallFrames), ("special", data.SpecialFrames) })
+        foreach ((string name, List<string> into) in new[] { ("ball", data.BallFrames), ("special", data.SpecialFrames), ("affected", data.AffectedFrames) })
         {
             if (node!.Nodes[name] is not { } frames) continue;
             if (!SaveSkillFrames(frames, $"skill/wz/{id}/{name}", into, outDir, saved, id)) return false;

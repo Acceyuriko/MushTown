@@ -213,7 +213,7 @@ public class WzSkillTests
             new[] { WzSkillData.EnergyBolt, WzSkillData.Teleport, WzSkillData.ManaWave, WzSkillData.MagicGuard, WzSkillData.MagicArmor, WzSkillData.MpBoost },
             pages[0]);
         CollectionAssert.AreEqual(
-            new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic },
+            new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb },
             pages[1]);
         Assert.IsTrue(pages.Skip(2).All(p => p.Length == 0));
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.ElementalWeakness)); // invisible in WZ

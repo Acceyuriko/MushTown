@@ -312,6 +312,52 @@ public class WorldTests
         Assert.IsFalse(f.Owner.Dead);
     }
 
+    // A WZ loop (it has origins) rides the player's FEET and turns with the player; an old bare loop keeps the torso rule.
+    [TestMethod]
+    public void FxTick_WzLoopRidesTheFeet_AndTurnsWithThePlayer()
+    {
+        var rider = new PlayerMover { X = 100f, Y = 200f, FacingRight = false };
+        var f = new GameObject().Add(new SkillFx { Loop = true, Frames = new List<string> { "a" }, Origins = new[] { new[] { 10, 20 } }, Rider = rider });
+        f.Update(0.1f);
+        Assert.AreEqual(200f, f.Y); // the origin is on the feet, no CastDy
+        Assert.IsFalse(f.FacingRight);
+        rider.FacingRight = true;
+        f.Update(0.1f);
+        Assert.IsTrue(f.FacingRight);
+    }
+
+    // Another player's loop (Meditation seen on a peer): it follows that peer's feet and facing, ends after LifeMs, and is
+    // stripped by the peer (a hero's strip leaves it alone, the peer's strip leaves the hero's loop alone).
+    [TestMethod]
+    public void FxTick_PeerLoop_FollowsThePeer_EndsAfterItsLife_StripsByPeer()
+    {
+        var peer = new GameObject().Add(new PeerArt(7, new Dictionary<int, AppearanceEvent>()));
+        peer.X = 50f; peer.Y = 80f; peer.FacingRight = true;
+        var loop = new GameObject().Add(new SkillFx { Skill = 2101001, Loop = true, Frames = new List<string> { "a" }, Peer = peer, LifeMs = 250 });
+        loop.Update(0.1f);
+        Assert.AreEqual(50f, loop.X);
+        Assert.AreEqual(80f, loop.Y);
+        Assert.IsTrue(loop.FacingRight);
+        peer.X = 60f;
+        loop.Update(0.1f);
+        Assert.AreEqual(60f, loop.X); // it follows every frame
+        Assert.IsFalse(loop.Owner.Dead);
+        loop.Update(0.1f); // 300 ms in: the 250 ms life is over
+        Assert.IsTrue(loop.Owner.Dead);
+
+        var world = new GameObject();
+        var pool = new Stack<SkillFx>();
+        var live = new List<SkillFx>();
+        var mine = new GameObject().Add(new SkillFx { Skill = 2101001, Loop = true, Frames = new List<string> { "a" } });
+        var theirs = new GameObject().Add(new SkillFx { Skill = 2101001, Loop = true, Frames = new List<string> { "a" }, Peer = peer });
+        foreach (var f in new[] { mine, theirs }) { world.AddChild(f.Owner); live.Add(f); }
+        SkillFx.StripLoops(live, world, pool, 2101001); // ours: the peer's loop stays
+        CollectionAssert.AreEqual(new[] { theirs }, live);
+        SkillFx.StripLoops(live, world, pool, 0, peer); // skill 0: every loop of the peer
+        Assert.AreEqual(0, live.Count);
+        Assert.AreEqual(2, pool.Count);
+    }
+
     [TestMethod]
     public void FxTick_LoopRidesThePlayer()
     {

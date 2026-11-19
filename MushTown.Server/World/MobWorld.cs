@@ -67,7 +67,7 @@ public sealed class MobWorld
         public float MsLeft;
     }
 
-    // A ball in the air: it waits here for its attack-frame delay and flight, then the box judges where it lands.
+    // A ball in the air, or a cast with no ball that waits for its attack frame: it waits here for its delay (and flight), then the box judges.
     private sealed class Pending
     {
         public int Map;
@@ -429,8 +429,10 @@ public sealed class MobWorld
     // body overlapping the box height) when the skill is rectBasedOnTarget (Energy Bolt). The damage lands only after
     // the attack-frame delay and the flight (the first tick after both, so a client never sees a number before the
     // explosion). The target is picked at the cast: the box stays where the ball was sent even if that mob moves or
-    // dies on the way. The cast returns no hits for a ball; they come out of Tick. A skill with no ball judges at
-    // once: the box on the caster, or on the nearest mob ahead when it is rectBasedOnTarget (no mob: no hit).
+    // dies on the way. The cast returns no hits for a ball; they come out of Tick. A skill with no ball judges with the
+    // box on the caster (Flame Orb), or on the nearest mob ahead when it is rectBasedOnTarget (no mob: no hit). A skill with no
+    // ball and a body action (AttackDelayMs) judges at the action's attack frame, on the first tick after it, from Tick like a ball
+    // (the box stays where the caster cast it): the cast effect has reached its main part by then. A skill with no action judges at once.
     private List<Hit> WzStrike(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, int pct, int attacker)
     {
         // Every number the damage needs is read here, in the cast, where a bad skill file fails the caster's call. A ball
@@ -444,7 +446,7 @@ public sealed class MobWorld
         bool ball = wz.BallFrames.Count > 0;
         int attackDelay = wz.AttackDelayMs; // the ball appears when the body action reaches its attack frame
         bool onTarget = wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1";
-        float range = (float)wz.Value("range", wz.MaxLevel);
+        float range = onTarget || ball ? (float)wz.Value("range", wz.MaxLevel) : 0; // only a skill that picks a target or throws a ball has a range (Flame Orb has none)
         Mob? first = null;
         if (onTarget)
             foreach (var m in _lives)
@@ -455,8 +457,13 @@ public sealed class MobWorld
                 if (first == null || Math.Abs(dx) < Math.Abs(first.X - x)) first = m;
             }
         if (!ball)
-            return !onTarget ? WzHits(map, x, y, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker)
-                : first == null ? new List<Hit>() : WzHits(map, first.X, first.Y, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker);
+        {
+            if (onTarget && first == null) return new List<Hit>();
+            float bx = onTarget ? first!.X : x, by = onTarget ? first!.Y : y;
+            if (attackDelay <= 0) return WzHits(map, bx, by, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker);
+            Wait(bx, by, attackDelay + TickMs);
+            return new List<Hit>();
+        }
         float boxX = first?.X ?? x + (facingRight ? range : -range);
         float boxY = first?.Y ?? y;
         float toX = boxX;
@@ -464,13 +471,17 @@ public sealed class MobWorld
         float fromX = facingRight ? Math.Min(x + LaunchDx, toX) : Math.Max(x - LaunchDx, toX); // a mob right in front: the ball does not fly back
         float fromY = y - LaunchDy;
         _launches.Add(new BallEvent(wz.SkillId, map, fromX, fromY, toX, toY, attackDelay));
-        _pending.Add(new Pending
+        Wait(boxX, boxY, attackDelay + Projectile.FlightMs(fromX, fromY, toX, toY) + TickMs);
+        return new List<Hit>();
+
+        // The box (center bx, by) judges after msLeft, in Tick, with the numbers read above.
+        void Wait(float bx, float by, int msLeft) => _pending.Add(new Pending
         {
             Map = map,
-            X = boxX,
-            Y = boxY,
+            X = bx,
+            Y = by,
             FacingRight = facingRight,
-            MsLeft = attackDelay + Projectile.FlightMs(fromX, fromY, toX, toY) + TickMs,
+            MsLeft = msLeft,
             Rng = rng,
             Build = build,
             Wz = wz,
@@ -480,7 +491,6 @@ public sealed class MobWorld
             Pct = pct,
             Attacker = attacker,
         });
-        return new List<Hit>();
     }
 
     // The damage of one WZ cast whose box has its origin at (ox, oy): the mobs whose body overlaps the box lt..rb,

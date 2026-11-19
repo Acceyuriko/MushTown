@@ -624,7 +624,9 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
             if (wz.SkillId == WzSkillData.ManaWave && !wz.Children.Any(c => c.SkillId == WzSkillData.ManaWaveFloat && c.HasFloatArt))
                 throw new InvalidDataException($"skill {wz.SkillId} has no child {WzSkillData.ManaWaveFloat} (the slow fall) with its art (special, specialAffected): run the exporter (export)");
-            if ((wz.Common.ContainsKey("damage") || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
+            if (wz.SkillId == WzSkillData.Meditation && (wz.AffectedFrames.Count == 0 || !wz.Art.TryGetValue("affected", out var affected) || affected.Origins.Length != wz.AffectedFrames.Count))
+                throw new InvalidDataException($"skill {wz.SkillId} has no affected loop art: run the exporter (export)");
+            if ((wz.Common.ContainsKey("damage") || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
             if ((wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1" || wz.BallFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} throws a ball but has no ball or special art: run the exporter (export)");
@@ -700,6 +702,7 @@ public partial class MushTownGame
             foreach (string f in wz.HitFrames) LoadTexture(f);
             foreach (string f in wz.BallFrames) LoadTexture(f);
             foreach (string f in wz.SpecialFrames) LoadTexture(f);
+            foreach (string f in wz.AffectedFrames) LoadTexture(f);
             foreach (var art in wz.Children.SelectMany(c => c.Art.Values)) // the slow fall's bubble and end
                 foreach (string f in art.Frames) LoadTexture(f);
         }
