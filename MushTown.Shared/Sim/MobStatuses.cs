@@ -10,8 +10,8 @@ public enum MobStatusKind
 // One damage-over-time effect (DoT) on a mob: the numbers are taken from the caster at the cast (the Build snapshot, the
 // damage % of one tick, the element), so the ticks do not change when the caster later changes gear or buffs.
 // The statuses own the clock (MsLeft, NextMs); the server reads the ticks and does the damage.
-// On purpose: if the caster leaves the game, its DoT on a mob runs to its end anyway; a mob it poisons to death gives no EXP to anyone
-// (the kill is credited to an Attacker that is gone).
+// A DoT belongs to its source (Attacker): the kill is credited to that source, and when the source disconnects or leaves the map
+// the server removes its DoTs (MobWorld.CancelDoTs).
 public sealed class Dot
 {
     public int Skill;
@@ -30,29 +30,40 @@ public sealed class Dot
 // The statuses on one mob: a kind, its number and the time left. Adding a kind that is already on the
 // mob replaces its number and restarts its time (it refreshes, it does not stack). The mob steps it
 // on every AI tick; a dead mob is gone with its list.
-// The DoTs are kept apart, one entry per SKILL that put one on: the same skill again only refreshes
-// its time (and takes the new cast's numbers), another skill is another effect (the user's rule). DotCount is the number of
-// skills, for Elemental Drain. A tick that came due while stepping waits in TakeDue until the server does its damage.
+// The DoTs are kept apart by SOURCE AND SKILL: the same source's same skill again only refreshes its time (and takes the new
+// cast's numbers); another source, or another skill, is another independent effect (the user's rule). DotCount is the number of
+// distinct skills, for Elemental Drain (one layer per skill, whatever the number of sources). A tick that came due while stepping
+// waits in TakeDue until the server does its damage.
 public sealed class MobStatuses
 {
     private readonly Dictionary<MobStatusKind, (double value, int msLeft)> _list = new();
 
-    private readonly Dictionary<int, Dot> _dots = new(); // skill id -> its DoT
+    private readonly Dictionary<(int Attacker, int Skill), Dot> _dots = new(); // (source, skill) -> its DoT
 
     private readonly List<Dot> _due = new();
 
     public void Add(MobStatusKind kind, double value, int ms) => _list[kind] = (value, ms);
 
-    // The first tick comes one interval after the cast. A refresh (the skill is on the mob already) takes the new numbers and time but keeps the
-    // beat of the next tick: a skill cast more often than its interval must not push the tick away for ever.
+    // The first tick comes one interval after the cast. A refresh (the same source's same skill is on the mob already) takes the new
+    // numbers and time but keeps the beat of the next tick: a skill cast more often than its interval must not push the tick away for ever.
     public void AddDot(Dot dot)
     {
-        dot.NextMs = _dots.TryGetValue(dot.Skill, out var old) ? old.NextMs : dot.IntervalMs;
-        _dots[dot.Skill] = dot;
+        var key = (dot.Attacker, dot.Skill);
+        dot.NextMs = _dots.TryGetValue(key, out var old) ? old.NextMs : dot.IntervalMs;
+        _dots[key] = dot;
     }
 
-    // How many different skills have a DoT on the mob.
-    public int DotCount => _dots.Count;
+    // How many distinct DoT skills are on the mob (one layer per skill, whatever the number of sources), for Elemental Drain.
+    public int DotCount => _dots.Keys.Select(k => k.Skill).Distinct().Count();
+
+    // The DoTs of one source leave with it (its disconnect, map change or cash-shop entry): no tick of a source
+    // that is no longer here. Nothing else changes.
+    public void RemoveDotsOf(int attacker)
+    {
+        if (_dots.Count == 0) return;
+        foreach (var key in _dots.Keys.Where(k => k.Attacker == attacker).ToList())
+            _dots.Remove(key);
+    }
 
     // The ticks that came due in the steps since the last call, oldest first (a dot that ran out in the same step still gives its last tick).
     public IReadOnlyList<Dot> TakeDue()
@@ -73,13 +84,13 @@ public sealed class MobStatuses
     {
         if (_dots.Count > 0)
         {
-            foreach (var dot in _dots.Values.ToList())
+            foreach (var (key, dot) in _dots.ToList())
             {
                 int run = Math.Min(ms, dot.MsLeft);
                 dot.MsLeft -= run;
                 dot.NextMs -= run;
                 for (; dot.NextMs <= 0; dot.NextMs += dot.IntervalMs) _due.Add(dot);
-                if (dot.MsLeft == 0) _dots.Remove(dot.Skill);
+                if (dot.MsLeft == 0) _dots.Remove(key);
             }
         }
         if (_list.Count == 0) return;

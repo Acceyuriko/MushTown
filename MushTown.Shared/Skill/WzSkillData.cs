@@ -69,8 +69,8 @@ public sealed class WzSkillData
 
     public double Value(string field, int level) => Common[field][level - 1];
 
-    // How far ahead a skill that picks a target (rectBasedOnTarget) or throws a ball looks, in px: the WZ range at max level. Poison Breath
-    // has no range (the WZ gives only its box), so its box half-width is the reach (unverified).
+    // How far ahead a ball skill looks, in px: the WZ range at max level (or the box half-width when a file has no
+    // range). Only a ball reads it; a skill with no ball judges with its full box on the caster and does not use a reach.
     public float Reach() => Common.TryGetValue("range", out var range) ? (float)range[MaxLevel - 1] : Math.Max(-Vectors["lt"][0], Vectors["rb"][0]);
 
     // The slow fall (child 2001012) keeps two arts, special and specialAffected, of three frame lists each (Art["special0"]..

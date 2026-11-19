@@ -9,10 +9,10 @@ public partial class FirePoisonCombatTests
 {
     private const int Breath = WzSkillData.PoisonBreath;
 
-    // Poison Breath as 210.img writes it at level 10: poison, 6 segments, 6 mobs, the box lt(-200,-200) rb(200,120) centred on the target
-    // (rectBasedOnTarget, no range), no ball, a body action with its attack frame at attackDelayMs; a DoT of 60% every 1 s for 10 s.
-    // targetBox false hangs the same box on the caster, so a test can look at the DoT alone.
-    private static WzSkillData BreathData(int id = Breath, bool targetBox = false, int attackDelayMs = 0)
+    // Poison Breath as 210.img writes it at level 10: poison, 6 segments, 6 mobs, the box lt(-200,-200) rb(200,120) on the caster
+    // (it also carries rectBasedOnTarget, but a skill with no ball ignores it), no ball, a body action with its attack frame at
+    // attackDelayMs; a DoT of 60% every 1 s for dotTime s (10 at max level).
+    private static WzSkillData BreathData(int id = Breath, bool targetBox = false, int attackDelayMs = 0, int dotTime = 10)
     {
         var data = new WzSkillData { SkillId = id, MaxLevel = 10, Kind = SkillData.KindActive, ElemAttr = "s", AttackDelayMs = attackDelayMs };
         data.Common["mpCon"] = SkillFormula.Levels("11+3*d(x/4)", 10);
@@ -21,7 +21,7 @@ public partial class FirePoisonCombatTests
         data.Common["mobCount"] = SkillFormula.Levels("6", 10);
         data.Common["dot"] = SkillFormula.Levels("30+3*x", 10);
         data.Common["dotInterval"] = SkillFormula.Levels("1", 10);
-        data.Common["dotTime"] = SkillFormula.Levels("10", 10);
+        data.Common["dotTime"] = SkillFormula.Levels(dotTime.ToString(), 10);
         data.Vectors["lt"] = new[] { -200, -200 };
         data.Vectors["rb"] = new[] { 200, 120 };
         if (targetBox) data.Info["rectBasedOnTarget"] = "1";
@@ -31,7 +31,8 @@ public partial class FirePoisonCombatTests
     // A DoT skill with its own id, to give a mob one more layer (Elemental Drain counts the skills).
     private static WzSkillData DotSkillData(int id) => BreathData(id);
 
-    private static Dot DotOf(int skill, int timeMs, int intervalMs = 1000) => new() { Skill = skill, IntervalMs = intervalMs, MsLeft = timeMs };
+    private static Dot DotOf(int skill, int timeMs, int intervalMs = 1000, int attacker = 0) =>
+        new() { Skill = skill, Attacker = attacker, IntervalMs = intervalMs, MsLeft = timeMs };
 
     // A world with one mob of the given HP, level 200, DEF 10%, at x 100 (the caster stands at x 0, facing right).
     private static MobWorld OneMob(TempAssets assets, long hp, string elemAttr = "")
@@ -63,6 +64,28 @@ public partial class FirePoisonCombatTests
         list.Step(4999);
         Assert.AreEqual(1, list.DotCount);
         list.Step(1);
+        Assert.AreEqual(0, list.DotCount);
+    }
+
+    // Two sources, the same skill: two independent effects, each with its own clock. DotCount counts the skill once (it is
+    // the Elemental Drain layer count), but both sources tick every interval, and each stops at its own dotTime.
+    [TestMethod]
+    public void MobStatuses_Dots_TwoSourcesSameSkill_AreIndependent()
+    {
+        var list = new MobStatuses();
+        list.AddDot(DotOf(Breath, 3000, attacker: 5));
+        list.AddDot(DotOf(Breath, 5000, attacker: 6)); // another source: another effect on its own clock
+        Assert.AreEqual(1, list.DotCount); // DotCount is per skill, not per source
+        list.AddDot(DotOf(Breath, 3000, attacker: 5)); // same source and skill: refresh, no second effect
+        Assert.AreEqual(1, list.DotCount);
+        list.Step(1000);
+        Assert.AreEqual(2, list.TakeDue().Count); // both sources ticked
+        list.Step(2000);
+        Assert.AreEqual(4, list.TakeDue().Count); // 2..3 s: both still tick (2 each)
+        list.Step(2000);
+        Assert.AreEqual(2, list.TakeDue().Count); // 3..5 s: source 5 is gone, source 6 still ticks
+        list.Step(1000);
+        Assert.AreEqual(0, list.TakeDue().Count);
         Assert.AreEqual(0, list.DotCount);
     }
 
@@ -167,26 +190,21 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(0, immune.ticks);
     }
 
-    // Poison Breath picks the nearest mob ahead within its reach (the box half-width, 200: WZ has no range) and judges with the box centred on it: a mob
-    // 200 px ahead is the target, and another mob 150 px beyond it is inside the box too (splash), one 210 px beyond is not. It judges at the body
-    // action's attack frame, not at the cast. A mob 201 px ahead is no target (no hit at all).
+    // Poison Breath is an area skill with the full lt/rb box on the CASTER (no ball, no range, no target): a mob in front and a
+    // mob behind are both hit when their body overlaps the box, and a mob just outside the box is not. It judges at the body
+    // action's attack frame, not at the cast. The file's rectBasedOnTarget is set but a skill with no ball ignores it.
     [TestMethod]
-    public void PoisonBreath_TargetsTheNearestAhead_BoxCentredOnIt_JudgesAtTheAttackFrame()
+    public void PoisonBreath_BoxOnTheCaster_HitsFrontAndBehind_AtTheAttackFrame()
     {
         using var assets = new TempAssets();
         assets.AddWzSkill(BreathData(targetBox: true, attackDelayMs: 500));
-        var world = World(assets, (-100, 100), (200, 100), (350, 100), (410, 100));
+        var world = World(assets, (-150, 100), (150, 100), (250, 100)); // behind, front, and one outside the box
         Assert.AreEqual(0, world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Breath, 180).Count); // not at the cast
         Assert.AreEqual(0, world.TakeLaunches().Count); // no ball
         Assert.AreEqual(0, Ticks(world, 500).Count); // the attack frame is 500 ms: not yet judged on the tick that reaches it
         var hits = Ticks(world, 100);
-        Assert.AreEqual(12, hits.Count); // 2 mobs x 6 segments
-        CollectionAssert.AreEqual(new[] { 200, 350 }, UidsHit(world, hits));
-        using var assets2 = new TempAssets();
-        assets2.AddWzSkill(BreathData(targetBox: true, attackDelayMs: 500));
-        var world2 = World(assets2, (201, 100));
-        world2.SkillStrike(7, 0, 100, true, new Random(1), Mage, Breath, 180);
-        Assert.AreEqual(0, Ticks(world2, 2000).Count);
+        Assert.AreEqual(12, hits.Count); // the behind mob and the front mob: 6 segments each
+        CollectionAssert.AreEqual(new[] { -150, 150 }, UidsHit(world, hits)); // the mob 250 px ahead is outside the box
     }
 
     // A kill clears the mob's DoT: the tick that kills settles (HP 0), the mob is gone and no more ticks come, and the mob that grows back in its place
@@ -304,16 +322,109 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(0, Ticks(world, 1000).Count);
     }
 
-    // The caster leaves the game while its DoT runs: the server loop does not throw (the other client keeps getting the ticks), the DoT runs to its end, and
-    // the mob that dies of it dies for everyone (HP 0, settled), with no EXP for anyone and no server error.
+    // Two sources put the same skill's DoT on one mob: each ticks on its own and each runs out on its own clock (the first
+    // source's ticks stop at its dotTime, the second's continue to its own), and neither refresh replaces the other.
     [TestMethod]
-    public void Loopback_CasterLeaves_DotKillsTheMob_ServerKeepsTicking()
+    public void Dot_TwoSourcesSameSkill_TickIndependently_AndExpireIndependently()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BreathData());
+        var world = OneMob(assets, 1_000_000_000);
+        world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Breath, 180, attacker: 5);
+        var firstFive = world.Tick(5000, new()).Strikes; // source 5 ticks at 1..5 s
+        Assert.AreEqual(5, firstFive.Count);
+        Assert.IsTrue(firstFive.All(s => s.attacker == 5 && s.hit.Dot));
+        world.SkillStrike(7, 0, 100, true, new Random(2), Mage, Breath, 180, attacker: 6); // a second source joins at 5 s
+        var both = world.Tick(5000, new()).Strikes; // 5..10 s: source 5's last 5 ticks and source 6's first 5
+        Assert.AreEqual(10, both.Count);
+        Assert.AreEqual(5, both.Count(s => s.attacker == 5));
+        Assert.AreEqual(5, both.Count(s => s.attacker == 6));
+        var onlySix = world.Tick(5000, new()).Strikes; // 10..15 s: source 5 is gone, source 6's last 5
+        Assert.AreEqual(5, onlySix.Count);
+        Assert.IsTrue(onlySix.All(s => s.attacker == 6));
+        Assert.AreEqual(0, world.Tick(5000, new()).Strikes.Count);
+    }
+
+    // Two sources put a DoT on one mob, and the last hit is source B's DoT tick: the kill (HP 0) and the mob's EXP are
+    // credited to B, not to A. A's skill runs out after its first tick, so B alone ticks the mob to death.
+    [TestMethod]
+    public void Dot_TwoSources_LastHitKills_CreditGoesToTheDotSource()
+    {
+        long seg = Poison(Steady, 180, 1.0), tick = Poison(Steady, 60, 1.0);
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BreathData(2111003, dotTime: 1)); // A: one tick, then it runs out
+        assets.AddWzSkill(BreathData());                     // B: the full 10 s
+        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 12 * seg + 3 * tick, 0.1, exp: 50, speed: 1, level: 200);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        world.SkillStrike(7, 0, 100, true, new Random(1), Steady, 2111003, 180, attacker: 5); // both casts leave 3 ticks of HP
+        world.SkillStrike(7, 0, 100, true, new Random(2), Steady, Breath, 180, attacker: 6);
+        var firstSecond = world.Tick(1000, new()).Strikes; // 1 s: A and B both tick, the mob lives
+        Assert.AreEqual(2, firstSecond.Count);
+        Assert.IsTrue(firstSecond.All(s => s.hit.HpLeft > 0));
+        var kill = world.Tick(1000, new()).Strikes; // 2 s: A is gone, B's tick kills
+        Assert.AreEqual(1, kill.Count);
+        Assert.AreEqual(6, kill[0].attacker); // the kill is B's
+        Assert.AreEqual(0, kill[0].hit.HpLeft);
+        Assert.AreEqual(50, kill[0].hit.Exp); // the mob's EXP goes with that kill, credited to B by the server
+        Assert.AreEqual(0, world.MobsOn(7).Count);
+    }
+
+    // A source leaves the map: its DoTs go, another source's DoTs stay. (The server calls CancelDoTs on a map switch or a
+    // disconnect; here the world is stepped directly.)
+    [TestMethod]
+    public void CancelDoTs_OneSourceLeaves_OnlyItsDotsStop()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BreathData());
+        var world = OneMob(assets, 1_000_000_000);
+        world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Breath, 180, attacker: 5);
+        world.SkillStrike(7, 0, 100, true, new Random(2), Mage, Breath, 180, attacker: 6);
+        world.CancelDoTs(5); // source 5 leaves
+        var ticks = world.Tick(3000, new()).Strikes;
+        Assert.AreEqual(3, ticks.Count);
+        Assert.IsTrue(ticks.All(s => s.attacker == 6 && s.hit.Dot));
+    }
+
+    // The numbers of the formula, by hand (character-stats.md §3.1): a Lv.200 mage INT 1000 / LUK 100 / magic attack 200 on a
+    // short staff (1.20, mastery 20%), a Lv.200 mob with 10% DEF, no element:
+    //   stat value = 4 x 1000 + 100 = 4100
+    //   max actual = 1.20 x 4100 x 200 / 100 = 9840, min actual = 20% of that = 1968 -> min panel = floor(1 + 1968) = 1969
+    //   one hit = (min panel + (max panel - min panel) x roll) x skill% / 100 x (1 - DEF) x level(1.10), floored
+    // The WZ dot (60) is the skill% of one tick, in the same place as the 180% of a segment (not a final multiplier).
+    [TestMethod]
+    public void PoisonBreath_DotValue_IsTheSkillPctOfTheFormula()
+    {
+        const long minPanel = 1969, maxPanel = 9840;
+        static long Hand(double roll, int pct) =>
+            Math.Max(1L, (long)Math.Floor((minPanel + (maxPanel - minPanel) * roll) * pct / 100.0 * 0.9 * 1.10));
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BreathData());
+        var world = OneMob(assets, 1_000_000_000);
+        var cast = world.SkillStrike(7, 0, 100, true, new Random(4), Mage, Breath, 180); // Mage crit 0: no crit roll changes the number
+        Assert.AreEqual(6, cast.Count);
+        var rng = new Random(4);
+        for (int i = 0; i < 6; i++)
+        {
+            double roll = rng.NextDouble();
+            rng.NextDouble(); // the crit roll (no crit)
+            Assert.AreEqual(Hand(roll, 180), cast[i].Damage, $"segment {i}");
+        }
+        var tick = Ticks(world, 1000).Single();
+        Assert.AreEqual(Hand(rng.NextDouble(), 60), tick.Damage);
+    }
+
+    // The caster leaves the game while its DoT runs: his DoTs vanish at once (no more ticks), and the server keeps running for
+    // the others.
+    [TestMethod]
+    public void Loopback_CasterLeaves_HisDoTVanishes()
     {
         long cast = 6 * Poison(Steady, 180, 1.0), tick = Poison(Steady, 60, 1.0);
         using var assets = new TempAssets();
         assets.AddWzSkill(BreathData(targetBox: true, attackDelayMs: 300));
         assets.AddMap(9, """[{"MobId":100000,"X":100,"Cy":100}]""", Floor);
-        assets.AddMob(100000, cast + 2 * tick + 100, 0.1, 0, speed: 1, level: 200); // alive after the cast and two ticks; the third tick kills
+        assets.AddMob(100000, cast + 100 * tick, 0.1, 0, speed: 1, level: 200); // the mob lives long after the caster is gone
         var log = new List<string>();
         using var server = new GameServer(m => { lock (log) log.Add(m); }, assets.Dir, Net.Port + 78);
         server.Start();
@@ -330,12 +441,43 @@ public partial class FirePoisonCombatTests
         var seen = Enumerable.Range(0, 6 + 1).Select(_ => WaitHit(b)).ToList(); // the 6 segments and the first tick
         Assert.IsTrue(seen[^1].Dot && seen[^1].HpLeft > 0);
         a.Dispose(); // the caster is gone
-        var tick2 = WaitHit(b);
-        var tick3 = WaitHit(b);
-        Assert.IsTrue(tick2.Dot && tick2.HpLeft > 0);
-        Assert.IsTrue(tick3.Dot && tick3.Settle && tick3.HpLeft == 0); // the poison killed it
-        Thread.Sleep(300);
-        Assert.IsFalse(b.TryTakeMob(out var more) && more.Dot && more.HpLeft > 0); // nothing ticks on the dead mob
+        Assert.IsTrue(WaitGone(b, 1), "the server never reported the caster gone");
+        while (b.TryTakeMob(out _)) { } // drop any tick that raced in before the server removed the DoT
+        Thread.Sleep(1300); // more than one 1 s interval: a surviving DoT would tick here
+        Assert.IsFalse(b.TryTakeMob(out var more) && more.Dot && more.HpLeft > 0);
         lock (log) Assert.IsFalse(log.Any(m => m.Contains("error", StringComparison.OrdinalIgnoreCase)), string.Join("; ", log));
     }
+
+    // The caster switches to another map: the DoTs it left on the old map vanish (the other player still on that map sees no
+    // more ticks).
+    [TestMethod]
+    public void Loopback_CasterSwitchesMap_HisDoTVanishes()
+    {
+        long cast = 6 * Poison(Steady, 180, 1.0), tick = Poison(Steady, 60, 1.0);
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BreathData(targetBox: true, attackDelayMs: 300));
+        assets.AddMap(9, """[{"MobId":100000,"X":100,"Cy":100}]""", Floor);
+        assets.AddMap(10, "[]", Floor);
+        assets.AddMob(100000, cast + 100 * tick, 0.1, 0, speed: 1, level: 200);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 79);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 79);
+        b.Connect("127.0.0.1", Net.Port + 79);
+        a.SendState(9, 0, 100, Net.ActStand, 0, true);
+        b.SendState(9, 600, 100, Net.ActStand, 0, true);
+        WaitSpawn(a);
+        WaitSpawn(b);
+        a.SendBuild(Steady);
+        a.SendSkillCast(Breath, 180);
+        var seen = Enumerable.Range(0, 6 + 1).Select(_ => WaitHit(b)).ToList();
+        Assert.IsTrue(seen[^1].Dot && seen[^1].HpLeft > 0);
+        a.SendState(10, 0, 100, Net.ActStand, 0, true); // the caster changes map
+        Assert.IsTrue(WaitGone(b, 1), "the server never reported the map switch");
+        while (b.TryTakeMob(out _)) { } // drop any tick that raced in before the DoT was removed
+        Thread.Sleep(1300);
+        Assert.IsFalse(b.TryTakeMob(out var more) && more.Dot && more.HpLeft > 0);
+    }
+
 }

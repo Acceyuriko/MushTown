@@ -194,10 +194,11 @@ public sealed partial class GameServer : IDisposable
         {
             _log($"client {id} error: {ex.Message}");
         }
-        lock (_mobLock) // the client leaves the table and the balls it threw leave the air together: a late hit has no one to credit
+        lock (_mobLock) // the client leaves the table; the balls it threw leave the air and its DoTs leave the mobs together: a late hit has no one to credit
         {
             _clients.TryRemove(id, out _);
             _mobs.CancelBalls(id);
+            _mobs.CancelDoTs(id);
             _pos.Remove(id);
             _away.Remove(id);
             _builds.Remove(id);
@@ -228,6 +229,8 @@ public sealed partial class GameServer : IDisposable
         lock (_mobLock)
         {
             _away.Add(id);
+            _mobs.CancelBalls(id); // a cash-shop entry leaves the map (it counts as leaving): its balls and DoTs go
+            _mobs.CancelDoTs(id);
             had = _pos.Remove(id);
         }
         if (had) Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
@@ -369,6 +372,7 @@ public sealed partial class GameServer : IDisposable
             if (switched)
             {
                 _mobs.CancelBalls(id); // the balls it threw on the old map do not land
+                _mobs.CancelDoTs(id); // and the DoTs it left there do not tick
                 Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
             }
             if (first || switched)

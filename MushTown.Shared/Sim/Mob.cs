@@ -34,7 +34,7 @@ public sealed class Mob : Component
     public int Speed;
     public int Aggro;
     public bool Boss;
-    public readonly MobStatuses Statuses = new(); // marks from skills (Elemental Weakness): they run out on the AI steps
+    public readonly MobStatuses Statuses = new(); // marks and DoTs from skills: they run out on the AI steps
 
     // One AI step: run the statuses down, cool the touch down, then walk the line or fall off it.
     public void Step(int ms, MapData map, List<(int id, int map, float x, float y)> players)

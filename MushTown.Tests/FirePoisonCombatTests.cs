@@ -137,8 +137,8 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(200, world2.TakeLaunches().Single().ToX); // body 176..226 is above the box
     }
 
-    // The splash box also uses the whole mob body: a body standing 100 px below the box origin still touches it;
-    // one more 26 px down misses by one pixel.
+    // The box on the caster uses the whole mob body: a body standing 100 px below the box origin still touches it;
+    // 26 px more misses by one pixel. (A skill with no ball judges with its box on the caster, whatever rectBasedOnTarget says.)
     [TestMethod]
     public void WzStrike_SplashBox_UsesTheWholeMobBody()
     {
@@ -147,9 +147,9 @@ public partial class FirePoisonCombatTests
         data.BallFrames.Clear(); // no ball: the box judges at once (no body action), before the mobs can move
         data.AttackDelayMs = 0;
         assets.AddWzSkill(data);
-        var world = World(assets, 50, (100, 100), (150, 200), (200, 226));
+        var world = World(assets, 50, (50, 100), (60, 200), (70, 226));
         var hits = world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78);
-        CollectionAssert.AreEqual(new[] { 100, 150 }, UidsHit(world, hits));
+        CollectionAssert.AreEqual(new[] { 50, 60 }, UidsHit(world, hits)); // x 70 at feet 226: its body top 176 is past the box edge 175
     }
 
     // Energy Bolt: the bolt flies to the nearest mob ahead within the reach (340), then the box (240 x 150) hangs on
@@ -316,9 +316,9 @@ public partial class FirePoisonCombatTests
         Assert.IsFalse(a.TryTakeMob(out _)); // no damage: the ball was cancelled
     }
 
-    // "Is it a ball" is the art (BallFrames); rectBasedOnTarget only says where the box hangs. A ball skill that is not
-    // rectBasedOnTarget flies to the end of the range and its box hangs there, even when a mob stands near; a
-    // rectBasedOnTarget skill with no ball judges at once, on the nearest mob ahead.
+    // "Is it a ball" is the art (BallFrames); rectBasedOnTarget only says where a ball's box hangs. A ball skill that is not
+    // rectBasedOnTarget flies to the end of the range and its box hangs there, even when a mob stands near; a skill with no
+    // ball ignores rectBasedOnTarget and judges with the box on the caster.
     [TestMethod]
     public void Ball_IsTheArt_RectBasedOnTargetIsTheBoxPlace()
     {
@@ -335,7 +335,7 @@ public partial class FirePoisonCombatTests
         noBall.AttackDelayMs = 0; // no body action: at once
         assets2.AddWzSkill(noBall);
         var world2 = World(assets2, (100, 100));
-        Assert.AreEqual(4, world2.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78).Count); // at once
+        Assert.AreEqual(4, world2.SkillStrike(7, 0, 100, true, new Random(1), Mage, Bolt, 78).Count); // at once, box on the caster
         Assert.AreEqual(0, world2.TakeLaunches().Count);
     }
 
@@ -806,5 +806,17 @@ public partial class FirePoisonCombatTests
         }
         Assert.Fail("timed out waiting for a mob event");
         throw new InvalidOperationException("unreachable");
+    }
+
+    // Waits for the server's "this peer is gone" event (a disconnect or a map switch), draining the other peer events on the way.
+    private static bool WaitGone(NetClient client, int id)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            while (client.TryTake(out var e))
+                if (e.Gone && e.Id == id) return true;
+            Thread.Sleep(10);
+        }
+        return false;
     }
 }

@@ -207,6 +207,7 @@ public partial class MushTownGame
         DropFx();
         RespawnBuffLoops(); // buff timers survive the switch, so their loops re-hang
         _localWorld!.CancelBalls(0); // the balls in the air did not cross the map change (DropFx took their art)
+        _localWorld!.CancelDoTs(0); // and the DoTs the player left on the old map do not tick
         _localWorld.EnterMap(_mapId);
         foreach (var s in _localWorld.MobsOn(_mapId))
             ApplySpawn(s.Uid, s.Mob, s.X, s.Y, s.MaxHp, s.Hp);

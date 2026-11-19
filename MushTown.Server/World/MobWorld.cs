@@ -287,6 +287,14 @@ public sealed class MobWorld
     // The balls of one caster that are still in the air vanish with no damage (the caster left the game or changed map).
     public void CancelBalls(int attacker) => _pending.RemoveAll(p => p.Attacker == attacker);
 
+    // The DoTs of one caster vanish with the caster: a disconnect, a map change or a cash-shop entry removes every
+    // effect he put on a mob. It walks every live mob and removes the ones this source owns (a source stands on one map,
+    // so only that map's mobs hold his DoTs, but the loop does not filter by map).
+    public void CancelDoTs(int attacker)
+    {
+        foreach (var m in _lives) m.Statuses.RemoveDotsOf(attacker);
+    }
+
     // Balls thrown by the casts since the last call (the caller broadcasts them to the map).
     public List<BallEvent> TakeLaunches()
     {
@@ -441,10 +449,10 @@ public sealed class MobWorld
     // the attack-frame delay and the flight (the first tick after both, so a client never sees a number before the
     // explosion). The target is picked at the cast: the box stays where the ball was sent even if that mob moves or
     // dies on the way. The cast returns no hits for a ball; they come out of Tick. A skill with no ball judges with the
-    // box on the caster (Flame Orb), or on the nearest mob ahead when it is rectBasedOnTarget (no mob: no hit). A skill with no
+    // full lt..rb box on the caster (Flame Orb, Poison Breath), so it can hit a mob behind the caster: no target is picked
+    // and no range is read, whatever the file's rectBasedOnTarget says. A skill with no
     // ball and a body action (AttackDelayMs) judges at the action's attack frame, on the first tick after it, from Tick like a ball
     // (the box stays where the caster cast it): the cast effect has reached its main part by then. A skill with no action judges at once.
-    // Poison Breath is that kind of skill (rectBasedOnTarget, an action, no ball): it picks the nearest mob ahead within Reach and judges there at its attack frame.
     private List<Hit> WzStrike(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, int pct, int attacker)
     {
         // Every number the damage needs is read here, in the cast, where a bad skill file fails the caster's call. A ball
@@ -469,8 +477,16 @@ public sealed class MobWorld
         };
         bool ball = wz.BallFrames.Count > 0;
         int attackDelay = wz.AttackDelayMs; // the ball appears when the body action reaches its attack frame
+        // A skill with no ball judges with the full lt..rb box on the caster (Flame Orb, Poison Breath), on both sides: the
+        // box is not moved onto a target and no range is read, so a mob behind the caster is hit too.
+        if (!ball)
+        {
+            if (attackDelay <= 0) return WzHits(map, x, y, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker, dot);
+            Wait(x, y, attackDelay + TickMs);
+            return new List<Hit>();
+        }
         bool onTarget = wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1";
-        float range = wz.Reach(); // only a skill that picks a target or throws a ball reads it
+        float range = wz.Reach(); // a ball reads the range: the end of the flight, or the search for a target
         Mob? first = null;
         if (onTarget)
             foreach (var m in _lives)
@@ -480,14 +496,6 @@ public sealed class MobWorld
                 if (m.Map != map || !ahead || Math.Abs(dx) > range || !wz.BodyOverlapsY(m.Y - y, m.BodyH)) continue;
                 if (first == null || Math.Abs(dx) < Math.Abs(first.X - x)) first = m;
             }
-        if (!ball)
-        {
-            if (onTarget && first == null) return new List<Hit>();
-            float bx = onTarget ? first!.X : x, by = onTarget ? first!.Y : y;
-            if (attackDelay <= 0) return WzHits(map, bx, by, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker, dot);
-            Wait(bx, by, attackDelay + TickMs);
-            return new List<Hit>();
-        }
         float boxX = first?.X ?? x + (facingRight ? range : -range);
         float boxY = first?.Y ?? y;
         float toX = boxX;
@@ -570,8 +578,9 @@ public sealed class MobWorld
 
     // One tick of a DoT: one roll through the Damage chain with the caster's snapshot (Build), the DoT's damage % and element, and the mob's
     // Def, level and element, plus the extra magic damage of Elemental Weakness. A DoT never crits (crit roll 1.0). The tick is a settled hit
-    // flagged Dot: HP and death are set, the client skips the flinch and the spark. A kill buries the mob and its statuses go with it.
-    // A DoT keeps running when its caster has left the game; a mob it kills then gives no EXP to anyone (on purpose).
+    // flagged Dot: HP and death are set, the client skips the flinch and the spark. A kill buries the mob and its statuses go with it, and
+    // the kill is credited to the DoT's own source (Attacker). A DoT is removed when its source disconnects or leaves the map (CancelDoTs),
+    // so a tick never belongs to a source that is gone.
     private Hit DotTick(Mob m, Dot dot)
     {
         var result = Damage.SkillResult(dot.Rng.NextDouble(), 1.0, m.Def, dot.Build, dot.Pct, m.Level, m.ElemAttr, dot.Element, m.Boss, m.Statuses.MagicExtraDamagePct);
