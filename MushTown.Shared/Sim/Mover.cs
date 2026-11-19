@@ -26,7 +26,7 @@ public sealed class PlayerMover : Component
     // Walk/jump feel, tuned by hand (approximate MapleStory values).
     public const float WalkSpeed = 140f; // px per second (the Client scales these two by Warrior Mastery)
     public const float JumpV0 = -520f; // take-off velocity, px per second
-    private const float Gravity = 1800f; // pull-down, px per second squared
+    public const float Gravity = 1800f; // pull-down, px per second squared
     public const float MaxFall = 700f; // terminal velocity: long drops stop speeding up here
     private const float AirAccel = 100f; // weak air drift: a full jump shifts vx by ~60
     private const float ClimbSpeed = 120f; // ladder/rope slide, px per second
@@ -40,6 +40,8 @@ public sealed class PlayerMover : Component
     // (null means airborne, so there is no separate on-ground flag).
     public float X, Y, Vx, Vy;
     public float FallCap = MaxFall; // the fastest the feet fall; AirMovement lowers it for a slow fall (Mana Wave)
+    public float FallAccel = Gravity; // how fast the fall speeds up, px per second squared; AirMovement lowers it for a slow fall
+    public string AirAction = "jump"; // the pose in the air; AirMovement swaps it for a boost or a slow fall
     public FootholdItem? Ground;
     public LadderItem? Climb; // set while on a ladder or rope
     public bool ClimbMoving; // climb pose only animates while sliding
@@ -202,7 +204,7 @@ public sealed class PlayerMover : Component
         // vertical: one-way platforms (pass through going up, land coming down)
         if (Ground == null && Climb == null)
         {
-            Vy += Gravity * dt;
+            Vy += FallAccel * dt;
             Vy = Math.Min(Vy, FallCap);
             float ny = Y + Vy * dt;
             if (Vy > 0 && _dropFrames == 0)
@@ -231,7 +233,7 @@ public sealed class PlayerMover : Component
 
         Action = Input.Locked ? AttackAction
             : Climb != null ? (Climb.Ladder ? "ladder" : "rope")
-            : Ground == null ? "jump" : Input.Down ? "prone" : dir != 0 && moved ? "walk1" : "stand1";
+            : Ground == null ? AirAction : Input.Down ? "prone" : dir != 0 && moved ? "walk1" : "stand1";
     }
 
     // Held Up/Down near a ladder or rope grabs on, centered on its x.

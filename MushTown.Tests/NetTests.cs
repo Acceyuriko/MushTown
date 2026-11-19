@@ -189,8 +189,14 @@ public sealed class NetTests
         Assert.AreEqual(150f, WaitTake(b).Y);
         a.SendState(10000, 100, 80, Net.ActJump, 0, true); // the top
         Assert.AreEqual(80f, WaitTake(b).Y);
-        a.SendState(10000, 100, 81.5f, Net.ActJump, 0, true); // the slow fall: no message of its own, just the feet
-        Assert.AreEqual(81.5f, WaitTake(b).Y);
+        // the slow fall has no message of its own: its pose (fly) is the sign, the bubble and its end are drawn from it
+        a.SendState(10000, 100, 81.5f, Net.ActFly, 0, true);
+        var floating = WaitTake(b);
+        Assert.AreEqual(81.5f, floating.Y);
+        Assert.AreEqual(Net.ActFly, floating.Action);
+        Assert.AreEqual(0, floating.Frame);
+        a.SendState(10000, 100, 90, Net.ActJump, 0, true); // Jump let go: the pose is a jump again
+        Assert.AreEqual(Net.ActJump, WaitTake(b).Action);
     }
 
     [TestMethod]
@@ -208,8 +214,11 @@ public sealed class NetTests
     {
         foreach (string name in Net.Actions)
             Assert.AreEqual(name, Net.ActionName(Net.ActionCode(name)));
-        for (byte code = 0; code <= Net.ActSwingO3; code++)
+        for (byte code = 0; code <= Net.ActFly; code++)
             Assert.AreEqual(code, Net.ActionCode(Net.ActionName(code)));
+        Assert.AreEqual("fly", Net.ActionName(Net.ActFly)); // the floating pose of Mana Wave's slow fall: peers see it
+        Assert.AreEqual(Net.ActFly, Net.ActionCode("fly"));
+        Assert.AreEqual(Net.Actions.Length - 1, Net.ActFly);
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionCode("xxx"));
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionName(99));
     }

@@ -103,14 +103,59 @@ public partial class MushTownGame
         foreach (var f in list)
         {
             if (f.Flight is { Started: false }) continue; // the body action has not reached its attack frame
-            var tex = _textures[f.Frames[f.Frame]];
-            var ox = f.Origins == null ? tex.Width / 2f : f.Origins[f.Frame][0];
-            if (f.FacingRight) ox = tex.Width - ox;
-            var o = new Vector2(ox, f.Origins == null ? tex.Height / 2f : f.Origins[f.Frame][1]);
-            _spriteBatch.Draw(tex, new Vector2(f.X - _camera.X, f.Y - _camera.Y), null, Color.White,
-                0f, o, 1f, f.FacingRight ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+            DrawFxFrame(f.Frames[f.Frame], f.Origins?[f.Frame], f.X, f.Y, f.FacingRight);
         }
     }
+
+    // One frame of an effect: its WZ origin on the anchor (x, y in the world), or centered when it has none.
+    private void DrawFxFrame(string frame, int[]? origin, float x, float y, bool facingRight)
+    {
+        var tex = _textures[frame];
+        var ox = origin == null ? tex.Width / 2f : origin[0];
+        if (facingRight) ox = tex.Width - ox;
+        var o = new Vector2(ox, origin == null ? tex.Height / 2f : origin[1]);
+        _spriteBatch.Draw(tex, new Vector2(x - _camera.X, y - _camera.Y), null, Color.White,
+            0f, o, 1f, facingRight ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+    }
+
+    // The slow fall's bubble (WZ 2001012 specialAffected, three lists that play together, z -1): drawn behind the actor,
+    // before its avatar, with the WZ origin on the feet. It loops while the actor floats.
+    private void DrawFloatBubble(FloatBubble b, float feetX, float feetY, bool facingRight)
+    {
+        if (!b.Active) return;
+        foreach (var art in FloatWz.FloatArt("specialAffected"))
+        {
+            int i = Idle.At(art.Delays, b.Ms);
+            DrawFxFrame(art.Frames[i], art.Origins[i], feetX, feetY, facingRight);
+        }
+    }
+
+    // The end of a slow fall (WZ 2001012 special, three lists that play together) where the actor is, once. It is drawn in
+    // front of the avatar like every cast effect: in WZ every special frame has z 0 and the lists have no z of their own,
+    // while specialAffected lists have z -1 (behind), which DrawFloatBubble follows. Only call this outside the tree step
+    // (it adds nodes).
+    private void SpawnFloatEnd(float x, float y, bool facingRight)
+    {
+        foreach (var art in FloatWz.FloatArt("special"))
+        {
+            var fx = TakeFx();
+            fx.Frames = art.Frames;
+            fx.Origins = art.Origins;
+            fx.Delays = art.Delays;
+            fx.X = x; fx.Y = y; fx.FacingRight = facingRight;
+        }
+    }
+
+    // The end effects of this step: the hero's float ended by the Jump key or the time limit (a landing is no end), and each
+    // peer whose fly pose ended into a jump (the pose is all a peer sends: a landing shows as a stand, walk, prone or ladder).
+    private void SpawnFloatEnds()
+    {
+        if (_bubble.TakeEnded() && _air.EndedBy != FloatEnd.Landed) SpawnFloatEnd(_mover.X, _mover.Y, _mover.FacingRight);
+        foreach (var r in _remotes.Values)
+            if (r.Bubble.TakeEnded() && r.Action == Net.ActJump) SpawnFloatEnd(r.X, r.Y, r.FacingRight);
+    }
+
+    private WzSkillData FloatWz => _wzSkills[WzSkillData.ManaWave].Children.Single(c => c.SkillId == WzSkillData.ManaWaveFloat); // the start check proves it is there
 
     // Damage numbers: the digits of the number's skin, rising and fading
     // over FloatingNumber.LifeMs. Every skin lays its digits out by their WZ
@@ -394,11 +439,14 @@ public partial class MushTownGame
     // Mana Wave (WZ 2001011) has no key of its own: Jump pressed with Up held boosts (mpCon MP), on the ground (instead of
     // the plain jump) or in the air; Jump pressed again in the air without Up slows the fall for as long as it is held, up
     // to time seconds (the child 2001012, mpCon MP, paid once when it starts). Each once per airtime (AirMovement). Like the
-    // other skills (but Teleport) it does not fire during a swing or on a ladder. Others see it by the State messages (the
-    // feet every frame) and the boost effect (SkillCast); the slow fall has no message and no art yet (the special nodes
-    // of 2001012 are not drawn).
+    // other skills (but Teleport) it does not fire during a swing or on a ladder.
+    // The poses: the boost plays WZ manaWave (alert frame 2 for 30 ms, then the jump pose) and the slow fall WZ manaWaveFloat
+    // (fly frame 0), see PoseFrame. The slow fall has no message of its own: its bubble (specialAffected) and its end
+    // (special) are drawn by every client from the State messages, the bubble while the action is fly and the end when it
+    // turns into a jump. The boost effect goes by SkillCast.
     // Unverified (the WZ gives no unit): y 1200 is taken as the take-off speed in px per second (a peak of y^2 / 2 / gravity
-    // = 400 px, the plain jump is 75), and the child's v 95 as the slow fall speed in px per second; time 5 is seconds.
+    // = 400 px, the plain jump is 75); the child's u 25 as how fast the fall speeds up (px per second squared) and v 95 as
+    // the fastest fall (px per second); time 5 is seconds. w 180 is not used.
     private void UpdateManaWave(bool freshAlt, bool up)
     {
         if (!freshAlt || _mover.Climb != null || _fighter.AttackLock > 0 || !_wzSkills.TryGetValue(WzSkillData.ManaWave, out var wave)) return;
@@ -413,10 +461,10 @@ public partial class MushTownGame
         }
         var chara = _save?.Slots[_slot];
         if (!_air.CanFloat || chara == null || !JobSkills.Has(chara.Job, wave.SkillId)) return;
-        var hold = wave.Children.Single(c => c.SkillId == WzSkillData.ManaWaveFloat); // the start check proves it is there
+        var hold = FloatWz;
         int lv = wave.MaxLevel; // the skill stands at its max level; the child has no level of its own to learn
         if (!_skillCost.Pay(chara, hold, lv, _fighter.Cooldowns)) return;
-        _air.Float((float)hold.Value("time", lv), (float)hold.Value("v", lv));
+        _air.Float((float)hold.Value("time", lv), (float)hold.Value("v", lv), (float)hold.Value("u", lv));
     }
 
     // A paid damaging cast: lock the pose, play the effect, judge (local) or
@@ -557,6 +605,11 @@ public partial class MushTownGame
         fx.Delays = delays;
         fx.X = x; fx.Y = origins == null ? y - SkillFx.CastDy : y; fx.FacingRight = facingRight;
     }
+
+    // The hero's frame as the WZ poses of Mana Wave show it: the boost is alert frame 2 (in the air alert is only that pose) and the
+    // slow fall is fly frame 0, held. Every other pose keeps its own frame. Peers get this frame in the State message.
+    private int PoseFrame(string action, int frame) =>
+        action == "fly" ? 0 : action == "alert" && _mover.Ground == null ? 2 : frame;
 
     // Ctrl is a weapon swing: no weapon in hand means no swing at all.
     // The swing is rolled from the pool of the appearance: cash weapon first, then gear.

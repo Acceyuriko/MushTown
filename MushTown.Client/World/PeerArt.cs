@@ -29,6 +29,7 @@ public sealed class PeerArt : Component
     public int Face = ItemData.DefaultFace;
     public List<int>? CashWorn;
     public List<int>? Equips;
+    public FloatBubble Bubble => Owner.Get<FloatBubble>()!; // the slow fall's bubble: spawn always hangs one
 
     // A look can arrive before the first State: the table entry is applied to
     // this component as soon as either arrives.

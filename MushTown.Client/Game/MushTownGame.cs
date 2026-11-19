@@ -51,7 +51,7 @@ public partial class MushTownGame : Game
     private readonly string? _shotTeleport; // --teleport <left|right|up|down>: cast Teleport that way from --at
     private readonly (int X, int? Y)? _shotAt; // --at <x>[,<y>]: the feet x (and height) of the --teleport pose
     private readonly int _shotHoldMs; // --hold <ms>: the Left/Right key stays held this long after the --teleport cast
-    private readonly string? _shotManaWave; // --manawave <boost|air|float>: play Mana Wave from --at
+    private readonly string? _shotManaWave; // --manawave <boost|air|float|release|timeout>: play Mana Wave from --at
     private readonly string? _shotTeleportFrom; // --teleportfrom <rope|swing>: the stage the --teleport cast starts from
     private readonly bool _shotTeleportPre; // --teleportpre: the stage before the cast
     private readonly int _shotRecastMs; // --recast <ms>: after --flyms the same cast again, then the world runs this long (the numbers of two casts on one mob)
@@ -87,6 +87,7 @@ public partial class MushTownGame : Game
     private GameObject _mapObj = new(); // rebuilt per map load: portal + NPC children
     private readonly PlayerMover _mover = new();
     private readonly AirMovement _air = new(); // Mana Wave's boost and slow fall: once per airtime each
+    private readonly FloatBubble _bubble = new(); // the slow fall's bubble on the hero (a peer has its own)
     // The audio object: the music player is its component.
     private readonly GameObject _audio = new();
     private readonly BgmPlayer _bgm;
@@ -260,6 +261,7 @@ public partial class MushTownGame : Game
         var player = new GameObject();
         player.Add(_air); // before the mover: its fall cap is set before the feet fall
         player.Add(_mover);
+        player.Add(_bubble);
         player.Add(_heroPlate);
         _world.AddChild(player);
         var cam = new GameObject();
@@ -796,6 +798,7 @@ public partial class MushTownGame : Game
             Jump = OwnJump(),
         };
         TreeUpdate.UpdateObject(_world, dt);
+        _bubble.Active = _air.Floating;
         _uiScene.Update(dt); // the NPC bubbles keep their own clock
         // Before the draw: a corpse and a finished effect both sit on
         // Frame == Frames.Count, and the draw reads that frame. A number does
@@ -842,6 +845,7 @@ public partial class MushTownGame : Game
             _frameMs += _fighter.AttackLock > 0 ? dtMs / _fighter.AttackScale : dtMs; // a locked swing plays as long as its lock
             _frame = Idle.Frame(_shownAction, Delays(_shownAction, Hero?.Skin ?? 0), _frameMs);
         }
+        _frame = PoseFrame(_shownAction, _frame);
 
         var (targetX, targetY) = CameraTarget();
         _camera.Follow(dt, targetX, targetY);
@@ -902,6 +906,8 @@ public partial class MushTownGame : Game
             if (!_net.Connected && _localWorld == null)
                 StartLocalWorld(); // link lost: a fresh local world keeps the mobs working (kills come back: the drop resets the session)
         }
+
+        SpawnFloatEnds(); // after the peer states: a float that ended this frame plays its end where the actor stands
 
         // Local AI (dropped links tick it live; shots pose it frozen and
         // never reach Update): the world steps every frame and we apply its

@@ -10,6 +10,7 @@ public sealed class WzArt
 {
     public int[][] Origins { get; set; } = Array.Empty<int[]>();
     public int[] Delays { get; set; } = Array.Empty<int>();
+    public List<string> Frames { get; set; } = new(); // the png paths, only for art that is not in a frame list of its own (Mana Wave's slow fall)
 }
 
 public sealed class WzSkillData
@@ -55,6 +56,15 @@ public sealed class WzSkillData
     public List<WzSkillData> Children { get; set; } = new();
 
     public double Value(string field, int level) => Common[field][level - 1];
+
+    // The slow fall (child 2001012) keeps two arts, special and specialAffected, of three frame lists each (Art["special0"]..
+    // Art["specialAffected2"]); the three lists of one art play together.
+    public const int FloatLists = 3;
+
+    public IEnumerable<WzArt> FloatArt(string name) => Enumerable.Range(0, FloatLists).Select(i => Art[name + i]);
+
+    public bool HasFloatArt => new[] { "special", "specialAffected" }.All(name => Enumerable.Range(0, FloatLists).All(i =>
+        Art.TryGetValue(name + i, out var a) && a.Frames.Count > 0 && a.Frames.Count == a.Origins.Length && a.Frames.Count == a.Delays.Length));
 
     // Journey client's attack-frame rule: a frame whose raw delay is positive is the attack frame, and its
     // time is the sum of the absolute delays of the frames before it. A missing or zero delay counts as

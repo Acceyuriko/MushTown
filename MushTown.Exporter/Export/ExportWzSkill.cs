@@ -19,7 +19,7 @@ namespace MushTown.Exporter;
 // action node in this WZ, so it has no HitFrames and an empty Actions.
 // Mana Wave (no damage line, no hit node, an effect of 8 pictures) also gets its cast effect (effect/): the WZ effect list
 // starts with a blank 1x1 frame of 120 ms (no origin, no picture in the canvas); it is left out, so the effect starts at once
-// (CastFrames, Art.Origins and Art.Delays keep the same count). Its child 2001012 (the slow fall) has no art here.
+// (CastFrames, Art.Origins and Art.Delays keep the same count). Its child 2001012 (the slow fall) gets the art of its special and specialAffected (SaveWzFloatArt).
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -55,7 +55,12 @@ public static partial class Export
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
             if ((data.Common.ContainsKey("damage") || id is WzSkillData.Teleport or WzSkillData.ManaWave) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
-            if (WzSkillChildren.TryGetValue(id, out int child)) data.Children.Add(ReadWzSkill(baseRoot, chara, child));
+            if (WzSkillChildren.TryGetValue(id, out int child))
+            {
+                var childData = ReadWzSkill(baseRoot, chara, child);
+                if (child == WzSkillData.ManaWaveFloat && !SaveWzFloatArt(baseRoot, child, childData, outDir, saved)) return false;
+                data.Children.Add(childData);
+            }
             WriteJson(Path.Combine(outDir, "skill", "wz", $"{id}.json"), data);
             string kind = data.Kind == SkillData.KindPassive ? "passive" : data.Kind == SkillData.KindBuff ? "buff" : "active";
             Console.WriteLine($"wz skill {id} {data.Name}: {kind}, max {data.MaxLevel}, common {string.Join(",", data.Common.Keys)}"
@@ -95,6 +100,40 @@ public static partial class Export
             if (node!.Nodes[name] is not { } frames) continue;
             if (!SaveSkillFrames(frames, $"skill/wz/{id}/{name}", into, outDir, saved, id)) return false;
             data.Art[name] = ReadWzArt(meta.Nodes[name]!);
+        }
+        return true;
+    }
+
+    // The slow fall's art (2001012): special (played once when the fall ends) and specialAffected (loops behind the hero
+    // while it lasts) each hold three lists of frames (0, 1, 2) that play together (the specialAffected lists have z -1:
+    // behind the hero). Each goes to Art["special0"], Art["specialAffected1"]... with its frames (png paths), origins and delays.
+    // A frame is an _outlink to a picture in _Canvas, and several lists share pictures, so each frame follows its link.
+    private static bool SaveWzFloatArt(WzRoot baseRoot, int id, WzSkillData data, string outDir, HashSet<string> saved)
+    {
+        var meta = WzSkillNode(baseRoot, id);
+        foreach (string name in new[] { "special", "specialAffected" })
+        {
+            if (meta.Nodes[name] is not { } lists)
+            {
+                Console.WriteLine($"skill {id} has no {name}");
+                return false;
+            }
+            foreach (Wz_Node list in lists.Nodes.Where(l => int.TryParse(l.Text, out _)))
+            {
+                var art = ReadWzArt(list);
+                foreach (Wz_Node f in list.Nodes.Where(f => int.TryParse(f.Text, out _)).OrderBy(f => int.Parse(f.Text, CultureInfo.InvariantCulture)))
+                {
+                    if (WzNodeUtil.ReadCanvas(baseRoot, f).png is not { } png)
+                    {
+                        Console.WriteLine($"skill {id} {name}{list.Text} frame {f.Text}: no picture");
+                        return false;
+                    }
+                    string path = $"skill/wz/{id}/{name}{list.Text}/{art.Frames.Count}.png";
+                    SaveOnce(png, Path.Combine(outDir, path), saved);
+                    art.Frames.Add(path);
+                }
+                data.Art[name + list.Text] = art;
+            }
         }
         return true;
     }

@@ -274,7 +274,7 @@ public partial class MushTownGame
         _shownAction = _mover.Action;
     }
 
-    // --manawave <boost|air|float> --at <x>[,<y>] [--hold <ms>]: the hero stands as for --teleport and plays Mana Wave through the
+    // --manawave <boost|air|float|release|timeout> --at <x>[,<y>] [--hold <ms>]: the hero stands as for --teleport and plays Mana Wave through the
     // Client's own check (UpdateManaWave: the MP, the effect) and the air state and mover steps at 60 a second (see Program.cs).
     private void PoseManaWave()
     {
@@ -293,9 +293,15 @@ public partial class MushTownGame
                 _mover.Input = new PlayerInput { Up = up, JumpHeld = alt, JumpPressed = fresh && i == 0, Walk = OwnWalk(), Jump = OwnJump() };
                 _air.Update(1f / 60);
                 _mover.Update(1f / 60);
+                _bubble.Active = _air.Floating; // what the tree step and the end of Update do in the game
+                _bubble.Update(1f / 60);
+                SpawnFloatEnds();
+                foreach (var f in _fx) f.Update(1f / 60);
+                PoolSweep.CollectDead(_fx, _world, _fxPool); // a finished effect leaves, as in the game
+                _frame = PoseFrame(_mover.Action, 0);
             }
         }
-        int hold = _shotHoldMs > 0 ? _shotHoldMs : _shotManaWave == "float" ? 1000 : 250;
+        int hold = _shotHoldMs > 0 ? _shotHoldMs : _shotManaWave == "float" ? 1000 : _shotManaWave is "release" or "timeout" ? 240 : 250;
         int frames = Math.Max(1, hold * 60 / 1000);
         switch (_shotManaWave)
         {
@@ -306,16 +312,26 @@ public partial class MushTownGame
                 Step(6, false, true, true); // the plain jump (no Up: nothing to cast on the ground)
                 Step(frames, true, true, true); // Up and Jump together in the air
                 break;
+            case "release":
+                Step(40, true, true, true); // the boost, to its top
+                Step(2, false, false, false);
+                Step(36, false, true, true); // the slow fall for 600 ms
+                Step(frames, false, false, false); // Jump let go: the fall is free again, the end effect plays
+                break;
+            case "timeout":
+                Step(40, true, true, true); // the boost, to its top
+                Step(2, false, false, false);
+                Step(5 * 60 + 2, false, true, true); // Jump held through the 5 s limit
+                Step(frames, false, true, false); // still held: the limit ended it, the end effect plays
+                break;
             default:
                 Step(40, true, true, true); // the boost, to its top (a plain jump is only 75 px: the slow fall needs height)
                 Step(2, false, false, false); // the keys let go
                 Step(frames, false, true, true); // pressed again and held: the slow fall
                 break;
         }
-        foreach (var f in _fx) f.Frame = Math.Min(f.Frames.Count - 1, hold / 60); // the boost effect, as far as it has played
         Console.WriteLine($"manawave {_shotManaWave}: {hold} ms in, feet height {_mover.Y:F1} (stand {standY:F0}, so {standY - _mover.Y:F1} px up), speed {_mover.Vy:F1}, MP {_save!.Slots[_slot]!.Mp}");
         _shownAction = _mover.Action;
-        _frame = 0;
         SnapCamera();
     }
 

@@ -24,6 +24,9 @@ using MushTown.Exporter;
 //           - the equipment tooltip was reworked (the set table assets/set/448.json; the required stats, the category and the
 //             set number in the equip json; the ui/etip_*.png art; `panel stat` exports the etip art too).
 //           - the swing actions changed (body, hair, face and all exported gear got swingO2 and swingO3).
+//           - the fly action was added (body, hair, face and all exported gear got fly: the floating pose of Mana Wave's slow fall).
+//           - Mana Wave's slow fall art was added (assets/skill/wz/2001011.json child 2001012: Art special0..2 and specialAffected0..2
+//             with their frames under assets/skill/wz/2001012/).
 //           - the Fire/Poison 1st-job skills changed (new assets/skill/wz/<id>.json and icons; the numbers come from the WZ
 //             `common` formulas). The MP Boost weapon crit change is part of this: 2000006.json got WeaponBonus.
 //           - the dodge changed (the mob json got Acc; an old one reads 0 and the dodge rate comes out wrong. effect/hurtdmg.json

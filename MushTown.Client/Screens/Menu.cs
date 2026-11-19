@@ -179,10 +179,11 @@ public partial class MushTownGame
             //     mover run that long (the hero walks on, as with a real key held): it shows a wall stopping the walk. --teleportpre --hold walks
             //     with the key held and does not cast.
             //     --teleportfrom <rope|swing> starts the cast from a rope or ladder (the one at --at) or in the middle of a weapon swing.
-            //   --manawave <boost|air|float> --at <x>[,<y>] [--hold <ms>] (no --screen) poses a level 200 Fire/Poison hero (--job 210) and
+            //   --manawave <boost|air|float|release|timeout> --at <x>[,<y>] [--hold <ms>] (no --screen) poses a level 200 Fire/Poison hero (--job 210) and
             //     plays Mana Wave through the Client's own check (UpdateManaWave) and the air state: boost = Up and Jump together on the
             //     ground, air = a jump, then Up and Jump together in the air, float = a boost, then Jump pressed again and held (the
-            //     slow fall). The shot is <ms> after the move starts; the feet height and speed are printed. See Program.cs.
+            //     slow fall), release / timeout = the slow fall ended by letting Jump go / by the 5 s limit (the end effect shows).
+            //     The shot is <ms> after the move starts; the feet height and speed are printed. See Program.cs.
             //   death poses the death scene: the tombstone landed, the ghost with its head, the name, the revive popup.
             //   fashionworn poses a world character wearing cash fashion. settings poses the volume window.
             //   shop (with --talk) poses the shop.
@@ -621,8 +622,8 @@ public partial class MushTownGame
             var wz = LoadJson<WzSkillData>(f);
             if (wz.Common.ContainsKey("damage") && (wz.CastFrames.Count == 0 || wz.HitFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
-            if (wz.SkillId == WzSkillData.ManaWave && wz.Children.All(c => c.SkillId != WzSkillData.ManaWaveFloat))
-                throw new InvalidDataException($"skill {wz.SkillId} has no child {WzSkillData.ManaWaveFloat} (the slow fall): run the exporter (export)");
+            if (wz.SkillId == WzSkillData.ManaWave && !wz.Children.Any(c => c.SkillId == WzSkillData.ManaWaveFloat && c.HasFloatArt))
+                throw new InvalidDataException($"skill {wz.SkillId} has no child {WzSkillData.ManaWaveFloat} (the slow fall) with its art (special, specialAffected): run the exporter (export)");
             if ((wz.Common.ContainsKey("damage") || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
             if ((wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1" || wz.BallFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
@@ -699,6 +700,8 @@ public partial class MushTownGame
             foreach (string f in wz.HitFrames) LoadTexture(f);
             foreach (string f in wz.BallFrames) LoadTexture(f);
             foreach (string f in wz.SpecialFrames) LoadTexture(f);
+            foreach (var art in wz.Children.SelectMany(c => c.Art.Values)) // the slow fall's bubble and end
+                foreach (string f in art.Frames) LoadTexture(f);
         }
         for (int i = 0; i < MacroBook.Count; i++) LoadTexture($"ui/macro_icon{i}.png"); // the keys and the quick slots draw them
         RoundTopCorners(Tex("hud_stathilong.png"), 2, 3);

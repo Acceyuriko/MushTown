@@ -26,7 +26,11 @@ public partial class MushTownGame
         {
             int centerX = hero != null ? AvatarCenterX(feetX, _mover.FacingRight, hero.Skin) : feetX;
             if (_death.Dead) DrawDeath(hero);
-            else DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero, tint: HurtTint);
+            else
+            {
+                DrawFloatBubble(_bubble, _mover.X, _mover.Y, _mover.FacingRight); // behind the avatar
+                DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero, tint: HurtTint);
+            }
             if (hero != null)
                 DrawName(centerX - _camera.X, feetY + NameDown - _camera.Y, _heroPlate.Name, _heroPlate.Plate);
         }
@@ -37,6 +41,7 @@ public partial class MushTownGame
             var plate = r.Owner.Get<PlateArt>()!; // spawn always hangs one
             draws.Add((ry, () =>
             {
+                DrawFloatBubble(r.Bubble, r.X, r.Y, r.FacingRight); // behind the avatar
                 int centerX = DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight,
                     r.Skin, r.Equips, r.CashWorn, r.Hair, r.Face);
                 int hpPct = PartyHpOf(r.Id);
