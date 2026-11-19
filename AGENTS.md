@@ -13,6 +13,7 @@
 - **一个 ticket 做完就停下等用户验收**，不要顺手做下一个。
 - **每个 ticket 先走 review-loop，收敛后才能提交；提交后再呈递验收。**
 - 每个 ticket 一个 git commit；债不跨 ticket。
+- 开发的验收和调试截图放 `logs/<ticket 编号>/`，每个 ticket 一个文件夹（便于查找和清理）。
 
 ## 红线
 
