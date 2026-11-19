@@ -49,7 +49,8 @@ public partial class MushTownGame : Game
     private readonly bool _shotWeak; // --weak: the --skill cast lands on mobs already marked by Elemental Weakness
     private readonly int _shotStandoff; // --standoff <px>: how far from the first mob a WZ --skill caster stands (0 = the default 250)
     private readonly string? _shotTeleport; // --teleport <left|right|up|down>: cast Teleport that way from --at
-    private readonly int? _shotAt; // --at <x>: the feet x of the --teleport pose
+    private readonly (int X, int? Y)? _shotAt; // --at <x>[,<y>]: the feet x (and height) of the --teleport pose
+    private readonly int _shotHoldMs; // --hold <ms>: the Left/Right key stays held this long after the --teleport cast
     private readonly bool _shotTeleportPre; // --teleportpre: the stage before the cast
     private readonly int _shotRecastMs; // --recast <ms>: after --flyms the same cast again, then the world runs this long (the numbers of two casts on one mob)
     private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (effect, attack frame, ball, explosion, numbers)
@@ -95,6 +96,7 @@ public partial class MushTownGame : Game
     private readonly DeathState _death = new(); // dead from HP 0 to the revive click
     private readonly HurtGuard _hurt = new(); // player hurt state: 60 frames, one timer with the invincibility
     private bool _upNow, _downNow; // this frame's Up and Down keys, stored before the cast loop (Teleport reads them; _mover.Input is written after the casts)
+    private int _dirNow; // this frame's Left/Right keys: -1, 0 or 1 (same use)
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
     // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
@@ -137,7 +139,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, int? shotAt = null, bool shotTeleportPre = false)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -172,6 +174,7 @@ public partial class MushTownGame : Game
         _shotTeleport = shotTeleport;
         _shotAt = shotAt;
         _shotTeleportPre = shotTeleportPre;
+        _shotHoldMs = shotHoldMs;
         _shotCrit = shotCrit;
         _shotStandoff = shotStandoff;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
@@ -728,6 +731,7 @@ public partial class MushTownGame : Game
         // Face the held direction before skills strike: same-frame turn+act
         // uses the new facing (the in-step update then agrees).
         int dirNow = (kb.IsKeyDown(Keys.Right) ? 1 : 0) - (kb.IsKeyDown(Keys.Left) ? 1 : 0);
+        _dirNow = dirNow;
         if (_fighter.AttackLock <= 0 && dirNow != 0 && _mover.Climb == null) _mover.FacingRight = dirNow > 0;
 
         // Ctrl swings the weapon (not on a ladder): the swing locks movement

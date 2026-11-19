@@ -171,10 +171,13 @@ public partial class MushTownGame
             //     --standoff <px> moves the caster away from the first mob (default 250): out of
             //     reach, the ball has no target. The big blue shape in front of the caster is the cast effect (WZ effect,
             //     16 frames x 60 ms = 960 ms), not a second ball.
-            //   --teleport <dir> --at <x> (no --screen) poses a level 200 Fire/Poison hero (--job 210) standing at feet x <x>, on the
-            //     ground at the map's spawn height, and casts Teleport that way through the real cast path (CastTeleport:
-            //     the landing rules, the MP, the effect); the shot is the landing, with the effect posed at its fourth frame.
-            //     --teleportpre stops before the cast. The camera stays where the pre shot has it, so the two shots show the move.
+            //   --teleport <dir> --at <x>[,<y>] (no --screen) poses a level 200 Fire/Poison hero (--job 210) standing at feet x <x>,
+            //     on the ground nearest below feet height <y> (default: the map's spawn height), the key of <dir> held, and casts
+            //     Teleport that way through the real cast path (CastTeleport: the keys, the landing rules, the MP, the effect); the
+            //     shot is the landing, with the effect posed at its fourth frame. --teleportpre stops before the cast. The camera stays
+            //     where the pre shot has it, so the two shots show the move. --hold <ms> keeps the key held after the cast and lets the
+            //     mover run that long (the hero walks on, as with a real key held): it shows a wall stopping the walk. --teleportpre --hold walks
+            //     with the key held and does not cast.
             //   death poses the death scene: the tombstone landed, the ghost with its head, the name, the revive popup.
             //   fashionworn poses a world character wearing cash fashion. settings poses the volume window.
             //   shop (with --talk) poses the shop.

@@ -68,6 +68,120 @@ public sealed class MoverTests
         Assert.AreEqual(0f, m.Vx);
     }
 
+    // A wall (a vertical foothold) whose span holds the feet height stops the walk 1 px before it. The hero keeps its
+    // ground and has no momentum (before: it walked into the cliff and fell into the void).
+    [TestMethod]
+    public void Walk_IntoWallOnTheGround_StopsBeforeIt()
+    {
+        var map = TestMap();
+        map.Footholds.Add(new() { X1 = 600, Y1 = 240, X2 = 600, Y2 = 300 });
+        var m = Mover(map, 590, 300);
+        m.Input = Input(1);
+        m.Update(1f);
+        Assert.AreEqual(599f, m.X);
+        Assert.AreEqual(0f, m.Vx);
+        Assert.IsNotNull(m.Ground);
+        Assert.AreEqual(300f, m.Y);
+    }
+
+    // A wall whose top is at the feet (the edge of a floor) or whose bottom is above the feet (an end cap) does not stop it.
+    [TestMethod]
+    public void Walk_PastWallTopOrEndCap_IsNotStopped()
+    {
+        var map = TestMap();
+        map.Footholds.Add(new() { X1 = 600, Y1 = 300, X2 = 600, Y2 = 340 }); // top at the feet
+        map.Footholds.Add(new() { X1 = 700, Y1 = 250, X2 = 700, Y2 = 299 }); // cap above the feet
+        var m = Mover(map, 590, 300);
+        m.Input = Input(1);
+        m.Update(1f);
+        Assert.AreEqual(590 + PlayerMover.WalkSpeed, m.X, 0.01f);
+        var m2 = Mover(map, 690, 300);
+        m2.Input = Input(1);
+        m2.Update(1f);
+        Assert.AreEqual(690 + PlayerMover.WalkSpeed, m2.X, 0.01f);
+    }
+
+    // Map 1020000, x 497: a 1 px vertical foothold joins two slopes. It is a seam in the floor: the walk goes on over it
+    // (the same shape shifted down by 500, so it fits the test map). A 60 px wall still stops the walk (above).
+    [TestMethod]
+    public void Walk_Over1PxWallBetweenSlopes_IsNotStopped()
+    {
+        var map = TestMap();
+        map.Footholds = new List<FootholdItem>
+        {
+            new() { X1 = 400, Y1 = 314, X2 = 495, Y2 = 314 },
+            new() { X1 = 495, Y1 = 314, X2 = 497, Y2 = 313 },
+            new() { X1 = 497, Y1 = 313, X2 = 497, Y2 = 314 },
+            new() { X1 = 497, Y1 = 314, X2 = 534, Y2 = 297 },
+        };
+        var m = Mover(map, 490, 314);
+        m.Input = Input(1);
+        for (int i = 0; i < 12; i++) m.Update(0.1f / 6);
+        Assert.IsTrue(m.X > 498f, $"stopped at {m.X}");
+        Assert.IsNotNull(m.Ground);
+    }
+
+    // The pair of the 1 px seam above: a 2 px wall is a wall and stops the walk 1 px before it.
+    [TestMethod]
+    public void Walk_Into2PxWall_StopsBeforeIt()
+    {
+        var map = TestMap();
+        map.Footholds = new List<FootholdItem>
+        {
+            new() { X1 = 400, Y1 = 314, X2 = 497, Y2 = 314 },
+            new() { X1 = 497, Y1 = 312, X2 = 497, Y2 = 314 },
+            new() { X1 = 497, Y1 = 312, X2 = 600, Y2 = 312 },
+        };
+        var m = Mover(map, 490, 314);
+        m.Input = Input(1);
+        for (int i = 0; i < 12; i++) m.Update(0.1f / 6);
+        Assert.AreEqual(496f, m.X);
+    }
+
+    // The wall rule in the air: a jump with the key held toward a 60 px cliff is stopped by the cliff face while the feet
+    // are below its top, passes once they are above it, and lands on the plateau.
+    [TestMethod]
+    public void Jump_TowardLowCliff_HeldKey_LandsOnThePlateau()
+    {
+        var map = TestMap();
+        map.Footholds.Add(new() { X1 = 600, Y1 = 240, X2 = 600, Y2 = 300 }); // the cliff face
+        map.Footholds.Add(new() { X1 = 600, Y1 = 240, X2 = 1000, Y2 = 240 }); // the plateau
+        var m = Mover(map, 590, 300);
+        var jump = Input(1);
+        jump.JumpHeld = true;
+        m.Input = jump;
+        m.Update(Dt);
+        Assert.IsNull(m.Ground);
+        m.Input = Input(1);
+        for (int i = 0; i < 120 && m.Ground == null; i++) m.Update(Dt);
+        Assert.IsNotNull(m.Ground);
+        Assert.AreEqual(240f, m.Y);
+        Assert.IsTrue(m.X > 600f, $"x {m.X}");
+    }
+
+    [TestMethod]
+    public void StopBeforeWall_BothDirections_AndNoWall()
+    {
+        var walls = new List<FootholdItem> { new() { X1 = 100, Y1 = 40, X2 = 100, Y2 = 100 } };
+        Assert.AreEqual(99f, SceneMath.StopBeforeWall(walls, 0, 190, 100));
+        Assert.AreEqual(101f, SceneMath.StopBeforeWall(walls, 200, 10, 100));
+        Assert.AreEqual(190f, SceneMath.StopBeforeWall(walls, 0, 190, 39)); // above the wall
+        Assert.AreEqual(50f, SceneMath.StopBeforeWall(walls, 0, 50, 100)); // the wall is farther than the target
+        Assert.AreEqual(190f, SceneMath.StopBeforeWall(walls, 100, 190, 100)); // standing on the wall x: it is not ahead, no stop
+    }
+
+    // WZ cuts a tall wall into pieces: they are one wall (the piece at the feet is only the low part of it), and step lets
+    // the caller step over a wall that rises no more than that above the feet.
+    [TestMethod]
+    public void StopBeforeWall_PiecesAreOneWall_AndStepJumpsLowOnes()
+    {
+        var wall = new List<FootholdItem> { new() { X1 = 100, Y1 = 100, X2 = 100, Y2 = 60 }, new() { X1 = 100, Y1 = 60, X2 = 100, Y2 = 20 } };
+        Assert.AreEqual(99f, SceneMath.StopBeforeWall(wall, 0, 190, 100)); // 80 high in two pieces
+        Assert.AreEqual(99f, SceneMath.StopBeforeWall(wall, 0, 190, 100, 75)); // 80 high is above the step
+        Assert.AreEqual(190f, SceneMath.StopBeforeWall(wall, 0, 190, 100, 80)); // top 20 = feet - 80: stepped over
+        Assert.AreEqual(190f, SceneMath.StopBeforeWall(wall, 0, 190, 20)); // the feet at the top of the wall: it is the edge of the platform on top
+    }
+
     [TestMethod]
     public void Jump_RisesThenLandsBack()
     {

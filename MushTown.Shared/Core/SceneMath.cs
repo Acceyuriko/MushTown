@@ -187,6 +187,43 @@ public static class SceneMath
         return best;
     }
 
+    // A wall is a vertical foothold (WZ cuts a tall wall into pieces: the pieces that touch end to end at one x are one wall).
+    // Walking or teleporting from x0 toward x1 with the feet at height y, the first wall ahead (after x0, up to and including
+    // x1) whose span holds the feet height (top < y <= bottom) stops us 1 px before it; that x is returned (x1 when there is
+    // no wall, x0 when we already stand against it). A wall that ends above the feet (the end cap of a floating platform) or
+    // starts at the feet (the edge of the platform we stand on) does not stop. step is how high a wall may rise above the
+    // feet and still be stepped over: the walk passes 1 (a 1 px seam in the floor is no wall, Mover.WalkStepUp); Teleport passes
+    // its reach, so it jumps a low cliff and stops only at a wall that rises above that.
+    public static float StopBeforeWall(List<FootholdItem> footholds, float x0, float x1, float y, int step = 0)
+    {
+        int dir = Math.Sign(x1 - x0);
+        float stop = x1;
+        foreach (var w in footholds)
+        {
+            if (w.X1 != w.X2 || (w.X1 - x0) * dir <= 0 || (w.X1 - x1) * dir > 0) continue;
+            if (WallTop(footholds, w) >= y - step || y > Math.Max(w.Y1, w.Y2)) continue;
+            if ((w.X1 - dir - stop) * dir < 0) stop = w.X1 - dir;
+        }
+        return (stop - x0) * dir < 0 ? x0 : stop;
+    }
+
+    // The top of the whole wall w belongs to: the pieces above it at the same x that touch end to end.
+    private static int WallTop(List<FootholdItem> footholds, FootholdItem w)
+    {
+        int top = Math.Min(w.Y1, w.Y2);
+        for (bool grew = true; grew;)
+        {
+            grew = false;
+            foreach (var o in footholds)
+            {
+                if (o.X1 != o.X2 || o.X1 != w.X1 || Math.Max(o.Y1, o.Y2) != top || Math.Min(o.Y1, o.Y2) >= top) continue;
+                top = Math.Min(o.Y1, o.Y2);
+                grew = true;
+            }
+        }
+        return top;
+    }
+
     // Frame timer: add dt, walk past spent delays, loop. Delays are checked > 0
     // at load (the exporter fails, the client throws), so this loop always ends.
     public static (int frame, float timer) AdvanceFrame(int frame, float timer, float dtMs, List<int> delays)

@@ -371,17 +371,16 @@ public partial class MushTownGame
         }
     }
 
-    // Teleport: Up and Down (this frame's keys, _upNow/_downNow: Up and the Teleport key pressed together in one frame
-    // go up; the macro cast reads the same fields) hold the vertical jump (the y field), otherwise the cast goes the way the hero faces
-    // (Left and Right already turned it this frame; the x field). The landing is the farthest legal spot
-    // (TeleportRules); a refused landing costs no MP. The feet move at once and the pose stays as it was (WZ has no
+    // Teleport: the direction keys of this frame decide (_upNow/_downNow/_dirNow: a key pressed together with the
+    // Teleport key in one frame counts; the macro cast reads the same fields). Up or Down is the vertical jump (the y
+    // field, Up wins over Down, and over Left/Right), Left or Right the horizontal one (the x field). No direction key
+    // held: nothing happens (no cast, no MP, no cooldown, no effect). The landing is TeleportRules' (wall first, then the
+    // platform); a refused landing costs no MP. The feet move at once and the pose stays as it was (WZ has no
     // action node). The cooldown (teleportCooltime, 480 ms) is checked by TryPayWzSkill: while it runs nothing moves,
     // nothing is paid and no effect plays. The server learns the new place first, so the others see the effect where we land.
     private void CastTeleport(WzSkillData wz)
     {
-        var land = _upNow ? TeleportRules.Vertical(_map, _mover.X, _mover.Y, -1, (int)wz.Value("y", wz.MaxLevel))
-            : _downNow ? TeleportRules.Vertical(_map, _mover.X, _mover.Y, 1, (int)wz.Value("y", wz.MaxLevel))
-            : TeleportRules.Horizontal(_map, _mover.X, _mover.Y, _mover.FacingRight ? 1 : -1, (int)wz.Value("x", wz.MaxLevel));
+        var land = TeleportRules.ForKeys(_map, _mover.X, _mover.Y, _upNow, _downNow, _dirNow, (int)wz.Value("x", wz.MaxLevel), (int)wz.Value("y", wz.MaxLevel));
         if (land is not { } to || !TryPayWzSkill(wz)) return;
         _mover.Reset();
         _mover.X = to.X;

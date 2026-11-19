@@ -33,6 +33,7 @@ public sealed class PlayerMover : Component
     private const int DropFrames = 3; // down+jump ignores landings for ~3 frames: just enough to clear the dropped line
     private const int PortalCooldown = 30; // frames after travel during which Up cannot travel again (~0.5s)
     private const int GrabCooldown = 20; // frames after leaving a ladder during which Up/Down cannot re-grab (~0.33s)
+    private const int WalkStepUp = 1; // a wall this low or lower is a seam in the floor, not a wall: the walk already climbs 1 px per pixel (SceneMath.StepTo)
     public const int LadderTopDrop = 120; // a ladder may end above its platform: step onto a top platform within this drop
 
     // Feet position, horizontal/vertical speed, and the foothold stood on
@@ -144,6 +145,7 @@ public sealed class PlayerMover : Component
                 Vx = Math.Clamp(Vx + dir * AirAccel * dt, -Input.Walk, Input.Walk);
             float rawX = X + Vx * dt;
             nx = Math.Clamp(rawX, Map.Info.VrLeft, Map.Info.VrRight);
+            nx = SceneMath.StopBeforeWall(Map.Footholds, X, nx, Y, WalkStepUp); // a cliff or a step is a wall: the feet stop in front of it
             if (nx != rawX) Vx = 0; // hit a wall: momentum dies here
             moved = nx != X;
             X = nx;

@@ -214,13 +214,14 @@ public partial class MushTownGame
         SnapCamera();
     }
 
-    // --teleport <dir> --at <x>: the hero stands at feet x on the ground at the map's spawn height, facing the way of a
-    // horizontal cast, and casts Teleport through CastTeleport (the landing rules, the MP, the effect). The camera is fixed
+    // --teleport <dir> --at <x>[,<y>]: the hero stands at feet x on the ground nearest below feet height y (default: the
+    // map's spawn height), facing the way of a horizontal cast, the direction key held, and casts Teleport through
+    // CastTeleport (the landing rules, the MP, the effect). --hold <ms> then steps the mover that long with the key held. The camera is fixed
     // before the cast and stays, so the pre and the post shot show the same scene. The effect is posed at its fourth frame (a thin one: the hero stays visible).
     private void PoseTeleport()
     {
-        _mover.X = _shotAt!.Value;
-        _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, _map.Info.SpawnY)
+        _mover.X = _shotAt!.Value.X;
+        _mover.Ground = SceneMath.GroundBelow(_map.Footholds, (int)_mover.X, _shotAt.Value.Y ?? _map.Info.SpawnY)
             ?? throw new InvalidDataException($"--teleport found no ground at x {_mover.X}");
         _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
         ResetMotion();
@@ -228,11 +229,19 @@ public partial class MushTownGame
         _mover.Action = "stand1";
         _frame = 0;
         SnapCamera();
-        if (_shotTeleportPre) return;
+        if (_shotTeleportPre && _shotHoldMs == 0) return;
         _upNow = _shotTeleport == "up";
         _downNow = _shotTeleport == "down";
-        CastTeleport(_wzSkills[WzSkillData.Teleport]);
-        foreach (var f in _fx) f.Frame = 3;
+        _dirNow = _shotTeleport == "left" ? -1 : _shotTeleport == "right" ? 1 : 0;
+        if (!_shotTeleportPre) // --teleportpre --hold only walks: no cast
+        {
+            CastTeleport(_wzSkills[WzSkillData.Teleport]);
+            foreach (var f in _fx) f.Frame = 3;
+        }
+        if (_shotHoldMs == 0) return;
+        _mover.Input = new PlayerInput { Dir = _dirNow, Walk = OwnWalk(), Jump = OwnJump() };
+        for (int i = _shotHoldMs * 60 / 1000; i > 0; i--) _mover.Update(1f / 60);
+        _shownAction = _mover.Action;
     }
 
     // A WZ damage skill (Energy Bolt): pay best-effort, let the mobs gather (--aiticks), then cast with a fixed
