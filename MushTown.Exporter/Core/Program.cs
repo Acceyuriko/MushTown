@@ -18,6 +18,26 @@ using MushTown.Exporter;
 //   pick hair <out.png> <id,id,...>       contact sheet of the doll per hair
 // Only smoke and export take a DataDir; the others always read the default one,
 // so their first argument is their own.
+//
+// Rerun after you pull a change (the client stops at start when a file is missing or old):
+//   export  - the start gear changed (the start gear is the six Finsaliel pieces).
+//           - the equipment tooltip was reworked (the set table assets/set/448.json; the required stats, the category and the
+//             set number in the equip json; the ui/etip_*.png art; `panel stat` exports the etip art too).
+//           - the swing actions changed (body, hair, face and all exported gear got swingO2 and swingO3).
+//           - the Fire/Poison 1st-job skills changed (new assets/skill/wz/<id>.json and icons; the numbers come from the WZ
+//             `common` formulas). The MP Boost weapon crit change is part of this: 2000006.json got WeaponBonus.
+//           - the dodge changed (the mob json got Acc; an old one reads 0 and the dodge rate comes out wrong. effect/hurtdmg.json
+//             got the Miss word and effect/hurtdmg/Miss.png; an old hurtdmg.json has no Miss word and the client fails on a dodge).
+//   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of
+//             each map and the login theme.
+//   panel   - exports one panel's art only.
+//           - panel passive exports the default passive skills of the skill window's beginner page (name, text, max-level
+//             numbers, icon) into assets/skill/passive/. Rerun `panel passive` and `panel skill` after DefaultPassiveSkills
+//             changed (the client fails on a mismatch). Rerun `panel passive` after the Monster Park Potion change (new green
+//             potion icon assets/skill/passive/item2023126.png).
+//           - panel skill also exports the macro list window and the five macro_*.png icons: rerun it after the macro change.
+//           - panel map also exports the minimap shop NPC triangle icons mini_dot_shop.png and npclist_shop.png: rerun it after
+//             the minimap shop icon change.
 string cmd = args.Length > 0 ? args[0] : "smoke";
 
 switch (cmd)

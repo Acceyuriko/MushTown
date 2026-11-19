@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -23,6 +22,7 @@ public partial class MushTownGame : Game
     private readonly GraphicsDeviceManager _graphics;
     private readonly string _assetsDir;
     private readonly string? _shotPath;
+    private bool _shotDone; // the shot is saved: RunHidden stops
     private readonly int _shotMap;
     private readonly int _shotTravel;
     private readonly string _shotAction;
@@ -267,8 +267,6 @@ public partial class MushTownGame : Game
         _world.AddChild(cam);
         _world.AddChild(_audio); // the music player component
         Exiting += (_, _) => { SaveChara(); _net?.Dispose(); _server?.Dispose(); };
-        if (_shotPath != null && OperatingSystem.IsWindows())
-            HideWindowEarly(); // headless shots: hide before first paint (load takes seconds)
     }
 
     // A game event for the player: it goes to the log file and to the chat
@@ -279,27 +277,12 @@ public partial class MushTownGame : Game
         _chatWindow.AddSystem(line);
     }
 
-    // Hides every window of this process, every 25ms, until exit. One
-    // mechanism: MainWindowHandle lags creation by ~1s, and hiding once
-    // (Initialize/Update) still leaves the black window up through load.
-    private static void HideWindowEarly()
+    // Headless --shot (the default): Game.Run() shows the SDL window when its loop starts, and SDL activates a window it
+    // shows: that is the black window and the stolen focus. RunOneFrame never shows it. The window stays hidden from
+    // creation to exit; the shot is drawn into a render target and saved from there. --show uses Run() instead.
+    internal void RunHidden()
     {
-        uint pid = (uint)Environment.ProcessId;
-        var t = new Thread(() =>
-        {
-            for (int i = 0; i < 1600; i++) // 40s cap; shot mode exits in seconds
-            {
-                EnumWindows((h, _) =>
-                {
-                    GetWindowThreadProcessId(h, out uint wpid);
-                    if (wpid == pid && IsWindowVisible(h)) ShowWindow(h, 0);
-                    return true;
-                }, IntPtr.Zero);
-                Thread.Sleep(25);
-            }
-        });
-        t.IsBackground = true;
-        t.Start();
+        while (!_shotDone) RunOneFrame();
     }
 
     protected override void Initialize()
@@ -405,16 +388,6 @@ public partial class MushTownGame : Game
 
     // Screen size changed (resolution switch, moving to another monitor):
     // follow the new size so the upscaling stays correct.
-    [DllImport("user32.dll")]
-    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
-    [DllImport("user32.dll")]
-    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
     private void OnClientSizeChanged(object? sender, EventArgs e)
     {
         var mode = GraphicsDevice.Adapter.CurrentDisplayMode;
@@ -1049,6 +1022,7 @@ public partial class MushTownGame : Game
         BlitScene();
         GraphicsDevice.SetRenderTarget(null);
         SaveShot(target, _shotPath);
+        _shotDone = true;
         Exit();
     }
 

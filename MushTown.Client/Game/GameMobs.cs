@@ -124,11 +124,10 @@ public partial class MushTownGame
         }
         float bodyH = m.Frames[0].OriginY; // origin to feet: where the head is
         float headY = m.Y - bodyH;
-        // The hits of one WZ multi-hit cast land in the same frame: each number of this mob goes one step above the last
+        // The hits of one multi-hit cast land in the same frame: each number of this mob goes one step above the last
         // and appears after it (other mobs' numbers do not count: every mob has its own stack from its own head), and
-        // only the first of a mob plants the spark. The warrior skills keep their one spot.
-        bool wzHit = _wzSkills.ContainsKey(skill);
-        int layer = wzHit ? FloatingNumber.Layer(_numbers, uid) : 0;
+        // only the first of a mob plants the spark. The rule does not look at the job or the skill: any hit stacks.
+        int layer = FloatingNumber.Layer(_numbers, uid);
         bool firstOfMob = layer == 0;
         var num = TakeNumber();
         num.Text = damage.ToString(); num.X = m.X; num.MobUid = uid;

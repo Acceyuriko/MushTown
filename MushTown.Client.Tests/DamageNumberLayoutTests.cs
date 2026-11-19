@@ -55,4 +55,14 @@ public class DamageNumberLayoutTests
         CollectionAssert.AreEqual(plain.Places, crit.Places);
         Assert.AreEqual(plain.Width, crit.Width);
     }
+
+    [TestMethod]
+    public void CriticalMark_HangingLeftOfItsOrigin_AnchorsAStepInFromTheDigitsTopLeft()
+    {
+        // skin 1354: a 44 x 56 first digit (origin 24, 56), a mark 88 wide with its origin at (110, 100)
+        var glyphs = new[] { Digit(44, 24, 56), Digit(42, 21, 48) };
+        var mark = DamageNumberLayout.Place(glyphs, 0, Digit(88, 110, 100)).Star!.Value;
+        Assert.AreEqual(-2f + 44 * 0.7f - 110, mark.Left, 0.001f); // the digit's left is -2; the origin 70 percent across
+        Assert.AreEqual(-56 * 0.3f - 100, mark.Top, 0.001f); // and 70 percent down
+    }
 }
