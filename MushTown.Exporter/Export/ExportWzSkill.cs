@@ -7,8 +7,9 @@ namespace MushTown.Exporter;
 // The Fire/Poison skills, read straight from the WZ skill nodes (Shared WzSkillData): every common
 // formula worked out for every level (SkillFormula), the lt/rb rectangles, info and action, and the
 // tooltip text of String.wz with the max-level numbers filled in. Writes assets/skill/wz/<id>.json
-// plus the icon and the disabled icon. Only the 1st job (200.img) is exported for now: the formula
-// reader is general, the other jobs are added with their own tickets.
+// plus the icon and the disabled icon. The ids come from the job pages (JobSkills): the 1st job (200.img) and the 2nd job
+// passives (210.img: MP Eater, Spell Mastery, High Wisdom, Elemental Drain, Agile Magic); the formula reader is general, the
+// other skills are added with their own tickets.
 // A skill with a damage line also gets its cast effect (effect/) and hit spark (hit/) frames, and CastFrames and
 // HitFrames in the json; the effect, hit, ball and special art also keep their WZ origin and delay in Art. A skill
 // with a ball node (Energy Bolt) also gets the flying bolt (ball/) and BallFrames, and one with a special node the art
@@ -173,6 +174,9 @@ public static partial class Export
             foreach (Wz_Node weapon in byWeapon.Nodes)
                 data.WeaponBonus[int.Parse(weapon.Text, CultureInfo.InvariantCulture)] =
                     weapon.Nodes.ToDictionary(v => v.Text, v => SkillFormula.Levels(Text(v), data.MaxLevel));
+        // Agile Magic: psdWeaponBooster/actionSpeed -2 (attack speed +2 stages). It goes into Common as boosterActionSpeed.
+        if (node.Nodes["psdWeaponBooster"]?.Nodes["actionSpeed"] is { } booster)
+            data.Common["boosterActionSpeed"] = SkillFormula.Levels(Text(booster), data.MaxLevel);
         foreach (Wz_Node v in node.Nodes["info"]!.Nodes) data.Info[v.Text] = Text(v);
         if (node.Nodes["action"] is { } action)
             foreach (Wz_Node v in action.Nodes) data.Actions.Add(Text(v));

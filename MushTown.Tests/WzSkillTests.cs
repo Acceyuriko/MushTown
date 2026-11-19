@@ -8,7 +8,22 @@ public class WzSkillTests
     // One WZ skill from its common formulas (the text of Skill/200.img/skill/<id>/common).
     private static WzSkillData Skill(int id, int maxLevel, params (string Field, string Formula)[] common)
     {
-        var data = new WzSkillData { SkillId = id, MaxLevel = maxLevel, Name = id switch { WzSkillData.MpBoost => "MP Boost", WzSkillData.Teleport => "Teleport", _ => "Magic Armor" } };
+        var data = new WzSkillData
+        {
+            SkillId = id,
+            MaxLevel = maxLevel,
+            Name = id switch
+            {
+                WzSkillData.MpBoost => "MP Boost",
+                WzSkillData.Teleport => "Teleport",
+                WzSkillData.HighWisdom => "High Wisdom",
+                WzSkillData.AgileMagic => "Agile Magic",
+                WzSkillData.SpellMastery => "Spell Mastery",
+                WzSkillData.MpEater => "MP Eater",
+                WzSkillData.ElementalDrain => "Elemental Drain",
+                _ => "Magic Armor",
+            }
+        };
         foreach (var (field, formula) in common) data.Common[field] = SkillFormula.Levels(formula, maxLevel);
         return data;
     }
@@ -19,6 +34,12 @@ public class WzSkillTests
         [WzSkillData.MagicArmor] = Skill(WzSkillData.MagicArmor, 9, ("pddX", "10*x")),
         [WzSkillData.MpBoost] = BoostWithWandCrit(),
         [WzSkillData.Teleport] = Skill(WzSkillData.Teleport, 5, ("psdSpeed", "2+4*x"), ("speedMax", "4*x")),
+        // The 2nd job passives with the formulas of 210.img (common; Agile Magic's psdWeaponBooster/actionSpeed is boosterActionSpeed).
+        [WzSkillData.HighWisdom] = Skill(WzSkillData.HighWisdom, 5, ("intX", "8*x")),
+        [WzSkillData.AgileMagic] = Skill(WzSkillData.AgileMagic, 10, ("intX", "2*x"), ("boosterActionSpeed", "-2")),
+        [WzSkillData.SpellMastery] = Skill(WzSkillData.SpellMastery, 10, ("mastery", "10+4*x"), ("x", "x"), ("cr", "u(x/2)")),
+        [WzSkillData.MpEater] = Skill(WzSkillData.MpEater, 9, ("prop", "3*x+3"), ("x", "d(x/2)+1"), ("y", "d(x/3)")),
+        [WzSkillData.ElementalDrain] = Skill(WzSkillData.ElementalDrain, 1, ("x", "3"), ("y", "5"), ("range", "800")),
     };
 
     // psdWT/37/cr = 5 in 200.img: the wand (item family 137, weapon code 37) gives 5 crit rate.
@@ -148,10 +169,10 @@ public class WzSkillTests
     {
         var crit = new StatModifier(StatKey.CRIT_RATE, StatValueType.FLAT, 5, StatSource.Skill, "MP Boost");
         Assert.IsTrue(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Wand).Contains(crit));
-        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Staff).Any(m => m.Key == StatKey.CRIT_RATE));
-        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 0).Any(m => m.Key == StatKey.CRIT_RATE));
-        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 1302000).Any(m => m.Key == StatKey.CRIT_RATE)); // a sword
-        Assert.AreEqual(5.0, StatAggregator.Aggregate(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Wand)).Value(StatKey.CRIT_RATE));
+        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Staff).Any(m => m.Key == StatKey.CRIT_RATE && m.Label == "MP Boost"));
+        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 0).Any(m => m.Key == StatKey.CRIT_RATE && m.Label == "MP Boost"));
+        Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 1302000).Any(m => m.Key == StatKey.CRIT_RATE && m.Label == "MP Boost")); // a sword
+        Assert.AreEqual(10.0, StatAggregator.Aggregate(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Wand)).Value(StatKey.CRIT_RATE)); // the wand's 5 and Spell Mastery's 5
     }
 
     // The max MP of an existing Fire/Poison save must not change: the old hard-coded rule was
@@ -168,7 +189,7 @@ public class WzSkillTests
         Assert.AreEqual(old, StatAggregator.Aggregate(mods).IntValue(StatKey.MAX_MP));
     }
 
-    // The mage has the fixed stage 4; MP Boost adds one: the panel shows 5 and the delay is shorter.
+    // The mage has the fixed stage 4; MP Boost adds one and Agile Magic two: the panel shows 7 and the delay is shorter.
     [TestMethod]
     public void AttackSpeed_MageStageIsFourPlusTheSkillTotal()
     {
@@ -176,22 +197,25 @@ public class WzSkillTests
         Assert.AreEqual(4.0, StatAggregator.Aggregate(mods).Value(StatKey.ATTACK_SPEED));
         mods.AddRange(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 0));
         double stage = StatAggregator.Aggregate(mods).Value(StatKey.ATTACK_SPEED);
-        Assert.AreEqual(5.0, stage);
+        Assert.AreEqual(7.0, stage);
         Assert.IsTrue(StatTables.DelayScale(stage) < StatTables.DelayScale(4));
         Assert.AreEqual(1.0, StatTables.DelayScale(4));
         Assert.AreEqual(0.9375, StatTables.DelayScale(5));
     }
 
-    // The window shows the 1st job page only; the other pages wait for their jobs.
+    // The window shows the 1st job page and the 2nd job passives; the other pages wait for their jobs.
     [TestMethod]
-    public void FirstJobPage_HasSixSkills_OthersEmpty()
+    public void FirstTwoPages_HaveTheirSkills_OthersEmpty()
     {
         var pages = JobSkills.Pages(StatTables.FirePoisonMage);
         Assert.AreEqual(5, pages.Length);
         CollectionAssert.AreEqual(
             new[] { WzSkillData.EnergyBolt, WzSkillData.Teleport, WzSkillData.ManaWave, WzSkillData.MagicGuard, WzSkillData.MagicArmor, WzSkillData.MpBoost },
             pages[0]);
-        Assert.IsTrue(pages.Skip(1).All(p => p.Length == 0));
+        CollectionAssert.AreEqual(
+            new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic },
+            pages[1]);
+        Assert.IsTrue(pages.Skip(2).All(p => p.Length == 0));
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.ElementalWeakness)); // invisible in WZ
     }
 }

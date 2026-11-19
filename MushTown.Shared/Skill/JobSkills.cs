@@ -14,12 +14,12 @@ public static class JobSkills
         Array.Empty<int>(), // V: no skills yet
     };
 
-    // Fire/Poison: the 1st job (200.img, the visible ones: Elemental Weakness is invisible in WZ). Pages II to V
-    // follow with their own jobs' tickets.
+    // Fire/Poison: the 1st job (200.img, the visible ones: Elemental Weakness is invisible in WZ) and the 2nd job
+    // passives (210.img; the 2nd job actives follow with their own tickets). Pages III to V follow with their own jobs' tickets.
     private static readonly int[][] FirePoison =
     {
         new[] { WzSkillData.EnergyBolt, WzSkillData.Teleport, WzSkillData.ManaWave, WzSkillData.MagicGuard, WzSkillData.MagicArmor, WzSkillData.MpBoost },
-        Array.Empty<int>(), // II
+        new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic },
         Array.Empty<int>(), // III
         Array.Empty<int>(), // IV
         Array.Empty<int>(), // V

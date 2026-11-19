@@ -113,9 +113,13 @@ public partial class MushTownGame
     // is wrong.
     // settle false: a later segment of a multi-segment cast, which only shows its number (the first segment already set
     // the mob's HP, its flinch or death, the sound and the EXP for the whole cast).
-    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit, bool settle)
+    // mpPct: an MP Eater proc of this hit (the server rolled it, see MobWorld.WzHits): our own client gives back that percent of
+    // our max MP (the MP stays inside our max).
+    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit, bool settle, int mpPct = 0)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
+        if (mine && mpPct > 0 && _save?.Slots[_slot] is { } chara)
+            chara.Mp = Math.Min(chara.Mp + MaxMpNow() * mpPct / 100, MaxMpNow());
         if (settle)
         {
             m.Hp = hpLeft;

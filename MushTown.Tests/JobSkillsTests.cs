@@ -21,11 +21,12 @@ public class JobSkillsTests
     }
 
     [TestMethod]
-    public void FirePoison_OwnsOnlyTheFirstJobPage_NotEndureNorAnyWarriorSkill()
+    public void FirePoison_OwnsTheFirstTwoPages_NotEndureNorAnyWarriorSkill()
     {
         Assert.AreEqual(5, JobSkills.Pages(StatTables.FirePoisonMage).Length);
         Assert.AreEqual(6, JobSkills.Pages(StatTables.FirePoisonMage)[0].Length);
-        Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage).Skip(1).All(p => p.Length == 0));
+        Assert.AreEqual(5, JobSkills.Pages(StatTables.FirePoisonMage)[1].Length); // the 2nd job passives
+        Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage).Skip(2).All(p => p.Length == 0));
         foreach (int id in JobSkills.Pages(StatTables.Hero).SelectMany(p => p))
             Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, id), $"Fire/Poison owns {id}");
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, SkillData.Endure));

@@ -18,14 +18,15 @@ public static class Damage
         CalcResult(roll01, crit01, def, build, mobLevel, mobElemAttr, element, boss).TotalDamage;
 
     // Damaging skill: pct is the cast-time skill percentage (level and orbs
-    // already folded in by the caster). extraDmgPct is the damage % the mob's statuses add to a magic hit.
+    // already folded in by the caster). extraDmgPct is the damage % the mob's statuses add to a magic hit; extraFinalPct is the
+    // final damage % the target gives (Elemental Drain).
     public static DamageResult SkillResult(double roll01, double crit01, double def, Build build, int pct,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
-        bool boss = false, double extraDmgPct = 0) =>
-        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, pct, boss, 0, extraDmgPct);
+        bool boss = false, double extraDmgPct = 0, double extraFinalPct = 0) =>
+        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, pct, boss, 0, extraDmgPct, extraFinalPct);
 
     public static long SkillCalc(double roll01, double crit01, double def, Build build, int pct,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
-        bool boss = false, double extraDmgPct = 0) =>
-        SkillResult(roll01, crit01, def, build, pct, mobLevel, mobElemAttr, element, boss, extraDmgPct).TotalDamage;
+        bool boss = false, double extraDmgPct = 0, double extraFinalPct = 0) =>
+        SkillResult(roll01, crit01, def, build, pct, mobLevel, mobElemAttr, element, boss, extraDmgPct, extraFinalPct).TotalDamage;
 }

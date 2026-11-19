@@ -20,7 +20,8 @@ public sealed class MobWorld
     // Settle: this hit carries the mob's HP, death and EXP for the whole cast. A multi-segment skill sends one hit per
     // segment (each with its own number) but only the first settles: HpLeft is the HP after ALL the segments, and the
     // other segments are numbers only (no flinch, no death sound, no EXP again). Every other hit settles.
-    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit, bool Settle = true);
+    // MpPct: MP Eater proc on this hit, in percent of the attacker's max MP to give back (0 = none); it rides the first hit of the mob.
+    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit, bool Settle = true, int MpPct = 0);
 
     // One mob step (10Hz on the wire): Uid now stands at X/Y, facing along.
     public sealed record Move(int Uid, int Map, float X, float Y, bool FacingRight);
@@ -489,6 +490,8 @@ public sealed class MobWorld
     // number. The first hit of the mob settles (Hit.Settle), the others only show.
     // The element comes from the skill; a mob with Elemental Weakness takes the extra magic damage.
     // Before its segments a mob may get marked (Elemental Weakness): the mark counts in this cast's segments too.
+    // Elemental Drain adds final damage for each DoT on the mob; MP Eater may give MP back once for each mob (Hit.MpPct on its
+    // first hit: the server rolls it, the attacker's client adds the MP).
     // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
     private List<Hit> WzHits(int map, float ox, float oy, bool facingRight, Random rng, Build build, WzSkillData wz,
         AttackElement element, int mobCount, int segments, int pct, int attacker)
@@ -504,13 +507,17 @@ public sealed class MobWorld
         foreach ((float _, Mob m) in inBox.Take(mobCount).ToList())
         {
             TryWeaken(m, build, rng);
+            // Elemental Drain: final damage for each DoT on the mob, at most DrainMax of them (0 = not learned).
+            double drain = build.DrainPct * Math.Min(m.Statuses.DotCount, build.DrainMax);
             var rolls = new List<(long damage, bool crit)>();
             for (int i = 0; i < segments; i++)
             {
                 var result = Damage.SkillResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
-                    m.Level, m.ElemAttr, element, m.Boss, m.Statuses.MagicExtraDamagePct);
+                    m.Level, m.ElemAttr, element, m.Boss, m.Statuses.MagicExtraDamagePct, drain);
                 rolls.Add((result.TotalDamage, result.CritMultiplier > 1.0));
             }
+            // MP Eater: one roll for each mob hit by the cast (0 = not learned, no random number is spent).
+            int mpPct = build.MpEaterProp > 0 && rng.NextDouble() * 100 < build.MpEaterProp ? (m.Boss ? build.MpEaterBossPct : build.MpEaterPct) : 0;
             m.Hp = Math.Max(0, m.Hp - rolls.Sum(r => r.damage));
             if (m.Hp == 0)
             {
@@ -518,10 +525,14 @@ public sealed class MobWorld
                 Bury(m, rng, attacker);
             }
             for (int i = 0; i < segments; i++)
-                hits.Add(new Hit(m.Uid, m.Map, rolls[i].damage, m.Hp, m.Exp, wz.SkillId, m.MobId, rolls[i].crit, Settle: i == 0));
+                hits.Add(new Hit(m.Uid, m.Map, rolls[i].damage, m.Hp, m.Exp, wz.SkillId, m.MobId, rolls[i].crit, Settle: i == 0, MpPct: i == 0 ? mpPct : 0));
         }
         return hits;
     }
+
+    // Puts a DoT of this skill on the live mob Uid for ms (the same skill again refreshes it). The DoT skills call
+    // Statuses.AddDot from their own strike; this hook is for the tests and the shot poses until they exist.
+    public void AddDot(int uid, int skill, int ms) => _lives.Single(m => m.Uid == uid).Statuses.AddDot(skill, ms);
 
     // Elemental Weakness: one of our attacks marks the mob (rolled once per mob, before its damage) with the chance of the build (prop, in percent;
     // 0 means the skill is not learned and no random number is spent). The mark adds x to the damage % of

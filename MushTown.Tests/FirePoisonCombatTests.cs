@@ -6,7 +6,7 @@ namespace MushTown.Tests;
 // Fire/Poison 1st job, part 2: Energy Bolt (the rectangle, the segments, the element), Magic Guard,
 // Elemental Weakness and the mob status list under it.
 [TestClass]
-public class FirePoisonCombatTests
+public partial class FirePoisonCombatTests
 {
     private const int Bolt = WzSkillData.EnergyBolt;
     private const string Floor = """[{"X1":-1000,"Y1":100,"X2":1000,"Y2":100,"Layer":0}]""";
@@ -729,7 +729,7 @@ public class FirePoisonCombatTests
         WaitSpawn(a);
         WaitSpawn(b);
         WaitSpawn(b);
-        a.SendBuild(Mage with { WeaknessProp = 100 }); // the 69-byte Build; every cast marks
+        a.SendBuild(Mage with { WeaknessProp = 100 }); // the 93-byte Build; every cast marks
         var thrown = System.Diagnostics.Stopwatch.StartNew();
         a.SendSkillCast(Bolt, 78);
         var ballA = WaitBall(a); // the caster gets its own ball from the server

@@ -141,6 +141,12 @@ public sealed class NetClient : IDisposable
             w.Write(build.Level);
             w.Write(build.WeaponType);
             w.Write(build.WeaknessProp);
+            w.Write(build.SkillMasteryPct);
+            w.Write(build.MpEaterProp);
+            w.Write(build.MpEaterPct);
+            w.Write(build.MpEaterBossPct);
+            w.Write(build.DrainPct);
+            w.Write(build.DrainMax);
         }));
     }
 
@@ -374,11 +380,11 @@ public sealed class NetClient : IDisposable
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
                 BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17),
                 BitConverter.ToInt64(p, 21), 0, BitConverter.ToInt64(p, 29), 0, 0, 0));
-        else if (p[0] == Net.MobHit && p.Length == 43)
+        else if (p[0] == Net.MobHit && p.Length == 44)
             _mobEvents.Enqueue(new MobEvent(false,
                 BitConverter.ToInt32(p, 1), 0, BitConverter.ToInt32(p, 5), 0, 0, 0,
                 BitConverter.ToInt64(p, 9), BitConverter.ToInt64(p, 17),
-                BitConverter.ToInt32(p, 25), BitConverter.ToInt64(p, 29), BitConverter.ToInt32(p, 37), p[41] != 0, p[42] != 0));
+                BitConverter.ToInt32(p, 25), BitConverter.ToInt64(p, 29), BitConverter.ToInt32(p, 37), p[41] != 0, p[42] != 0, p[43]));
         else if (p[0] == Net.SkillFx && p.Length == 22)
             _fxEvents.Enqueue(new SkillFxEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),

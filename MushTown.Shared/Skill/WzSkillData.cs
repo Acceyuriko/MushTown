@@ -20,6 +20,12 @@ public sealed class WzSkillData
     public const int Teleport = 2001009;
     public const int ManaWave = 2001011;
     public const int ManaWaveFloat = 2001012; // Mana Wave's held slow fall: a child node of 2001011 (WZ has no link, see Export.WzSkillChildren)
+    // 210 Wizard (Fire/Poison): the 2nd job passives.
+    public const int MpEater = 2100000;
+    public const int SpellMastery = 2100006;
+    public const int HighWisdom = 2100007;
+    public const int ElementalDrain = 2100009;
+    public const int AgileMagic = 2100011;
     public const int MagicGuard = 2000002;
     public const int MagicArmor = 2000010;
     public const int MpBoost = 2000006;

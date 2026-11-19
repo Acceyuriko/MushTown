@@ -162,7 +162,7 @@ public partial class MushTownGame
             //   --job on a game pose shot (--hit, --skill, --hurt; no --screen) poses a fresh level 200 hero of that class, in the
             //     starter kit, like stat200 (the demo is level 7: a Fire/Poison cast on a level 200 mob would do 1 damage).
             //     --skill with a WZ skill (Energy Bolt) follows --facing, lets --aiticks gather the mobs first and --weak
-            //     marks them first (the cast is the last thing the shot does). A ball skill judges when its ball arrives:
+            //     marks them first and --dots <n> hangs n DoTs on them (the cast is the last thing the shot does). A ball skill judges when its ball arrives:
             //     --flyms <ms> then runs the world that long after the cast. The cast effect starts at once; the ball
             //     appears at the body action's attack frame (Energy Bolt: 390 ms), then flies, explodes and shows numbers
             //     one server tick later. --recast <ms> (with --flyms) then casts again at the same mobs (never a crit, so

@@ -70,11 +70,11 @@ public class StatsTests
             StatKey.STATUS_RESISTANCE, StatKey.KNOCKBACK_RESISTANCE, StatKey.BUFF_DURATION_PCT, StatKey.CDR_PCT,
             StatKey.COOLDOWN_SKIP_PCT, StatKey.DROP_PCT, StatKey.MESO_PCT, StatKey.EXP_PCT, StatKey.SPEED, StatKey.JUMP,
         };
-        Assert.AreEqual(39, StatSnapshot.AllKeys.Length);
+        Assert.AreEqual(40, StatSnapshot.AllKeys.Length);
         CollectionAssert.AreEqual(contract, StatSnapshot.AllKeys.Take(28).ToArray());
         Assert.AreEqual(27, (int)StatKey.JUMP);
         Assert.AreEqual(28, (int)StatKey.IGNORE_ELEMENT_RESISTANCE_PCT);
-        Assert.AreEqual(StatKey.SPEED_MAX, StatSnapshot.AllKeys[^1]);
+        Assert.AreEqual(StatKey.MASTERY, StatSnapshot.AllKeys[^1]);
     }
 
     [TestMethod]

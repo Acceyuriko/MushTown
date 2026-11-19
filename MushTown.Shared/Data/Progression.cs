@@ -331,6 +331,11 @@ public static class Progression
 // WeaponAtk is the final total attack. FinalPct is the Final Attack proc
 // chance (not final damage; the chain has its own FinalDamagePct).
 // WeaknessProp is Elemental Weakness: the chance, in percent, that one of our hits marks the mob (0 = not learned).
+// SkillMasteryPct is the mastery that skills add to the weapon's own (Spell Mastery), percent points.
+// MpEaterProp is MP Eater: the chance, in percent, that a mob we hit gives MP back (0 = not learned); MpEaterPct and
+// MpEaterBossPct are the share of our max MP given back from a normal mob and from a boss.
+// DrainPct is Elemental Drain: the final damage percent for each damage-over-time effect on the target (0 = not learned);
+// DrainMax is the most effects that count.
 public readonly record struct Build(
     long Str,
     long Dex,
@@ -345,4 +350,10 @@ public readonly record struct Build(
     int IedPct = 0,
     int Level = 1,
     int WeaponType = 0,
-    int WeaknessProp = 0);
+    int WeaknessProp = 0,
+    int SkillMasteryPct = 0,
+    int MpEaterProp = 0,
+    int MpEaterPct = 0,
+    int MpEaterBossPct = 0,
+    int DrainPct = 0,
+    int DrainMax = 0);

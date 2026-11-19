@@ -47,6 +47,9 @@ public enum StatKey
     ELEMENT_RESISTANCE,
     // Hidden key: percent points added to the SPEED cap (WZ speedMax; the base cap is 140%).
     SPEED_MAX,
+    // Hidden key: percent points of mastery added to the weapon's own mastery (Spell Mastery). Mastery is the share of the
+    // top damage the bottom of the damage range stands at.
+    MASTERY,
 }
 
 // How one source contributes to a key. FLAT first, then PERCENT, then

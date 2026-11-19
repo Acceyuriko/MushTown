@@ -324,7 +324,7 @@ public sealed partial class GameServer : IDisposable
             OnSkill(id, BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5));
             return;
         }
-        if (payload[0] == Net.Build && payload.Length == 69)
+        if (payload[0] == Net.Build && payload.Length == 93)
         {
             lock (_mobLock)
                 _builds[id] = new Build(
@@ -341,7 +341,13 @@ public sealed partial class GameServer : IDisposable
                     BitConverter.ToInt32(payload, 53),
                     BitConverter.ToInt32(payload, 57),
                     BitConverter.ToInt32(payload, 61),
-                    BitConverter.ToInt32(payload, 65));
+                    BitConverter.ToInt32(payload, 65),
+                    BitConverter.ToInt32(payload, 69),
+                    BitConverter.ToInt32(payload, 73),
+                    BitConverter.ToInt32(payload, 77),
+                    BitConverter.ToInt32(payload, 81),
+                    BitConverter.ToInt32(payload, 85),
+                    BitConverter.ToInt32(payload, 89));
             return;
         }
         if (payload[0] != Net.State || payload.Length != 20)
@@ -720,6 +726,7 @@ public sealed partial class GameServer : IDisposable
             w.Write(h.Skill);
             w.Write(h.Crit);
             w.Write(h.Settle);
+            w.Write((byte)h.MpPct);
         }));
         if (kill)
             PushQuestKills(attacker, h.Mob);

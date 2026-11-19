@@ -161,6 +161,9 @@ public partial class MushTownGame
         if (chara == null) return Progression.Beginner;
         int finalAttack = _skills[SkillData.FinalAttack].ProcPct * SkillLv(SkillData.FinalAttack);
         var job = CurrentJob(); // the class picks the main and sub stat and physical or magic attack
+        bool mage = chara.Job == StatTables.FirePoisonMage;
+        var mpEater = mage ? WzSkillStats.MpEater(_wzSkills) : default;
+        var drain = mage ? WzSkillStats.ElementalDrain(_wzSkills) : default;
         return new Build(
             _stats.IntValue(job.Main),
             _stats.IntValue(job.Sub),
@@ -175,7 +178,10 @@ public partial class MushTownGame
             (int)Math.Round((1 - DamageChain.IedMultiplier(_stats)) * 100),
             chara.Level,
             (int)job.Weapon,
-            chara.Job == StatTables.FirePoisonMage ? WzSkillStats.WeaknessProp(_wzSkills) : 0); // Elemental Weakness: the Fire/Poison Mage marks mobs
+            mage ? WzSkillStats.WeaknessProp(_wzSkills) : 0, // Elemental Weakness: the Fire/Poison Mage marks mobs
+            (int)_stats.IntValue(StatKey.MASTERY),
+            mpEater.prop, mpEater.pct, mpEater.bossPct, // MP Eater
+            drain.pct, drain.max); // Elemental Drain
     }
 
     private void ClampPoolsToMax()

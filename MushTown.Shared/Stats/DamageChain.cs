@@ -148,12 +148,13 @@ public static class DamageChain
     }
 
     // Step 3 truncates instead of rounding, matching the old panel.
+    // The mastery is the weapon's own plus what skills add (Spell Mastery), at most 100.
     private static (long MinActual, long MaxActual, long MinPanel, long MaxPanel) Panel(
-        long statValue, long attack, int dmgPct, double finalMultiplier, WeaponProfile weapon)
+        long statValue, long attack, int dmgPct, double finalMultiplier, WeaponProfile weapon, double skillMastery = 0)
     {
         double damage = dmgPct / 100.0;
         long maxActual = (long)(weapon.Coefficient * statValue * attack / 100.0);
-        long minActual = (long)(maxActual * weapon.MasteryPct / 100.0);
+        long minActual = (long)(maxActual * Math.Min(100.0, weapon.MasteryPct + skillMastery) / 100.0);
         long maxPanel = (long)Math.Floor(maxActual * (1.0 + damage) * finalMultiplier);
         long minPanel = (long)Math.Floor(1.0 + minActual * (1.0 + damage) * finalMultiplier);
         return (minActual, maxActual, minPanel, maxPanel);
@@ -167,7 +168,8 @@ public static class DamageChain
             TotalAttack(stats, job.Main == StatKey.INT), // a mage hits with magic attack
             (int)stats.IntValue(StatKey.DAMAGE_PCT),
             FinalDamageMultiplier(stats),
-            StatTables.Weapon(job.Weapon));
+            StatTables.Weapon(job.Weapon),
+            stats.Value(StatKey.MASTERY));
         return (panel.MinPanel, panel.MaxPanel);
     }
 
@@ -209,15 +211,16 @@ public static class DamageChain
     // stats. Step 8 keeps one hit per call; TotalDamage is the production
     // return value used by Damage. extraDmgPct is what the mob's own statuses add to the damage
     // percent (Elemental Weakness on a magic hit: 20; 0 = none): it goes into the same additive sum as
-    // damage % and normal/boss %, not on top of the final damage.
+    // damage % and normal/boss %, not on top of the final damage. extraFinalPct is final damage the target gives this hit
+    // (Elemental Drain: a share for each DoT on it): it multiplies with the build's own final damage, like another source.
     public static DamageResult Calculate(Build build, double roll01, double crit01, double mobDef,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
-        int skillPct = 100, bool boss = false, double ignoreElemPct = 0, double extraDmgPct = 0)
+        int skillPct = 100, bool boss = false, double ignoreElemPct = 0, double extraDmgPct = 0, double extraFinalPct = 0)
     {
         var weapon = StatTables.Weapon((WeaponType)build.WeaponType);
         long statValue = StatValue(build.Str, build.Dex);
         var panel = Panel(statValue, build.WeaponAtk, build.DmgPct,
-            1.0 + build.FinalDamagePct / 100.0, weapon);
+            (1.0 + build.FinalDamagePct / 100.0) * (1.0 + extraFinalPct / 100.0), weapon, build.SkillMasteryPct);
         var (minActual, maxActual, minPanel, maxPanel) = panel;
         double damage = build.DmgPct;
         double target = 1.0 + (damage + extraDmgPct + (boss ? build.BossPct : build.NormalPct)) / 100.0;

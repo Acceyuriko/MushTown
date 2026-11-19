@@ -53,16 +53,16 @@ public class DefaultPassiveSkillsTests
         StringAssert.DoesNotMatch(skill.Desc!, new System.Text.RegularExpressions.Regex("30 minutes"));
     }
 
-    // A mage: the fixed stage 4, MP Boost +1 and the potion +1 make stage 6 (the swing takes 14/16 of the stage 4 time).
+    // A mage: the fixed stage 4, MP Boost +1, Agile Magic +2 and the potion +1 make stage 8 (the swing takes 12/16 of the stage 4 time).
     [TestMethod]
-    public void MonsterParkPotion_MageAttackSpeedIsSix()
+    public void MonsterParkPotion_MageAttackSpeedIsEight()
     {
         var mods = new List<StatModifier> { StatTables.AttackSpeed(true, 0)!.Value };
         mods.AddRange(WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200, 0));
         mods.AddRange(DefaultPassives.All);
         double stage = StatAggregator.Aggregate(mods).Value(StatKey.ATTACK_SPEED);
-        Assert.AreEqual(6.0, stage);
-        Assert.AreEqual(0.875, StatTables.DelayScale(stage));
+        Assert.AreEqual(8.0, stage);
+        Assert.AreEqual(0.75, StatTables.DelayScale(stage));
     }
 
     [TestMethod]
