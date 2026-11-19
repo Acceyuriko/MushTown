@@ -21,7 +21,7 @@ public sealed class MobWorld
     // segment (each with its own number) but only the first settles: HpLeft is the HP after ALL the segments, and the
     // other segments are numbers only (no flinch, no death sound, no EXP again). Every other hit settles.
     // MpPct: MP Eater proc on this hit, in percent of the attacker's max MP to give back (0 = none); it rides the first hit of the mob.
-    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit, bool Settle = true, int MpPct = 0);
+    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit, bool Settle = true, int MpPct = 0, bool Dot = false);
 
     // One mob step (10Hz on the wire): Uid now stands at X/Y, facing along.
     public sealed record Move(int Uid, int Map, float X, float Y, bool FacingRight);
@@ -83,6 +83,7 @@ public sealed class MobWorld
         public int Segments;
         public int Pct;
         public int Attacker;
+        public Dot? Dot; // the DoT this cast puts on each mob it leaves alive (a copy for each mob), built at the cast
     }
 
     private sealed class GroundDrop
@@ -230,7 +231,7 @@ public sealed class MobWorld
                 continue;
             }
             _pending.RemoveAt(i);
-            foreach (var h in WzHits(p.Map, p.X, p.Y, p.FacingRight, p.Rng, p.Build, p.Wz, p.Element, p.MobCount, p.Segments, p.Pct, p.Attacker))
+            foreach (var h in WzHits(p.Map, p.X, p.Y, p.FacingRight, p.Rng, p.Build, p.Wz, p.Element, p.MobCount, p.Segments, p.Pct, p.Attacker, p.Dot))
                 strikes.Add((h, p.Attacker));
         }
         var onMap = new HashSet<int>();
@@ -249,6 +250,16 @@ public sealed class MobWorld
             }
             if (onMap.Contains(m.Map))
                 moves.Add(new Move(m.Uid, m.Map, m.X, m.Y, m.FacingRight));
+        }
+        for (int i = 0; i < _lives.Count;) // the DoT ticks that came due in the steps above (a kill removes the mob from _lives, so the index stays)
+        {
+            var m = _lives[i];
+            foreach (var dot in m.Statuses.TakeDue())
+            {
+                strikes.Add((DotTick(m, dot), dot.Attacker));
+                if (m.Hp == 0) break; // the dead mob takes no more ticks
+            }
+            if (m.Hp > 0) i++;
         }
         var spawns = new List<Spawn>();
         for (int i = _graves.Count - 1; i >= 0; i--)
@@ -433,6 +444,7 @@ public sealed class MobWorld
     // box on the caster (Flame Orb), or on the nearest mob ahead when it is rectBasedOnTarget (no mob: no hit). A skill with no
     // ball and a body action (AttackDelayMs) judges at the action's attack frame, on the first tick after it, from Tick like a ball
     // (the box stays where the caster cast it): the cast effect has reached its main part by then. A skill with no action judges at once.
+    // Poison Breath is that kind of skill (rectBasedOnTarget, an action, no ball): it picks the nearest mob ahead within Reach and judges there at its attack frame.
     private List<Hit> WzStrike(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, int pct, int attacker)
     {
         // Every number the damage needs is read here, in the cast, where a bad skill file fails the caster's call. A ball
@@ -443,10 +455,22 @@ public sealed class MobWorld
         // The mark reads the Elemental Weakness file the first time it is used. Load it now, in the cast: the tick loop
         // that lands the ball must not read files (a missing file would throw there and end the loop).
         if (build.WeaknessProp > 0) Wz(WzSkillData.ElementalWeakness);
+        // The DoT of the cast (dot, dotInterval, dotTime at max level), read here too: Tick must not read the WZ numbers.
+        Dot? dot = !wz.Common.ContainsKey("dot") ? null : new Dot
+        {
+            Skill = wz.SkillId,
+            Attacker = attacker,
+            Build = build,
+            Pct = (int)wz.Value("dot", wz.MaxLevel),
+            Element = element,
+            Rng = rng,
+            IntervalMs = (int)(wz.Value("dotInterval", wz.MaxLevel) * 1000),
+            MsLeft = (int)(wz.Value("dotTime", wz.MaxLevel) * 1000),
+        };
         bool ball = wz.BallFrames.Count > 0;
         int attackDelay = wz.AttackDelayMs; // the ball appears when the body action reaches its attack frame
         bool onTarget = wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1";
-        float range = onTarget || ball ? (float)wz.Value("range", wz.MaxLevel) : 0; // only a skill that picks a target or throws a ball has a range (Flame Orb has none)
+        float range = wz.Reach(); // only a skill that picks a target or throws a ball reads it
         Mob? first = null;
         if (onTarget)
             foreach (var m in _lives)
@@ -460,7 +484,7 @@ public sealed class MobWorld
         {
             if (onTarget && first == null) return new List<Hit>();
             float bx = onTarget ? first!.X : x, by = onTarget ? first!.Y : y;
-            if (attackDelay <= 0) return WzHits(map, bx, by, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker);
+            if (attackDelay <= 0) return WzHits(map, bx, by, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker, dot);
             Wait(bx, by, attackDelay + TickMs);
             return new List<Hit>();
         }
@@ -490,6 +514,7 @@ public sealed class MobWorld
             Segments = segments,
             Pct = pct,
             Attacker = attacker,
+            Dot = dot,
         });
     }
 
@@ -500,11 +525,12 @@ public sealed class MobWorld
     // number. The first hit of the mob settles (Hit.Settle), the others only show.
     // The element comes from the skill; a mob with Elemental Weakness takes the extra magic damage.
     // Before its segments a mob may get marked (Elemental Weakness): the mark counts in this cast's segments too.
+    // A skill with a DoT (common dot, dotInterval, dotTime at max level) puts it on each mob it leaves alive, after its segments (DotTick does the ticks).
     // Elemental Drain adds final damage for each DoT on the mob; MP Eater may give MP back once for each mob (Hit.MpPct on its
     // first hit: the server rolls it, the attacker's client adds the MP).
     // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
     private List<Hit> WzHits(int map, float ox, float oy, bool facingRight, Random rng, Build build, WzSkillData wz,
-        AttackElement element, int mobCount, int segments, int pct, int attacker)
+        AttackElement element, int mobCount, int segments, int pct, int attacker, Dot? dot)
     {
         var inBox = new List<(float dist2, Mob m)>();
         foreach (var m in _lives)
@@ -534,15 +560,29 @@ public sealed class MobWorld
                 _lives.Remove(m);
                 Bury(m, rng, attacker);
             }
+            if (dot != null && m.Hp > 0 && MobElemAttr.Multiplier(m.ElemAttr, element) > 0) // a mob that is immune to the element does not get its DoT
+                m.Statuses.AddDot(dot.Clone());
             for (int i = 0; i < segments; i++)
                 hits.Add(new Hit(m.Uid, m.Map, rolls[i].damage, m.Hp, m.Exp, wz.SkillId, m.MobId, rolls[i].crit, Settle: i == 0, MpPct: i == 0 ? mpPct : 0));
         }
         return hits;
     }
 
-    // Puts a DoT of this skill on the live mob Uid for ms (the same skill again refreshes it). The DoT skills call
-    // Statuses.AddDot from their own strike; this hook is for the tests and the shot poses until they exist.
-    public void AddDot(int uid, int skill, int ms) => _lives.Single(m => m.Uid == uid).Statuses.AddDot(skill, ms);
+    // One tick of a DoT: one roll through the Damage chain with the caster's snapshot (Build), the DoT's damage % and element, and the mob's
+    // Def, level and element, plus the extra magic damage of Elemental Weakness. A DoT never crits (crit roll 1.0). The tick is a settled hit
+    // flagged Dot: HP and death are set, the client skips the flinch and the spark. A kill buries the mob and its statuses go with it.
+    // A DoT keeps running when its caster has left the game; a mob it kills then gives no EXP to anyone (on purpose).
+    private Hit DotTick(Mob m, Dot dot)
+    {
+        var result = Damage.SkillResult(dot.Rng.NextDouble(), 1.0, m.Def, dot.Build, dot.Pct, m.Level, m.ElemAttr, dot.Element, m.Boss, m.Statuses.MagicExtraDamagePct);
+        m.Hp = Math.Max(0, m.Hp - result.TotalDamage);
+        if (m.Hp == 0)
+        {
+            _lives.Remove(m);
+            Bury(m, dot.Rng, dot.Attacker);
+        }
+        return new Hit(m.Uid, m.Map, result.TotalDamage, m.Hp, m.Exp, dot.Skill, m.MobId, false, Dot: true);
+    }
 
     // Elemental Weakness: one of our attacks marks the mob (rolled once per mob, before its damage) with the chance of the build (prop, in percent;
     // 0 means the skill is not learned and no random number is spent). The mark adds x to the damage % of

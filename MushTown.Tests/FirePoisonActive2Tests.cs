@@ -148,7 +148,7 @@ public partial class FirePoisonCombatTests
     {
         var page = JobSkills.Pages(StatTables.FirePoisonMage)[1];
         CollectionAssert.AreEqual(new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain,
-            WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb }, page);
+            WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath }, page);
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, Orb));
         Assert.IsFalse(JobSkills.Has(StatTables.Hero, Orb));
     }

@@ -8,7 +8,7 @@ namespace MushTown.Exporter;
 // formula worked out for every level (SkillFormula), the lt/rb rectangles, info and action, and the
 // tooltip text of String.wz with the max-level numbers filled in. Writes assets/skill/wz/<id>.json
 // plus the icon and the disabled icon. The ids come from the job pages (JobSkills): the 1st job (200.img) and the 2nd job
-// passives (210.img: MP Eater, Spell Mastery, High Wisdom, Elemental Drain, Agile Magic); the formula reader is general, the
+// actives and passives (210.img: MP Eater, Spell Mastery, High Wisdom, Elemental Drain, Agile Magic, Meditation, Flame Orb, Poison Breath); the formula reader is general, the
 // other skills are added with their own tickets.
 // A skill with a damage line also gets its cast effect (effect/) and hit spark (hit/) frames, and CastFrames and
 // HitFrames in the json; the effect, hit, ball and special art also keep their WZ origin and delay in Art. A skill
@@ -25,6 +25,8 @@ namespace MushTown.Exporter;
 // walking from 172 to 583 along x) is the orb and its blast, and hit/0 is the spark on each mob. Meditation is a buff (info type 10):
 // its cast effect (effect, 19 pictures) and its loop on the buffed player (affected, AffectedFrames and Art["affected"]; the first
 // WZ frame of affected has only a delay of 270 ms and no picture, it is left out like Mana Wave's blank lead-in).
+// Poison Breath (210.img) is a damage skill with no ball and no special: its effect is the breath at the caster, hit/0 the poison on each mob; its
+// Common also keeps dot, dotInterval and dotTime (the damage-over-time numbers), and there is no ball, so its box is centred on the target mob.
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export

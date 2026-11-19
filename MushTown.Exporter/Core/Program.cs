@@ -35,6 +35,9 @@ using MushTown.Exporter;
 //           - the Fire/Poison 2nd-job actives were added (assets/skill/wz/2101001.json Meditation and 2101004.json Flame Orb, their icons
 //             and their art under assets/skill/wz/<id>/: effect, hit for Flame Orb, effect and affected for Meditation; the json has
 //             AffectedFrames and Art["affected"]). An old export makes the client stop at start.
+//           - Poison Breath was added (assets/skill/wz/2101005.json, its icons and its art under assets/skill/wz/2101005/: effect and hit; the
+//             json has the dot, dotInterval and dotTime formulas in Common). The skill window's page II lists it; an old export makes the
+//             client stop at start (no exported wz def for the page II ids).
 //           - the dodge changed (the mob json got Acc; an old one reads 0 and the dodge rate comes out wrong. effect/hurtdmg.json
 //             got the Miss word and effect/hurtdmg/Miss.png; an old hurtdmg.json has no Miss word and the client fails on a dodge).
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of

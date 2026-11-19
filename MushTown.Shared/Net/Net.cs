@@ -11,7 +11,7 @@ public static class Net
     public const byte Leave = 4;   // server -> client: int id (a peer is gone)
     public const byte Attack = 5;  // client -> server: no body (server judges from the last State)
     public const byte MobSpawn = 6; // server -> client: int uid, int mob, int map, float x, float y, long maxHp, long hp
-    public const byte MobHit = 7;  // server -> client: int uid, int map, long damage, long hpLeft (0 = dead), int attacker, long exp, int skill (0 = basic), byte crit, byte settle, byte mpPct (MP Eater: percent of the attacker's max MP given back)
+    public const byte MobHit = 7;  // server -> client: int uid, int map, long damage, long hpLeft (0 = dead), int attacker, long exp, int skill (0 = basic), byte crit, byte settle, byte mpPct (MP Eater: percent of the attacker's max MP given back), byte dot (1 = a tick of a damage-over-time effect: it sets HP and death but plays no flinch and no spark)
     public const byte Build = 8;   // client -> server: Build fields (resent on level-up/learn/buff)
     public const byte SkillCast = 9; // client -> server: int skill, int pct (cast-time damage pct, orbs folded in; buffs send 0)
     public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing
@@ -216,10 +216,10 @@ public readonly record struct AppearanceEvent(int Id, int Skin, int Hair, int Fa
 // the mob's Exp (awarded on the killing blow), the Skill id (0 = basic swing,
 // else the skill whose hit spark each client plays on the mob), and whether
 // the roll critted (the critical damage-number art). Settle: the hit carries the mob's HP, death and EXP (a
-// multi-segment cast settles on its first segment only; the rest are numbers).
+// multi-segment cast settles on its first segment only; the rest are numbers). Dot: a tick of a DoT (a settled hit with no flinch and no spark).
 public readonly record struct MobEvent(
     bool Spawn, int Uid, int Mob, int Map, float X, float Y, long MaxHp, long Damage, long HpLeft,
-    int Attacker, long Exp, int Skill, bool Crit = false, bool Settle = true, int MpPct = 0);
+    int Attacker, long Exp, int Skill, bool Crit = false, bool Settle = true, int MpPct = 0, bool Dot = false);
 
 // One skill effect from the server: Attacker cast Skill at X/Y facing right
 // or left. The caster plays its own effect live and never gets this echo.

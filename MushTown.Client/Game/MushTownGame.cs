@@ -46,7 +46,6 @@ public partial class MushTownGame : Game
     private readonly long _shotDmg; // --dmg <n>: one posed floating damage number
     private readonly int? _shotDmgSkin; // --dmgskin <id>: that number's skin
     private readonly bool _shotHurt; // --hurt: the player takes one posed hit
-    private readonly int _shotDots; // --dots <n>: the --skill cast lands on mobs that carry n DoTs (Elemental Drain)
     private readonly bool _shotWeak; // --weak: the --skill cast lands on mobs already marked by Elemental Weakness
     private readonly int _shotStandoff; // --standoff <px>: how far from the first mob a WZ --skill caster stands (0 = the default 250)
     private readonly string? _shotTeleport; // --teleport <left|right|up|down>: cast Teleport that way from --at
@@ -144,7 +143,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null, int shotDots = 0)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -174,7 +173,6 @@ public partial class MushTownGame : Game
         _shotHurtPre = shotHurtPre;
         _shotHurtMiss = shotHurtMiss;
         _shotWeak = shotWeak;
-        _shotDots = shotDots;
         _shotFlyms = shotFlyms;
         _shotRecastMs = shotRecastMs;
         _shotTeleport = shotTeleport;
@@ -871,7 +869,7 @@ public partial class MushTownGame : Game
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
                 if (m.Spawn) ApplySpawn(m.Uid, m.Mob, m.X, m.Y, m.MaxHp, m.HpLeft);
-                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp, m.Skill, m.Crit, m.Settle, m.MpPct);
+                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp, m.Skill, m.Crit, m.Settle, m.MpPct, m.Dot);
             }
             while (_net.TryTakeMove(out var mv))
             {

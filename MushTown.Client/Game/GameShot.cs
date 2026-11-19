@@ -358,7 +358,7 @@ public partial class MushTownGame
     // does not roll the mark itself (chance 0), so the plain shot has no mark. --weak casts once before with a 100%
     // Elemental Weakness chance (another seed; the shot ticks the world until that cast's first strike lands, up to
     // 3 s, so its ball is unseen and its numbers are not shown): the shown cast then has the same rolls as the plain
-    // shot, with the mark on the mobs (+20 damage %). --dots <n> hangs n DoTs on every mob first (Elemental Drain).
+    // shot, with the mark on the mobs (+20 damage %).
     private void PoseWzSkill(MobWorld world, WzSkillData wz)
     {
         if (wz.Kind != SkillData.KindActive || !wz.Common.ContainsKey("damage"))
@@ -367,8 +367,6 @@ public partial class MushTownGame
         RunShotAi();
         int pct = (int)wz.Value("damage", wz.MaxLevel);
         var build = ShotBuild() with { WeaknessProp = 0 };
-        foreach (var spawn in world.MobsOn(_mapId))
-            for (int k = 1; k <= _shotDots; k++) world.AddDot(spawn.Uid, k, 60_000); // n fake DoT skills: Elemental Drain counts them
         if (_shotWeak)
         {
             world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { WeaknessProp = 100 }, wz.SkillId, pct);
@@ -428,7 +426,7 @@ public partial class MushTownGame
         var ev = world.Tick(ms, players);
         if (showStrikes)
         {
-            foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpPct);
+            foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpPct, s.hit.Dot);
             DrainDrops(world, animate: false);
         }
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);

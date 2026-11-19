@@ -30,6 +30,7 @@ public sealed class WzSkillData
     // 210 Wizard (Fire/Poison): the 2nd job actives.
     public const int Meditation = 2101001;
     public const int FlameOrb = 2101004;
+    public const int PoisonBreath = 2101005;
     public const int MagicGuard = 2000002;
     public const int MagicArmor = 2000010;
     public const int MpBoost = 2000006;
@@ -67,6 +68,10 @@ public sealed class WzSkillData
     public List<WzSkillData> Children { get; set; } = new();
 
     public double Value(string field, int level) => Common[field][level - 1];
+
+    // How far ahead a skill that picks a target (rectBasedOnTarget) or throws a ball looks, in px: the WZ range at max level. Poison Breath
+    // has no range (the WZ gives only its box), so its box half-width is the reach (unverified).
+    public float Reach() => Common.TryGetValue("range", out var range) ? (float)range[MaxLevel - 1] : Math.Max(-Vectors["lt"][0], Vectors["rb"][0]);
 
     // The slow fall (child 2001012) keeps two arts, special and specialAffected, of three frame lists each (Art["special0"]..
     // Art["specialAffected2"]); the three lists of one art play together.

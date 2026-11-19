@@ -113,9 +113,11 @@ public partial class MushTownGame
     // is wrong.
     // settle false: a later segment of a multi-segment cast, which only shows its number (the first segment already set
     // the mob's HP, its flinch or death, the sound and the EXP for the whole cast).
+    // dot: a tick of a damage-over-time effect (MobWorld.DotTick): it sets HP and death and shows its number, but plays no flinch,
+    // no sound and no spark (a kill still dies as usual).
     // mpPct: an MP Eater proc of this hit (the server rolled it, see MobWorld.WzHits): our own client gives back that percent of
     // our max MP (the MP stays inside our max).
-    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit, bool settle, int mpPct = 0)
+    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit, bool settle, int mpPct = 0, bool dot = false)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
         if (mine && mpPct > 0 && _save?.Slots[_slot] is { } chara)
@@ -123,8 +125,11 @@ public partial class MushTownGame
         if (settle)
         {
             m.Hp = hpLeft;
-            m.SetAction(hpLeft == 0 ? "die1" : "hit1");
-            PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, m.Data.Boss) : "hit");
+            if (hpLeft == 0 || !dot) // a DoT tick that does not kill makes no flinch and no sound
+            {
+                m.SetAction(hpLeft == 0 ? "die1" : "hit1");
+                PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, m.Data.Boss) : "hit");
+            }
         }
         float bodyH = m.Frames[0].OriginY; // origin to feet: where the head is
         float headY = m.Y - bodyH;
@@ -143,7 +148,7 @@ public partial class MushTownGame
         // Another WZ skill plants its hit art on each mob.
         _wzSkills.TryGetValue(skill, out var wz);
         var hitArt = skill == 0 ? null : wz == null ? _skills[skill].Hit : ArtFrames(wz, "hit");
-        if (hitArt is { Count: > 0 } && firstOfMob)
+        if (hitArt is { Count: > 0 } && firstOfMob && !dot)
         {
             var spark = TakeFx();
             if (wz != null) UseArt(spark, wz, "hit");

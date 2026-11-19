@@ -162,7 +162,7 @@ public partial class MushTownGame
             //   --job on a game pose shot (--hit, --skill, --hurt; no --screen) poses a fresh level 200 hero of that class, in the
             //     starter kit, like stat200 (the demo is level 7: a Fire/Poison cast on a level 200 mob would do 1 damage).
             //     --skill with a WZ skill (Energy Bolt) follows --facing, lets --aiticks gather the mobs first and --weak
-            //     marks them first and --dots <n> hangs n DoTs on them (the cast is the last thing the shot does). A ball skill judges when its ball arrives:
+            //     marks them first (the cast is the last thing the shot does). A ball skill judges when its ball arrives:
             //     --flyms <ms> then runs the world that long after the cast. The cast effect starts at once; the ball
             //     appears at the body action's attack frame (Energy Bolt: 390 ms), then flies, explodes and shows numbers
             //     one server tick later. --recast <ms> (with --flyms) then casts again at the same mobs (never a crit, so
@@ -628,7 +628,9 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} has no affected loop art: run the exporter (export)");
             if ((wz.Common.ContainsKey("damage") || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
-            if ((wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1" || wz.BallFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
+            if (wz.SkillId == WzSkillData.EnergyBolt && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
+                throw new InvalidDataException($"skill {wz.SkillId} has no ball or special art: run the exporter (export)");
+            if ((wz.BallFrames.Count > 0 || wz.SpecialFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0)) // a ball skill has both its ball and its special (a target box with no ball, Poison Breath, has neither)
                 throw new InvalidDataException($"skill {wz.SkillId} throws a ball but has no ball or special art: run the exporter (export)");
             _wzSkills[wz.SkillId] = wz;
         }

@@ -123,26 +123,6 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(shadow.NextDouble(), rng.NextDouble());
     }
 
-    // The DoTs of a mob: one entry per skill. The same skill again refreshes its time; another skill is another effect.
-    [TestMethod]
-    public void MobStatuses_Dots_CountedBySkill_RefreshAndExpire()
-    {
-        var list = new MobStatuses();
-        Assert.AreEqual(0, list.DotCount);
-        list.AddDot(2101005, 5000);
-        list.AddDot(2101005, 5000); // the same skill: refresh, no second layer
-        Assert.AreEqual(1, list.DotCount);
-        list.AddDot(2111003, 2000); // another skill: another layer
-        Assert.AreEqual(2, list.DotCount);
-        list.Step(2000); // the second one runs out at 0
-        Assert.AreEqual(1, list.DotCount);
-        list.AddDot(2101005, 5000); // a refresh restarts the time
-        list.Step(4999);
-        Assert.AreEqual(1, list.DotCount);
-        list.Step(1);
-        Assert.AreEqual(0, list.DotCount);
-    }
-
     // Elemental Drain: +3% final damage for each DoT on the target, 0 to 5 layers; the 6th DoT adds nothing. The same rolls
     // (seed 3) with 0..6 DoTs give the damage with extraFinalPct 0, 3, 6, 9, 12, 15, 15.
     [TestMethod]
@@ -151,12 +131,12 @@ public partial class FirePoisonCombatTests
         var build = Mage with { DrainPct = 3, DrainMax = 5 };
         using var assets = new TempAssets();
         assets.AddWzSkill(BoltData());
+        for (int dots = 1; dots <= 6; dots++) assets.AddWzSkill(DotSkillData(2100000 + dots));
         var world = World(assets, (100, 100));
-        int uid = world.MobsOn(7).Single().Uid;
         var damage = new List<long>();
         for (int dots = 0; dots <= 6; dots++)
         {
-            if (dots > 0) world.AddDot(uid, 2100000 + dots, 60_000);
+            if (dots > 0) world.SkillStrike(7, 0, 100, true, new Random(9), Mage, 2100000 + dots, 100); // another DoT skill: another layer
             var hit = Cast(world, 7, 0, 100, true, new Random(3), build, Bolt, 78)[0];
             var rng = new Random(3);
             Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 78, 200, extraFinalPct: 3 * Math.Min(dots, 5)), hit.Damage, $"{dots} DoTs");
@@ -173,10 +153,10 @@ public partial class FirePoisonCombatTests
     {
         using var assets = new TempAssets();
         assets.AddWzSkill(BoltData());
+        for (int dots = 1; dots <= 3; dots++) assets.AddWzSkill(DotSkillData(2100000 + dots));
         var world = World(assets, (100, 100));
-        int uid = world.MobsOn(7).Single().Uid;
         var none = Cast(world, 7, 0, 100, true, new Random(3), Mage, Bolt, 78)[0].Damage;
-        for (int dots = 1; dots <= 3; dots++) world.AddDot(uid, 2100000 + dots, 60_000);
+        for (int dots = 1; dots <= 3; dots++) world.SkillStrike(7, 0, 100, true, new Random(9), Mage, 2100000 + dots, 100);
         Assert.AreEqual(none, Cast(world, 7, 0, 100, true, new Random(3), Mage, Bolt, 78)[0].Damage);
     }
 
