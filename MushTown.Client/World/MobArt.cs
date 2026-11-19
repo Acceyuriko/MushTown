@@ -60,8 +60,8 @@ public sealed class MobArt : Component
     }
 
     // The mobs that finished their death anim: the tree skipped them
-    // already, so this only drops the body and the dict entry.
-    public static void CollectDead(Dictionary<int, MobArt> mobs, GameObject world)
+    // already, so this only drops the body, the dict entry and their mark stacks.
+    public static void CollectDead(Dictionary<int, MobArt> mobs, GameObject world, Dictionary<int, int> marks)
     {
         List<int>? gone = null;
         foreach (var (uid, m) in mobs)
@@ -71,6 +71,7 @@ public sealed class MobArt : Component
         {
             world.RemoveChild(mobs[uid].Owner);
             mobs.Remove(uid);
+            marks.Remove(uid); // a dead mob takes my stacks with it
         }
     }
 }

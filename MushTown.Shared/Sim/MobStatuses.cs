@@ -34,6 +34,9 @@ public sealed class Dot
 // cast's numbers); another source, or another skill, is another independent effect (the user's rule). DotCount is the number of
 // distinct skills, for Elemental Drain (one layer per skill, whatever the number of sources). A tick that came due while stepping
 // waits in TakeDue until the server does its damage.
+// The Empirical Knowledge marks are kept apart by SOURCE only: each attacker has its own stacks and its own clock on this mob,
+// and only that attacker's client shows them (the server tells only the owner). A hit adds a stack (up to the skill's max) and
+// restarts the time; a hit with no proc only refreshes the time of the stacks already there; the time running out drops them all.
 public sealed class MobStatuses
 {
     private readonly Dictionary<MobStatusKind, (double value, int msLeft)> _list = new();
@@ -41,6 +44,10 @@ public sealed class MobStatuses
     private readonly Dictionary<(int Attacker, int Skill), Dot> _dots = new(); // (source, skill) -> its DoT
 
     private readonly List<Dot> _due = new();
+
+    private readonly Dictionary<int, (int stacks, int msLeft)> _marks = new(); // source -> its Empirical Knowledge stacks + time left
+
+    private readonly List<(int attacker, int stacks)> _markChanges = new(); // stack changes to report to the owner
 
     public void Add(MobStatusKind kind, double value, int ms) => _list[kind] = (value, ms);
 
@@ -74,6 +81,59 @@ public sealed class MobStatuses
         return due;
     }
 
+    // The Empirical Knowledge stacks this attacker has on the mob (0 = none).
+    public int MarkStacks(int attacker) => _marks.TryGetValue(attacker, out var m) ? m.stacks : 0;
+
+    // One hit of the attacker on this mob: a proc adds a stack (capped at maxStacks) and restarts the time; a hit with no proc
+    // only refreshes the time of the stacks already there (the ticket: hitting again refreshes). A stack change is reported to the
+    // owner (see TakeMarkChanges).
+    public void HitMark(int attacker, int maxStacks, int ms, bool proc)
+    {
+        if (proc)
+        {
+            if (_marks.TryGetValue(attacker, out var m))
+            {
+                int stacks = Math.Min(m.stacks + 1, maxStacks);
+                _marks[attacker] = (stacks, ms);
+                if (stacks != m.stacks) _markChanges.Add((attacker, stacks));
+            }
+            else
+            {
+                _marks[attacker] = (1, ms);
+                _markChanges.Add((attacker, 1));
+            }
+        }
+        else if (_marks.TryGetValue(attacker, out var have))
+            _marks[attacker] = (have.stacks, ms);
+    }
+
+    // Set the stacks outright (shot staging and tests that want a fixed stack): 0 removes.
+    public void SetMark(int attacker, int stacks, int ms)
+    {
+        if (stacks <= 0)
+        {
+            if (_marks.Remove(attacker)) _markChanges.Add((attacker, 0));
+            return;
+        }
+        _marks[attacker] = (stacks, ms);
+        _markChanges.Add((attacker, stacks));
+    }
+
+    // The marks of one source leave with it (its disconnect, map change or cash-shop entry), like its DoTs.
+    public void RemoveMarksOf(int attacker)
+    {
+        if (_marks.Remove(attacker)) _markChanges.Add((attacker, 0));
+    }
+
+    // The stack changes since the last call, to send to the owner's own client (nobody else sees these marks).
+    public IReadOnlyList<(int attacker, int stacks)> TakeMarkChanges()
+    {
+        if (_markChanges.Count == 0) return Array.Empty<(int, int)>(); // most steps change no mark
+        var changes = new List<(int, int)>(_markChanges);
+        _markChanges.Clear();
+        return changes;
+    }
+
     // The number of the kind, 0 when the mob does not have it.
     public double Value(MobStatusKind kind) => _list.TryGetValue(kind, out var s) ? s.value : 0;
 
@@ -91,6 +151,16 @@ public sealed class MobStatuses
                 dot.NextMs -= run;
                 for (; dot.NextMs <= 0; dot.NextMs += dot.IntervalMs) _due.Add(dot);
                 if (dot.MsLeft == 0) _dots.Remove(key);
+            }
+        }
+        if (_marks.Count > 0)
+        {
+            foreach (int attacker in _marks.Keys.ToList())
+            {
+                var m = _marks[attacker];
+                int left = m.msLeft - ms;
+                if (left <= 0) { _marks.Remove(attacker); _markChanges.Add((attacker, 0)); }
+                else _marks[attacker] = (m.stacks, left);
             }
         }
         if (_list.Count == 0) return;

@@ -213,9 +213,12 @@ public static class DamageChain
     // percent (Elemental Weakness on a magic hit: 20; 0 = none): it goes into the same additive sum as
     // damage % and normal/boss %, not on top of the final damage. extraFinalPct is final damage the target gives this hit
     // (Elemental Drain: a share for each DoT on it): it multiplies with the build's own final damage, like another source.
+    // extraIedPct is enemy DEF ignored that only this hit gets (Empirical Knowledge stacks): it joins the build's own IED as
+    // one more source (1 - ied) x (1 - extraIed), never changing the global IED.
     public static DamageResult Calculate(Build build, double roll01, double crit01, double mobDef,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
-        int skillPct = 100, bool boss = false, double ignoreElemPct = 0, double extraDmgPct = 0, double extraFinalPct = 0)
+        int skillPct = 100, bool boss = false, double ignoreElemPct = 0, double extraDmgPct = 0, double extraFinalPct = 0,
+        double extraIedPct = 0)
     {
         var weapon = StatTables.Weapon((WeaponType)build.WeaponType);
         long statValue = StatValue(build.Str, build.Dex);
@@ -229,7 +232,7 @@ public static class DamageChain
         double actual = minSkill + (maxSkill - minSkill) * Math.Clamp(roll01, 0.0, 1.0);
         bool crit = crit01 * 100.0 < Math.Clamp(build.CritPct, 0.0, 100.0);
         double critMult = CritMultiplier(crit, build.CritDamage);
-        double defense = DefenseMultiplier(mobDef * 100.0, 1.0 - build.IedPct / 100.0);
+        double defense = DefenseMultiplier(mobDef * 100.0, (1.0 - build.IedPct / 100.0) * (1.0 - extraIedPct / 100.0));
         double level = mobLevel <= 0 ? 1.0 : LevelMultiplier(build.Level, mobLevel);
         double elemMult = string.IsNullOrEmpty(mobElemAttr) ? 1.0 : MobElemAttr.Multiplier(mobElemAttr, element, ignoreElemPct);
         double after = actual * critMult * defense * elemMult * level;

@@ -40,6 +40,8 @@ using MushTown.Exporter;
 //             client stop at start (no exported wz def for the page II ids).
 //           - the dodge changed (the mob json got Acc; an old one reads 0 and the dodge rate comes out wrong. effect/hurtdmg.json
 //             got the Miss word and effect/hurtdmg/Miss.png; an old hurtdmg.json has no Miss word and the client fails on a dodge).
+//           - Empirical Knowledge was added (assets/skill/wz/80002762.json: the common formulas x/time/prop/y plus the mark art
+//             Art["mob0"], ["mob1"], ["mob2"] under assets/skill/wz/80002762/mob0..2/). The client fails on a missing mark art.
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of
 //             each map and the login theme.
 //   panel   - exports one panel's art only.

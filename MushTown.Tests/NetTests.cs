@@ -129,6 +129,54 @@ public sealed class NetTests
         }
     }
 
+    // Empirical Knowledge on the wire: two players hit the same mob, each proc is a MarkStack that goes only to its own owner.
+    [TestMethod]
+    public void Loopback_MarkStacks_GoOnlyToTheOwner()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(9, """[{"MobId":100000,"X":0,"Cy":100}]""", """[{"X1":-1000,"Y1":100,"X2":1000,"Y2":100,"Layer":0}]""");
+        assets.AddMob(100000, 1_000_000_000, 0.5, 0, speed: 1, level: 200);
+        var mark = new WzSkillData { SkillId = WzSkillData.EmpiricalKnowledge, MaxLevel = 9, Kind = SkillData.KindPassive };
+        mark.Common["x"] = SkillFormula.Levels("3", 9);
+        mark.Common["time"] = SkillFormula.Levels("10", 9);
+        mark.Common["prop"] = SkillFormula.Levels("13+2*x", 9);
+        mark.Common["y"] = SkillFormula.Levels("u(x/2)", 9);
+        mark.Common["w"] = SkillFormula.Levels("u(x/2)", 9);
+        assets.AddWzSkill(mark);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 80);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 80);
+        b.Connect("127.0.0.1", Net.Port + 80);
+        var build = new Build(1000, 100, 200, 0, 0, 0, Level: 200, WeaponType: (int)WeaponType.ShortStaff, MarkProp: 100);
+        a.SendBuild(build);
+        b.SendBuild(build);
+        a.SendState(9, -50, 100, Net.ActStand, 0, true);
+        Assert.AreEqual(a.PlayerId, WaitTake(b).Id);
+        Assert.IsTrue(WaitTakeMob(a).Spawn); // the mob is planted before the swing
+        b.SendState(9, -50, 100, Net.ActStand, 0, true);
+        Assert.AreEqual(b.PlayerId, WaitTake(a).Id);
+        Assert.IsTrue(WaitTakeMob(b).Spawn);
+
+        a.SendAttack();
+        b.SendAttack();
+        MarkEvent markOnA = default, markOnB = default;
+        bool gotA = false, gotB = false;
+        for (int i = 0; i < 500 && (!gotA || !gotB); i++)
+        {
+            if (!gotA) gotA = a.TryTakeMark(out markOnA);
+            if (!gotB) gotB = b.TryTakeMark(out markOnB);
+            if (!gotA || !gotB) Thread.Sleep(10);
+        }
+        Assert.IsTrue(gotA, "A must get its own mark");
+        Assert.IsTrue(gotB, "B must get its own mark");
+        Assert.IsTrue(markOnA.Stacks >= 1);
+        Assert.IsTrue(markOnB.Stacks >= 1);
+        Assert.IsFalse(a.TryTakeMark(out _), "A must not see B's mark");
+        Assert.IsFalse(b.TryTakeMark(out _), "B must not see A's mark");
+    }
+
     // Teleport on the wire: the caster sends its new place (State) and then the cast. The position the peer receives
     // and the effect it is told to play are both the landing, not the place the caster left.
     [TestMethod]

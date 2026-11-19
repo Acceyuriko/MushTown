@@ -46,6 +46,7 @@ public static class Net
     public const byte DropItem = 37; // client -> server: int itemId, int count, byte tab (drop at the last State's map/x/y; tab 4 = mesos, the two ints are a long amount)
     public const byte Appearance = 38; // client -> server: appearance body; the server relays int id + body to the same map
     public const byte Ball = 39; // server -> client: int skill, int map, float fromX, fromY, toX, toY, int delayMs (the attack-frame delay before the ball; its damage comes as MobHit when it arrives)
+    public const byte MarkStack = 40; // server -> client (the owner only): int uid, int stacks (Empirical Knowledge on that mob; 0 = gone)
 
     // A meso drop rides DropItem with tab 4: itemId holds the high 32 bits and
     // count the low 32, so the amount stays one long without a new command.
@@ -235,6 +236,9 @@ public readonly record struct BallEvent(int Skill, int Map, float FromX, float F
 // Clients drop moves for other maps and for mobs mid-flinch (hit1/die1 own
 // the pose until they finish).
 public readonly record struct MoveEvent(int Uid, int Map, float X, float Y, bool FacingRight);
+
+// One Empirical Knowledge stack change on a mob, sent only to its owner: Uid now has Stacks (0 = the marks are gone).
+public readonly record struct MarkEvent(int Uid, int Stacks);
 
 // One touch that landed on us: Mob's Uid dealt Damage (pre-DEF). Sent to
 // the victim only, so no victim id rides along.

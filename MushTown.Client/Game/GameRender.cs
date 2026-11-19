@@ -55,7 +55,7 @@ public partial class MushTownGame
         foreach (int uid in _mobs.Keys.OrderBy(u => u))
         {
             var m = _mobs[uid];
-            draws.Add(((int)Math.Floor(m.Y), () => DrawMob(m)));
+            draws.Add(((int)Math.Floor(m.Y), () => DrawMob(uid, m)));
         }
         foreach (int uid in _drops.Keys.OrderBy(u => u))
         {

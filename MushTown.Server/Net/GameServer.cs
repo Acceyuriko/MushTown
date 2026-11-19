@@ -108,6 +108,7 @@ public sealed partial class GameServer : IDisposable
                     foreach (var s in ev.Strikes) // the balls that arrived: their damage lands now
                         BroadcastHit(s.hit, s.attacker);
                     BroadcastFreshDrops();
+                    BroadcastMarkChanges();
                     foreach (var mv in ev.Moves)
                         Broadcast(Net.Encode(Net.MobMove, w =>
                         {
@@ -327,7 +328,7 @@ public sealed partial class GameServer : IDisposable
             OnSkill(id, BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5));
             return;
         }
-        if (payload[0] == Net.Build && payload.Length == 93)
+        if (payload[0] == Net.Build && payload.Length == 97)
         {
             lock (_mobLock)
                 _builds[id] = new Build(
@@ -350,7 +351,8 @@ public sealed partial class GameServer : IDisposable
                     BitConverter.ToInt32(payload, 77),
                     BitConverter.ToInt32(payload, 81),
                     BitConverter.ToInt32(payload, 85),
-                    BitConverter.ToInt32(payload, 89));
+                    BitConverter.ToInt32(payload, 89),
+                    BitConverter.ToInt32(payload, 93));
             return;
         }
         if (payload[0] != Net.State || payload.Length != 20)
@@ -610,6 +612,7 @@ public sealed partial class GameServer : IDisposable
             if (build.WeaponAtk <= 0) return; // empty hand: the swing was a client bug or a foreign client
             foreach (var h in _mobs.Strike(p.map, p.x, p.y, p.facing, Random.Shared, build, id))
                 BroadcastHit(h, id);
+            BroadcastMarkChanges();
             BroadcastFreshDrops();
         }
     }
@@ -653,6 +656,7 @@ public sealed partial class GameServer : IDisposable
                     w.Write(b.ToY);
                     w.Write(b.DelayMs);
                 }));
+            BroadcastMarkChanges();
             BroadcastFreshDrops();
         }
     }
@@ -677,6 +681,15 @@ public sealed partial class GameServer : IDisposable
     {
         foreach (var d in _mobs.TakeDrops())
             Broadcast(DropSpawnFrame(d));
+    }
+
+    // Empirical Knowledge stack changes after a judging or a tick: each goes only to its own attacker's client (nobody else
+    // sees these marks). A change names the mob uid and the new stack count (0 = the marks are gone).
+    private void BroadcastMarkChanges()
+    {
+        foreach (var (attacker, uid, stacks) in _mobs.TakeMarkChanges())
+            if (_clients.TryGetValue(attacker, out var client))
+                Send(client, Net.Encode(Net.MarkStack, w => { w.Write(uid); w.Write(stacks); }));
     }
 
     // A player drop: the mesos or item leave that client, the server makes the

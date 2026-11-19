@@ -21,7 +21,7 @@ public class DefaultPassiveSkillsTests
     {
         var sources = DefaultPassives.All.Where(m => m.Source == StatSource.Skill).Select(m => m.Label).ToHashSet();
         sources.Add(DefaultPassives.MapleWarrior(StatKey.STR, 100).Label); // Maple Warrior is built from the character
-        foreach (var p in DefaultPassiveSkills.All)
+        foreach (var p in DefaultPassiveSkills.All.Where(p => p.HasStat))
             Assert.IsTrue(sources.Contains(p.Label), $"{p.Label} is listed but the stat panel has no such skill source");
     }
 

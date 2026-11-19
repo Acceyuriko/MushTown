@@ -336,6 +336,7 @@ public static class Progression
 // MpEaterBossPct are the share of our max MP given back from a normal mob and from a boss.
 // DrainPct is Elemental Drain: the final damage percent for each damage-over-time effect on the target (0 = not learned);
 // DrainMax is the most effects that count.
+// MarkProp is Empirical Knowledge: the chance, in percent, that one of our hits marks the mob (0 = not learned).
 public readonly record struct Build(
     long Str,
     long Dex,
@@ -356,4 +357,5 @@ public readonly record struct Build(
     int MpEaterPct = 0,
     int MpEaterBossPct = 0,
     int DrainPct = 0,
-    int DrainMax = 0);
+    int DrainMax = 0,
+    int MarkProp = 0);

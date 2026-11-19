@@ -23,9 +23,10 @@ public partial class MushTownGame
     {
         foreach (var m in _mobs.Values) _world.RemoveChild(m.Owner);
         _mobs.Clear();
+        _markStacks.Clear();
     }
 
-    private void DrawMob(MobArt m)
+    private void DrawMob(int uid, MobArt m)
     {
         var frame = m.Frames[m.Frame];
         var tex = _textures[frame.Image];
@@ -37,10 +38,47 @@ public partial class MushTownGame
             : feetX - frame.OriginX;
         int y = (int)Math.Floor(m.Y) - frame.OriginY;
         DrawTexture(frame.Image, x, y, m.FacingRight); // raw art faces left; the AI faces along
+        DrawMark(uid, m); // my own Empirical Knowledge stacks over the head
         if (m.Hp >= m.MaxHp || m.Hp <= 0) return; // fresh and dying mobs hide their bar
         int px = (int)Math.Floor(m.X) - BarWidth / 2 - _camera.X, py = y - 8 - _camera.Y;
         _spriteBatch.Draw(_pixel, new Rectangle(px, py, BarWidth, 5), Color.Black);
         _spriteBatch.Draw(_pixel, new Rectangle(px + 1, py + 1, Math.Max(1, (int)((BarWidth - 2) * (float)m.Hp / m.MaxHp)), 3), new Color(80, 220, 80));
+    }
+
+    // The Empirical Knowledge stacks the local player has on this mob: the local world reads its own status list (the single
+    // player is attacker 0); net play reads the marks the server sent to this client only.
+    private int LocalMarkStacks(int uid) => _localWorld != null
+        ? _localWorld.MarkStacks(uid, 0)
+        : _markStacks.TryGetValue(uid, out var s) ? s : 0;
+
+    // The mob/0, mob/1, mob/2 loops (1/2/3 stacks), built once from the exported skill art.
+    private void EnsureMarkArt()
+    {
+        if (_markArt != null) return;
+        _markArt = new IdleArt?[3];
+        if (!_wzSkills.TryGetValue(WzSkillData.EmpiricalKnowledge, out var wz)) return; // no export: no marks drawn
+        for (int k = 0; k < 3; k++)
+        {
+            if (!wz.Art.TryGetValue($"mob{k}", out var art) || art.Frames.Count == 0) continue;
+            foreach (string f in art.Frames) LoadTexture(f);
+            _markArt[k] = new IdleArt(art.Frames, art.Delays, art.Origins.Select(o => new Origin(o[0], o[1])).ToList());
+        }
+    }
+
+    // The stack mark over a mob's head: 1, 2 or 3 stacks play mob/0, mob/1, mob/2. Anchored by the art's origin at the head top.
+    private void DrawMark(int uid, MobArt m)
+    {
+        if (m.Hp <= 0) return; // a dead mob shows no mark
+        int stacks = LocalMarkStacks(uid);
+        if (stacks <= 0) return;
+        EnsureMarkArt();
+        var art = _markArt![Math.Min(stacks, 3) - 1];
+        if (art == null) return;
+        int frame = Idle.At(art.Delays, (float)_timeMs);
+        var org = art.Origins[frame];
+        int headTop = (int)Math.Floor(m.Y) - m.Frames[0].OriginY; // origin to feet: the top of the head
+        int ax = (int)Math.Floor(m.X), ay = headTop - 6;
+        DrawTexture(art.Images[frame], ax - org.X, ay - org.Y, false);
     }
 
     // One mob's art: json plus textures, loaded once.

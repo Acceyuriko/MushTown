@@ -56,6 +56,7 @@ public partial class MushTownGame : Game
     private readonly bool _shotTeleportPre; // --teleportpre: the stage before the cast
     private readonly int _shotRecastMs; // --recast <ms>: after --flyms the same cast again, then the world runs this long (the numbers of two casts on one mob)
     private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (effect, attack frame, ball, explosion, numbers)
+    private readonly int _shotMark; // --mark <1..3>: pose that many Empirical Knowledge stacks on the nearest mob
     private readonly bool _shotHurtBlink; // --hurtblink: the same arc in the purple flash step
     private readonly bool _shotHurtPre; // --hurtpre: the same stage before the hit
     private readonly bool _shotHurtMiss; // --hurtmiss: the touch rolls a dodge that always lands
@@ -119,6 +120,8 @@ public partial class MushTownGame : Game
     // MobWorld; net play applies server events.
     private MobWorld? _localWorld;
     private readonly Dictionary<int, MobArt> _mobs = new();
+    private readonly Dictionary<int, int> _markStacks = new(); // mob uid -> my Empirical Knowledge stacks (net play; local reads the world)
+    private IdleArt?[]? _markArt; // the mob/0, mob/1, mob/2 loops (1/2/3 stacks), built once from the exported skill
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<FloatingNumber> _numbers = new();
     private readonly List<SkillFx> _fx = new(); // skill effects in flight: casts, hit sparks, landing specials, buff loops
@@ -143,7 +146,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null, int shotMark = 0)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -174,6 +177,7 @@ public partial class MushTownGame : Game
         _shotHurtMiss = shotHurtMiss;
         _shotWeak = shotWeak;
         _shotFlyms = shotFlyms;
+        _shotMark = shotMark;
         _shotRecastMs = shotRecastMs;
         _shotTeleport = shotTeleport;
         _shotAt = shotAt;
@@ -804,7 +808,7 @@ public partial class MushTownGame : Game
         // Frame == Frames.Count, and the draw reads that frame. A number does
         // not crash, it just keeps drawing and ageing. All three belong here.
         SpawnImpacts(); // a ball that arrived explodes (before the sweep takes it away)
-        MobArt.CollectDead(_mobs, _world);
+        MobArt.CollectDead(_mobs, _world, _markStacks);
         DropArt.CollectDead(_drops, _world);
         PoolSweep.CollectDead(_numbers, _world, _numberPool);
         PoolSweep.CollectDead(_fx, _world, _fxPool);
@@ -875,6 +879,11 @@ public partial class MushTownGame : Game
             {
                 if (mv.Map != _mapId) continue; // another map's walk: not shown here
                 ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
+            }
+            while (_net.TryTakeMark(out var mk)) // my own Empirical Knowledge stacks on a mob (only ever sent to me)
+            {
+                if (mk.Stacks > 0) _markStacks[mk.Uid] = mk.Stacks;
+                else _markStacks.Remove(mk.Uid);
             }
             while (_net.TryTakeHurt(out var h))
             {

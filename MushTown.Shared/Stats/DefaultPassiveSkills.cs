@@ -9,7 +9,9 @@ namespace MushTown.Shared;
 // marks). A text is written here when the WZ one tells about an effect the game
 // does not have (cooldown, party, active use). IconId is the skill whose icon
 // is used when the skill has none (0 = its own). ItemIconId is the item whose icon is used (0 = none).
-public sealed record DefaultPassiveSkill(string Label, int WzId, string? Desc = null, string? Effect = null, int IconId = 0, int ItemIconId = 0);
+// HasStat is false for a passive whose effect is not a stat record (Empirical Knowledge marks mobs on hit): it still shows
+// in the window but has no source in the stat panel.
+public sealed record DefaultPassiveSkill(string Label, int WzId, string? Desc = null, string? Effect = null, int IconId = 0, int ItemIconId = 0, bool HasStat = true);
 
 public static class DefaultPassiveSkills
 {
@@ -71,5 +73,8 @@ public static class DefaultPassiveSkills
             "Cultivates your qi using techniques first developed in Jianghu.",
             "Boss Damage: +#bdR%"),
         new("Link: Guiding Stars (Shine)", 80010343),
+        // The Explorer Magician Link: a permanent passive that marks the mobs we hit (a chance to add stacks that raise our
+        // damage and DEF-ignored % against them). No stat record: the hit judge reads its numbers.
+        new("Link: Empirical Knowledge (Magician)", 80002762, HasStat: false),
     };
 }

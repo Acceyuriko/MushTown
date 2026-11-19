@@ -35,6 +35,9 @@ public sealed class WzSkillData
     public const int MagicArmor = 2000010;
     public const int MpBoost = 2000006;
     public const int ElementalWeakness = 2000007;
+    // The Explorer Magician Link (Empirical Knowledge): a permanent passive that marks the mobs the player hits. Its number
+    // node is the same on the Link ids (80002762..65) and the body skill 0000255; this id is the one exported and read.
+    public const int EmpiricalKnowledge = 80002762;
 
     public int SkillId { get; set; }
     public string Name { get; set; } = "";

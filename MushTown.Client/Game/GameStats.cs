@@ -166,6 +166,8 @@ public partial class MushTownGame
         bool mage = chara.Job == StatTables.FirePoisonMage;
         var mpEater = mage ? WzSkillStats.MpEater(_wzSkills) : default;
         var drain = mage ? WzSkillStats.ElementalDrain(_wzSkills) : default;
+        // Empirical Knowledge is a permanent default passive (every job), so its chance applies whenever the skill table has it.
+        int markProp = _wzSkills.ContainsKey(WzSkillData.EmpiricalKnowledge) ? WzSkillStats.EmpiricalKnowledgeProp(_wzSkills) : 0;
         return new Build(
             _stats.IntValue(job.Main),
             _stats.IntValue(job.Sub),
@@ -183,7 +185,8 @@ public partial class MushTownGame
             mage ? WzSkillStats.WeaknessProp(_wzSkills) : 0, // Elemental Weakness: the Fire/Poison Mage marks mobs
             (int)_stats.IntValue(StatKey.MASTERY),
             mpEater.prop, mpEater.pct, mpEater.bossPct, // MP Eater
-            drain.pct, drain.max); // Elemental Drain
+            drain.pct, drain.max, // Elemental Drain
+            markProp); // Empirical Knowledge
     }
 
     private void ClampPoolsToMax()

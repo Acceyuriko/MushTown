@@ -27,6 +27,14 @@ public static class WzSkillStats
         return (int)weak.Value("prop", weak.MaxLevel);
     }
 
+    // Empirical Knowledge: the chance, in percent, that one of our hits marks the mob (WZ prop). The other numbers (stack cap,
+    // time, damage % and DEF-ignored % per stack) are read by the server's MobWorld from the same skill node.
+    public static int EmpiricalKnowledgeProp(IReadOnlyDictionary<int, WzSkillData> skills)
+    {
+        var mark = skills[WzSkillData.EmpiricalKnowledge];
+        return (int)mark.Value("prop", mark.MaxLevel);
+    }
+
     // MP Eater at max level: the chance (WZ prop), the share of OUR max MP that a proc gives back (WZ x) and the share against a boss
     // (WZ y), in percent. Unverified: the WZ text says "x% of Max MP" and "y% of the boss's Max MP"; the mobs of this game have
     // no MP, so the share is taken of the caster's max MP.

@@ -17,6 +17,7 @@ public partial class MushTownGame
         if (_shotJob != 0) { _save ??= new SaveData(); (_save.Slots[_slot] ??= DemoChara()).Job = _shotJob; } // --job on a stat shot: the demo plays that class
         RefreshStats();
         if (_shotScreen == "stat200" || (_shotScreen == null && _shotJob != 0)) ClampPoolsToMax(); // shots never update: the new hero's first frame is done here
+        if (_shotMark > 0) { PoseMarks(); return; } // --mark: pose the stacks over a mob, no cast
         if (_shotHit && _shotDmgSkin is { } hitSkin) Hero!.DamageSkin = hitSkin; // --dmgskin: the --hit number reads the demo's own skin
         if (_shotDmg > 0)
         {
@@ -419,11 +420,32 @@ public partial class MushTownGame
     private Build ShotBuild() => _shotCrit ? CurrentBuild() with { CritPct = 100 } : CurrentBuild();
 
     // One world step at the posed feet: the balls that arrived strike (shown unless asked not to), the mobs move.
+    // --mark <1..3>: stand the hero beside the first mob (facing it) and set that many Empirical Knowledge stacks on it. The mark
+    // art then draws over its head (DrawMark), proving the 1/2/3 stack styles without a random proc.
+    private void PoseMarks()
+    {
+        var world = _localWorld!; // StartLocalWorld just built it
+        var first = world.MobsOn(_mapId).FirstOrDefault()
+            ?? throw new InvalidDataException($"--mark needs mobs, map {_mapId} has none");
+        const int standOff = 140;
+        _mover.X = first.X + standOff; // stand to the right of the first mob, facing it
+        _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, (int)first.Y)
+            ?? throw new InvalidDataException($"--mark found no ground near mob {first.Mob}");
+        _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
+        ResetMotion();
+        _mover.FacingRight = false;
+        _mover.Action = "stand1";
+        _frame = 0;
+        world.SetMarkStacks(first.Uid, 0, Math.Min(_shotMark, 3), 600000);
+        SnapCamera();
+    }
+
     private List<(MobWorld.Hit hit, int attacker)> ShotTick(int ms, bool showStrikes = true)
     {
         var world = _localWorld!; // StartLocalWorld just built it
         var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _mover.X, _mover.Y) };
         var ev = world.Tick(ms, players);
+        world.DiscardMarkChanges(); // a shot reads stacks from the world, so the queue is not sent anywhere
         if (showStrikes)
         {
             foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpPct, s.hit.Dot);

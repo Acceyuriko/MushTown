@@ -33,7 +33,8 @@ public static partial class Export
 {
     // The skill ids to export: the ones on the job pages, plus the skills the window does not list
     // (Elemental Weakness is invisible in WZ).
-    private static readonly int[] WzSkillIds = JobSkills.Pages(StatTables.FirePoisonMage).SelectMany(p => p).Append(WzSkillData.ElementalWeakness).ToArray();
+    private static readonly int[] WzSkillIds = JobSkills.Pages(StatTables.FirePoisonMage).SelectMany(p => p)
+        .Append(WzSkillData.ElementalWeakness).Append(WzSkillData.EmpiricalKnowledge).ToArray();
 
     // A skill node that another skill owns (WZ has no link between them): parent -> child.
     private static readonly Dictionary<int, int> WzSkillChildren = new() { [WzSkillData.ManaWave] = 2001012 }; // Mana Wave -> its held fall
@@ -62,6 +63,7 @@ public static partial class Export
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
             if ((data.Common.ContainsKey("damage") || data.Kind == SkillData.KindBuff || id is WzSkillData.Teleport or WzSkillData.ManaWave) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
+            if (id == WzSkillData.EmpiricalKnowledge && !SaveMarkArt(baseRoot, id, data, outDir, saved)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child))
             {
                 var childData = ReadWzSkill(baseRoot, chara, child);
@@ -145,6 +147,40 @@ public static partial class Export
         return true;
     }
 
+    // The Empirical Knowledge mark art: the mob/0, mob/1, mob/2 loops (1/2/3 stacks) that play over a marked mob's head. Each
+    // frame is an _outlink into _Canvas/000.img/skill/0000255/mob/<k>; the origin and delay live on the loose node.
+    private static bool SaveMarkArt(WzRoot baseRoot, int id, WzSkillData data, string outDir, HashSet<string> saved)
+    {
+        var mob = WzSkillNode(baseRoot, id).Nodes["mob"] ?? throw new InvalidDataException($"skill {id} has no mob node");
+        for (int k = 0; k < 3; k++)
+        {
+            if (mob.Nodes[k.ToString(CultureInfo.InvariantCulture)] is not { } list)
+            {
+                Console.WriteLine($"skill {id} mob/{k} not found");
+                return false;
+            }
+            var art = ReadWzArt(list);
+            foreach (Wz_Node f in list.Nodes.Where(f => int.TryParse(f.Text, out _) && f.Nodes["origin"] != null).OrderBy(f => int.Parse(f.Text, CultureInfo.InvariantCulture)))
+            {
+                if (WzNodeUtil.ReadCanvas(baseRoot, f).png is not { } png)
+                {
+                    Console.WriteLine($"skill {id} mob/{k} frame {f.Text}: no picture");
+                    return false;
+                }
+                string path = $"skill/wz/{id}/mob{k}/{art.Frames.Count}.png";
+                SaveOnce(png, Path.Combine(outDir, path), saved);
+                art.Frames.Add(path);
+            }
+            if (art.Frames.Count == 0)
+            {
+                Console.WriteLine($"skill {id} mob/{k}: no frames");
+                return false;
+            }
+            data.Art[$"mob{k}"] = art;
+        }
+        return true;
+    }
+
     // The origin and delay of each int-named frame, in frame order (the order SaveSkillFrames numbers the pngs).
     private static WzArt ReadWzArt(Wz_Node list)
     {
@@ -158,7 +194,7 @@ public static partial class Export
     }
 
     private static Wz_Node WzSkillNode(WzRoot baseRoot, int id) =>
-        baseRoot.Find($"Skill/{id / 10000:D3}.img/skill/{id:D7}") ?? throw new InvalidDataException($"skill {id} not found");
+        baseRoot.Find($"Skill/{(id >= 80000000 ? id / 100 : id / 10000):D3}.img/skill/{id:D7}") ?? throw new InvalidDataException($"skill {id} not found");
 
     // The raw formula text of every number field of common (the String text takes its #names from here).
     private static Dictionary<string, string> WzSkillValues(WzRoot baseRoot, int id) =>
