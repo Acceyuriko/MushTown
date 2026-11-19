@@ -113,9 +113,9 @@ public partial class MushTownGame
     }
 
     // Damage numbers: the digits of the number's skin, rising and fading
-    // over FloatingNumber.LifeMs. Skin 0 and the hurt skin keep the original
-    // left-to-right layout; collected skins use their origins and spacing.
-    // A critical number uses NoCri1 plus the skin's effect3 prefix.
+    // over FloatingNumber.LifeMs. Every skin lays its digits out by their WZ
+    // origins (DrawSkinNumbers). A critical number uses the NoCri sets plus the
+    // skin's effect3 prefix.
     private void DrawNumbers()
     {
         if (_numbers.Count == 0) return;
@@ -132,92 +132,45 @@ public partial class MushTownGame
                     null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
                 continue;
             }
-            if (n.Crit)
-            {
-                if (!long.TryParse(n.Text, out long critDamage)) continue;
-                DrawSkinNumbers(dmg.Unit != null ? DmgUnit.Format(critDamage) : n.Text, dmg, n.X, baseY, tint,
-                    dmg.Cri1, true);
-                continue;
-            }
-            if (n.Skin <= 0)
-            {
-                DrawBasicNumbers(n.Text, dmg, n.X, baseY, tint);
-                continue;
-            }
             if (!long.TryParse(n.Text, out long damage)) continue;
-            DrawSkinNumbers(dmg.Unit != null ? DmgUnit.Format(damage) : n.Text, dmg, n.X, baseY, tint);
+            DrawSkinNumbers(dmg.Unit != null ? DmgUnit.Format(damage) : n.Text, dmg, n.X, baseY, tint, n.Crit);
         }
     }
 
-    // The original base-skin layout: pack the raw picture widths from the
-    // left edge; Ox stays 0 in dmg.json, so it would shift these digits.
-    private void DrawBasicNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint)
-    {
-        int totalW = 0;
-        foreach (char c in text) totalW += _textures[dmg.Digits[c - '0'].Image].Width;
-        float x = centerX - totalW / 2f - _camera.X;
-        foreach (char c in text)
-        {
-            var d = dmg.Digits[c - '0'];
-            var tex = _textures[d.Image];
-            _spriteBatch.Draw(tex, new Vector2(x, baseY - d.Oy), null, tint,
-                0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
-            x += tex.Width;
-        }
-    }
+    // The WZ holds two sets of digits per style: NoRed1 (big) and NoRed0 (small) for a normal number, NoCri1 (big) and
+    // NoCri0 (small) for a critical one. The first character of a number takes the big set; every later character
+    // (digits, the dot and the unit letter count too) takes the small set. The user's finding in the WZ, and the same
+    // as the reference pictures of the basic skin with units and of the new video.
+    internal static IReadOnlyList<DmgDigit> DigitSet(DmgData dmg, bool crit, int index) =>
+        index == 0 ? (crit ? dmg.Cri1 : dmg.Red1) : (crit ? dmg.Cri0 : dmg.Digits);
 
-    // Collected skins: each picture's origin lands in the middle of its
-    // advance box (left = pen + width / 2 - Ox); NumberSpace widens digits.
-    // A unit skin's "." and K/M/B come from DmgUnit: DotSpace after the dot,
-    // and the unit letter follows its number with no extra gap, bottom-aligned
-    // with the digits.
-    private void DrawSkinNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint,
-        IReadOnlyList<DmgDigit>? digits = null, bool crit = false)
+    // Every skin lays its characters out by DamageNumberLayout (steps, overlap, the critical mark in the first cell).
+    // A unit skin's "." and K/M/B come from DmgUnit; a critical number takes the small critical letters (CriImages,
+    // NoCustom/NoCri0) and CriDotSpace. The mark is drawn before the digits, so the first digit covers it.
+    private void DrawSkinNumbers(string text, DmgData dmg, float centerX, float baseY, Color tint, bool crit)
     {
-        var set = digits ?? dmg.Digits;
-        var glyphs = new List<(Texture2D Tex, int Ox, int Oy, int SpaceBefore, int SpaceAfter)>();
-        foreach (char c in text)
+        var textures = new List<Texture2D>();
+        var pics = new List<GlyphPic>();
+        var unitImages = crit ? dmg.Unit?.CriImages : dmg.Unit?.Images;
+        for (int i = 0; i < text.Length; i++)
         {
-            if (c is >= '0' and <= '9')
-            {
-                var d = set[c - '0'];
-                glyphs.Add((_textures[d.Image], d.Ox, d.Oy, 0, dmg.NumberSpace));
-            }
-            else if (c == '.' && dmg.Unit != null)
-            {
-                var d = dmg.Unit.Images[0];
-                glyphs.Add((_textures[d.Image], d.Ox, d.Oy, 0, dmg.Unit.DotSpace));
-            }
-            else if (dmg.Unit != null)
-            {
-                int unit = c switch { 'K' => 1, 'M' => 2, 'B' => 3, _ => -1 };
-                if (unit < 0) continue;
-                var d = dmg.Unit.Images[unit];
-                var tex = _textures[d.Image];
-                // The letter's bottom edge sits on the digits' bottom edge.
-                var digit = set[0];
-                int oy = tex.Height - (_textures[digit.Image].Height - digit.Oy);
-                glyphs.Add((tex, d.Ox, oy, 0, 0));
-            }
+            char c = text[i];
+            DmgDigit d;
+            GlyphKind kind;
+            if (c is >= '0' and <= '9') { d = DigitSet(dmg, crit, i)[c - '0']; kind = GlyphKind.Digit; }
+            else if (c == '.' && dmg.Unit != null) { d = unitImages![0]; kind = GlyphKind.Dot; }
+            else { d = unitImages![c switch { 'K' => 1, 'M' => 2, _ => 3 }]; kind = GlyphKind.Unit; }
+            textures.Add(_textures[d.Image]);
+            pics.Add(new GlyphPic(kind, textures[^1].Width, d.Ox, d.Oy));
         }
-        float totalW = 0;
-        for (int i = 0; i < glyphs.Count; i++)
-            totalW += glyphs[i].SpaceBefore + glyphs[i].Tex.Width
-                + (i < glyphs.Count - 1 ? glyphs[i].SpaceAfter : 0);
-        float x = centerX - totalW / 2f - _camera.X;
-        if (crit && dmg.Effect3 is { } effect)
-        {
-            var effectTex = _textures[effect.Image];
-            _spriteBatch.Draw(effectTex, new Vector2(x - effectTex.Width, baseY - effect.Oy),
-                null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
-        }
-        foreach (var g in glyphs)
-        {
-            x += g.SpaceBefore;
-            _spriteBatch.Draw(g.Tex, new Vector2(x + g.Tex.Width / 2f - g.Ox, baseY - g.Oy),
-                null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
-            x += g.Tex.Width + g.SpaceAfter;
-        }
+        var star = crit ? dmg.Effect3 : null;
+        var layout = DamageNumberLayout.Place(pics, dmg.NumberOverlap, crit ? dmg.Unit?.CriDotSpace ?? 0 : dmg.Unit?.DotSpace ?? 0,
+            star is { } e ? new GlyphPic(GlyphKind.Digit, _textures[e.Image].Width, e.Ox, e.Oy) : null);
+        var origin = new Vector2(centerX - layout.Width / 2f - _camera.X, baseY);
+        if (layout.Star is { } place)
+            _spriteBatch.Draw(_textures[star!.Image], origin + new Vector2(place.Left, place.Top), null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+        for (int i = 0; i < textures.Count; i++)
+            _spriteBatch.Draw(textures[i], origin + new Vector2(layout.Places[i].Left, layout.Places[i].Top), null, tint, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
     }
 
     // One damage skin: ten digits plus their baseline offsets, loaded once
@@ -228,13 +181,17 @@ public partial class MushTownGame
         if (_dmg.TryGetValue(skin, out var data)) return data;
         string file = skin == FloatingNumber.HurtSkin ? "hurtdmg.json" : skin == 0 ? "dmg.json" : $"dmg{skin}.json";
         data = LoadJson<DmgData>(Path.Combine(_assetsDir, "effect", file));
-        if (data.Digits.Count != 10 || (skin != FloatingNumber.HurtSkin && data.Cri1.Count != 10))
-            throw new InvalidDataException($"damage skin {skin} has {data.Digits.Count} normal and {data.Cri1.Count} critical digits, want 10");
-        foreach (var d in data.Digits) LoadTexture(d.Image);
-        foreach (var d in data.Cri1) LoadTexture(d.Image);
+        if (data.Digits.Count != 10 || data.Red1.Count != 10
+            || (skin != FloatingNumber.HurtSkin && (data.Cri0.Count != 10 || data.Cri1.Count != 10)))
+            throw new InvalidDataException($"damage skin {skin} lacks a digit set (normal {data.Digits.Count}/{data.Red1.Count}, critical {data.Cri0.Count}/{data.Cri1.Count}, want 10): run `panel damageskin` again");
+        foreach (var d in data.Digits.Concat(data.Red1).Concat(data.Cri0).Concat(data.Cri1)) LoadTexture(d.Image);
         foreach (var w in data.Words) LoadTexture(w.Image);
         if (data.Unit != null)
-            foreach (var u in data.Unit.Images) LoadTexture(u.Image);
+        {
+            if (data.Unit.CriImages.Count != 4)
+                throw new InvalidDataException($"damage skin {skin} has no critical unit letters, run `panel damageskin` again");
+            foreach (var u in data.Unit.Images.Concat(data.Unit.CriImages)) LoadTexture(u.Image);
+        }
         if (data.Effect3 != null) LoadTexture(data.Effect3.Image);
         if (data.Sample != null) LoadTexture(data.Sample.Image);
         _dmg[skin] = data;

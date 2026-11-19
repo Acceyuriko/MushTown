@@ -9,6 +9,14 @@ namespace MushTown.Exporter;
 // another skin's picture (1426 uses skin 0 digits and 208's sample), so no
 // path is built from the skin id. The base skin (dmg.json) is exported by
 // ExportUi.ExportDamageSkin.
+// Re-run `panel damageskin` after pulling the damage number changes (T-20261119091326), or the client draws old data:
+//  - every skin writes both digit sets (Digits = NoRed0, Red1 = NoRed1, Cri0, Cri1); the base skin (dmg.json) and the
+//    hurt skin (hurtdmg.json, NoViolet0/NoViolet1) carry Red1 and the WZ origin of their digits;
+//  - the critical unit letters of a unit skin (1426) are the small set NoCustom/NoCri0, written as
+//    effect/dmg1426/unit_cri0_<0..3>.png plus Unit.CriImages / CriDotSpace (old unit_cri1_*.png files are unused);
+//  - dmg.json and dmg1426.json carry NumberOverlap = 30. An old json has no NumberOverlap, which reads as 0: the
+//    digits only touch instead of overlapping.
+// The client throws the first time a skin without Red1, Cri0 or CriImages is drawn (LoadDmg).
 public static partial class Export
 {
     private static readonly DamageSkinRow[] DamageSkinList = ExportList.LoadDamageSkins();
@@ -50,16 +58,25 @@ public static partial class Export
         data.Effect3 = ReadPicture(etc, "Etc", $"{root}/effect/NoCri1/effect3", $"{dir}/effect3.png", outDir);
         data.Sample = ReadPicture(etc, "Etc", $"{root}/sample", $"{dir}/sample.png", outDir);
         if (data.Effect3 == null || data.Sample == null) return false;
-        data.NumberSpace = Int(etc.Find($"{root}/effect/NoRed0"), "numberSpace");
+        // No digit set of any skin holds a numberSpace; only NoCustom of a unit skin does (30 in skin 1426).
         var custom = etc.Find($"{root}/effect/NoCustom/NoRed0");
+        data.NumberOverlap = Int(custom, "numberSpace");
         if (custom != null)
         {
-            var unit = new DmgUnit { DotSpace = Int(custom, "dotSpace"), NumberSpace = Int(custom, "numberSpace") };
+            var unit = new DmgUnit { DotSpace = Int(custom, "dotSpace") };
             for (int u = 0; u <= 3; u++)
             {
                 var picture = ReadPicture(etc, "Etc", $"{root}/effect/NoCustom/NoRed0/{u}", $"{dir}/unit_{u}.png", outDir);
                 if (picture == null) return false;
                 unit.Images.Add(picture);
+            }
+            // The critical letters are the small critical set (NoCustom/NoCri0); every letter is a small picture, like the digits after the first.
+            unit.CriDotSpace = Int(etc.Find($"{root}/effect/NoCustom/NoCri0"), "dotSpace");
+            for (int u = 0; u <= 3; u++)
+            {
+                var picture = ReadPicture(etc, "Etc", $"{root}/effect/NoCustom/NoCri0/{u}", $"{dir}/unit_cri0_{u}.png", outDir);
+                if (picture == null) return false;
+                unit.CriImages.Add(picture);
             }
             data.Unit = unit;
         }

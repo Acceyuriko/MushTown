@@ -2,19 +2,37 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// One damage number in flight: the digits rise and fade over LifeMs, then
+// One damage number in flight: the digits float up and fade over LifeMs, then
 // the node ends its own life and the game pools it. The skin key picks the
-// digit set (0 = NoRed0 for monster damage, -1 = NoViolet0 for player hurt);
-// Crit swaps in NoCri1 and draws the skin's effect3 prefix.
+// digit sets (0 = the base skin, NoRed0/NoRed1, for monster damage; -1 = NoViolet0/NoViolet1 for player hurt; any
+// other key is a collected skin); Crit swaps in the NoCri0/NoCri1 sets and draws the skin's effect3 mark.
 // The timing of a cast with several numbers lives here and only here: the numbers of one mob appear one after the
 // other from the bottom up (each starts AppearStepMs after the one below, DelayMs), then each runs the same rise
 // and fade, so they fade one after the other from the bottom up too. Where they stand is the spawn site's business.
 public sealed class FloatingNumber : Component
 {
-    public const float LifeMs = 800; // rise and fade over this long
-    public const int RisePx = 60;    // px the number floats up
-    public const int StackPx = 30;   // px between the numbers of one multi-hit cast
-    public const int AppearStepMs = 100; // the next number of one mob appears this long after the one below (a proposal: not read from the video)
+    // The numbers below come from a clean official video (BV1qv4y1v7tK from 3:00: one mob, one attacker), measured in
+    // .dsh/research/damage-number-display-v2.md (T-20261119091326). The recording shows the game window shrunk to
+    // 1152x646; I take the game as 1366x768, a scale of 0.843. That scale is a GUESS (the recording window size is not
+    // known); three numbers agree with it (the layer step and the rise speed match Journey, the v83 look-alike client,
+    // and the big digit picture is 38 px). Not verified. The video has repeated frames: one frame is 33 ms, +-1 frame.
+    // - Gap between two numbers of one mob: 3 or 4 frames, 3.6 on average, 30 samples, the same sequence in every cast
+    //   of a skill: a constant 120 ms. High confidence.
+    // - The k-th number stands on the fixed k-th layer, 26 video px = 31 game px apart (Journey: 30). Medium-high
+    //   (3 casts); crit numbers look the same, not checked. In the video a new cast may replace the old numbers on the
+    //   same layer (1 or 2 samples, low confidence): NOT done here.
+    // - A number comes out at full size and full alpha (no fade-in, no pop) and floats up steadily until it is gone:
+    //   26 video px/s = 31 game px/s (Journey: 31.25), medium-high (5 cycles).
+    // - It is solid for 12.5 frames = 420 ms (medium), then fades about linearly: half at 22 to 23 frames, nothing at
+    //   about 31 frames (1.03 s); to the eye it is gone at 0.9 s. Life taken as 1000 ms. Medium (2 cycles + 4 numbers).
+    // - The lowest (oldest) number fades first, each by its own age (2 casts, by eye).
+    // One set for every number (hits, the player hurt number, Miss).
+    public const float HoldMs = 420; // solid for this long
+    public const float FadeMs = 580; // then it fades linearly over this long
+    public const float LifeMs = HoldMs + FadeMs;
+    public const float RisePxPerSec = 31; // steady, from its start until it is gone
+    public const int StackPx = 30;   // px between the numbers of one mob (the layers of a cast)
+    public const int AppearStepMs = 120; // the next number of one mob appears this long after the one below
     public const int StackNearPx = 100; // mobs closer than this stack their numbers together (side by side they would overlap)
     public const int HurtSkin = -1;  // NoViolet0, kept apart from monster damage
 
@@ -39,13 +57,11 @@ public sealed class FloatingNumber : Component
 
     public bool Visible => Age >= DelayMs;
 
-    // 0..1 through its own life (from the moment it appeared).
-    private float Progress => (Age - DelayMs) / LifeMs;
+    // Full for HoldMs, then it fades out linearly over FadeMs.
+    public int Alpha => (int)(255 * Math.Clamp(1 - (Age - DelayMs - HoldMs) / FadeMs, 0f, 1f));
 
-    // Full for 70% of the life, then it fades out.
-    public int Alpha => Progress < 0.7f ? 255 : (int)(255 * (1 - (Progress - 0.7f) / 0.3f));
-
-    public float Rise => RisePx * Progress;
+    // How far up it is now: it floats up steadily.
+    public float Rise => RisePxPerSec * (Age - DelayMs) / 1000f;
 
     public override void Update(float dt)
     {

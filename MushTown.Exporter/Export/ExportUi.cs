@@ -84,9 +84,8 @@ public static partial class Export
     // its node): 58 bamboo, 59 ink-and-wash, 129 island travel.
     private static readonly int[] NameTagNodes = ExportList.Load("nametags");
 
-    // Basic damage skin digits: BasicEff.img NoRed0 0-9 (yellow; the set that
-    // also carries Miss/guard words). Miss and the words stay for the week
-    // that adds dodge and guard.
+    // Basic damage skin digits: BasicEff.img NoRed0 (small) and NoRed1 (big) 0-9, with their WZ origins (the set that
+    // also carries Miss/guard words). Miss and the words stay for the week that adds dodge and guard.
     // The OS cursor (Basic Cursor state 0, the gloved hand): the png plus
     // its WZ origin as the click hotspot (cursor.json). States 1/12/5 ride
     // along: button hover, pressed, inventory grab.
@@ -387,46 +386,25 @@ public static partial class Export
         return true;
     }
 
-    private static bool ExportDamageSkin(WzRoot effect, string outDir)
+    private static bool ExportDamageSkin(WzRoot effect, WzRoot etc, string outDir)
     {
-        var data = new DmgData();
-        for (int d = 0; d <= 9; d++)
-        {
-            string node = $"BasicEff.img/NoRed0/{d}";
-            var origin = WzNodeUtil.ResolveUol(effect.Find(node))?.Nodes["origin"]?.Value as Wz_Vector;
-            if (origin == null)
-            {
-                Console.WriteLine($"{node}: no origin");
-                return false;
-            }
-            string path = $"effect/dmg/{d}.png";
-            if (!UiPng.Save(effect, "Effect", node, Path.Combine(outDir, path)))
-                return false;
-            data.Digits.Add(new DmgDigit { Image = path, Oy = origin.Y });
-        }
-        if (!ReadDigits(effect, "Effect", "BasicEff.img/NoCri0", "effect/dmg", "cri0_", data.Cri0, outDir)
+        // The base skin has no numberSpace of its own. Its digits are the pictures of skin 1426 ("Basic Damage Skin
+        // (Unit)"), so the overlap comes from the NoCustom of that skin, like the one it shows in the game.
+        var data = new DmgData { NumberOverlap = Int(etc.Find("DamageSkin.img/1426/effect/NoCustom/NoRed0"), "numberSpace") };
+        if (!ReadDigits(effect, "Effect", "BasicEff.img/NoRed0", "effect/dmg", "", data.Digits, outDir)
+            || !ReadDigits(effect, "Effect", "BasicEff.img/NoRed1", "effect/dmg", "red1_", data.Red1, outDir)
+            || !ReadDigits(effect, "Effect", "BasicEff.img/NoCri0", "effect/dmg", "cri0_", data.Cri0, outDir)
             || !ReadDigits(effect, "Effect", "BasicEff.img/NoCri1", "effect/dmg", "cri1_", data.Cri1, outDir))
             return false;
         data.Effect3 = ReadPicture(effect, "Effect", "BasicEff.img/NoCri1/effect", "effect/dmg/effect3.png", outDir);
         if (data.Effect3 == null) return false;
         WriteJson(Path.Combine(outDir, "effect", "dmg.json"), data);
-        Console.WriteLine("damage skin: NoRed0, NoCri0 and NoCri1 0-9 plus effect3");
+        Console.WriteLine("damage skin: NoRed0, NoRed1, NoCri0 and NoCri1 0-9 plus effect3");
 
         var hurt = new DmgData();
-        for (int d = 0; d <= 9; d++)
-        {
-            string node = $"BasicEff.img/NoViolet0/{d}";
-            var origin = WzNodeUtil.ResolveUol(effect.Find(node))?.Nodes["origin"]?.Value as Wz_Vector;
-            if (origin == null)
-            {
-                Console.WriteLine($"{node}: no origin");
-                return false;
-            }
-            string path = $"effect/hurtdmg/{d}.png";
-            if (!UiPng.Save(effect, "Effect", node, Path.Combine(outDir, path)))
-                return false;
-            hurt.Digits.Add(new DmgDigit { Image = path, Oy = origin.Y });
-        }
+        if (!ReadDigits(effect, "Effect", "BasicEff.img/NoViolet0", "effect/hurtdmg", "", hurt.Digits, outDir)
+            || !ReadDigits(effect, "Effect", "BasicEff.img/NoViolet1", "effect/hurtdmg", "red1_", hurt.Red1, outDir))
+            return false;
         const string missNode = "BasicEff.img/NoViolet0/Miss"; // the word a dodged touch shows
         var missOrigin = WzNodeUtil.ResolveUol(effect.Find(missNode))?.Nodes["origin"]?.Value as Wz_Vector;
         if (missOrigin == null)
@@ -438,7 +416,7 @@ public static partial class Export
             return false;
         hurt.Words.Add(new DmgWord { Name = "Miss", Image = "effect/hurtdmg/Miss.png", Ox = missOrigin.X, Oy = missOrigin.Y });
         WriteJson(Path.Combine(outDir, "effect", "hurtdmg.json"), hurt);
-        Console.WriteLine("hurt damage skin: NoViolet0 0-9 and Miss");
+        Console.WriteLine("hurt damage skin: NoViolet0, NoViolet1 0-9 and Miss");
         return true;
     }
 }

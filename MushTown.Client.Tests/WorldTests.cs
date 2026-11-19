@@ -117,11 +117,10 @@ public class WorldTests
     public void NumberTick_DiesAtTheEndOfItsLife()
     {
         var n = new GameObject().Add(new FloatingNumber { Text = "12" });
-        n.Update(0.5f); // 500ms: still rising
+        n.Update(0.9f); // 900 ms: still there (LifeMs is 1000)
         Assert.IsFalse(n.Owner.Dead);
-        n.Update(0.3f); // 800ms: the last frame counts as over
+        n.Update(0.2f); // 1100 ms: past LifeMs, over
         Assert.IsTrue(n.Owner.Dead);
-        Assert.AreEqual(800f, n.Age, 0.01f);
     }
 
     // A number of a multi-hit cast waits for its turn: not there before DelayMs, there from it, over DelayMs + LifeMs later.
@@ -130,27 +129,72 @@ public class WorldTests
     {
         var n = new GameObject().Add(new FloatingNumber { Text = "12", DelayMs = 200 });
         Assert.IsFalse(n.Visible);
-        n.Update(0.1f); // 100 ms
+        n.Update(0.15f); // 150 ms
         Assert.IsFalse(n.Visible);
-        n.Update(0.1f); // 200 ms: its turn
+        n.Update(0.15f); // 300 ms: past DelayMs (200), its turn
         Assert.IsTrue(n.Visible);
-        n.Update(0.7f); // 900 ms: 700 ms of its own life
+        n.Update(0.8f); // 1100 ms: 900 ms of its own life
         Assert.IsFalse(n.Owner.Dead);
-        n.Update(0.1f); // 1000 ms = DelayMs + LifeMs
+        n.Update(0.2f); // 1300 ms: past DelayMs + LifeMs (1200)
         Assert.IsTrue(n.Owner.Dead);
     }
 
-    // Two numbers of one cast, the upper one AppearStepMs later: at the same moment the lower one has faded more.
+    // Two numbers of one cast, the upper one AppearStepMs (120) later: at the same moment the lower one has faded more.
     [TestMethod]
     public void NumberFade_GoesFromTheBottomUp()
     {
         var lower = new GameObject().Add(new FloatingNumber { Text = "1", DelayMs = 0 });
         var upper = new GameObject().Add(new FloatingNumber { Text = "2", DelayMs = FloatingNumber.AppearStepMs });
-        lower.Update(0.6f); // 600 ms: the lower one is 600 ms into its life (past 70% of 800), the upper one 500 ms (before it)
-        upper.Update(0.6f);
+        lower.Update(0.5f); // 500 ms: the lower one is 500 ms into its life (past HoldMs = 420), the upper one 380 ms (before it)
+        upper.Update(0.5f);
         Assert.AreEqual(255, upper.Alpha); // the upper one is still full
-        Assert.IsTrue(lower.Alpha < upper.Alpha);
-        Assert.IsTrue(lower.Rise > upper.Rise);
+        Assert.IsTrue(lower.Alpha is > 0 and < 255);
+    }
+
+    // Solid for HoldMs, then linear to nothing over FadeMs: halfway through the fade it is about half.
+    [TestMethod]
+    public void NumberAlpha_HoldsThenFadesLinearly()
+    {
+        var n = new GameObject().Add(new FloatingNumber { Text = "1" });
+        n.Update(0.3f); // 300 ms: well inside the hold
+        Assert.AreEqual(255, n.Alpha);
+        n.Update(0.12f + FloatingNumber.FadeMs / 2000f); // 420 + 290 = 710 ms: half of the fade
+        Assert.AreEqual(127, n.Alpha, 4);
+        n.Update(0.4f); // 1110 ms: past the end
+        Assert.AreEqual(0, n.Alpha);
+    }
+
+    // The number floats up steadily at RisePxPerSec from its own start (not from the spawn), in game px.
+    [TestMethod]
+    public void NumberRise_IsSteadyFromItsOwnStart()
+    {
+        var n = new GameObject().Add(new FloatingNumber { Text = "1", DelayMs = 100 });
+        n.Update(0.1f); // its turn: it has not floated yet
+        Assert.AreEqual(0f, n.Rise, 0.1f);
+        n.Update(0.5f); // 500 ms after its start
+        Assert.AreEqual(FloatingNumber.RisePxPerSec * 0.5f, n.Rise, 0.1f);
+        n.Update(0.5f); // 1000 ms after its start
+        Assert.AreEqual(FloatingNumber.RisePxPerSec, n.Rise, 0.2f);
+    }
+
+    // The jagged digits: the first character of a number takes the big WZ set, every later one the small set.
+    [TestMethod]
+    public void DigitSet_FirstBigTheRestSmall()
+    {
+        var dmg = new DmgData
+        {
+            Digits = { new DmgDigit { Image = "red0" } },
+            Red1 = { new DmgDigit { Image = "red1" } },
+            Cri0 = { new DmgDigit { Image = "cri0" } },
+            Cri1 = { new DmgDigit { Image = "cri1" } },
+        };
+        Assert.AreEqual("red1", MushTownGame.DigitSet(dmg, false, 0)[0].Image);
+        Assert.AreEqual("cri1", MushTownGame.DigitSet(dmg, true, 0)[0].Image);
+        for (int i = 1; i < 5; i++)
+        {
+            Assert.AreEqual("red0", MushTownGame.DigitSet(dmg, false, i)[0].Image);
+            Assert.AreEqual("cri0", MushTownGame.DigitSet(dmg, true, i)[0].Image);
+        }
     }
 
     [TestMethod]

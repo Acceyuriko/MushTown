@@ -30,9 +30,13 @@ public static partial class Export
             var str = WzRoot.LoadCategory(ExporterPaths.DataDir, "String");
             return ExportMapUi(ui, map, str, outDir) && ExportWorldMap(ui, map, str, outDir);
         }
-        if (name == "damageskin")
-            return ExportDamageSkins(WzRoot.LoadCategory(ExporterPaths.DataDir, "Etc"), WzRoot.LoadCategory(ExporterPaths.DataDir, "Item"),
-                WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir);
+        if (name == "damageskin") // the base and hurt skins (BasicEff.img) too, since their second digit set
+        {
+            var etc = WzRoot.LoadCategory(ExporterPaths.DataDir, "Etc");
+            return ExportDamageSkin(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"), etc, outDir)
+                && ExportDamageSkins(etc, WzRoot.LoadCategory(ExporterPaths.DataDir, "Item"),
+                    WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir);
+        }
         if (name == "death")
             return ExportDeath(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"), outDir);
         if (name == "cashshop")
@@ -153,7 +157,8 @@ public static partial class Export
             }
         }
         var effect = WzRoot.LoadCategory(dataDir, "Effect");
-        if (!ExportDamageSkin(effect, outDir))
+        var etc = WzRoot.LoadCategory(dataDir, "Etc");
+        if (!ExportDamageSkin(effect, etc, outDir))
         {
             Environment.ExitCode = 1;
             return;
@@ -163,7 +168,6 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
-        var etc = WzRoot.LoadCategory(dataDir, "Etc");
         var item = WzRoot.LoadCategory(dataDir, "Item");
         if (!ExportDamageSkins(etc, item, str, outDir))
         {

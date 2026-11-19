@@ -468,7 +468,9 @@ public sealed class DmgData
     public List<DmgWord> Words { get; set; } = new(); // NoRed0 Miss/guard/resist/shot/counter (a skin may lack some)
     public DmgDigit? Effect3 { get; set; } // NoCri1/effect3: the picture a critical hit adds
     public DmgDigit? Sample { get; set; } // the preview picture; Ox/Oy are 0 when the WZ node has no origin
-    public int NumberSpace { get; set; } // extra pixels between two digits (WZ numberSpace; 0 = none)
+    // How much a digit's picture is overlapped by the next character, in percent of its width (WZ numberSpace of
+    // NoCustom, 30 for the basic skin; 0 = the digits only touch).
+    public int NumberOverlap { get; set; }
     public DmgUnit? Unit { get; set; } // NoCustom/NoRed0 of a unit skin ("1.2B"); null = plain digits
 }
 
@@ -489,13 +491,15 @@ public sealed class DmgWord
     public int Oy { get; set; }
 }
 
-// The unit skin data: the four unit pictures (WZ NoCustom 0..3: dot, K, M, B)
-// and the dot gap. NumberSpace is exported but not used by the 1.2B layout.
+// The unit skin data: the four unit pictures (WZ NoCustom/NoRed0 0..3: dot, K, M, B)
+// and the dot gap.
+// A critical number uses the same four pictures from NoCustom/NoCri0 (CriImages) and its own dot gap.
 public sealed class DmgUnit
 {
     public List<DmgDigit> Images { get; set; } = new();
+    public List<DmgDigit> CriImages { get; set; } = new();
     public int DotSpace { get; set; } // gap after the decimal point
-    public int NumberSpace { get; set; } // WZ value; the 1.2B layout keeps the unit letter tight
+    public int CriDotSpace { get; set; } // the same for a critical number
 
     // 1234567890 -> "1.2B": K/M/B, one decimal only when it is not zero.
     public static string Format(long damage)
