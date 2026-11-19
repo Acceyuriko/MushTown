@@ -48,6 +48,9 @@ public partial class MushTownGame : Game
     private readonly bool _shotHurt; // --hurt: the player takes one posed hit
     private readonly bool _shotWeak; // --weak: the --skill cast lands on mobs already marked by Elemental Weakness
     private readonly int _shotStandoff; // --standoff <px>: how far from the first mob a WZ --skill caster stands (0 = the default 250)
+    private readonly string? _shotTeleport; // --teleport <left|right|up|down>: cast Teleport that way from --at
+    private readonly int? _shotAt; // --at <x>: the feet x of the --teleport pose
+    private readonly bool _shotTeleportPre; // --teleportpre: the stage before the cast
     private readonly int _shotRecastMs; // --recast <ms>: after --flyms the same cast again, then the world runs this long (the numbers of two casts on one mob)
     private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (effect, attack frame, ball, explosion, numbers)
     private readonly bool _shotHurtBlink; // --hurtblink: the same arc in the purple flash step
@@ -91,6 +94,7 @@ public partial class MushTownGame : Game
     private readonly SwingActions _swing; // the swing of the basic attack and the casts (a fixed seed in a --shot)
     private readonly DeathState _death = new(); // dead from HP 0 to the revive click
     private readonly HurtGuard _hurt = new(); // player hurt state: 60 frames, one timer with the invincibility
+    private bool _upNow, _downNow; // this frame's Up and Down keys, stored before the cast loop (Teleport reads them; _mover.Input is written after the casts)
     private bool _canLeap = true; // War Leap: once per airtime, refreshed on ground or ladder
 
     // Net peers, keyed by server id. Empty in shot mode and after a dropped link.
@@ -133,7 +137,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, int? shotAt = null, bool shotTeleportPre = false)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -165,6 +169,9 @@ public partial class MushTownGame : Game
         _shotWeak = shotWeak;
         _shotFlyms = shotFlyms;
         _shotRecastMs = shotRecastMs;
+        _shotTeleport = shotTeleport;
+        _shotAt = shotAt;
+        _shotTeleportPre = shotTeleportPre;
         _shotCrit = shotCrit;
         _shotStandoff = shotStandoff;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");
@@ -710,6 +717,8 @@ public partial class MushTownGame : Game
         bool up = kb.IsKeyDown(Keys.Up);
         bool freshUp = up && _input.Fresh(Keys.Up); // a portal is entered once, not every frame
         bool down = kb.IsKeyDown(Keys.Down);
+        _upNow = up;
+        _downNow = down;
         // The pickup is a bindable action like the attack; a modal window
         // takes the keys, so Z does not pick a drop up there. Releasing Z
         // lets the next press retry a drop the server missed.

@@ -45,6 +45,8 @@ public enum StatKey
     // source (0.82 = 18% less damage taken); ELEMENT_RESISTANCE is summed.
     DAMAGE_TAKEN,
     ELEMENT_RESISTANCE,
+    // Hidden key: percent points added to the SPEED cap (WZ speedMax; the base cap is 140%).
+    SPEED_MAX,
 }
 
 // How one source contributes to a key. FLAT first, then PERCENT, then
@@ -156,11 +158,11 @@ public sealed class StatSnapshot
     // The caps of research/stat-formulas-decisions.md rule 12. IED needs
     // none: its sources multiply, so it cannot pass 100%. JUMP is a negative
     // take-off velocity, so its cap is a maximum magnitude.
-    private static double Cap(StatKey key, double value) => key switch
+    private double Cap(StatKey key, double value) => key switch
     {
         StatKey.MAX_HP or StatKey.MAX_MP => Math.Min(value, 500_000),
         StatKey.CRIT_RATE => Math.Min(value, 100),
-        StatKey.SPEED => Math.Min(value, PlayerMover.WalkSpeed * 1.40),
+        StatKey.SPEED => Math.Min(value, PlayerMover.WalkSpeed * (140 + _flat[(int)StatKey.SPEED_MAX]) / 100),
         StatKey.JUMP => Math.Max(value, PlayerMover.JumpV0 * 1.23),
         _ => value,
     };

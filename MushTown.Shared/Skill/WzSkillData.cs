@@ -3,8 +3,8 @@ namespace MushTown.Shared;
 // One skill read straight from the WZ skill node (the Fire/Poison line): the numbers of every level
 // (the common formulas, already worked out), the rectangles, the flags, and the tooltip text at max
 // level. This is a table of its own: the warrior SkillData is a hand-made feel table and is not
-// extended. Energy Bolt is cast (the ball flies, the rectangle and the segments judge on arrival, the art); Magic Guard, Elemental Weakness,
-// Magic Armor and MP Boost take effect; Teleport and Mana Wave are not cast yet.
+// extended. Energy Bolt is cast (the ball flies, the rectangle and the segments judge on arrival, the art); Teleport is cast (TeleportRules);
+// Magic Guard, Elemental Weakness, Magic Armor and MP Boost take effect; Mana Wave is not cast yet.
 // The frame meta of one art: per frame, the origin (x, y: the point of the png that sits on the anchor) and the delay in ms.
 public sealed class WzArt
 {

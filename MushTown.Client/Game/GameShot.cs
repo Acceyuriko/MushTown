@@ -3,7 +3,7 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// Shot staging: frozen local worlds for --hit/--skill/--drop/--dmg/--hurt/--hurtblink/--hurtmiss/--hurtpre/--aiticks.
+// Shot staging: frozen local worlds for --hit/--skill/--drop/--dmg/--hurt/--hurtblink/--hurtmiss/--hurtpre/--teleport/--aiticks.
 public partial class MushTownGame
 {
     // Shot mode: a frozen local world. --hit plants the player mid-swing next
@@ -75,6 +75,11 @@ public partial class MushTownGame
             CastBuff(_shotSkill);
             RunShotAi();
             SnapCamera();
+            return;
+        }
+        if (_shotTeleport != null)
+        {
+            PoseTeleport();
             return;
         }
         if (_shotHurt)
@@ -207,6 +212,27 @@ public partial class MushTownGame
         }
         RunShotAi();
         SnapCamera();
+    }
+
+    // --teleport <dir> --at <x>: the hero stands at feet x on the ground at the map's spawn height, facing the way of a
+    // horizontal cast, and casts Teleport through CastTeleport (the landing rules, the MP, the effect). The camera is fixed
+    // before the cast and stays, so the pre and the post shot show the same scene. The effect is posed at its fourth frame (a thin one: the hero stays visible).
+    private void PoseTeleport()
+    {
+        _mover.X = _shotAt!.Value;
+        _mover.Ground = SceneMath.ArrivalGround(_map.Footholds, (int)_mover.X, _map.Info.SpawnY)
+            ?? throw new InvalidDataException($"--teleport found no ground at x {_mover.X}");
+        _mover.Y = SceneMath.FootholdY(_mover.Ground, (int)_mover.X);
+        ResetMotion();
+        _mover.FacingRight = _shotTeleport != "left";
+        _mover.Action = "stand1";
+        _frame = 0;
+        SnapCamera();
+        if (_shotTeleportPre) return;
+        _upNow = _shotTeleport == "up";
+        _downNow = _shotTeleport == "down";
+        CastTeleport(_wzSkills[WzSkillData.Teleport]);
+        foreach (var f in _fx) f.Frame = 3;
     }
 
     // A WZ damage skill (Energy Bolt): pay best-effort, let the mobs gather (--aiticks), then cast with a fixed

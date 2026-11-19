@@ -20,7 +20,7 @@ public sealed class SkillCost : Component
     }
 
     // The same for a WZ skill at the level lv (0 = not learned): mpCon of the level, and the cooltime
-    // (seconds in WZ) when the skill has one.
+    // when the skill has one: WZ cooltime is seconds, Teleport's teleportCooltime is milliseconds (480; the user decided).
     public bool Pay(CharaSlot? chara, WzSkillData skill, int lv, IDictionary<int, float> cooldowns)
     {
         if (chara == null || lv <= 0) return false;
@@ -28,7 +28,8 @@ public sealed class SkillCost : Component
         int mp = (int)skill.Value("mpCon", lv);
         if (chara.Mp < mp || left > 0) return false;
         chara.Mp -= mp;
-        cooldowns[skill.SkillId] = skill.Common.ContainsKey("cooltime") ? (float)skill.Value("cooltime", lv) * 1000f : 0f;
+        cooldowns[skill.SkillId] = skill.Common.ContainsKey("cooltime") ? (float)skill.Value("cooltime", lv) * 1000f
+            : skill.Common.ContainsKey("teleportCooltime") ? (float)skill.Value("teleportCooltime", lv) : 0f;
         return true;
     }
 }

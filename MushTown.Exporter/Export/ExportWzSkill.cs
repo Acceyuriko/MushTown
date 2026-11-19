@@ -14,6 +14,9 @@ namespace MushTown.Exporter;
 // with a ball node (Energy Bolt) also gets the flying bolt (ball/) and BallFrames, and one with a special node the art
 // for every mob it hits (special/) and SpecialFrames. A skill with an action also gets AttackDelayMs: the body
 // action's attack frame from Character.wz/00002000.img/<action> (the Journey rule, see WzSkillData.AttackDelayFrom).
+// Teleport (no damage line) also gets its cast effect: WZ keeps four colors of it in effect/0..3 (0 blue, 1 orange,
+// 2 violet, 3 yellow; which job wears which is unknown), the Fire/Poison one uses 0. It has no hit node and no
+// action node in this WZ, so it has no HitFrames and an empty Actions.
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -48,7 +51,7 @@ public static partial class Export
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
-            if (data.Common.ContainsKey("damage") && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
+            if ((data.Common.ContainsKey("damage") || id == WzSkillData.Teleport) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child)) data.Children.Add(ReadWzSkill(baseRoot, chara, child));
             WriteJson(Path.Combine(outDir, "skill", "wz", $"{id}.json"), data);
             string kind = data.Kind == SkillData.KindPassive ? "passive" : data.Kind == SkillData.KindBuff ? "buff" : "active";
@@ -67,19 +70,22 @@ public static partial class Export
     private static bool SaveWzSkillArt(WzRoot baseRoot, WzRoot skill, int id, WzSkillData data, string outDir, HashSet<string> saved)
     {
         var node = skill.Find($@"_Canvas\{id / 10000}.img\skill\{id}");
-        var effect = node?.Nodes["effect"];
+        bool teleport = id == WzSkillData.Teleport; // effect/0: the blue one, see the header
+        var effect = teleport ? node?.Nodes["effect"]?.Nodes["0"] : node?.Nodes["effect"];
         var hit = node?.Nodes["hit"]?.Nodes["0"];
-        if (effect == null || hit == null)
+        if (effect == null || (hit == null && !teleport))
         {
             Console.WriteLine($"skill {id} has no effect or no hit 0");
             return false;
         }
         var meta = WzSkillNode(baseRoot, id);
-        data.Art["effect"] = ReadWzArt(meta.Nodes["effect"]!);
-        data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);
-        if (!SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)
-            || !SaveSkillFrames(hit, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id))
-            return false;
+        data.Art["effect"] = ReadWzArt(teleport ? meta.Nodes["effect"]!.Nodes["0"]! : meta.Nodes["effect"]!);
+        if (!SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)) return false;
+        if (hit != null)
+        {
+            data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);
+            if (!SaveSkillFrames(hit, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id)) return false;
+        }
         foreach ((string name, List<string> into) in new[] { ("ball", data.BallFrames), ("special", data.SpecialFrames) })
         {
             if (node!.Nodes[name] is not { } frames) continue;

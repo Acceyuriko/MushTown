@@ -8,16 +8,17 @@ public class WzSkillTests
     // One WZ skill from its common formulas (the text of Skill/200.img/skill/<id>/common).
     private static WzSkillData Skill(int id, int maxLevel, params (string Field, string Formula)[] common)
     {
-        var data = new WzSkillData { SkillId = id, MaxLevel = maxLevel, Name = id == WzSkillData.MpBoost ? "MP Boost" : "Magic Armor" };
+        var data = new WzSkillData { SkillId = id, MaxLevel = maxLevel, Name = id switch { WzSkillData.MpBoost => "MP Boost", WzSkillData.Teleport => "Teleport", _ => "Magic Armor" } };
         foreach (var (field, formula) in common) data.Common[field] = SkillFormula.Levels(formula, maxLevel);
         return data;
     }
 
-    // The two skills that only add numbers, with the WZ formulas of 200.img.
+    // The skills that only add numbers (Teleport's passive part too), with the WZ formulas of 200.img.
     internal static Dictionary<int, WzSkillData> FirePoisonPassives() => new()
     {
         [WzSkillData.MagicArmor] = Skill(WzSkillData.MagicArmor, 9, ("pddX", "10*x")),
         [WzSkillData.MpBoost] = BoostWithWandCrit(),
+        [WzSkillData.Teleport] = Skill(WzSkillData.Teleport, 5, ("psdSpeed", "2+4*x"), ("speedMax", "4*x")),
     };
 
     // psdWT/37/cr = 5 in 200.img: the wand (item family 137, weapon code 37) gives 5 crit rate.
@@ -114,6 +115,31 @@ public class WzSkillTests
         Assert.IsTrue(mods.Contains(new(StatKey.MAX_MP, StatValueType.FLAT, 24_000, StatSource.Skill, "MP Boost"))); // 120 x level 200
         Assert.IsTrue(mods.Contains(new(StatKey.MAX_MP, StatValueType.PERCENT, 20, StatSource.Skill, "MP Boost")));
         Assert.IsTrue(mods.Contains(new(StatKey.ATTACK_SPEED, StatValueType.FLAT, 1, StatSource.Skill, "MP Boost")));
+    }
+
+    // Teleport's passive: psdSpeed 22 is percent points of the base speed (a PERCENT record on SPEED, like the
+    // equipment incSpeed), speedMax 20 is percent points added to the SPEED cap. Source Skill, label Teleport.
+    [TestMethod]
+    public void Teleport_PassiveSpeed_IsPercentPointsAndRaisesTheCap()
+    {
+        var mods = WzSkillStats.Modifiers(FirePoisonPassives(), 200, 0).ToList();
+        Assert.IsTrue(mods.Contains(new(StatKey.SPEED, StatValueType.PERCENT, 22, StatSource.Skill, "Teleport")));
+        Assert.IsTrue(mods.Contains(new(StatKey.SPEED_MAX, StatValueType.FLAT, 20, StatSource.Skill, "Teleport")));
+        var baseSpeed = new StatModifier(StatKey.SPEED, StatValueType.FLAT, PlayerMover.WalkSpeed, StatSource.Base);
+        var shoes = new StatModifier(StatKey.SPEED, StatValueType.PERCENT, 5, StatSource.Equipment);
+        Assert.AreEqual(105.0, StatAggregator.Aggregate(new[] { baseSpeed, shoes }).SpeedPercent, 1e-6);
+        Assert.AreEqual(127.0, StatAggregator.Aggregate(mods.Append(baseSpeed).Append(shoes)).SpeedPercent, 1e-6); // 100 + 5 + 22
+    }
+
+    // The cap is 140% of the base; speedMax lifts it by its percent points (20 -> 160%).
+    [TestMethod]
+    public void SpeedCap_Is140Percent_AndSpeedMaxRaisesIt()
+    {
+        var baseSpeed = new StatModifier(StatKey.SPEED, StatValueType.FLAT, PlayerMover.WalkSpeed, StatSource.Base);
+        var boots = new StatModifier(StatKey.SPEED, StatValueType.PERCENT, 80, StatSource.Equipment); // 180% uncapped
+        Assert.AreEqual(140.0, StatAggregator.Aggregate(new[] { baseSpeed, boots }).SpeedPercent, 1e-6);
+        var max = new StatModifier(StatKey.SPEED_MAX, StatValueType.FLAT, 20, StatSource.Skill);
+        Assert.AreEqual(160.0, StatAggregator.Aggregate(new[] { baseSpeed, boots, max }).SpeedPercent, 1e-6);
     }
 
     // MP Boost: crit rate +5 while a wand is worn (WZ psdWT code 37). The staff (code 38) has no entry: +0.

@@ -129,6 +129,36 @@ public sealed class NetTests
         }
     }
 
+    // Teleport on the wire: the caster sends its new place (State) and then the cast. The position the peer receives
+    // and the effect it is told to play are both the landing, not the place the caster left.
+    [TestMethod]
+    public void Loopback_Teleport_PeerSeesTheLandingAndTheEffectThere()
+    {
+        using var assets = new TempAssets();
+        assets.AddMap(10000);
+        var teleport = new WzSkillData { SkillId = WzSkillData.Teleport, MaxLevel = 1, Kind = SkillData.KindActive };
+        teleport.Common["mpCon"] = SkillFormula.Levels("1", 1);
+        assets.AddWzSkill(teleport);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 73);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 73);
+        b.Connect("127.0.0.1", Net.Port + 73);
+
+        a.SendState(10000, 100, 215, Net.ActStand, 0, true);
+        Assert.AreEqual(100f, WaitTake(b).X);
+        a.SendState(10000, 230, 215, Net.ActStand, 0, true); // the landing, 130 px away, in one step
+        a.SendSkillCast(WzSkillData.Teleport, 0);
+        Assert.AreEqual(230f, WaitTake(b).X);
+        SkillFxEvent fx = default;
+        for (int i = 0; i < 500 && !b.TryTakeFx(out fx); i++) Thread.Sleep(10);
+        Assert.AreEqual(WzSkillData.Teleport, fx.Skill);
+        Assert.AreEqual(230f, fx.X);
+        Assert.AreEqual(215f, fx.Y);
+        Assert.IsFalse(a.TryTakeFx(out _)); // the caster draws its own effect
+    }
+
     [TestMethod]
     public void DropAmount_SplitsAndJoinsLong()
     {

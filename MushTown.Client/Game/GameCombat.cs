@@ -342,10 +342,13 @@ public partial class MushTownGame
                     CastActive(id);
                 }
                 return;
+            case WzSkillData.Teleport:
+                if (_mover.Climb == null && _fighter.AttackLock <= 0) CastTeleport(_wzSkills[id]);
+                return;
             default:
                 if (_wzSkills.TryGetValue(id, out var wz))
                 {
-                    // Only a damage skill casts so far; a passive and the moves (Teleport, Mana Wave) are ignored.
+                    // Only a damage skill casts so far; a passive and the move Mana Wave are ignored.
                     if (wz.Kind == SkillData.KindActive && wz.Common.ContainsKey("damage") && _mover.Climb == null
                         && _fighter.AttackLock <= 0 && HasJudge() && TryPayWzSkill(wz))
                         CastWzActive(wz);
@@ -366,6 +369,28 @@ public partial class MushTownGame
                     CastActive(id);
                 return;
         }
+    }
+
+    // Teleport: Up and Down (this frame's keys, _upNow/_downNow: Up and the Teleport key pressed together in one frame
+    // go up; the macro cast reads the same fields) hold the vertical jump (the y field), otherwise the cast goes the way the hero faces
+    // (Left and Right already turned it this frame; the x field). The landing is the farthest legal spot
+    // (TeleportRules); a refused landing costs no MP. The feet move at once and the pose stays as it was (WZ has no
+    // action node). The cooldown (teleportCooltime, 480 ms) is checked by TryPayWzSkill: while it runs nothing moves,
+    // nothing is paid and no effect plays. The server learns the new place first, so the others see the effect where we land.
+    private void CastTeleport(WzSkillData wz)
+    {
+        var land = _upNow ? TeleportRules.Vertical(_map, _mover.X, _mover.Y, -1, (int)wz.Value("y", wz.MaxLevel))
+            : _downNow ? TeleportRules.Vertical(_map, _mover.X, _mover.Y, 1, (int)wz.Value("y", wz.MaxLevel))
+            : TeleportRules.Horizontal(_map, _mover.X, _mover.Y, _mover.FacingRight ? 1 : -1, (int)wz.Value("x", wz.MaxLevel));
+        if (land is not { } to || !TryPayWzSkill(wz)) return;
+        _mover.Reset();
+        _mover.X = to.X;
+        _mover.Y = to.Y;
+        _mover.Ground = to.Ground;
+        SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
+        if (_net == null || !_net.Connected) return;
+        _net.SendState(_mapId, _mover.X, _mover.Y, Net.ActionCode(_mover.Action), (byte)_frame, _mover.FacingRight);
+        _net.SendSkillCast(wz.SkillId, 0);
     }
 
     // A paid damaging cast: lock the pose, play the effect, judge (local) or

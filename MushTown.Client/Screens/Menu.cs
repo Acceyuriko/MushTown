@@ -171,6 +171,10 @@ public partial class MushTownGame
             //     --standoff <px> moves the caster away from the first mob (default 250): out of
             //     reach, the ball has no target. The big blue shape in front of the caster is the cast effect (WZ effect,
             //     16 frames x 60 ms = 960 ms), not a second ball.
+            //   --teleport <dir> --at <x> (no --screen) poses a level 200 Fire/Poison hero (--job 210) standing at feet x <x>, on the
+            //     ground at the map's spawn height, and casts Teleport that way through the real cast path (CastTeleport:
+            //     the landing rules, the MP, the effect); the shot is the landing, with the effect posed at its fourth frame.
+            //     --teleportpre stops before the cast. The camera stays where the pre shot has it, so the two shots show the move.
             //   death poses the death scene: the tombstone landed, the ghost with its head, the name, the revive popup.
             //   fashionworn poses a world character wearing cash fashion. settings poses the volume window.
             //   shop (with --talk) poses the shop.
@@ -609,7 +613,7 @@ public partial class MushTownGame
             var wz = LoadJson<WzSkillData>(f);
             if (wz.Common.ContainsKey("damage") && (wz.CastFrames.Count == 0 || wz.HitFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
-            if (wz.Common.ContainsKey("damage") && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
+            if ((wz.Common.ContainsKey("damage") || wz.SkillId == WzSkillData.Teleport) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
             if ((wz.Info.GetValueOrDefault("rectBasedOnTarget") == "1" || wz.BallFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} throws a ball but has no ball or special art: run the exporter (export)");
