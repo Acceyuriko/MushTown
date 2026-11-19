@@ -42,6 +42,9 @@ using MushTown.Exporter;
 //             got the Miss word and effect/hurtdmg/Miss.png; an old hurtdmg.json has no Miss word and the client fails on a dodge).
 //           - Empirical Knowledge was added (assets/skill/wz/80002762.json: the common formulas x/time/prop/y plus the mark art
 //             Art["mob0"], ["mob1"], ["mob2"] under assets/skill/wz/80002762/mob0..2/). The client fails on a missing mark art.
+//           - the monster MP was added (the mob json got MaxMp from WZ info/maxMP; MP Eater absorbs it) and Elemental Drain's layer
+//             icons were added (assets/skill/wz/2100009/number/icon1..N from the WZ number node, kept in the json's NumberFrames, the
+//             buff-bar art). Rerun export after either change; an old mob json has MaxMp 0 and an old 2100009.json has no number icons.
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of
 //             each map and the login theme.
 //   panel   - exports one panel's art only.

@@ -130,7 +130,7 @@ public partial class MushTownGame
         if (withPlayer) players.Add((0, _mapId, _mover.X, _mover.Y));
         var ev = _localWorld.Tick(dtMs, players);
         _localWorld.DiscardMarkChanges(); // a local world reads stacks from the world, so the queue is not sent anywhere
-        foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpPct, s.hit.Dot); // the balls that arrived
+        foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpGain, s.hit.Dot); // the balls that arrived
         if (ev.Strikes.Count > 0) DrainDrops(_localWorld);
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
         foreach (var h in ev.Hurts)

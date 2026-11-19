@@ -56,6 +56,7 @@ public sealed class WzSkillData
     public List<string> BallFrames { get; set; } = new(); // the flying ball art (ball), only for a skill that throws one (Energy Bolt)
     public List<string> SpecialFrames { get; set; } = new(); // the landing explosion art (special), only for a skill that has one (Energy Bolt)
     public List<string> AffectedFrames { get; set; } = new(); // the loop on the buffed player (affected), only for a buff that has one (Meditation)
+    public List<string> NumberFrames { get; set; } = new(); // the number icons (WZ number/icon1..N) with the count drawn in, for the buff bar (Elemental Drain)
     // The WZ origin and delay of every frame of the art that is drawn the WZ way: "effect", "hit", "ball", "special"
     // (the same order as the frame lists). The cast effect uses both its WZ delay and its WZ origin.
     public Dictionary<string, WzArt> Art { get; set; } = new();

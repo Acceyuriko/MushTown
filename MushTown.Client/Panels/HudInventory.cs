@@ -513,7 +513,7 @@ public partial class MushTownGame
             () => (_save?.Slots[_slot]?.Mesos ?? 0).ToString("#,##0"),
             _invWide ? _invLay.Get("mesoWideX", 185) : _invLay.Get("mesoX", 213),
             _invWide ? _invLay.Get("mesoWideY", 484) : _invLay.Get("mesoY", 484),
-            new Color(96, 104, 113)));
+            () => new Color(96, 104, 113)));
         coin.AddChild(meso);
         body.AddChild(coin);
         _invHost.AddChild(body);

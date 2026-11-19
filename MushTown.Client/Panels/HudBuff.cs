@@ -30,10 +30,21 @@ public partial class MushTownGame
     private GameObject BuildBuffBar()
     {
         foreach (string f in BuffFrameFiles) LoadTexture("ui/" + f);
+        if (_wzSkills.TryGetValue(WzSkillData.ElementalDrain, out var drain)) // the layer icons are drawn live: load them now
+            foreach (string f in drain.NumberFrames) LoadTexture(f);
         var bar = new GameObject { NoHit = true }; // art only: the clicks go through
         bar.Add(new Rect(BuffBarRect()));
-        bar.Add(new BuffBarArt(() => LiveBuffs(), id => _wzSkills.TryGetValue(id, out var wz) ? wz.Icon : _skills[id].Icon));
+        bar.Add(new BuffBarArt(() => LiveBuffs(), id => _wzSkills.TryGetValue(id, out var wz) ? wz.Icon : _skills[id].Icon,
+            () => CurrentDrainLayers(), DrainIcon));
         return bar;
+    }
+
+    // The Elemental Drain buff icon at this many layers: the WZ number icon (its top-right digit is the count). Empty if the
+    // art was not exported; the callers skip an empty icon.
+    private string DrainIcon(int layers)
+    {
+        if (!_wzSkills.TryGetValue(WzSkillData.ElementalDrain, out var wz) || wz.NumberFrames.Count == 0) return "";
+        return wz.NumberFrames[layers - 1];
     }
 
     // The live buffs of this frame: the fighter holds the real times.
@@ -57,30 +68,41 @@ public partial class MushTownGame
 }
 
 // The buff bar art: the official frame around the live buff icons (the skill
-// icon of each buff) with the time left on the icon.
+// icon of each buff) with the time left on the icon. Elemental Drain rides in
+// front as its WZ number icon (the layer count is drawn on the icon; no time).
 public sealed class BuffBarArt : Component, IDrawable
 {
     private readonly Func<List<(int id, float ms)>> _buffs;
     private readonly Func<int, string> _icon;
-    public BuffBarArt(Func<List<(int id, float ms)>> buffs, Func<int, string> icon) { _buffs = buffs; _icon = icon; }
+    private readonly Func<int> _drainLayers;
+    private readonly Func<int, string> _drainIcon;
+    public BuffBarArt(Func<List<(int id, float ms)>> buffs, Func<int, string> icon, Func<int> drainLayers, Func<int, string> drainIcon)
+    {
+        _buffs = buffs; _icon = icon; _drainLayers = drainLayers; _drainIcon = drainIcon;
+    }
 
     public void Draw(UiGfx gfx)
     {
         var lay = MushTownGame._buffLay;
-        var buffs = _buffs();
-        if (buffs.Count == 0) return; // no buff, no bar
+        var entries = new List<(string image, string? time)>();
+        int layers = _drainLayers();
+        if (layers > 0) { var img = _drainIcon(layers); if (img.Length > 0) entries.Add((img, null)); } // Elemental Drain first: no time left, the count is on the icon
+        foreach (var b in _buffs()) entries.Add((_icon(b.id), BuffTimeText(b.ms)));
+        if (entries.Count == 0) return; // no buff, no bar
         var box = Owner.Get<Rect>()!.Screen;
         int pad = MushTownGame.BuffFramePad; // the border of the frame art
         int size = MushTownGame.BuffIconSize; // the skill icon is 32x32
         int pitch = lay.Get("iconPitch", 39);
-        int width = pad * 2 + size + (buffs.Count - 1) * pitch;
+        int width = pad * 2 + size + (entries.Count - 1) * pitch;
         int x = box.Right - width;
         NineSlice.Draw(gfx, "buff_frame", new Rectangle(x, box.Y, width, pad * 2 + size));
-        for (int i = 0; i < buffs.Count; i++)
+        for (int i = 0; i < entries.Count; i++)
         {
             int ix = x + pad + i * pitch;
-            gfx.Sb.Draw(gfx.Tex(_icon(buffs[i].id)), new Vector2(ix, box.Y + pad), Color.White);
-            var t = gfx.Ui.GetSmall(BuffTimeText(buffs[i].ms));
+            if (entries[i].image != "")
+                gfx.Sb.Draw(gfx.Tex(entries[i].image), new Vector2(ix, box.Y + pad), Color.White);
+            if (entries[i].time is not { } time) continue;
+            var t = gfx.Ui.GetSmall(time);
             int tx = ix + size - t.Width - lay.Get("timeRight", 1);
             int ty = box.Y + pad + size - t.Height - lay.Get("timeBottom", 1);
             int sh = lay.Get("shadow", 1);

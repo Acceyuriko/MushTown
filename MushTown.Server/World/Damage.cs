@@ -10,15 +10,16 @@ public static class Damage
     // Basic swing: a 100% skill roll. mobLevel <= 0 means no level-advantage
     // multiplier; tests pass it explicitly. extraDmgPct / extraIedPct are the
     // hit's own damage % and DEF-ignored % from the attacker's marks on this mob.
+    // extraFinalPct is final damage the target gives this hit (Elemental Drain), like a basic swing's own final damage source.
     public static DamageResult CalcResult(double roll01, double crit01, double def, Build build, int mobLevel,
         string mobElemAttr = "", AttackElement element = AttackElement.Physical, bool boss = false,
-        double extraDmgPct = 0, double extraIedPct = 0) =>
-        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, 100, boss, 0, extraDmgPct, 0, extraIedPct);
+        double extraDmgPct = 0, double extraFinalPct = 0, double extraIedPct = 0) =>
+        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, 100, boss, 0, extraDmgPct, extraFinalPct, extraIedPct);
 
     public static long Calc(double roll01, double crit01, double def, Build build, int mobLevel,
         string mobElemAttr = "", AttackElement element = AttackElement.Physical, bool boss = false,
-        double extraDmgPct = 0, double extraIedPct = 0) =>
-        CalcResult(roll01, crit01, def, build, mobLevel, mobElemAttr, element, boss, extraDmgPct, extraIedPct).TotalDamage;
+        double extraDmgPct = 0, double extraFinalPct = 0, double extraIedPct = 0) =>
+        CalcResult(roll01, crit01, def, build, mobLevel, mobElemAttr, element, boss, extraDmgPct, extraFinalPct, extraIedPct).TotalDamage;
 
     // Damaging skill: pct is the cast-time skill percentage (level and orbs
     // already folded in by the caster). extraDmgPct is the damage % the mob's statuses add to a magic hit; extraFinalPct is the

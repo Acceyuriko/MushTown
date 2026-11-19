@@ -20,8 +20,9 @@ public sealed class MobWorld
     // Settle: this hit carries the mob's HP, death and EXP for the whole cast. A multi-segment skill sends one hit per
     // segment (each with its own number) but only the first settles: HpLeft is the HP after ALL the segments, and the
     // other segments are numbers only (no flinch, no death sound, no EXP again). Every other hit settles.
-    // MpPct: MP Eater proc on this hit, in percent of the attacker's max MP to give back (0 = none); it rides the first hit of the mob.
-    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit, bool Settle = true, int MpPct = 0, bool Dot = false);
+    // MpGain: MP Eater absorbed this many MP from the mob on this hit (0 = none); it rides the first hit of the mob and the
+    // attacker's client adds it to its own MP.
+    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit, bool Settle = true, int MpGain = 0, bool Dot = false);
 
     // One mob step (10Hz on the wire): Uid now stands at X/Y, facing along.
     public sealed record Move(int Uid, int Map, float X, float Y, bool FacingRight);
@@ -54,6 +55,7 @@ public sealed class MobWorld
     private const int LaunchDy = 40; // ...at the torso (the height of the cast effect); a proposal, WZ has no start point
     private const int RespawnMs = 10000; // graves re-plant after 10s
     private const int BossRespawnMs = 300000; // the boss rests 5 min between fights
+    private const int DrainRangePx = 800; // Elemental Drain: the WZ range, the radius of the circle around the caster whose DoTs count
     private const int DropMs = 60000; // drops fade after 60s unclaimed
     public const int PickDx = 90; // pickup reach, x half-box (the client filters Z with these)
     public const int PickDy = 90; // ... and the server judges with them (a miss sends nothing)
@@ -73,6 +75,8 @@ public sealed class MobWorld
         public int Map;
         public float X; // the center of the box (the mob feet, or the end of the range)
         public float Y;
+        public float CasterX; // the caster's feet at the cast (Elemental Drain counts nearby mobs around the caster)
+        public float CasterY;
         public bool FacingRight;
         public int MsLeft;
         public Random Rng = null!;
@@ -104,7 +108,7 @@ public sealed class MobWorld
 
     private readonly string _assetsDir;
     private readonly Dictionary<int, MapData> _maps = new();
-    private readonly Dictionary<int, (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr, int bodyH)> _stats = new();
+    private readonly Dictionary<int, (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr, int bodyH, long maxMp)> _stats = new();
     private readonly Dictionary<int, (int kind, int dmgLo, int mobCount, int range)> _skills = new();
     private readonly Dictionary<int, WzSkillData> _wzSkills = new(); // the Fire/Poison skills (skill/wz/<id>.json), loaded when first needed
     private readonly Dictionary<int, DropTable> _dropTables = new();
@@ -162,7 +166,7 @@ public sealed class MobWorld
                 if (mob.Touch < 0 || mob.Speed <= 0 || mob.Aggro < 0)
                     throw new InvalidDataException($"mob {life.MobId} has bad ai stats (touch {mob.Touch}, speed {mob.Speed}, aggro {mob.Aggro})");
                 int bodyH = mob.Actions.FirstOrDefault(a => a.Name == "stand")?.Frames.FirstOrDefault()?.OriginY ?? 0;
-                st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss, mob.Level, mob.ElemAttr, bodyH);
+                st = (mob.MaxHp, mob.Def, mob.Exp, mob.Touch, mob.Speed, mob.Aggro, mob.Boss, mob.Level, mob.ElemAttr, bodyH, mob.MaxMp);
                 _stats[life.MobId] = st;
                 _dropTables[life.MobId] = new DropTable(LoadDropTable(life.MobId));
             }
@@ -175,7 +179,7 @@ public sealed class MobWorld
     // One fresh body at the spawn feet (first plant and respawns share it).
     // Mobs face left until the AI turns them.
     private static Mob Plant(int uid, int mob, int map, float x, float y,
-        (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr, int bodyH) st) => new()
+        (long hp, double def, long exp, long touch, int speed, int aggro, bool boss, int level, string elemAttr, int bodyH, long maxMp) st) => new()
         {
             Uid = uid,
             MobId = mob,
@@ -189,6 +193,8 @@ public sealed class MobWorld
             ElemAttr = st.elemAttr,
             Hp = st.hp,
             MaxHp = st.hp,
+            Mp = st.maxMp,
+            MaxMp = st.maxMp,
             Def = st.def,
             Exp = st.exp,
             Touch = st.touch,
@@ -237,7 +243,7 @@ public sealed class MobWorld
                 continue;
             }
             _pending.RemoveAt(i);
-            foreach (var h in WzHits(p.Map, p.X, p.Y, p.FacingRight, p.Rng, p.Build, p.Wz, p.Element, p.MobCount, p.Segments, p.Pct, p.Attacker, p.Dot))
+            foreach (var h in WzHits(p.Map, p.X, p.Y, p.FacingRight, p.Rng, p.Build, p.Wz, p.Element, p.MobCount, p.Segments, p.Pct, p.Attacker, p.Dot, p.CasterX, p.CasterY))
                 strikes.Add((h, p.Attacker));
         }
         var onMap = new HashSet<int>();
@@ -307,6 +313,28 @@ public sealed class MobWorld
             FlushMarks(m);
         }
     }
+
+    // Elemental Drain: how many layers count near one point. It walks the live mobs of the map and sums each one's distinct
+    // DoT skills (MobStatuses.DotCount: one per skill, whatever the source), inside the WZ range circle (800 px around the
+    // caster's feet), then caps the sum at max (the skill's DrainMax; 0 when not learned). Called by the hit judge and, once a
+    // tick, by the server to tell each caster the layers it displays.
+    public int DrainLayers(int map, float x, float y, int max)
+    {
+        if (max <= 0) return 0;
+        int layers = 0;
+        foreach (var m in _lives)
+        {
+            if (m.Map != map) continue;
+            float dx = m.X - x, dy = m.Y - y;
+            if (dx * dx + dy * dy > DrainRangePx * DrainRangePx) continue;
+            layers += m.Statuses.DotCount;
+        }
+        return Math.Min(layers, max);
+    }
+
+    // Elemental Drain's final damage percent for one hit, read around one point: the per-stack percent times the layers near it (0 = not learned).
+    private double DrainBonus(int map, float x, float y, Build build) =>
+        build.DrainPct > 0 ? build.DrainPct * DrainLayers(map, x, y, build.DrainMax) : 0;
 
     // The Empirical Knowledge stacks one attacker has on one mob (0 = none), for the client's own view and the shot staging.
     public int MarkStacks(int uid, int attacker)
@@ -390,6 +418,7 @@ public sealed class MobWorld
     public List<Hit> Strike(int map, float x, float y, bool facingRight, Random rng, Build build, int attacker = 0)
     {
         if (build.MarkProp > 0) LoadMark(); // read the mark numbers now, in the cast
+        double drain = DrainBonus(map, x, y, build); // Elemental Drain: near the caster
         var hits = new List<Hit>();
         for (int i = _lives.Count - 1; i >= 0; i--)
         {
@@ -402,7 +431,7 @@ public sealed class MobWorld
             TryMark(m, build, rng, attacker);
             var (markDmg, markIed) = MarkBonus(m, build, attacker);
             var result = Damage.CalcResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, m.Level, m.ElemAttr,
-                AttackElement.Physical, m.Boss, markDmg, markIed);
+                AttackElement.Physical, m.Boss, markDmg, drain, markIed);
             long damage = result.TotalDamage;
             m.Hp = Math.Max(0, m.Hp - damage);
             hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId, result.CritMultiplier > 1.0));
@@ -526,7 +555,7 @@ public sealed class MobWorld
         // box is not moved onto a target and no range is read, so a mob behind the caster is hit too.
         if (!ball)
         {
-            if (attackDelay <= 0) return WzHits(map, x, y, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker, dot);
+            if (attackDelay <= 0) return WzHits(map, x, y, facingRight, rng, build, wz, element, mobCount, segments, pct, attacker, dot, x, y);
             Wait(x, y, attackDelay + TickMs);
             return new List<Hit>();
         }
@@ -557,6 +586,8 @@ public sealed class MobWorld
             Map = map,
             X = bx,
             Y = by,
+            CasterX = x,
+            CasterY = y,
             FacingRight = facingRight,
             MsLeft = msLeft,
             Rng = rng,
@@ -580,12 +611,15 @@ public sealed class MobWorld
     // Before its segments a mob may get marked (Elemental Weakness): the mark counts in this cast's segments too.
     // The caster's own Empirical Knowledge stacks on the mob add damage % and DEF-ignored % to this cast (that attacker only).
     // A skill with a DoT (common dot, dotInterval, dotTime at max level) puts it on each mob it leaves alive, after its segments (DotTick does the ticks).
-    // Elemental Drain adds final damage for each DoT on the mob; MP Eater may give MP back once for each mob (Hit.MpPct on its
-    // first hit: the server rolls it, the attacker's client adds the MP).
+    // Elemental Drain adds final damage for each DoT on the mobs near the caster (a circle of WZ range 800 around the caster's feet,
+    // counted by distinct DoT skill, at most DrainMax); MP Eater may absorb MP from each mob once (Hit.MpGain on its first hit:
+    // the server rolls and takes it from the mob, the attacker's client adds it).
     // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
     private List<Hit> WzHits(int map, float ox, float oy, bool facingRight, Random rng, Build build, WzSkillData wz,
-        AttackElement element, int mobCount, int segments, int pct, int attacker, Dot? dot)
+        AttackElement element, int mobCount, int segments, int pct, int attacker, Dot? dot, float casterX, float casterY)
     {
+        // Elemental Drain: one number for the whole cast, read around the caster (not the box). 0 = not learned.
+        double drain = DrainBonus(map, casterX, casterY, build);
         var inBox = new List<(float dist2, Mob m)>();
         foreach (var m in _lives)
         {
@@ -599,8 +633,6 @@ public sealed class MobWorld
             TryWeaken(m, build, rng);
             TryMark(m, build, rng, attacker); // Empirical Knowledge: this attacker's own stacks (a proc adds one, else refresh)
             var (markDmg, markIed) = MarkBonus(m, build, attacker);
-            // Elemental Drain: final damage for each DoT on the mob, at most DrainMax of them (0 = not learned).
-            double drain = build.DrainPct * Math.Min(m.Statuses.DotCount, build.DrainMax);
             var rolls = new List<(long damage, bool crit)>();
             for (int i = 0; i < segments; i++)
             {
@@ -608,8 +640,17 @@ public sealed class MobWorld
                     m.Level, m.ElemAttr, element, m.Boss, m.Statuses.MagicExtraDamagePct + markDmg, drain, markIed);
                 rolls.Add((result.TotalDamage, result.CritMultiplier > 1.0));
             }
-            // MP Eater: one roll for each mob hit by the cast (0 = not learned, no random number is spent).
-            int mpPct = build.MpEaterProp > 0 && rng.NextDouble() * 100 < build.MpEaterProp ? (m.Boss ? build.MpEaterBossPct : build.MpEaterPct) : 0;
+            // MP Eater: one roll for each mob hit by the cast (0 = not learned, no random number is spent). A proc absorbs
+            // ceil(maxMP x pct%) of the mob's current MP (at least 1 when it has any; Boss uses the boss share), never more
+            // than it holds: the mob's MP falls and the attacker's client adds the same amount.
+            int mpGain = 0;
+            if (build.MpEaterProp > 0 && rng.NextDouble() * 100 < build.MpEaterProp && m.MaxMp > 0 && m.Mp > 0)
+            {
+                int sharePct = m.Boss ? build.MpEaterBossPct : build.MpEaterPct;
+                long amount = Math.Min((long)Math.Ceiling(m.MaxMp * sharePct / 100.0), m.Mp);
+                m.Mp -= amount;
+                mpGain = (int)amount;
+            }
             m.Hp = Math.Max(0, m.Hp - rolls.Sum(r => r.damage));
             if (m.Hp == 0)
             {
@@ -619,7 +660,7 @@ public sealed class MobWorld
             if (dot != null && m.Hp > 0 && MobElemAttr.Multiplier(m.ElemAttr, element) > 0) // a mob that is immune to the element does not get its DoT
                 m.Statuses.AddDot(dot.Clone());
             for (int i = 0; i < segments; i++)
-                hits.Add(new Hit(m.Uid, m.Map, rolls[i].damage, m.Hp, m.Exp, wz.SkillId, m.MobId, rolls[i].crit, Settle: i == 0, MpPct: i == 0 ? mpPct : 0));
+                hits.Add(new Hit(m.Uid, m.Map, rolls[i].damage, m.Hp, m.Exp, wz.SkillId, m.MobId, rolls[i].crit, Settle: i == 0, MpGain: i == 0 ? mpGain : 0));
         }
         return hits;
     }

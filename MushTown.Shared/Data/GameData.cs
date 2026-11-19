@@ -231,6 +231,7 @@ public sealed class MobData
     public int Level { get; set; } = 0; // WZ info/level; 0 = unknown/neutral (old JSON)
     public string ElemAttr { get; set; } = ""; // WZ info/elemAttr, e.g. "F2I3"; empty = neutral
     public long MaxHp { get; set; }
+    public long MaxMp { get; set; } // WZ info/maxMP: the MP MP Eater absorbs from this mob (0 = has none)
     public double Def { get; set; } // fraction of damage blocked, 0-1 (PDRate/100)
     public long Exp { get; set; } // kill award (the WZ exp node)
     public int Acc { get; set; } // WZ info/acc: the accuracy that cuts the player's dodge chance (0 = old JSON)

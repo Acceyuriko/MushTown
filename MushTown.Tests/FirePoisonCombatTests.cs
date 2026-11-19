@@ -808,6 +808,18 @@ public partial class FirePoisonCombatTests
         throw new InvalidOperationException("unreachable");
     }
 
+    // Waits for the server's Elemental Drain layer update (the owner only), skipping earlier values (a fresh cast starts at 0).
+    private static void WaitDrain(NetClient client, int expected)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            if (client.TryTakeDrain(out var e) && e.Stacks == expected) return;
+            Thread.Sleep(10);
+        }
+        Assert.Fail($"timed out waiting for a drain event with {expected} layers");
+        throw new InvalidOperationException("unreachable");
+    }
+
     // Waits for the server's "this peer is gone" event (a disconnect or a map switch), draining the other peer events on the way.
     private static bool WaitGone(NetClient client, int id)
     {

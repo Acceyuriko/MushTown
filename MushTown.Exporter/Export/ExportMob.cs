@@ -77,6 +77,7 @@ public static partial class Export
             Level = Int(info, "level", 0),
             ElemAttr = info.Nodes["elemAttr"]?.GetValueEx<string>("") ?? "",
             MaxHp = maxHp,
+            MaxMp = Int(info, "maxMP", 0),
             Def = Int(info, "PDRate", 0) / 100.0,
             Exp = Int(info, "exp", 0),
             Acc = Int(info, "acc", 0),

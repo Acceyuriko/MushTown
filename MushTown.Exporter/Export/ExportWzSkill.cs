@@ -64,6 +64,7 @@ public static partial class Export
                 return false;
             if ((data.Common.ContainsKey("damage") || data.Kind == SkillData.KindBuff || id is WzSkillData.Teleport or WzSkillData.ManaWave) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
             if (id == WzSkillData.EmpiricalKnowledge && !SaveMarkArt(baseRoot, id, data, outDir, saved)) return false;
+            if (id == WzSkillData.ElementalDrain && !SaveNumberArt(baseRoot, skill, id, data, outDir)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child))
             {
                 var childData = ReadWzSkill(baseRoot, chara, child);
@@ -177,6 +178,40 @@ public static partial class Export
                 return false;
             }
             data.Art[$"mob{k}"] = art;
+        }
+        return true;
+    }
+
+    // The Elemental Drain number icons (number/icon1..N): the skill icon with the layer count drawn in, the buff-bar art. Each
+    // child is a stub with an _outlink into the Skill category (like the icon). Saved as skill/wz/{id}/num/{i}.png, in order.
+    private static bool SaveNumberArt(WzRoot baseRoot, WzRoot skill, int id, WzSkillData data, string outDir)
+    {
+        string id7 = id.ToString("D7");
+        string img = (id >= 80000000 ? id / 100 : id / 10000).ToString("D3") + ".img";
+        var number = baseRoot.Find($"Skill/{img}/skill/{id7}/number");
+        if (number == null)
+        {
+            Console.WriteLine($"skill {id}: no number node");
+            return false;
+        }
+        foreach (Wz_Node child in number.Nodes
+            .Where(n => n.Text.StartsWith("icon") && int.TryParse(n.Text[4..], NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            .OrderBy(n => int.Parse(n.Text[4..], CultureInfo.InvariantCulture)))
+        {
+            string? link = child.Nodes["_outlink"]?.Value as string;
+            if (link == null || !link.StartsWith("Skill/"))
+            {
+                Console.WriteLine($"skill {id} number/{child.Text}: no icon link");
+                return false;
+            }
+            string path = $"skill/wz/{id}/num/{data.NumberFrames.Count}.png";
+            if (!UiPng.Save(skill, "Skill", link["Skill/".Length..], Path.Combine(outDir, path))) return false;
+            data.NumberFrames.Add(path);
+        }
+        if (data.NumberFrames.Count == 0)
+        {
+            Console.WriteLine($"skill {id} number: no icons");
+            return false;
         }
         return true;
     }

@@ -33,13 +33,13 @@ public sealed class TempAssets : IDisposable
 
     public void AddMob(int mob, long hp, double def = 0, long exp = 0,
         long touch = 5, int speed = 40, int aggro = 200, bool boss = false,
-        int level = 0, string elemAttr = "", int bodyH = 0)
+        int level = 0, string elemAttr = "", int bodyH = 0, long maxMp = 0)
     {
         string actions = bodyH == 0
             ? "[]"
             : """[{"Name":"stand","Frames":[{"Image":"","Delay":180,"OriginX":0,"OriginY":""" + bodyH + "}]}]";
         File.WriteAllText(Path.Combine(Dir, "mob", $"{mob}.json"),
-            $"{{\"MobId\":{mob},\"Level\":{level},\"ElemAttr\":\"{elemAttr}\",\"MaxHp\":{hp},\"Def\":{def.ToString(CultureInfo.InvariantCulture)},\"Exp\":{exp}," +
+            $"{{\"MobId\":{mob},\"Level\":{level},\"ElemAttr\":\"{elemAttr}\",\"MaxHp\":{hp},\"MaxMp\":{maxMp},\"Def\":{def.ToString(CultureInfo.InvariantCulture)},\"Exp\":{exp}," +
             $"\"Touch\":{touch},\"Speed\":{speed},\"Aggro\":{aggro},\"Boss\":{(boss ? "true" : "false")},\"Actions\":{actions}}}");
         if (boss) // spawned mobs need a table: the boss purse or plain potions
             AddDrops(mob, """[{"Item":2000000,"Chance":1,"Count":2},{"Item":2000003,"Chance":1,"Count":1},{"Item":1442004,"Chance":1,"Count":1}]""", 150, 300);

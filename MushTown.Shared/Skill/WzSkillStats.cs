@@ -35,18 +35,17 @@ public static class WzSkillStats
         return (int)mark.Value("prop", mark.MaxLevel);
     }
 
-    // MP Eater at max level: the chance (WZ prop), the share of OUR max MP that a proc gives back (WZ x) and the share against a boss
-    // (WZ y), in percent. Unverified: the WZ text says "x% of Max MP" and "y% of the boss's Max MP"; the mobs of this game have
-    // no MP, so the share is taken of the caster's max MP.
+    // MP Eater at max level: the chance (WZ prop), the share of the mob's max MP absorbed from a normal mob (WZ x) and from a boss
+    // (WZ y), in percent; the amount absorbed goes to the caster.
     public static (int prop, int pct, int bossPct) MpEater(IReadOnlyDictionary<int, WzSkillData> skills)
     {
         var eater = skills[WzSkillData.MpEater];
         return ((int)eater.Value("prop", eater.MaxLevel), (int)eater.Value("x", eater.MaxLevel), (int)eater.Value("y", eater.MaxLevel));
     }
 
-    // Elemental Drain at max level: the final damage percent for each damage-over-time effect on the target (WZ x) and the most
-    // effects that count (WZ y). The WZ text counts nearby enemies with a DoT (range 800); here it counts the DoTs on the
-    // target itself (the ticket's rule).
+    // Elemental Drain at max level: the final damage percent for each damage-over-time effect on the mobs near the caster (WZ x) and the most
+    // effects that count (WZ y). The WZ text counts nearby enemies with a DoT (range 800); MobWorld.DrainLayers counts the
+    // DoT skills on the mobs near the caster (a circle of radius 800), one layer per distinct skill.
     public static (int pct, int max) ElementalDrain(IReadOnlyDictionary<int, WzSkillData> skills)
     {
         var drain = skills[WzSkillData.ElementalDrain];

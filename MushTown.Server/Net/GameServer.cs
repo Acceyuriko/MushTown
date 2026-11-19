@@ -109,6 +109,7 @@ public sealed partial class GameServer : IDisposable
                         BroadcastHit(s.hit, s.attacker);
                     BroadcastFreshDrops();
                     BroadcastMarkChanges();
+                    BroadcastDrainLayers(players);
                     foreach (var mv in ev.Moves)
                         Broadcast(Net.Encode(Net.MobMove, w =>
                         {
@@ -692,6 +693,20 @@ public sealed partial class GameServer : IDisposable
                 Send(client, Net.Encode(Net.MarkStack, w => { w.Write(uid); w.Write(stacks); }));
     }
 
+    // Elemental Drain layers: once a tick, each player who has the skill gets the count near him (the nearby mobs' DoT skills),
+    // sent to that player every tick; the client draws the buff icon and the two stat rows from it. Caller holds
+    // _mobLock (players is that tick's _pos snapshot).
+    private void BroadcastDrainLayers(List<(int id, int map, float x, float y)> players)
+    {
+        foreach (var p in players)
+        {
+            if (!_builds.TryGetValue(p.id, out var build) || build.DrainMax <= 0) continue;
+            int layers = _mobs.DrainLayers(p.map, p.x, p.y, build.DrainMax);
+            if (_clients.TryGetValue(p.id, out var client))
+                Send(client, Net.Encode(Net.DrainStacks, w => w.Write((byte)layers)));
+        }
+    }
+
     // A player drop: the mesos or item leave that client, the server makes the
     // ground drop from the sender's last State and broadcasts it.
     private void OnDropItem(int id, int itemId, int count, string tab)
@@ -743,7 +758,7 @@ public sealed partial class GameServer : IDisposable
             w.Write(h.Skill);
             w.Write(h.Crit);
             w.Write(h.Settle);
-            w.Write((byte)h.MpPct);
+            w.Write(h.MpGain);
             w.Write(h.Dot);
         }));
         if (kill)

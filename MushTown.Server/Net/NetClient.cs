@@ -16,6 +16,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<BallEvent> _ballEvents = new();
     private readonly ConcurrentQueue<MoveEvent> _moveEvents = new();
     private readonly ConcurrentQueue<MarkEvent> _markEvents = new();
+    private readonly ConcurrentQueue<DrainEvent> _drainEvents = new();
     private readonly ConcurrentQueue<HurtEvent> _hurtEvents = new();
     private readonly ConcurrentQueue<DropEvent> _dropEvents = new();
     private readonly ConcurrentQueue<NameEvent> _nameEvents = new();
@@ -326,6 +327,8 @@ public sealed class NetClient : IDisposable
 
     public bool TryTakeMark(out MarkEvent e) => _markEvents.TryDequeue(out e);
 
+    public bool TryTakeDrain(out DrainEvent e) => _drainEvents.TryDequeue(out e);
+
     public bool TryTakeHurt(out HurtEvent e) => _hurtEvents.TryDequeue(out e);
 
     public bool TryTakeDrop(out DropEvent e) => _dropEvents.TryDequeue(out e);
@@ -384,11 +387,11 @@ public sealed class NetClient : IDisposable
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
                 BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17),
                 BitConverter.ToInt64(p, 21), 0, BitConverter.ToInt64(p, 29), 0, 0, 0));
-        else if (p[0] == Net.MobHit && p.Length == 45)
+        else if (p[0] == Net.MobHit && p.Length == 48)
             _mobEvents.Enqueue(new MobEvent(false,
                 BitConverter.ToInt32(p, 1), 0, BitConverter.ToInt32(p, 5), 0, 0, 0,
                 BitConverter.ToInt64(p, 9), BitConverter.ToInt64(p, 17),
-                BitConverter.ToInt32(p, 25), BitConverter.ToInt64(p, 29), BitConverter.ToInt32(p, 37), p[41] != 0, p[42] != 0, p[43], p[44] != 0));
+                BitConverter.ToInt32(p, 25), BitConverter.ToInt64(p, 29), BitConverter.ToInt32(p, 37), p[41] != 0, p[42] != 0, BitConverter.ToInt32(p, 43), p[47] != 0));
         else if (p[0] == Net.SkillFx && p.Length == 22)
             _fxEvents.Enqueue(new SkillFxEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
@@ -404,6 +407,8 @@ public sealed class NetClient : IDisposable
                 BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13), p[17] != 0));
         else if (p[0] == Net.MarkStack && p.Length == 9)
             _markEvents.Enqueue(new MarkEvent(BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5)));
+        else if (p[0] == Net.DrainStacks && p.Length == 2)
+            _drainEvents.Enqueue(new DrainEvent(p[1]));
         else if (p[0] == Net.Hurt && p.Length == 21)
             _hurtEvents.Enqueue(new HurtEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),

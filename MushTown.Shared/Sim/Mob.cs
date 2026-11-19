@@ -28,6 +28,8 @@ public sealed class Mob : Component
     public string ElemAttr = "";
     public long Hp;
     public long MaxHp;
+    public long Mp; // current MP: MP Eater absorbs from it (plants full, never regenerates in v1)
+    public long MaxMp; // WZ maxMP (0 = the mob has no MP to absorb)
     public double Def;
     public long Exp;
     public long Touch;

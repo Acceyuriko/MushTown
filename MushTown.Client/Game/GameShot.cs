@@ -183,7 +183,7 @@ public partial class MushTownGame
                 {
                     int pct = Progression.SkillDamage(_skills[_shotSkill], 1);
                     foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, true, new Random(0), ShotBuild(), _shotSkill, pct))
-                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpPct);
+                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
                     DrainDrops(world, animate: false);
                 }
             }
@@ -206,7 +206,7 @@ public partial class MushTownGame
                 for (int i = 0; i < 20 && !killed; i++)
                     foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, rng, ShotBuild()))
                     {
-                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpPct);
+                        ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
                         killed |= h.HpLeft == 0;
                     }
                 if (!killed) throw new InvalidDataException($"--drop killed nothing in 20 swings, map {_mapId}");
@@ -226,7 +226,7 @@ public partial class MushTownGame
             else
             {
                 foreach (var h in world.Strike(_mapId, _mover.X, _mover.Y, true, new Random(0), ShotBuild()))
-                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpPct);
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
                 DrainDrops(world, animate: false);
             }
         }
@@ -378,14 +378,14 @@ public partial class MushTownGame
         SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
         if (_shotFlyms == 0) _fx[0].Frame = 5; // mid-effect: the small first frames prove nothing
         foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(0), build, wz.SkillId, pct))
-            ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpPct);
+            ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
         foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
         DrainDrops(world, animate: false);
         RunShotFly(_shotFlyms);
         if (_shotRecastMs > 0) // --recast: the same cast again at the same mobs, never a crit, while the numbers of the first are still up
         {
             foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { CritPct = 0 }, wz.SkillId, pct))
-                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpPct);
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
             foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
             DrainDrops(world, animate: false);
             RunShotFly(_shotRecastMs);
@@ -448,7 +448,7 @@ public partial class MushTownGame
         world.DiscardMarkChanges(); // a shot reads stacks from the world, so the queue is not sent anywhere
         if (showStrikes)
         {
-            foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpPct, s.hit.Dot);
+            foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpGain, s.hit.Dot);
             DrainDrops(world, animate: false);
         }
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);

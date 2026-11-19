@@ -333,9 +333,9 @@ public static class Progression
 // WeaknessProp is Elemental Weakness: the chance, in percent, that one of our hits marks the mob (0 = not learned).
 // SkillMasteryPct is the mastery that skills add to the weapon's own (Spell Mastery), percent points.
 // MpEaterProp is MP Eater: the chance, in percent, that a mob we hit gives MP back (0 = not learned); MpEaterPct and
-// MpEaterBossPct are the share of our max MP given back from a normal mob and from a boss.
-// DrainPct is Elemental Drain: the final damage percent for each damage-over-time effect on the target (0 = not learned);
-// DrainMax is the most effects that count.
+// MpEaterBossPct are the share of the mob's max MP absorbed from a normal mob and from a boss.
+// DrainPct is Elemental Drain: the final damage percent for each damage-over-time skill on the mobs near the caster
+// (0 = not learned); DrainMax is the most layers that count.
 // MarkProp is Empirical Knowledge: the chance, in percent, that one of our hits marks the mob (0 = not learned).
 public readonly record struct Build(
     long Str,

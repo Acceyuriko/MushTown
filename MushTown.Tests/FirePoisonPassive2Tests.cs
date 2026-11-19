@@ -67,7 +67,7 @@ public partial class FirePoisonCombatTests
     }
 
     // The mob roll of MP Eater is the 9th double of the cast of Energy Bolt (4 segments x 2 rolls come first). A double under
-    // 0.30 gives the share back (5% of our max MP) on the first hit of the mob only; otherwise none. Fixed seeds.
+    // 0.30 absorbs ceil(maxMP x 5%) of the mob's current MP (at least 1) on the first hit of the mob only; otherwise none.
     private static double MpRoll(int seed)
     {
         var rng = new Random(seed);
@@ -75,37 +75,65 @@ public partial class FirePoisonCombatTests
         return rng.NextDouble();
     }
 
+    // One mob at x 100 (caster at 0), 1e9 HP, level 200, DEF 10%, the given WZ maxMP.
+    private static MobWorld WorldWithMp(TempAssets assets, long maxMp, bool boss = false)
+    {
+        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200, boss: boss, maxMp: maxMp);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        return world;
+    }
+
     [TestMethod]
-    public void MpEater_RollsOncePerMob_ThirtyPercent_FiveOfMaxMp()
+    public void MpEater_AbsorbsCeilOfMaxMp_OnTheFirstHit()
     {
         int procSeed = Enumerable.Range(0, 1000).First(s => MpRoll(s) * 100 < 30);
         int missSeed = Enumerable.Range(0, 1000).First(s => MpRoll(s) * 100 >= 30);
         var build = Mage with { MpEaterProp = 30, MpEaterPct = 5, MpEaterBossPct = 3 };
         using var assets = new TempAssets();
         assets.AddWzSkill(BoltData());
-        var world = World(assets, (100, 100));
+        var world = WorldWithMp(assets, 1000);
         var proc = Cast(world, 7, 0, 100, true, new Random(procSeed), build, Bolt, 78);
         Assert.AreEqual(4, proc.Count);
-        CollectionAssert.AreEqual(new[] { 5, 0, 0, 0 }, proc.Select(h => h.MpPct).ToArray()); // once, on the first hit
+        CollectionAssert.AreEqual(new[] { 50, 0, 0, 0 }, proc.Select(h => h.MpGain).ToArray()); // ceil(1000 x 5%) once, on the first hit
         var miss = Cast(world, 7, 0, 100, true, new Random(missSeed), build, Bolt, 78);
-        Assert.IsTrue(miss.All(h => h.MpPct == 0));
-        // the client adds that share of its max MP: 5% of 54,450 = 2,722 (rounded down)
-        Assert.AreEqual(2722L, 54_450L * proc[0].MpPct / 100);
+        Assert.IsTrue(miss.All(h => h.MpGain == 0));
     }
 
-    // A boss gives the boss share (y = 3).
+    // A boss gives the boss share (y = 3): ceil(1000 x 3%) = 30.
     [TestMethod]
     public void MpEater_Boss_UsesTheBossShare()
     {
         int procSeed = Enumerable.Range(0, 1000).First(s => MpRoll(s) * 100 < 30);
         using var assets = new TempAssets();
         assets.AddWzSkill(BoltData());
-        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Floor);
-        assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200, boss: true);
-        var world = new MobWorld(assets.Dir);
-        world.EnterMap(7);
+        var world = WorldWithMp(assets, 1000, boss: true);
         var hits = Cast(world, 7, 0, 100, true, new Random(procSeed), Mage with { MpEaterProp = 30, MpEaterPct = 5, MpEaterBossPct = 3 }, Bolt, 78);
-        Assert.AreEqual(3, hits[0].MpPct);
+        Assert.AreEqual(30, hits[0].MpGain);
+    }
+
+    // A mob with no WZ maxMP (the snails, spores) gives nothing, even when the roll procs.
+    [TestMethod]
+    public void MpEater_MobWithNoMaxMp_GivesNothing()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BoltData());
+        var world = WorldWithMp(assets, 0);
+        var hits = Cast(world, 7, 0, 100, true, new Random(5), Mage with { MpEaterProp = 100, MpEaterPct = 5, MpEaterBossPct = 3 }, Bolt, 78);
+        Assert.IsTrue(hits.All(h => h.MpGain == 0));
+    }
+
+    // A mob with 1 MP: the first proc takes 1 (ceil(1 x 5%)); with 0 MP left the next proc takes nothing.
+    [TestMethod]
+    public void MpEater_EmptyMob_GivesNothingOnTheNextProc()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BoltData());
+        var world = WorldWithMp(assets, 1);
+        var build = Mage with { MpEaterProp = 100, MpEaterPct = 5, MpEaterBossPct = 3 };
+        Assert.AreEqual(1, Cast(world, 7, 0, 100, true, new Random(5), build, Bolt, 78)[0].MpGain);
+        Assert.AreEqual(0, Cast(world, 7, 0, 100, true, new Random(5), build, Bolt, 78)[0].MpGain);
     }
 
     // Not learned (prop 0): no roll is spent, so the damage rolls and the random stream are as before.
@@ -117,7 +145,7 @@ public partial class FirePoisonCombatTests
         var world = World(assets, (100, 100));
         var rng = new Random(11);
         var hits = Cast(world, 7, 0, 100, true, rng, Mage, Bolt, 78);
-        Assert.IsTrue(hits.All(h => h.MpPct == 0));
+        Assert.IsTrue(hits.All(h => h.MpGain == 0));
         var shadow = new Random(11);
         for (int i = 0; i < 8; i++) shadow.NextDouble();
         Assert.AreEqual(shadow.NextDouble(), rng.NextDouble());
@@ -160,15 +188,53 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(none, Cast(world, 7, 0, 100, true, new Random(3), Mage, Bolt, 78)[0].Damage);
     }
 
-    // Over the wire: the Build carries MP Eater's numbers, the server rolls the proc and sends the share on the first hit of the
-    // mob (MobHit byte 43); the other player sees the same hit. The caster's client then adds that share of its own max MP.
+    // The layers count the DoTs on the mobs near the caster (a circle of 800), not the ones far away: a DoT on a mob 1000 px
+    // away adds nothing; the same DoT on a mob 100 px away adds one layer.
     [TestMethod]
-    public void Loopback_MpEater_ServerSendsTheShareOnTheFirstHit()
+    public void ElementalDrain_CountsNearbyMobs_NotFarOnes()
+    {
+        var build = Mage with { DrainPct = 3, DrainMax = 5 };
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BoltData());
+        assets.AddWzSkill(DotSkillData(2100001));
+        assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100},{"MobId":100000,"X":1000,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        world.SkillStrike(7, 1000, 100, true, new Random(9), Mage, 2100001, 100); // a DoT on the far mob only
+        var rng = new Random(3);
+        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 78, 200), Cast(world, 7, 0, 100, true, new Random(3), build, Bolt, 78)[0].Damage);
+        world.SkillStrike(7, 0, 100, true, new Random(9), Mage, 2100001, 100); // a DoT on the near mob: one layer
+        rng = new Random(3);
+        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 78, 200, extraFinalPct: 3), Cast(world, 7, 0, 100, true, new Random(3), build, Bolt, 78)[0].Damage);
+    }
+
+    // A basic swing (not a skill) also gets Elemental Drain's final damage: Damage.CalcResult reads extraFinalPct.
+    [TestMethod]
+    public void ElementalDrain_BasicSwing_GetsTheBonus()
+    {
+        var build = Mage with { DrainPct = 3, DrainMax = 5 };
+        using var assets = new TempAssets();
+        assets.AddWzSkill(DotSkillData(2100001));
+        assets.AddMap(7, """[{"MobId":100000,"X":60,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        world.SkillStrike(7, 60, 100, true, new Random(9), Mage, 2100001, 100); // a DoT on the near mob
+        var hit = world.Strike(7, 0, 100, true, new Random(3), build)[0];
+        var rng = new Random(3);
+        Assert.AreEqual(Damage.Calc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 200, extraFinalPct: 3), hit.Damage);
+    }
+
+    // Over the wire: the Build carries MP Eater's numbers, the server absorbs ceil(maxMP x 5%) from the mob and sends it as an
+    // int mpGain on the first hit of the mob; the other player sees the same hit. The caster's client then adds that much MP.
+    [TestMethod]
+    public void Loopback_MpEater_ServerSendsTheAbsorbedMpOnTheFirstHit()
     {
         using var assets = new TempAssets();
         assets.AddWzSkill(BoltData());
         assets.AddMap(9, """[{"MobId":100000,"X":100,"Cy":100}]""", Floor);
-        assets.AddMob(100000, 2_000_000_000, 0.1, 0, speed: 1, level: 200);
+        assets.AddMob(100000, 2_000_000_000, 0.1, 0, speed: 1, level: 200, maxMp: 1000);
         using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 75);
         server.Start();
         using var a = new NetClient(_ => { });
@@ -182,8 +248,27 @@ public partial class FirePoisonCombatTests
         a.SendBuild(Mage with { SkillMasteryPct = 50, MpEaterProp = 100, MpEaterPct = 5, MpEaterBossPct = 3, DrainPct = 3, DrainMax = 5 }); // the 97-byte Build; every cast procs
         a.SendSkillCast(Bolt, 78);
         var hits = Enumerable.Range(0, 4).Select(_ => WaitHit(a)).ToList();
-        CollectionAssert.AreEqual(new[] { 5, 0, 0, 0 }, hits.Select(h => h.MpPct).ToArray());
+        CollectionAssert.AreEqual(new[] { 50, 0, 0, 0 }, hits.Select(h => h.MpGain).ToArray());
         var seen = Enumerable.Range(0, 4).Select(_ => WaitHit(b)).ToList();
-        CollectionAssert.AreEqual(new[] { 5, 0, 0, 0 }, seen.Select(h => h.MpPct).ToArray());
+        CollectionAssert.AreEqual(new[] { 50, 0, 0, 0 }, seen.Select(h => h.MpGain).ToArray());
+    }
+
+    // Over the wire: the server tells the caster how many Elemental Drain layers are near him (DrainStacks, owner only).
+    [TestMethod]
+    public void Loopback_ElementalDrain_ServerSendsTheLayersNearTheCaster()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BreathData());
+        assets.AddMap(9, """[{"MobId":100000,"X":100,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 2_000_000_000, 0.1, 0, speed: 1, level: 200);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 76);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 76);
+        a.SendState(9, 0, 100, Net.ActStand, 0, true);
+        WaitSpawn(a);
+        a.SendBuild(Mage with { DrainPct = 3, DrainMax = 5 });
+        a.SendSkillCast(Breath, 100); // Poison Breath puts a DoT on the near mob
+        WaitDrain(a, 1);
     }
 }

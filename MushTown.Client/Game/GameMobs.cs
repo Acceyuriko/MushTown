@@ -24,6 +24,7 @@ public partial class MushTownGame
         foreach (var m in _mobs.Values) _world.RemoveChild(m.Owner);
         _mobs.Clear();
         _markStacks.Clear();
+        _drainLayers = 0;
     }
 
     private void DrawMob(int uid, MobArt m)
@@ -50,6 +51,25 @@ public partial class MushTownGame
     private int LocalMarkStacks(int uid) => _localWorld != null
         ? _localWorld.MarkStacks(uid, 0)
         : _markStacks.TryGetValue(uid, out var s) ? s : 0;
+
+    // Elemental Drain layers around the player: the local world reads its own mobs (attacker 0 is the single player); net play
+    // reads the count the server last sent. A shot stages a fixed count (--drain).
+    private int CurrentDrainLayers()
+    {
+        if (_shotDrain >= 0) return _shotDrain;
+        if (_localWorld != null) return _localWorld.DrainLayers(_mapId, _mover.X, _mover.Y, DrainMaxNow());
+        return _drainLayers;
+    }
+
+    // Elemental Drain's numbers at max level for a Fire/Poison Mage (0 when another job, or the skill table has no file).
+    private int DrainPctNow() => DrainNumber().pct;
+    private int DrainMaxNow() => DrainNumber().max;
+    private (int pct, int max) DrainNumber()
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || chara.Job != StatTables.FirePoisonMage || !_wzSkills.ContainsKey(WzSkillData.ElementalDrain)) return (0, 0);
+        return WzSkillStats.ElementalDrain(_wzSkills);
+    }
 
     // The mob/0, mob/1, mob/2 loops (1/2/3 stacks), built once from the exported skill art.
     private void EnsureMarkArt()
@@ -153,13 +173,13 @@ public partial class MushTownGame
     // the mob's HP, its flinch or death, the sound and the EXP for the whole cast).
     // dot: a tick of a damage-over-time effect (MobWorld.DotTick): it sets HP and death and shows its number, but plays no flinch,
     // no sound and no spark (a kill still dies as usual).
-    // mpPct: an MP Eater proc of this hit (the server rolled it, see MobWorld.WzHits): our own client gives back that percent of
-    // our max MP (the MP stays inside our max).
-    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit, bool settle, int mpPct = 0, bool dot = false)
+    // mpGain: an MP Eater proc of this hit (the server rolled it and took that MP from the mob, see MobWorld.WzHits): our own
+    // client adds that much MP (the MP stays inside our max).
+    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit, bool settle, int mpGain = 0, bool dot = false)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
-        if (mine && mpPct > 0 && _save?.Slots[_slot] is { } chara)
-            chara.Mp = Math.Min(chara.Mp + MaxMpNow() * mpPct / 100, MaxMpNow());
+        if (mine && mpGain > 0 && _save?.Slots[_slot] is { } chara)
+            chara.Mp = Math.Min(chara.Mp + mpGain, MaxMpNow());
         if (settle)
         {
             m.Hp = hpLeft;

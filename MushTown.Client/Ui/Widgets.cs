@@ -523,8 +523,8 @@ public sealed class RightLabel : Component, IDrawable
     private readonly Func<UiText, string, Texture2D> _bake;
     private readonly Func<string> _text;
     private readonly int _dx, _dy;
-    private readonly Color _color;
-    public RightLabel(Func<UiText, string, Texture2D> bake, Func<string> text, int dx, int dy, Color color)
+    private readonly Func<Color> _color;
+    public RightLabel(Func<UiText, string, Texture2D> bake, Func<string> text, int dx, int dy, Func<Color> color)
     {
         _bake = bake; _text = text; _dx = dx; _dy = dy; _color = color;
     }
@@ -532,7 +532,7 @@ public sealed class RightLabel : Component, IDrawable
     {
         var r = Owner.Get<Rect>()!.Screen;
         var t = _bake(gfx.Ui, _text());
-        gfx.Sb.Draw(t, new Vector2(r.X + _dx - t.Width, r.Y + _dy), _color);
+        gfx.Sb.Draw(t, new Vector2(r.X + _dx - t.Width, r.Y + _dy), _color());
     }
 }
 
