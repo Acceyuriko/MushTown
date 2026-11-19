@@ -707,7 +707,8 @@ public sealed partial class GameServer : IDisposable
     // is the attacker's share: a party kill splits it (GameServerParty).
     private void BroadcastHit(MobWorld.Hit h, int attacker)
     {
-        long exp = h.HpLeft == 0 ? ShareKillExp(h.Exp, attacker, h.Map) : h.Exp;
+        bool kill = h.Settle && h.HpLeft == 0; // the other segments of a cast only show a number: no EXP share, no quest kill
+        long exp = kill ? ShareKillExp(h.Exp, attacker, h.Map) : h.Exp;
         Broadcast(Net.Encode(Net.MobHit, w =>
         {
             w.Write(h.Uid);
@@ -718,8 +719,9 @@ public sealed partial class GameServer : IDisposable
             w.Write(exp);
             w.Write(h.Skill);
             w.Write(h.Crit);
+            w.Write(h.Settle);
         }));
-        if (h.HpLeft == 0)
+        if (kill)
             PushQuestKills(attacker, h.Mob);
     }
 

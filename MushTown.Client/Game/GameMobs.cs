@@ -109,22 +109,32 @@ public partial class MushTownGame
     // A skill hit also plants the skill's spark on the mob's body (skills
     // without spark art, like Scarring Sword, skip it). Our own hits feed
     // the combo orb while Combo Attack lives (its bonus hits don't recurse).
-    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit)
+    // The hits of one cast must be taken in the same frame (they find each other by Age == 0), or the stack is wrong.
+    // settle false: a later segment of a multi-segment cast, which only shows its number (the first segment already set
+    // the mob's HP, its flinch or death, the sound and the EXP for the whole cast).
+    private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit, bool settle)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
-        m.Hp = hpLeft;
-        m.SetAction(hpLeft == 0 ? "die1" : "hit1");
-        PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, m.Data.Boss) : "hit");
+        if (settle)
+        {
+            m.Hp = hpLeft;
+            m.SetAction(hpLeft == 0 ? "die1" : "hit1");
+            PlaySfx(hpLeft == 0 ? SoundKey.MobDie(m.Mob, m.Data.Boss) : "hit");
+        }
         float bodyH = m.Frames[0].OriginY; // origin to feet: where the head is
         float headY = m.Y - bodyH;
-        // The hits of one WZ multi-hit cast land in the same frame: each number rises one step above the last
-        // (numbers of mobs closer than StackNearPx count, they would overlap; a mob with none yet this frame
-        // starts at the head), and only the first of a mob plants the spark. The warrior skills keep their one spot.
+        // The hits of one WZ multi-hit cast land in the same frame: each number goes one step above the last and
+        // appears after it (numbers of mobs closer than StackNearPx count for the height, they would overlap; a mob
+        // with none yet this frame starts at the head), and only the first of a mob plants the spark. The warrior
+        // skills keep their one spot.
         bool wzHit = _wzSkills.ContainsKey(skill);
         int stack = wzHit ? _numbers.Count(n => n.Age == 0 && Math.Abs(n.X - m.X) < FloatingNumber.StackNearPx) : 0;
-        bool firstOfMob = !wzHit || !_numbers.Any(n => n.Age == 0 && n.X == m.X);
+        int own = wzHit ? _numbers.Count(n => n.Age == 0 && n.X == m.X) : 0;
+        bool firstOfMob = own == 0;
         var num = TakeNumber();
-        num.Text = damage.ToString(); num.X = m.X; num.Y = headY - stack * FloatingNumber.StackPx;
+        num.Text = damage.ToString(); num.X = m.X;
+        num.Y = headY - stack * FloatingNumber.StackPx; // where it stands
+        num.DelayMs = own * FloatingNumber.AppearStepMs; // when it appears (timing: FloatingNumber)
         num.Crit = crit;
         if (mine) num.Skin = Hero?.DamageSkin ?? 0;
         // A skill with a ball plays its special once at the landing (SpawnImpacts); each mob it hits gets its hit art.
@@ -138,14 +148,14 @@ public partial class MushTownGame
             else spark.Frames = hitArt;
             spark.X = m.X; spark.Y = m.Y - bodyH / 2; spark.FacingRight = true;
         }
-        if (mine && skill != SkillData.FinalAttack && _fighter.Buffs.ContainsKey(SkillData.ComboAttack))
+        if (settle && mine && skill != SkillData.FinalAttack && _fighter.Buffs.ContainsKey(SkillData.ComboAttack))
         {
             int chance = _skills[SkillData.ComboAttack].OrbChance * SkillLv(SkillData.ComboAttack)
                 + _skills[SkillData.ComboSynergy].SynChance * SkillLv(SkillData.ComboSynergy);
             if (Random.Shared.NextDouble() * 100 < chance) // visible count: rolled client-side, shown in the window
                 _fighter.Orbs = Math.Min(_fighter.Orbs + 1, _skills[SkillData.ComboAttack].OrbMax);
         }
-        if (hpLeft == 0 && mine) { GainExp(exp); if (!QuestServer()) BumpQuestKills(m.Mob); } // net kills come back as QuestKill deltas
+        if (settle && hpLeft == 0 && mine) { GainExp(exp); if (!QuestServer()) BumpQuestKills(m.Mob); } // net kills come back as QuestKill deltas
     }
 
     // One AI step: snap the pose, face along. hit1/die1 own the pose until

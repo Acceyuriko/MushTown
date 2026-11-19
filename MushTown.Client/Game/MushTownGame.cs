@@ -731,7 +731,7 @@ public partial class MushTownGame : Game
             else if (_localWorld != null)
             {
                 foreach (var h in _localWorld.Strike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild()))
-                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
+                    ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle);
                 DrainDrops(_localWorld);
             }
         }
@@ -870,7 +870,7 @@ public partial class MushTownGame : Game
             {
                 if (m.Map != _mapId) continue; // another map's fight: not shown here
                 if (m.Spawn) ApplySpawn(m.Uid, m.Mob, m.X, m.Y, m.MaxHp, m.HpLeft);
-                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp, m.Skill, m.Crit);
+                else ApplyHit(m.Uid, m.Damage, m.HpLeft, m.Attacker == _net.PlayerId, m.Exp, m.Skill, m.Crit, m.Settle);
             }
             while (_net.TryTakeMove(out var mv))
             {

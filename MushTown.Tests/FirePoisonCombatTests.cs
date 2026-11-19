@@ -336,8 +336,8 @@ public class FirePoisonCombatTests
         Assert.AreEqual(0, world2.TakeLaunches().Count);
     }
 
-    // Four segments: one hit each, rolled one by one (the numbers equal the segments, each with its own roll);
-    // the HP falls by each number in turn.
+    // Four segments: one hit each, rolled one by one (the numbers equal the segments, each with its own roll).
+    // The HP falls once, by the total of the four; every segment reports that HP, and only the first settles.
     [TestMethod]
     public void WzStrike_Segments_EachRolledOnItsOwn()
     {
@@ -347,15 +347,16 @@ public class FirePoisonCombatTests
         var hits = Cast(world, 7, 0, 100, true, new Random(5), Mage, Bolt, 78);
         Assert.AreEqual(4, hits.Count);
         var rng = new Random(5); // the same rolls by hand: one roll and one crit roll per segment
-        long hp = 1_000_000_000;
+        long total = 0;
         foreach (var h in hits)
         {
             long expected = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 78, 200);
             Assert.AreEqual(expected, h.Damage);
-            hp -= expected;
-            Assert.AreEqual(hp, h.HpLeft);
+            total += expected;
             Assert.AreEqual(Bolt, h.Skill);
         }
+        Assert.IsTrue(hits.All(h => h.HpLeft == 1_000_000_000 - total)); // the total, taken once
+        CollectionAssert.AreEqual(new[] { true, false, false, false }, hits.Select(h => h.Settle).ToArray());
         Assert.IsTrue(hits.Select(h => h.Damage).Distinct().Count() > 1); // not four copies of one roll
     }
 
@@ -376,22 +377,48 @@ public class FirePoisonCombatTests
         Assert.IsFalse(plainHits.Any(h => h.Crit));
     }
 
-    // A mob that dies stops taking segments; the cap (mobCount) keeps the nearest to the target.
+    // A mob that the first segment would kill still shows every segment: it takes the total of the four once, dies once
+    // (one meso drop, one grave, one settling hit that carries the death and the EXP), and every hit reports HP 0.
+    // The cap (mobCount) keeps the nearest to the target, and each mob inside it gets all its segments.
     [TestMethod]
-    public void WzStrike_DeadStopsSegments_CapKeepsNearest()
+    public void WzStrike_DeadMobKeepsAllSegments_DiesOnce_CapKeepsNearest()
     {
         using var assets = new TempAssets();
         assets.AddWzSkill(BoltData(mobCount: 2));
         assets.AddMap(7, """[{"MobId":100001,"X":100,"Cy":100},{"MobId":100000,"X":150,"Cy":100},{"MobId":100000,"X":200,"Cy":100}]""", Floor);
         assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200);
-        assets.AddMob(100001, 1, 0.1, 0, speed: 1, level: 200); // dies to the first segment
+        assets.AddMob(100001, 1, 0.1, 100, speed: 1, level: 200); // dies to the first segment
         var world = new MobWorld(assets.Dir);
         world.EnterMap(7);
         var hits = Cast(world, 7, 0, 100, true, new Random(1), Mage, Bolt, 78);
-        Assert.AreEqual(1 + 4, hits.Count); // 1 segment on the dying target, 4 on the next nearest; x 200 is over the cap
-        Assert.AreEqual(0, hits[0].HpLeft);
-        Assert.AreEqual(1, hits.Count(h => h.Uid == hits[0].Uid));
+        Assert.AreEqual(4 + 4, hits.Count); // 4 on the dying target, 4 on the next nearest; x 200 is over the cap
+        var dying = hits.Where(h => h.Uid == hits[0].Uid).ToList();
+        Assert.AreEqual(4, dying.Count);
+        Assert.IsTrue(dying.All(h => h.HpLeft == 0)); // dead after the total, not after one segment
+        Assert.AreEqual(1, dying.Count(h => h.Settle)); // one death and one EXP award for the cast
+        Assert.AreEqual(1, world.TakeDrops().Count(d => d.Kind == DropKind.Mesos)); // one kill: one meso drop
         Assert.AreEqual(4, hits.Count(h => h.Uid != hits[0].Uid));
+        Assert.IsTrue(hits.Where(h => h.Uid != hits[0].Uid).All(h => h.HpLeft > 0));
+    }
+
+    // Every mob in the box gets all its segments, several mobs dying in the same cast die once each.
+    [TestMethod]
+    public void WzStrike_EveryMobShowsEverySegment()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BoltData());
+        assets.AddMap(7, """[{"MobId":100001,"X":100,"Cy":100},{"MobId":100001,"X":150,"Cy":100},{"MobId":100000,"X":200,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200);
+        assets.AddMob(100001, 20, 0.1, 100, speed: 1, level: 200); // the blue snail: HP 20, dies to the first segment
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        var hits = Cast(world, 7, 0, 100, true, new Random(1), Mage, Bolt, 78);
+        Assert.AreEqual(12, hits.Count);
+        foreach (var uid in hits.Select(h => h.Uid).Distinct())
+            Assert.AreEqual(4, hits.Count(h => h.Uid == uid));
+        Assert.AreEqual(2, hits.Count(h => h.Settle && h.HpLeft == 0)); // two deaths, one each
+        Assert.AreEqual(2, world.TakeDrops().Count(d => d.Kind == DropKind.Mesos));
+        Assert.AreEqual(3, hits.Count(h => h.Settle));
     }
 
     // The element of the skill goes into the chain: a fire bolt on a fire-weak mob (F3, x1.5) does what the chain says.
@@ -724,6 +751,34 @@ public class FirePoisonCombatTests
         for (int i = 0; i < 80; i++) later.Add(WaitHit(a));
         Assert.IsTrue(later.All(h => h.Damage is >= 1824 and <= 9118)); // +20 damage % on every segment
         Assert.IsTrue(later.Any(h => h.Damage > 7598)); // 84 segments: one over the plain maximum is all but sure (0.79^80)
+    }
+
+    // Over the wire: a mob that dies to the first segment still sends four hits; only one carries the death (Settle),
+    // all say HP 0, and the kill drops one meso pile.
+    [TestMethod]
+    public void Loopback_DeadMob_FourHitsOneSettleOneDrop()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(BoltData());
+        assets.AddMap(9, """[{"MobId":100001,"X":100,"Cy":100}]""", Floor);
+        assets.AddMob(100001, 20, 0.1, 100, speed: 1, level: 200);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 72);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 72);
+        a.SendState(9, 0, 100, Net.ActStand, 0, true);
+        WaitSpawn(a);
+        a.SendBuild(Mage);
+        a.SendSkillCast(Bolt, 78);
+        var hits = Enumerable.Range(0, 4).Select(_ => WaitHit(a)).ToList();
+        Assert.IsTrue(hits.All(h => !h.Spawn && h.HpLeft == 0 && h.Damage > 0));
+        Assert.AreEqual(1, hits.Count(h => h.Settle));
+        Thread.Sleep(300);
+        Assert.IsFalse(a.TryTakeMob(out _)); // no fifth hit
+        int mesoPiles = 0;
+        while (a.TryTakeDrop(out var d))
+            if (d.Spawn && d.Kind == DropKind.Mesos) mesoPiles++;
+        Assert.AreEqual(1, mesoPiles);
     }
 
     private static BallEvent WaitBall(NetClient client)

@@ -17,7 +17,10 @@ public sealed class MobWorld
     // Exp is the mob's kill award (the killer's client claims it).
     // Skill is 0 for a basic swing, else the skill whose hit spark to play.
     // Crit picks the critical damage-number art on every client.
-    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit);
+    // Settle: this hit carries the mob's HP, death and EXP for the whole cast. A multi-segment skill sends one hit per
+    // segment (each with its own number) but only the first settles: HpLeft is the HP after ALL the segments, and the
+    // other segments are numbers only (no flinch, no death sound, no EXP again). Every other hit settles.
+    public sealed record Hit(int Uid, int Map, long Damage, long HpLeft, long Exp, int Skill, int Mob, bool Crit, bool Settle = true);
 
     // One mob step (10Hz on the wire): Uid now stands at X/Y, facing along.
     public sealed record Move(int Uid, int Map, float X, float Y, bool FacingRight);
@@ -481,9 +484,11 @@ public sealed class MobWorld
 
     // The damage of one WZ cast whose box has its origin at (ox, oy): the mobs whose body overlaps the box lt..rb,
     // mirrored by facing (WzSkillData.InBodyRect), taken nearest first, at most mobCount. Each takes attackCount separate rolls
-    // (a hit each, so the numbers equal the segments); a mob that dies stops taking them. The element comes
-    // from the skill; a mob with Elemental Weakness takes the extra magic damage. Before its segments a mob may get
-    // marked (Elemental Weakness): the mark counts in this cast's segments too.
+    // (a hit each, so the numbers equal the segments). The mob loses the TOTAL of its segments once, and that total
+    // decides its death (a drop and EXP once): a segment never kills the mob in the middle, so every segment keeps its
+    // number. The first hit of the mob settles (Hit.Settle), the others only show.
+    // The element comes from the skill; a mob with Elemental Weakness takes the extra magic damage.
+    // Before its segments a mob may get marked (Elemental Weakness): the mark counts in this cast's segments too.
     // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
     private List<Hit> WzHits(int map, float ox, float oy, bool facingRight, Random rng, Build build, WzSkillData wz,
         AttackElement element, int mobCount, int segments, int pct, int attacker)
@@ -499,8 +504,21 @@ public sealed class MobWorld
         foreach ((float _, Mob m) in inBox.Take(mobCount).ToList())
         {
             TryWeaken(m, build, rng);
-            for (int i = 0; i < segments && m.Hp > 0; i++)
-                hits.Add(HitOne(m, wz.SkillId, rng, build, pct, attacker, element, m.Statuses.MagicExtraDamagePct));
+            var rolls = new List<(long damage, bool crit)>();
+            for (int i = 0; i < segments; i++)
+            {
+                var result = Damage.SkillResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
+                    m.Level, m.ElemAttr, element, m.Boss, m.Statuses.MagicExtraDamagePct);
+                rolls.Add((result.TotalDamage, result.CritMultiplier > 1.0));
+            }
+            m.Hp = Math.Max(0, m.Hp - rolls.Sum(r => r.damage));
+            if (m.Hp == 0)
+            {
+                _lives.Remove(m);
+                Bury(m, rng, attacker);
+            }
+            for (int i = 0; i < segments; i++)
+                hits.Add(new Hit(m.Uid, m.Map, rolls[i].damage, m.Hp, m.Exp, wz.SkillId, m.MobId, rolls[i].crit, Settle: i == 0));
         }
         return hits;
     }
@@ -518,13 +536,11 @@ public sealed class MobWorld
 
     // One damage roll applied to one live mob. The dead leave the world, a
     // grave (respawn), and their drops: mesos always, a potion sometimes
-    // (the boss always pays its purse). A warrior skill hits physical with no mob mark;
-    // a WZ skill passes its element and the mob's extra damage %.
-    private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker,
-        AttackElement element = AttackElement.Physical, double extraDmgPct = 0)
+    // (the boss always pays its purse). A warrior skill hits physical with no mob mark.
+    private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker)
     {
         var result = Damage.SkillResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
-            m.Level, m.ElemAttr, element, m.Boss, extraDmgPct);
+            m.Level, m.ElemAttr, AttackElement.Physical, m.Boss);
         long damage = result.TotalDamage;
         m.Hp = Math.Max(0, m.Hp - damage);
         if (m.Hp == 0)

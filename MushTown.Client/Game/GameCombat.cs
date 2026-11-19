@@ -121,11 +121,10 @@ public partial class MushTownGame
         if (_numbers.Count == 0) return;
         foreach (var n in _numbers)
         {
+            if (!n.Visible) continue; // waiting for its turn in the cast
             var dmg = LoadDmg(n.Skin);
-            float k = n.Age / FloatingNumber.LifeMs;
-            int alpha = k < 0.7f ? 255 : (int)(255 * (1 - (k - 0.7f) / 0.3f));
-            var tint = new Color(255, 255, 255, alpha);
-            float baseY = n.Y - FloatingNumber.RisePx * k - _camera.Y;
+            var tint = new Color(255, 255, 255, n.Alpha);
+            float baseY = n.Y - n.Rise - _camera.Y;
             if (dmg.Words.FirstOrDefault(w => w.Name == n.Text) is { } word) // the hurt skin has Miss; the base skin has no words
             {
                 var wordTex = _textures[word.Image];
@@ -425,7 +424,7 @@ public partial class MushTownGame
         else if (_localWorld != null)
         {
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), id, pct))
-                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle);
             DrainDrops(_localWorld);
         }
     }
@@ -446,7 +445,7 @@ public partial class MushTownGame
         else if (_localWorld != null)
         {
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), wz.SkillId, pct))
-                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit);
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle);
             foreach (var l in _localWorld.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
             DrainDrops(_localWorld);
         }

@@ -124,6 +124,35 @@ public class WorldTests
         Assert.AreEqual(800f, n.Age, 0.01f);
     }
 
+    // A number of a multi-hit cast waits for its turn: not there before DelayMs, there from it, over DelayMs + LifeMs later.
+    [TestMethod]
+    public void NumberDelay_WaitsThenShowsThenDies()
+    {
+        var n = new GameObject().Add(new FloatingNumber { Text = "12", DelayMs = 200 });
+        Assert.IsFalse(n.Visible);
+        n.Update(0.1f); // 100 ms
+        Assert.IsFalse(n.Visible);
+        n.Update(0.1f); // 200 ms: its turn
+        Assert.IsTrue(n.Visible);
+        n.Update(0.7f); // 900 ms: 700 ms of its own life
+        Assert.IsFalse(n.Owner.Dead);
+        n.Update(0.1f); // 1000 ms = DelayMs + LifeMs
+        Assert.IsTrue(n.Owner.Dead);
+    }
+
+    // Two numbers of one cast, the upper one AppearStepMs later: at the same moment the lower one has faded more.
+    [TestMethod]
+    public void NumberFade_GoesFromTheBottomUp()
+    {
+        var lower = new GameObject().Add(new FloatingNumber { Text = "1", DelayMs = 0 });
+        var upper = new GameObject().Add(new FloatingNumber { Text = "2", DelayMs = FloatingNumber.AppearStepMs });
+        lower.Update(0.6f); // 600 ms: the lower one is 600 ms into its life (past 70% of 800), the upper one 500 ms (before it)
+        upper.Update(0.6f);
+        Assert.AreEqual(255, upper.Alpha); // the upper one is still full
+        Assert.IsTrue(lower.Alpha < upper.Alpha);
+        Assert.IsTrue(lower.Rise > upper.Rise);
+    }
+
     [TestMethod]
     public void NumberReset_BringsANumberBack()
     {
