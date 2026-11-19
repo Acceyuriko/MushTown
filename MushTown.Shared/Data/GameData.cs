@@ -468,9 +468,6 @@ public sealed class DmgData
     public List<DmgWord> Words { get; set; } = new(); // NoRed0 Miss/guard/resist/shot/counter (a skin may lack some)
     public DmgDigit? Effect3 { get; set; } // NoCri1/effect3: the picture a critical hit adds
     public DmgDigit? Sample { get; set; } // the preview picture; Ox/Oy are 0 when the WZ node has no origin
-    // How much a digit's picture is overlapped by the next character, in percent of its width (WZ numberSpace of
-    // NoCustom, 30 for the basic skin; 0 = the digits only touch).
-    public int NumberOverlap { get; set; }
     public DmgUnit? Unit { get; set; } // NoCustom/NoRed0 of a unit skin ("1.2B"); null = plain digits
 }
 

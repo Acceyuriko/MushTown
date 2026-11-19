@@ -386,11 +386,9 @@ public static partial class Export
         return true;
     }
 
-    private static bool ExportDamageSkin(WzRoot effect, WzRoot etc, string outDir)
+    private static bool ExportDamageSkin(WzRoot effect, string outDir)
     {
-        // The base skin has no numberSpace of its own. Its digits are the pictures of skin 1426 ("Basic Damage Skin
-        // (Unit)"), so the overlap comes from the NoCustom of that skin, like the one it shows in the game.
-        var data = new DmgData { NumberOverlap = Int(etc.Find("DamageSkin.img/1426/effect/NoCustom/NoRed0"), "numberSpace") };
+        var data = new DmgData();
         if (!ReadDigits(effect, "Effect", "BasicEff.img/NoRed0", "effect/dmg", "", data.Digits, outDir)
             || !ReadDigits(effect, "Effect", "BasicEff.img/NoRed1", "effect/dmg", "red1_", data.Red1, outDir)
             || !ReadDigits(effect, "Effect", "BasicEff.img/NoCri0", "effect/dmg", "cri0_", data.Cri0, outDir)

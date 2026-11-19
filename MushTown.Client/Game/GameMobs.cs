@@ -109,7 +109,8 @@ public partial class MushTownGame
     // A skill hit also plants the skill's spark on the mob's body (skills
     // without spark art, like Scarring Sword, skip it). Our own hits feed
     // the combo orb while Combo Attack lives (its bonus hits don't recurse).
-    // The hits of one cast must be taken in the same frame (they find each other by Age == 0), or the stack is wrong.
+    // The hits of one cast must be taken in the same frame (they find each other by Age == 0 and the mob), or the stack
+    // is wrong.
     // settle false: a later segment of a multi-segment cast, which only shows its number (the first segment already set
     // the mob's HP, its flinch or death, the sound and the EXP for the whole cast).
     private void ApplyHit(int uid, long damage, long hpLeft, bool mine, long exp, int skill, bool crit, bool settle)
@@ -123,18 +124,16 @@ public partial class MushTownGame
         }
         float bodyH = m.Frames[0].OriginY; // origin to feet: where the head is
         float headY = m.Y - bodyH;
-        // The hits of one WZ multi-hit cast land in the same frame: each number goes one step above the last and
-        // appears after it (numbers of mobs closer than StackNearPx count for the height, they would overlap; a mob
-        // with none yet this frame starts at the head), and only the first of a mob plants the spark. The warrior
-        // skills keep their one spot.
+        // The hits of one WZ multi-hit cast land in the same frame: each number of this mob goes one step above the last
+        // and appears after it (other mobs' numbers do not count: every mob has its own stack from its own head), and
+        // only the first of a mob plants the spark. The warrior skills keep their one spot.
         bool wzHit = _wzSkills.ContainsKey(skill);
-        int stack = wzHit ? _numbers.Count(n => n.Age == 0 && Math.Abs(n.X - m.X) < FloatingNumber.StackNearPx) : 0;
-        int own = wzHit ? _numbers.Count(n => n.Age == 0 && n.X == m.X) : 0;
-        bool firstOfMob = own == 0;
+        int layer = wzHit ? FloatingNumber.Layer(_numbers, uid) : 0;
+        bool firstOfMob = layer == 0;
         var num = TakeNumber();
-        num.Text = damage.ToString(); num.X = m.X;
-        num.Y = headY - stack * FloatingNumber.StackPx; // where it stands
-        num.DelayMs = own * FloatingNumber.AppearStepMs; // when it appears (timing: FloatingNumber)
+        num.Text = damage.ToString(); num.X = m.X; num.MobUid = uid;
+        num.Y = headY - layer * FloatingNumber.StackPx; // where it stands
+        num.DelayMs = layer * FloatingNumber.AppearStepMs; // when it appears (timing: FloatingNumber)
         num.Crit = crit;
         if (mine) num.Skin = Hero?.DamageSkin ?? 0;
         // A skill with a ball plays its special once at the landing (SpawnImpacts); each mob it hits gets its hit art.

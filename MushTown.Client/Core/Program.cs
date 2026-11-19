@@ -7,7 +7,7 @@ using MushTown.Shared;
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
-// [--host | --join <ip>] [--shot <file.png> [--skin <0..5>] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|dropqty|dropqtymax|cashuserename|invscroll|stat|stat2|stat200|death|equipui|equipsetpart|decorations|damageskins|damageskinsempty|damageskinsselect|damageskinsdeleted|damageskinsask|dec|hud|fashionworn|skill|skillscroll|quest|questask|questforfeit|questpick|talk|settings|shop|shopscroll|shopnotice|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|worldmapworld|worldmapmaps|worldmaproot|keys|quickedit|quickeditswap|quickeditnocap|menu|guide|guidecard|macro|macrohold|macrobind|macromove|party|partysearch|partyask|cashshop|cashshopfashion|cashshopfashionoutfits|cashshopreset|cashshopempty|cashshopcart|cashshopladder|cashshopbeauty|cashshopbeautygear|cashshopface|cashshopfacegear|cashshopcheckout|cashshopbuyall|cashshopnotice] [--skilltab <0|1|2|3|4|5>] [--talk <npc>] [--job <id>] [--hit | --skill <id> [--weak] [--flyms <ms>] [--standoff <px>] | --drop | --hurt [--hurtblink | --hurtmiss] | --hurtpre] [--dmg <n>] [--dmgskin <id>] [--crit] [--wear] [--wear-only <slots>] [--aiticks <n>] [--hover <x,y>]]
+// [--host | --join <ip>] [--shot <file.png> [--skin <0..5>] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|dropqty|dropqtymax|cashuserename|invscroll|stat|stat2|stat200|death|equipui|equipsetpart|decorations|damageskins|damageskinsempty|damageskinsselect|damageskinsdeleted|damageskinsask|dec|hud|fashionworn|skill|skillscroll|quest|questask|questforfeit|questpick|talk|settings|shop|shopscroll|shopnotice|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|worldmapworld|worldmapmaps|worldmaproot|keys|quickedit|quickeditswap|quickeditnocap|menu|guide|guidecard|macro|macrohold|macrobind|macromove|party|partysearch|partyask|cashshop|cashshopfashion|cashshopfashionoutfits|cashshopreset|cashshopempty|cashshopcart|cashshopladder|cashshopbeauty|cashshopbeautygear|cashshopface|cashshopfacegear|cashshopcheckout|cashshopbuyall|cashshopnotice] [--skilltab <0|1|2|3|4|5>] [--talk <npc>] [--job <id>] [--hit | --skill <id> [--weak] [--flyms <ms> [--recast <ms>]] [--standoff <px>] | --drop | --hurt [--hurtblink | --hurtmiss] | --hurtpre] [--dmg <n>] [--dmgskin <id>] [--crit] [--wear] [--wear-only <slots>] [--aiticks <n>] [--hover <x,y>]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means menus.
 // --skin <0..5> picks the shot demo's skin (0 is the default).
@@ -38,6 +38,9 @@ CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 // attack frame (Energy Bolt: 390 ms) shows only the cast effect; from that frame it shows the ball at the caster,
 // the flight time (Projectile.FlightMs) shows the explosion, and the numbers come one server tick (100 ms) later.
 // The big blue shape in front of the caster in these shots is the cast effect (the WZ effect node), not a second ball.
+// --recast <ms> (with --flyms) then casts the same skill again at the same mobs (another seed, never a crit, so the two
+// casts look different) and runs the world that long again: the numbers of the second cast start at the heads of the
+// mobs while those of the first are still up, drawn over them.
 // --standoff <px> (with --skill, a WZ skill) sets how far from the first mob the caster stands (default 250): a big
 // number puts the caster out of reach, so the ball has no target and flies the whole range.
 // --drop swings until the first kill and shows its drops (game shots only).
@@ -95,6 +98,7 @@ bool shotHurtPre = false;
 bool shotHurtMiss = false;
 bool shotWeak = false;
 int shotFlyms = 0;
+int shotRecastMs = 0;
 int shotStandoff = 0;
 bool shotWear = false;
 string? shotWearOnly = null;
@@ -126,6 +130,7 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         else if (rest[i] == "--skill") { ok = int.TryParse(rest[i + 1], out shotSkill) && shotSkill > 0; i += 2; }
         else if (rest[i] == "--talk") { ok = int.TryParse(rest[i + 1], out shotTalk) && shotTalk > 0; i += 2; }
         else if (rest[i] == "--job") { ok = int.TryParse(rest[i + 1], out shotJob) && shotJob > 0; i += 2; }
+        else if (rest[i] == "--recast") { ok = int.TryParse(rest[i + 1], out shotRecastMs) && shotRecastMs > 0; i += 2; }
         else if (rest[i] == "--flyms") { ok = int.TryParse(rest[i + 1], out shotFlyms) && shotFlyms > 0; i += 2; }
         else if (rest[i] == "--standoff") { ok = int.TryParse(rest[i + 1], out shotStandoff) && shotStandoff > 0; i += 2; }
         else if (rest[i] == "--aiticks") { ok = int.TryParse(rest[i + 1], out shotAiticks) && shotAiticks > 0; i += 2; }
@@ -157,6 +162,7 @@ if (shotHurtPre && shotHurtBlink) ok = false; // one hurt stage per shot
 if (shotHurtMiss && (!shotHurt || shotHurtPre || shotHurtBlink)) ok = false; // the miss is the hurt pose's own hit, not the pre or blink stage
 if (shotWeak && shotSkill == 0) ok = false; // --weak marks the mobs before the --skill cast
 if (shotFlyms > 0 && shotSkill == 0) ok = false; // --flyms runs the world after the --skill cast
+if (shotRecastMs > 0 && shotFlyms == 0) ok = false; // --recast casts again after the --flyms run
 if (shotStandoff > 0 && shotSkill == 0) ok = false; // --standoff places the --skill caster
 if (shotSkill != 0 && shotScreen != null && shotScreen != "skill") ok = false; // --skill rides only with the skill window
 if ((shotHit ? 1 : 0) + (shotSkill != 0 ? 1 : 0) + (shotDrop ? 1 : 0) + (shotDmg > 0 ? 1 : 0) + (shotHurt ? 1 : 0) > 1) ok = false; // one pose per shot
@@ -168,14 +174,14 @@ if ((shotScreen is "shop" or "shopscroll" or "shopnotice") && shotTalk == 0) ok 
 if (shotTravel != 0 && shotScreen is not (null or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter")) ok = false; // --travel needs the game, the world map or the minimap
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--skin <0..5>] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|dropqty|dropqtymax|cashuserename|invscroll|stat|stat2|stat200|death|equipui|equipsetpart|decorations|damageskins|damageskinsempty|damageskinsselect|damageskinsdeleted|damageskinsask|dec|hud|fashionworn|skill|skillscroll|quest|questask|questforfeit|questpick|talk|settings|shop|shopscroll|shopnotice|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|worldmapworld|worldmapmaps|worldmaproot|keys|quickedit|quickeditswap|quickeditnocap|menu|guide|guidecard|macro|macrohold|macrobind|macromove|party|partysearch|partyask|cashshop|cashshopfashion|cashshopfashionoutfits|cashshopreset|cashshopempty|cashshopcart|cashshopladder|cashshopbeauty|cashshopbeautygear|cashshopface|cashshopfacegear|cashshopcheckout|cashshopbuyall|cashshopnotice] [--skilltab <0|1|2|3|4|5>] [--talk <npc>] [--job <id>] [--hit | --skill <id> [--weak] [--flyms <ms>] [--standoff <px>] | --drop | --hurt [--hurtblink | --hurtmiss] | --hurtpre] [--dmg <n>] [--dmgskin <id>] [--crit] [--wear] [--wear-only <slots>] [--aiticks <n>] [--hover <x,y>]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--skin <0..5>] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|dropqty|dropqtymax|cashuserename|invscroll|stat|stat2|stat200|death|equipui|equipsetpart|decorations|damageskins|damageskinsempty|damageskinsselect|damageskinsdeleted|damageskinsask|dec|hud|fashionworn|skill|skillscroll|quest|questask|questforfeit|questpick|talk|settings|shop|shopscroll|shopnotice|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|worldmapworld|worldmapmaps|worldmaproot|keys|quickedit|quickeditswap|quickeditnocap|menu|guide|guidecard|macro|macrohold|macrobind|macromove|party|partysearch|partyask|cashshop|cashshopfashion|cashshopfashionoutfits|cashshopreset|cashshopempty|cashshopcart|cashshopladder|cashshopbeauty|cashshopbeautygear|cashshopface|cashshopfacegear|cashshopcheckout|cashshopbuyall|cashshopnotice] [--skilltab <0|1|2|3|4|5>] [--talk <npc>] [--job <id>] [--hit | --skill <id> [--weak] [--flyms <ms> [--recast <ms>]] [--standoff <px>] | --drop | --hurt [--hurtblink | --hurtmiss] | --hurtpre] [--dmg <n>] [--dmgskin <id>] [--crit] [--wear] [--wear-only <slots>] [--aiticks <n>] [--hover <x,y>]]");
     Environment.ExitCode = 1;
     return;
 }
 
 try
 {
-    using var game = new MushTownGame(shotPath, shotMap, shotTravel, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks, shotWear, shotJob, shotHover, shotSkin, shotDmg, shotWearOnly, shotHurt, shotHurtBlink, shotHurtPre, shotDmgSkin, shotHurtMiss, shotWeak, shotFlyms, shotStandoff, shotCrit);
+    using var game = new MushTownGame(shotPath, shotMap, shotTravel, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks, shotWear, shotJob, shotHover, shotSkin, shotDmg, shotWearOnly, shotHurt, shotHurtBlink, shotHurtPre, shotDmgSkin, shotHurtMiss, shotWeak, shotFlyms, shotStandoff, shotCrit, shotRecastMs);
     game.Run();
 }
 catch (Exception ex) when (ex is InvalidDataException or IOException)

@@ -48,6 +48,7 @@ public partial class MushTownGame : Game
     private readonly bool _shotHurt; // --hurt: the player takes one posed hit
     private readonly bool _shotWeak; // --weak: the --skill cast lands on mobs already marked by Elemental Weakness
     private readonly int _shotStandoff; // --standoff <px>: how far from the first mob a WZ --skill caster stands (0 = the default 250)
+    private readonly int _shotRecastMs; // --recast <ms>: after --flyms the same cast again, then the world runs this long (the numbers of two casts on one mob)
     private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (effect, attack frame, ball, explosion, numbers)
     private readonly bool _shotHurtBlink; // --hurtblink: the same arc in the purple flash step
     private readonly bool _shotHurtPre; // --hurtpre: the same stage before the hit
@@ -132,7 +133,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -163,6 +164,7 @@ public partial class MushTownGame : Game
         _shotHurtMiss = shotHurtMiss;
         _shotWeak = shotWeak;
         _shotFlyms = shotFlyms;
+        _shotRecastMs = shotRecastMs;
         _shotCrit = shotCrit;
         _shotStandoff = shotStandoff;
         _shotBalloonRing = shotPath != null && Path.GetFileNameWithoutExtension(shotPath).Contains("balloonring");

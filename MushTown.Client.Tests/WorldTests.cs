@@ -197,12 +197,48 @@ public class WorldTests
         }
     }
 
+    // Every mob has its own stack: the layer counts only the numbers of that mob taken in this frame.
+    [TestMethod]
+    public void NumberLayer_CountsOnlyTheSameMobAndTheSameFrame()
+    {
+        var numbers = new List<FloatingNumber>
+        {
+            new() { MobUid = 1 }, new() { MobUid = 1 }, new() { MobUid = 2 },
+            new() { MobUid = 1, Age = 500 }, // an older attack
+            new(), // a number of no mob (hurt)
+        };
+        Assert.AreEqual(2, FloatingNumber.Layer(numbers, 1));
+        Assert.AreEqual(1, FloatingNumber.Layer(numbers, 2));
+        Assert.AreEqual(0, FloatingNumber.Layer(numbers, 3));
+    }
+
+    // The numbers are drawn in list order: a number that dies is taken out without moving the others, and a new one
+    // is added last, so the newest number is drawn over the older ones.
+    [TestMethod]
+    public void NumberSweep_KeepsTheOrderAndANewNumberComesLast()
+    {
+        var world = new GameObject();
+        var live = new List<FloatingNumber>();
+        var pool = new Stack<FloatingNumber>();
+        for (int i = 0; i < 3; i++)
+        {
+            var n = new GameObject().Add(new FloatingNumber { Text = i.ToString() });
+            world.AddChild(n.Owner);
+            live.Add(n);
+        }
+        live[1].Owner.Dead = true;
+        PoolSweep.CollectDead(live, world, pool);
+        live.Add(new GameObject().Add(new FloatingNumber { Text = "3" }));
+        CollectionAssert.AreEqual(new[] { "0", "2", "3" }, live.Select(n => n.Text).ToArray());
+    }
+
     [TestMethod]
     public void NumberReset_BringsANumberBack()
     {
-        var n = new GameObject().Add(new FloatingNumber { Text = "12", Age = 900, Skin = 3 });
+        var n = new GameObject().Add(new FloatingNumber { Text = "12", Age = 900, Skin = 3, MobUid = 7 });
         n.Owner.Dead = true;
         n.Reset();
+        Assert.AreEqual(FloatingNumber.NoMob, n.MobUid);
         Assert.AreEqual(0f, n.Age);
         Assert.AreEqual(0, n.Skin);
         Assert.IsFalse(n.Owner.Dead);

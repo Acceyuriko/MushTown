@@ -29,7 +29,7 @@ public partial class MushTownGame
         "skill_tip_nw.png", "skill_tip_ne.png", "skill_tip_sw.png", "skill_tip_se.png",
         "skill_tip_n.png", "skill_tip_s.png", "skill_tip_w.png", "skill_tip_e.png",
         "skill_tip_c.png", "skill_tip_dotw.png", "skill_tip_dotc.png", "skill_tip_dote.png", "skill_tip_iconbg.png",
-        "skill_book000.png", "skill_book100.png", "skill_book110.png", "skill_book111.png",
+        "skill_book000.png", "skill_book100.png", "skill_book110.png", "skill_book111.png", "skill_book200.png",
     };
 
     // The skill window pages: the beginner page (the default passives), then the Roman
@@ -46,12 +46,13 @@ public partial class MushTownGame
     private List<SkillView> _skillPage = new();
     private int SkillScrollMax => Math.Max(0, (_skillPage.Count + 1) / 2 - SkillRows);
 
-    // The name and the book of each page (the blue bar). Only the Hero's pages have book art. The names of
-    // the Fire/Poison pages are the job names of its four stages (String.wz has no job name table; the
-    // Skill.img book names such as "Intro to Magic" are not the job names).
+    // The name and the book of each page (the blue bar). The Hero has book art on its first four pages, Fire/Poison
+    // on its 1st job page. The names of the Fire/Poison pages are the job names of its four stages (String.wz has no
+    // job name table; the Skill.img book names such as "Intro to Magic" are not the job names).
     private static readonly string[] HeroTabNames = { "Legendary Skill", "Warrior", "Fighter", "Crusader", "4th Job", "5th Job" };
     private static readonly string[] FirePoisonTabNames = { "Legendary Skill", "Magician", "Wizard (Fire, Poison)", "Mage (Fire, Poison)", JobNames.Of(StatTables.FirePoisonMage), "5th Job" };
     private static readonly string?[] HeroTabBooks = { "ui/skill_book000.png", "ui/skill_book100.png", "ui/skill_book110.png", "ui/skill_book111.png", null, null };
+    private static readonly string?[] FirePoisonTabBooks = { null, "ui/skill_book200.png", null, null, null, null }; // only the 1st job page
 
     // The job of the character whose skill window this is.
     private int SkillJob => _save?.Slots[_slot]?.Job ?? 0;
@@ -88,7 +89,7 @@ public partial class MushTownGame
         var bar = new GameObject();
         bar.Add(new Rect(new Rectangle(_skillLay.Get("barX", 8), _skillLay.Get("barY", 47), _skillLay.Get("barW", 304), _skillLay.Get("barH", 45))));
         bar.Add(new Picture("ui/skill_bar.png", 0, 0)); // the blue bar: the name of the page
-        bar.Add(new SkillPageBar((SkillJob == StatTables.Hero ? HeroTabNames : FirePoisonTabNames)[_skillTab], SkillJob == StatTables.Hero ? HeroTabBooks[_skillTab] : null));
+        bar.Add(new SkillPageBar((SkillJob == StatTables.Hero ? HeroTabNames : FirePoisonTabNames)[_skillTab], (SkillJob == StatTables.Hero ? HeroTabBooks : FirePoisonTabBooks)[_skillTab]));
         body.AddChild(bar);
         for (int t = 0; t <= SkillTabLast; t++)
         {

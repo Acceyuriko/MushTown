@@ -31,12 +31,9 @@ public static partial class Export
             return ExportMapUi(ui, map, str, outDir) && ExportWorldMap(ui, map, str, outDir);
         }
         if (name == "damageskin") // the base and hurt skins (BasicEff.img) too, since their second digit set
-        {
-            var etc = WzRoot.LoadCategory(ExporterPaths.DataDir, "Etc");
-            return ExportDamageSkin(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"), etc, outDir)
-                && ExportDamageSkins(etc, WzRoot.LoadCategory(ExporterPaths.DataDir, "Item"),
+            return ExportDamageSkin(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"), outDir)
+                && ExportDamageSkins(WzRoot.LoadCategory(ExporterPaths.DataDir, "Etc"), WzRoot.LoadCategory(ExporterPaths.DataDir, "Item"),
                     WzRoot.LoadCategory(ExporterPaths.DataDir, "String"), outDir);
-        }
         if (name == "death")
             return ExportDeath(WzRoot.LoadCategory(ExporterPaths.DataDir, "Effect"), outDir);
         if (name == "cashshop")
@@ -50,7 +47,7 @@ public static partial class Export
             "inventory" => ExportInventoryUi(ui, outDir),
             "equip" => ExportEquipUi(ui, outDir),
             "stat" => ExportStatUi(ui, outDir),
-            "skill" => ExportSkillUi(ui, WzRoot.LoadCategory(ExporterPaths.DataDir, "Skill"), outDir),
+            "skill" => ExportSkillUi(ui, WzRoot.LoadCategory(ExporterPaths.DataDir, "Skill"), WzRoot.LoadBase(ExporterPaths.DataDir, packs: true), outDir),
             "quest" => ExportQuestUi(ui, outDir),
             "keys" => ExportKeyUi(ui, outDir),
             "menu" => ExportMenuUi(ui, outDir),
@@ -157,8 +154,7 @@ public static partial class Export
             }
         }
         var effect = WzRoot.LoadCategory(dataDir, "Effect");
-        var etc = WzRoot.LoadCategory(dataDir, "Etc");
-        if (!ExportDamageSkin(effect, etc, outDir))
+        if (!ExportDamageSkin(effect, outDir))
         {
             Environment.ExitCode = 1;
             return;
@@ -168,6 +164,7 @@ public static partial class Export
             Environment.ExitCode = 1;
             return;
         }
+        var etc = WzRoot.LoadCategory(dataDir, "Etc");
         var item = WzRoot.LoadCategory(dataDir, "Item");
         if (!ExportDamageSkins(etc, item, str, outDir))
         {
@@ -246,7 +243,7 @@ public static partial class Export
             return;
         }
         // The game panels: one export step per panel.
-        if (!ExportInventoryUi(ui, outDir) || !ExportEquipUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, skill, outDir)
+        if (!ExportInventoryUi(ui, outDir) || !ExportEquipUi(ui, outDir) || !ExportStatUi(ui, outDir) || !ExportSkillUi(ui, skill, baseRoot, outDir)
             || !ExportQuestUi(ui, outDir) || !ExportMapUi(ui, baseRoot, str, outDir) || !ExportWorldMap(ui, baseRoot, str, outDir) || !ExportKeyUi(ui, outDir)
             || !ExportMenuUi(ui, outDir) || !ExportQuickMenuUi(ui, outDir) || !ExportChatUi(ui, outDir)
             || !ExportShopUi(ui, outDir) || !ExportBuffUi(ui, outDir)

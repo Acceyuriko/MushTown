@@ -164,7 +164,7 @@ public partial class MushTownGame
             pics.Add(new GlyphPic(kind, textures[^1].Width, d.Ox, d.Oy));
         }
         var star = crit ? dmg.Effect3 : null;
-        var layout = DamageNumberLayout.Place(pics, dmg.NumberOverlap, crit ? dmg.Unit?.CriDotSpace ?? 0 : dmg.Unit?.DotSpace ?? 0,
+        var layout = DamageNumberLayout.Place(pics, crit ? dmg.Unit?.CriDotSpace ?? 0 : dmg.Unit?.DotSpace ?? 0,
             star is { } e ? new GlyphPic(GlyphKind.Digit, _textures[e.Image].Width, e.Ox, e.Oy) : null);
         var origin = new Vector2(centerX - layout.Width / 2f - _camera.X, baseY);
         if (layout.Star is { } place)

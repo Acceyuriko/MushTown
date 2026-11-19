@@ -165,7 +165,10 @@ public partial class MushTownGame
             //     marks them first (the cast is the last thing the shot does). A ball skill judges when its ball arrives:
             //     --flyms <ms> then runs the world that long after the cast. The cast effect starts at once; the ball
             //     appears at the body action's attack frame (Energy Bolt: 390 ms), then flies, explodes and shows numbers
-            //     one server tick later. --standoff <px> moves the caster away from the first mob (default 250): out of
+            //     one server tick later. --recast <ms> (with --flyms) then casts again at the same mobs (never a crit, so
+            //     the two casts look different) and runs the world that long: the second numbers start at the heads
+            //     while the first are still up.
+            //     --standoff <px> moves the caster away from the first mob (default 250): out of
             //     reach, the ball has no target. The big blue shape in front of the caster is the cast effect (WZ effect,
             //     16 frames x 60 ms = 960 ms), not a second ball.
             //   death poses the death scene: the tombstone landed, the ghost with its head, the name, the revive popup.

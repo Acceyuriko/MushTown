@@ -14,8 +14,8 @@ namespace MushTown.Exporter;
 //    hurt skin (hurtdmg.json, NoViolet0/NoViolet1) carry Red1 and the WZ origin of their digits;
 //  - the critical unit letters of a unit skin (1426) are the small set NoCustom/NoCri0, written as
 //    effect/dmg1426/unit_cri0_<0..3>.png plus Unit.CriImages / CriDotSpace (old unit_cri1_*.png files are unused);
-//  - dmg.json and dmg1426.json carry NumberOverlap = 30. An old json has no NumberOverlap, which reads as 0: the
-//    digits only touch instead of overlapping.
+//  - the overlap of the digits is the client's constant (DamageNumberLayout.OverlapPercent); a leftover NumberOverlap
+//    field in an old json is ignored.
 // The client throws the first time a skin without Red1, Cri0 or CriImages is drawn (LoadDmg).
 public static partial class Export
 {
@@ -58,9 +58,7 @@ public static partial class Export
         data.Effect3 = ReadPicture(etc, "Etc", $"{root}/effect/NoCri1/effect3", $"{dir}/effect3.png", outDir);
         data.Sample = ReadPicture(etc, "Etc", $"{root}/sample", $"{dir}/sample.png", outDir);
         if (data.Effect3 == null || data.Sample == null) return false;
-        // No digit set of any skin holds a numberSpace; only NoCustom of a unit skin does (30 in skin 1426).
         var custom = etc.Find($"{root}/effect/NoCustom/NoRed0");
-        data.NumberOverlap = Int(custom, "numberSpace");
         if (custom != null)
         {
             var unit = new DmgUnit { DotSpace = Int(custom, "dotSpace") };

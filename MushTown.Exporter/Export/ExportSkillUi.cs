@@ -6,7 +6,10 @@ namespace MushTown.Exporter;
 // the client (MushTown.Client/Panels/HudSkill.cs).
 public static partial class Export
 {
-    public static bool ExportSkillUi(WzRoot ui, WzRoot skill, string outDir)
+    // Re-run `panel skill` (or `export`) after pulling the skill_book200.png change (T-20261119135546): the Fire/Poison
+    // 1st-job page shows it in its blue bar, and the client fails at startup when the file is missing.
+    // baseRoot is the base tree with the Packs (it holds Skill/<job>.img, which the Skill category does not).
+    public static bool ExportSkillUi(WzRoot ui, WzRoot skill, WzRoot baseRoot, string outDir)
     {
         var files = new List<(string node, string file)>
         {
@@ -57,7 +60,17 @@ public static partial class Export
         foreach (string book in new[] { "000", "100", "110", "111" })
             if (!UiPng.Save(skill, "Skill", $"_Canvas/{book}.img/info/icon", Path.Combine(outDir, "ui", $"skill_book{book}.png")))
                 return false;
-        Console.WriteLine($"skill ui: {files.Count + 4} files");
+        // The Fire/Poison 1st-job book: Skill/200.img/info/icon only links (_outlink) to a picture in _Canvas (the
+        // value is Skill/_Canvas/100.img/info/icon: it is the same book as the Hero's 1st job page).
+        string? link = baseRoot.Find("Skill/200.img/info/icon")?.Nodes["_outlink"]?.Value as string;
+        if (link == null || !link.StartsWith("Skill/"))
+        {
+            Console.WriteLine($"Skill/200.img/info/icon: _outlink is {(link == null ? "missing" : link)}, want Skill/...");
+            return false;
+        }
+        if (!UiPng.Save(skill, "Skill", link["Skill/".Length..], Path.Combine(outDir, "ui", "skill_book200.png")))
+            return false;
+        Console.WriteLine($"skill ui: {files.Count + 5} files");
         return true;
     }
 }

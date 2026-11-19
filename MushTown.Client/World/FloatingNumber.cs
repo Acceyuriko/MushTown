@@ -8,7 +8,9 @@ namespace MushTown.Client;
 // other key is a collected skin); Crit swaps in the NoCri0/NoCri1 sets and draws the skin's effect3 mark.
 // The timing of a cast with several numbers lives here and only here: the numbers of one mob appear one after the
 // other from the bottom up (each starts AppearStepMs after the one below, DelayMs), then each runs the same rise
-// and fade, so they fade one after the other from the bottom up too. Where they stand is the spawn site's business.
+// and fade, so they fade one after the other from the bottom up too. Where they stand is the spawn site's business:
+// every number starts at the head of the mob it came from, and only the numbers of one mob and one attack (taken in
+// the same frame) stack. A newer number is drawn over an older one (draw order), nothing replaces an old number.
 public sealed class FloatingNumber : Component
 {
     // The numbers below come from a clean official video (BV1qv4y1v7tK from 3:00: one mob, one attacker), measured in
@@ -33,10 +35,18 @@ public sealed class FloatingNumber : Component
     public const float RisePxPerSec = 31; // steady, from its start until it is gone
     public const int StackPx = 30;   // px between the numbers of one mob (the layers of a cast)
     public const int AppearStepMs = 120; // the next number of one mob appears this long after the one below
-    public const int StackNearPx = 100; // mobs closer than this stack their numbers together (side by side they would overlap)
     public const int HurtSkin = -1;  // NoViolet0, kept apart from monster damage
 
+    public const int NoMob = -1; // MobUid of a number that belongs to no mob (the player hurt number, Miss)
+
+    // The layer a new number of this mob takes: how many numbers of the same mob were taken in this frame (the same
+    // attack). Numbers of other mobs do not count, however close those mobs stand. Limit: on a network game two sources
+    // that hit the same mob in the same frame stack as one attack; telling them apart needs an attack number in the hit
+    // message (a protocol change, not made).
+    public static int Layer(IEnumerable<FloatingNumber> numbers, int mobUid) => numbers.Count(n => n.Age == 0 && n.MobUid == mobUid);
+
     public string Text = "";
+    public int MobUid = NoMob; // the mob this number came from: the numbers of one mob and one attack stack together
     public int Skin; // 0 = dmg.json, -1 = hurtdmg.json, other = dmg{key}.json
     public bool Crit; // draw the critical digit set with its effect3 mark
     public float X; // head position when the hit landed
@@ -50,6 +60,7 @@ public sealed class FloatingNumber : Component
     {
         Age = 0;
         DelayMs = 0;
+        MobUid = NoMob;
         Skin = 0;
         Crit = false;
         Owner.Dead = false;

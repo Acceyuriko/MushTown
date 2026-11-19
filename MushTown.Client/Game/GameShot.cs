@@ -239,10 +239,24 @@ public partial class MushTownGame
             ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle);
         foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
         DrainDrops(world, animate: false);
-        for (int left = _shotFlyms; left > 0; left -= 16)
+        RunShotFly(_shotFlyms);
+        if (_shotRecastMs > 0) // --recast: the same cast again at the same mobs, never a crit, while the numbers of the first are still up
+        {
+            foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { CritPct = 0 }, wz.SkillId, pct))
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle);
+            foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
+            DrainDrops(world, animate: false);
+            RunShotFly(_shotRecastMs);
+        }
+    }
+
+    // The world runs ms after a cast, in 16 ms steps: the effects and the numbers age; the mobs and the hero stay posed.
+    private void RunShotFly(int totalMs)
+    {
+        for (int left = totalMs; left > 0; left -= 16)
         {
             int ms = Math.Min(16, left);
-            foreach (var f in _balls) TreeUpdate.UpdateObject(f.Owner, ms / 1000f); // the effects and the numbers age; the mobs and the hero stay posed
+            foreach (var f in _balls) TreeUpdate.UpdateObject(f.Owner, ms / 1000f);
             foreach (var f in _fx) TreeUpdate.UpdateObject(f.Owner, ms / 1000f);
             foreach (var n in _numbers) TreeUpdate.UpdateObject(n.Owner, ms / 1000f);
             SpawnImpacts();
