@@ -12,7 +12,8 @@ public partial class FirePoisonCombatTests
     [TestMethod]
     public void PoisonBreath_FirstSegment_TakesBurningMagic_WithOrWithoutAnotherDot()
     {
-        var trained = Mage with { DotFinalPct = 15 };
+        var heavy = Mage with { DmgPct = 100 }; // DmgPct 100: the damage zone and the final zone give different numbers
+        var trained = heavy with { DotFinalPct = 15 };
         List<MobWorld.Hit> Breathe(Build build, bool withOtherDot)
         {
             using var assets = new TempAssets();
@@ -28,24 +29,30 @@ public partial class FirePoisonCombatTests
             var rng = new Random(4);
             Assert.AreEqual(6, hits.Count);
             foreach (var hit in hits)
-                Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, trained, 180, 200, "", AttackElement.Poison, extraFinalPct: 15), hit.Damage, $"other DoT {withOtherDot}");
+            {
+                double r1 = rng.NextDouble(), r2 = rng.NextDouble();
+                Assert.AreEqual(Damage.SkillCalc(r1, r2, 0.1, trained, 180, 200, "", AttackElement.Poison, extraFinalPct: 15), hit.Damage, $"other DoT {withOtherDot}");
+                Assert.AreNotEqual(hit.Damage, Damage.SkillCalc(r1, r2, 0.1, trained, 180, 200, "", AttackElement.Poison, extraDmgPct: 15)); // the damage zone gives another number
+            }
         }
-        var plain = Breathe(Mage, false);
+        var plain = Breathe(heavy, false);
         var rng2 = new Random(4);
-        Assert.AreEqual(Damage.SkillCalc(rng2.NextDouble(), rng2.NextDouble(), 0.1, Mage, 180, 200, "", AttackElement.Poison), plain[0].Damage);
+        Assert.AreEqual(Damage.SkillCalc(rng2.NextDouble(), rng2.NextDouble(), 0.1, heavy, 180, 200, "", AttackElement.Poison), plain[0].Damage);
     }
 
     // The same order for Elemental Drain: the DoT this cast puts on the mob is a layer from the first segment (3% for one layer).
     [TestMethod]
     public void PoisonBreath_FirstSegment_CountsItsOwnDotForElementalDrain()
     {
-        var build = Mage with { DrainPct = 3, DrainMax = 5 };
+        var build = Mage with { DmgPct = 100, DrainPct = 3, DrainMax = 5 };
         using var assets = new TempAssets();
         assets.AddWzSkill(BreathData());
         var world = OneMob(assets, 1_000_000_000);
         var first = world.SkillStrike(7, 0, 100, true, new Random(4), build, Breath, 180)[0];
         var rng = new Random(4);
-        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, build, 180, 200, "", AttackElement.Poison, extraFinalPct: 3), first.Damage);
+        double r1 = rng.NextDouble(), r2 = rng.NextDouble();
+        Assert.AreEqual(Damage.SkillCalc(r1, r2, 0.1, build, 180, 200, "", AttackElement.Poison, extraFinalPct: 3), first.Damage);
+        Assert.AreNotEqual(first.Damage, Damage.SkillCalc(r1, r2, 0.1, build, 180, 200, "", AttackElement.Poison, extraDmgPct: 3)); // the damage zone gives another number
     }
 
     // A tick takes Burning Magic also at the end: the last tick comes after the DoT left the mob's list, and the DoT it comes from is still its status.
@@ -55,13 +62,15 @@ public partial class FirePoisonCombatTests
         using var assets = new TempAssets();
         assets.AddWzSkill(BreathData(dotTime: 1));
         var world = OneMob(assets, 1_000_000_000);
-        var build = Mage with { DotFinalPct = 15 };
+        var build = Mage with { DmgPct = 100, DotFinalPct = 15 };
         world.SkillStrike(7, 0, 100, true, new Random(4), build, Breath, 180);
         var rng = new Random(4);
         for (int i = 0; i < 12; i++) rng.NextDouble();
         var tick = Ticks(world, 1000).Single(); // the only tick, at the end of the 1 s
         Assert.IsTrue(tick.Dot);
-        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), 1.0, 0.1, build, 60, 200, "", AttackElement.Poison, extraFinalPct: 15), tick.Damage);
+        double roll = rng.NextDouble();
+        Assert.AreEqual(Damage.SkillCalc(roll, 1.0, 0.1, build, 60, 200, "", AttackElement.Poison, extraFinalPct: 15), tick.Damage);
+        Assert.AreNotEqual(tick.Damage, Damage.SkillCalc(roll, 1.0, 0.1, build, 60, 200, "", AttackElement.Poison, extraDmgPct: 15)); // the damage zone gives another number
     }
 
     // A mob that is immune to the skill's element (poison S1) gets no DoT: nothing of the DoT counts for its segments (no Burning Magic, no Drain layer).
@@ -76,7 +85,7 @@ public partial class FirePoisonCombatTests
         var rng = new Random(4);
         Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, build, 180, 200, "S1", AttackElement.Poison), hits[0].Damage);
         Assert.AreEqual(0, Ticks(world, 3000).Count);
-        Assert.AreEqual(0, world.DrainLayers(7, 0, 100, 5));
+        Assert.AreEqual(0, world.DrainLayers(7, 0, 100, 5, 0));
     }
 
     // A cast puts statuses only on the mobs it reaches. Two mobs, only one inside the box of Poison Breath: the mob outside gets no DoT (no Drain
@@ -94,8 +103,8 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(6, world.SkillStrike(7, 0, 100, true, new Random(4), build, Breath, 180).Count);
         var ticks = Ticks(world, 3000);
         Assert.IsTrue(ticks.Count > 0 && ticks.All(t => t.Uid == near), "only the mob inside ticks");
-        Assert.AreEqual(0, world.DrainLayers(7, 1000, 100, 5)); // around the far mob there is no DoT
-        Assert.AreEqual(1, world.DrainLayers(7, 100, 100, 5));
+        Assert.AreEqual(0, world.DrainLayers(7, 1000, 100, 5, 0)); // around the far mob there is no DoT
+        Assert.AreEqual(1, world.DrainLayers(7, 100, 100, 5, 0));
         var rng = new Random(3);
         long plain = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 78, 200);
         var hit = Cast(world, 7, 900, 100, true, new Random(3), Mage, Bolt, 78)[0];
@@ -113,10 +122,10 @@ public partial class FirePoisonCombatTests
         var outside = NewMob(2);
         var pipeline = StatusPipeline(new List<Mob> { hit, outside }, build, (_, _, _) => { });
         pipeline.Resolve(new[] { hit }, StatusAttack(build));
-        Assert.AreEqual(1, hit.Statuses.DotCount);
+        Assert.AreEqual(1, hit.Statuses.DotCount(5));
         Assert.AreEqual(1, hit.Statuses.MarkStacks(5));
         Assert.AreEqual(20, hit.Statuses.Value(MobStatusKind.ElementalWeakness));
-        Assert.AreEqual(0, outside.Statuses.DotCount);
+        Assert.AreEqual(0, outside.Statuses.DotCount(5));
         Assert.AreEqual(0, outside.Statuses.MarkStacks(5));
         Assert.AreEqual(0, outside.Statuses.Value(MobStatusKind.ElementalWeakness));
         Assert.IsFalse(outside.Statuses.HasBurningTarget);
@@ -131,7 +140,7 @@ public partial class FirePoisonCombatTests
         Mob NewMob(long hp) => new() { Uid = 1, Map = 7, Level = 200, Def = 0.1, Hp = hp, MaxHp = 1_000_000_000_000 };
         var survivor = NewMob(1_000_000_000_000);
         StatusPipeline(new List<Mob> { survivor }, build, (_, _, _) => { }).Resolve(new[] { survivor }, StatusAttack(build));
-        Assert.AreEqual(1, survivor.Statuses.DotCount);
+        Assert.AreEqual(1, survivor.Statuses.DotCount(5));
         Assert.AreEqual(1, survivor.Statuses.MarkStacks(5));
         Assert.AreEqual(20, survivor.Statuses.Value(MobStatusKind.ElementalWeakness));
         var victim = NewMob(1);
@@ -139,7 +148,7 @@ public partial class FirePoisonCombatTests
         var hits = StatusPipeline(new List<Mob> { victim }, build, (_, _, _) => kills++).Resolve(new[] { victim }, StatusAttack(build));
         Assert.AreEqual(1, kills);
         Assert.AreEqual(0, hits[0].HpLeft);
-        Assert.AreEqual(0, victim.Statuses.DotCount);
+        Assert.AreEqual(0, victim.Statuses.DotCount(5));
         Assert.AreEqual(0, victim.Statuses.MarkStacks(5));
         Assert.AreEqual(0, victim.Statuses.Value(MobStatusKind.ElementalWeakness));
         Assert.IsFalse(victim.Statuses.HasBurningTarget);
@@ -189,11 +198,11 @@ public partial class FirePoisonCombatTests
         var hits = world.SkillStrike(7, 0, 100, true, new Random(4), build, Breath, 180);
         Assert.AreEqual(6, hits.Count);
         Assert.AreEqual(0, hits[0].HpLeft);
-        Assert.AreEqual(0, world.DrainLayers(7, 0, 100, 5)); // the dead mob has no DoT layer
+        Assert.AreEqual(0, world.DrainLayers(7, 0, 100, 5, 0)); // the dead mob has no DoT layer
         Assert.AreEqual(0, Ticks(world, 3000).Count);
         Ticks(world, 8000); // the grave: the respawn comes 10 s after the death
         Assert.AreEqual(1, world.MobsOn(7).Count);
-        Assert.AreEqual(0, world.DrainLayers(7, 0, 100, 5));
+        Assert.AreEqual(0, world.DrainLayers(7, 0, 100, 5, 0));
         Assert.AreEqual(0, Ticks(world, 3000).Count);
         var rng = new Random(3);
         long plain = Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 78, 200); // no mark: no +20 damage %
@@ -205,7 +214,8 @@ public partial class FirePoisonCombatTests
     [TestMethod]
     public void WeaknessMark_FirstHitCarriesIt_ThenLands()
     {
-        var build = Mage with { WeaknessProp = 100 };
+        var heavy = Mage with { DmgPct = 100 }; // DmgPct 100: the damage zone and the final zone give different numbers
+        var build = heavy with { WeaknessProp = 100 };
         using var assets = new TempAssets();
         assets.AddWzSkill(BoltData());
         assets.AddWzSkill(WeaknessData());
@@ -213,10 +223,12 @@ public partial class FirePoisonCombatTests
         var first = Cast(world, 7, 0, 100, true, new Random(3), build, Bolt, 78)[0];
         var rng = new Random(3);
         rng.NextDouble(); // the mark roll
-        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, build, 78, 200, extraDmgPct: 20), first.Damage);
-        var later = Cast(world, 7, 0, 100, true, new Random(3), Mage, Bolt, 78)[0]; // no roll now: the mark is already on the mob
+        double r1 = rng.NextDouble(), r2 = rng.NextDouble();
+        Assert.AreEqual(Damage.SkillCalc(r1, r2, 0.1, build, 78, 200, extraDmgPct: 20), first.Damage);
+        Assert.AreNotEqual(first.Damage, Damage.SkillCalc(r1, r2, 0.1, build, 78, 200, extraFinalPct: 20)); // Weakness is damage, not final damage
+        var later = Cast(world, 7, 0, 100, true, new Random(3), heavy, Bolt, 78)[0]; // no roll now: the mark is already on the mob
         rng = new Random(3);
-        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 78, 200, extraDmgPct: 20), later.Damage);
+        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, heavy, 78, 200, extraDmgPct: 20), later.Damage);
     }
 
     // Step 2 is worked out once for one target and one attack: 6 segments on 2 targets make 2 step-2 results (not 12), and every segment only rolls
@@ -227,7 +239,7 @@ public partial class FirePoisonCombatTests
         Mob NewMob(int uid, double def) => new() { Uid = uid, Map = 7, Level = 200, Def = def, Hp = 1_000_000_000_000, MaxHp = 1_000_000_000_000 };
         var mobs = new List<Mob> { NewMob(1, 0.1), NewMob(2, 0.3) };
         mobs[0].Statuses.Add(MobStatusKind.Stun, 0, 60_000); // a status Burning Magic counts: the first target has +15% final damage
-        var build = Mage with { MagicDmgPct = 50, DotFinalPct = 15, CritPct = 50 };
+        var build = Mage with { DmgPct = 100, MagicDmgPct = 50, DotFinalPct = 15, CritPct = 50 };
         var pipeline = new HitPipeline(_ => throw new InvalidOperationException("no file"), mobs, (_, _, _) => { }, _ => { });
         var hits = pipeline.Resolve(mobs, new HitPipeline.Attack
         {
@@ -247,8 +259,11 @@ public partial class FirePoisonCombatTests
             long total = 0;
             for (int i = 0; i < 6; i++)
             {
-                var expected = Damage.SkillResult(rng.NextDouble(), rng.NextDouble(), mobs[t].Def, build, 78, 200, "", AttackElement.Fire,
+                double r1 = rng.NextDouble(), r2 = rng.NextDouble();
+                var expected = Damage.SkillResult(r1, r2, mobs[t].Def, build, 78, 200, "", AttackElement.Fire,
                     extraDmgPct: 50, extraFinalPct: t == 0 ? 15 : 0);
+                if (t == 0) // the same numbers in the other two buckets give another damage
+                    Assert.AreNotEqual(expected.TotalDamage, Damage.SkillResult(r1, r2, mobs[t].Def, build, 78, 200, "", AttackElement.Fire, extraDmgPct: 15, extraFinalPct: 50).TotalDamage);
                 Assert.AreEqual(expected.TotalDamage, hits[t * 6 + i].Damage, $"target {t} segment {i}");
                 Assert.AreEqual(expected.CritMultiplier > 1.0, hits[t * 6 + i].Crit);
                 total += expected.TotalDamage;

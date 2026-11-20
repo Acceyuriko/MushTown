@@ -510,8 +510,8 @@ public partial class MushTownGame
         }
     }
 
-    // Cast-time damage pct: the skill's level curve plus combo orbs (each orb
-    // pays Combo Attack's rate plus Combo Synergy's, both at their levels).
+    // Cast-time damage pct: the skill's level curve plus combo orbs (each orb pays Combo Attack's rate), then Combo Synergy's
+    // final damage per orb multiplies the whole (SkillDamage.Pct; rounded to an int, the message carries no fraction).
     private int CastPct(int id) =>
         _skillDmg.Pct(id, SkillLv(id), _fighter.Orbs, SkillLv(SkillData.ComboAttack), SkillLv(SkillData.ComboSynergy));
 

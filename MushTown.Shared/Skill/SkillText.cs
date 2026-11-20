@@ -28,7 +28,7 @@ public static class SkillText
         Add("Attack", skill.AtkPct * lv, "%");
         Add("Max HP", skill.HpPct * lv, "%");
         Add("DEF", skill.DefPct * lv, "%");
-        Add("Damage", skill.DmgPct * lv, "%");
+        Add("Final Damage", skill.DmgPct * lv, "%");
         Add("Critical Rate", skill.CritPct * lv, "%");
         Add("Movement Speed and Jump", skill.MovePct * lv, "%");
         Add("STR", skill.Str * lv);
@@ -36,7 +36,8 @@ public static class SkillText
         Add("Attack Power", skill.Atk * lv);
         Add("Orb Chance", (skill.OrbChance + skill.SynChance) * lv, "%");
         if (skill.OrbMax > 0) parts.Add($"Max Orbs: {skill.OrbMax}");
-        Add("Damage per Orb", (skill.OrbDmg + skill.SynDmg) * lv, "%");
+        Add("Damage per Orb", skill.OrbDmg * lv, "%");
+        Add("Final Damage per Orb", skill.SynDmg * lv, "%");
         Add("Final Attack Chance", skill.ProcPct * lv, "%");
         if (skill.RegenHp > 0) parts.Add($"HP Recovery: {skill.RegenHp * lv} per 10 sec");
         if (skill.RegenMp > 0) parts.Add($"MP Recovery: {skill.RegenMp * lv} per 10 sec");

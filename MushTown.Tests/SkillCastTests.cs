@@ -43,7 +43,8 @@ public class SkillCastTests
         Assert.AreEqual(1000, cd[1001005]);
     }
 
-    // Pct: level curve ends plus orb bonus (combo rate + synergy rate).
+    // Pct: level curve ends plus the orbs' damage (combo rate), and Combo Synergy's final damage multiplies the whole (WZ: Final Damage per orb).
+    // 100 + 2 orbs x (2 x 5) = 120; synergy 2 orbs x 3 x 4 = +24% final damage: 120 x 1.24 = 148.8, rounded to 149.
     [TestMethod]
     public void Pct_CurvePlusOrbs()
     {
@@ -53,7 +54,9 @@ public class SkillCastTests
         var dmg = new SkillDamage(defs);
         Assert.AreEqual(100, dmg.Pct(1001005, 1, 0, 0, 0)); // lv1: DmgLo
         Assert.AreEqual(200, dmg.Pct(1001005, 20, 0, 0, 0)); // max: DmgHi
-        Assert.AreEqual(100 + 2 * (2 * 5 + 3 * 4), dmg.Pct(1001005, 1, 2, 5, 4));
+        Assert.AreEqual(149, dmg.Pct(1001005, 1, 2, 5, 4));
+        Assert.AreEqual(120, dmg.Pct(1001005, 1, 2, 5, 0)); // no Combo Synergy learned: orbs only
+        Assert.AreEqual(124, dmg.Pct(1001005, 1, 2, 0, 4)); // Combo Synergy only: 100 x 1.24
     }
 
     // No orbs: combo/synergy defs never read (missing rows must not throw).

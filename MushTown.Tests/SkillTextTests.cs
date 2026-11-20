@@ -26,6 +26,16 @@ public class SkillTextTests
         Assert.AreEqual("Max HP: +20%, Movement Speed and Jump: +10%", SkillText.Effect(skill, 10));
     }
 
+    // The warrior passives whose WZ text says "Final Damage": the tooltip says so too (not a plain "Damage").
+    [TestMethod]
+    public void Effect_WeaponMasteryAndComboSynergy_SayFinalDamage()
+    {
+        var mastery = new SkillData { Kind = SkillData.KindPassive, MaxLevel = 10, DmgPct = 2 };
+        Assert.AreEqual("Final Damage: +20%", SkillText.Effect(mastery, 10));
+        var synergy = new SkillData { Kind = SkillData.KindPassive, MaxLevel = 10, SynDmg = 3 };
+        Assert.AreEqual("Final Damage per Orb: +30%", SkillText.Effect(synergy, 10));
+    }
+
     [TestMethod]
     public void Effect_Buff_ShowsDuration()
     {

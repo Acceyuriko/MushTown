@@ -697,7 +697,7 @@ public sealed partial class GameServer : IDisposable
                 Send(client, Net.Encode(Net.MarkStack, w => { w.Write(uid); w.Write(stacks); }));
     }
 
-    // Elemental Drain layers: once a tick, each player who has the skill gets the count near him (the nearby mobs' DoT skills),
+    // Elemental Drain layers: once a tick, each player who has the skill gets the count near him (the caster's own DoT skills on the nearby mobs),
     // sent to that player every tick; the client draws the buff icon and the two stat rows from it. Caller holds
     // _mobLock (players is that tick's _pos snapshot).
     private void BroadcastDrainLayers(List<(int id, int map, float x, float y)> players)
@@ -705,7 +705,7 @@ public sealed partial class GameServer : IDisposable
         foreach (var p in players)
         {
             if (!_builds.TryGetValue(p.id, out var build) || build.DrainMax <= 0) continue;
-            int layers = _mobs.DrainLayers(p.map, p.x, p.y, build.DrainMax);
+            int layers = _mobs.DrainLayers(p.map, p.x, p.y, build.DrainMax, p.id);
             if (_clients.TryGetValue(p.id, out var client))
                 Send(client, Net.Encode(Net.DrainStacks, w => w.Write((byte)layers)));
         }

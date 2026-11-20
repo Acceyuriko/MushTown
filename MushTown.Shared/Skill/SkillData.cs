@@ -65,7 +65,7 @@ public sealed class SkillData
     // 10s tick, Final Attack proc %, Combo Synergy (+damage% per orb, +gain chance%).
     public int Str { get; set; }
     public int Dex { get; set; }
-    public int DmgPct { get; set; }
+    public int DmgPct { get; set; } // Weapon Mastery: WZ says "Final Damage: +pdR%", so this is a FINAL damage % per level (FinalDamageModifier), not a damage % point
     public int CritPct { get; set; }
     public int MovePct { get; set; }
     public int Atk { get; set; }
@@ -73,7 +73,7 @@ public sealed class SkillData
     public int RegenHp { get; set; }
     public int RegenMp { get; set; }
     public int ProcPct { get; set; }
-    public int SynDmg { get; set; }
+    public int SynDmg { get; set; } // Combo Synergy: WZ says "Final Damage increases by damR% for each combo orb": a FINAL damage % per orb per level (SkillDamage.Pct multiplies it in)
     public int SynChance { get; set; }
     public List<string> Desc { get; set; } = new(); // String.wz desc, one entry per line (the tooltip)
     public string Icon { get; set; } = "";
@@ -81,4 +81,8 @@ public sealed class SkillData
     public List<string> Effect { get; set; } = new();
     public List<string> Hit { get; set; } = new();
     public List<string> Affected { get; set; } = new(); // buff loop frames (buffs with art only)
+
+    // Weapon Mastery's final damage at a skill level: a MULTIPLIER record on FINAL_DAMAGE_PCT (1 + DmgPct x lv %), like every final damage source.
+    public StatModifier FinalDamageModifier(int lv) =>
+        new(StatKey.FINAL_DAMAGE_PCT, StatValueType.MULTIPLIER, 1.0 + DmgPct * lv / 100.0, StatSource.Skill);
 }

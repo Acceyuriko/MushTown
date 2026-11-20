@@ -41,14 +41,18 @@ public sealed class SkillDamage : Component
 {
     private readonly IReadOnlyDictionary<int, SkillData> _defs;
     public SkillDamage(IReadOnlyDictionary<int, SkillData> defs) { _defs = defs; } // dumb ctor
-    // Cast-time damage pct: the skill's level curve plus combo orbs (each orb
-    // pays Combo Attack's rate plus Combo Synergy's, both at their levels).
+    // Cast-time damage pct: the skill's level curve plus the combo orbs' damage (each orb pays Combo Attack's rate at its level), then Combo
+    // Synergy's FINAL damage (WZ: "Final Damage increases by damR% for each combo orb"): the orbs times its rate make one final damage %, which
+    // multiplies the whole pct (a final damage zone multiplies the hit, and the skill percent multiplies the hit the same way; the cast message
+    // carries a whole number, so the result is rounded to one).
     public int Pct(int skill, int lv, int orbs, int comboLv, int synLv)
     {
         int pct = Progression.SkillDamage(_defs[skill], lv);
         if (orbs > 0)
-            pct += orbs * (_defs[SkillData.ComboAttack].OrbDmg * comboLv
-                + _defs[SkillData.ComboSynergy].SynDmg * synLv);
+        {
+            pct += orbs * _defs[SkillData.ComboAttack].OrbDmg * comboLv;
+            pct = (int)Math.Round(pct * (1.0 + orbs * _defs[SkillData.ComboSynergy].SynDmg * synLv / 100.0));
+        }
         return pct;
     }
 }

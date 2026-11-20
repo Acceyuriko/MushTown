@@ -57,7 +57,7 @@ public partial class MushTownGame
     private int CurrentDrainLayers()
     {
         if (_shotDrain >= 0) return _shotDrain;
-        if (_localWorld != null) return _localWorld.DrainLayers(_mapId, _mover.X, _mover.Y, DrainMaxNow());
+        if (_localWorld != null) return _localWorld.DrainLayers(_mapId, _mover.X, _mover.Y, DrainMaxNow(), 0);
         return _drainLayers;
     }
 

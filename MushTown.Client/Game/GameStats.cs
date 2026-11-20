@@ -86,8 +86,7 @@ public partial class MushTownGame
         mods.Add(new(StatKey.DEX, StatValueType.FLAT, _skills[SkillData.PhysicalTraining].Dex * training, StatSource.Skill));
         mods.Add(new(StatKey.STR, StatValueType.FLAT, _skills[SkillData.AgileArms].Str * agile, StatSource.Skill));
 
-        mods.Add(new(StatKey.DAMAGE_PCT, StatValueType.FLAT,
-            _skills[SkillData.WeaponMastery].DmgPct * SkillLv(SkillData.WeaponMastery), StatSource.Skill));
+        mods.Add(_skills[SkillData.WeaponMastery].FinalDamageModifier(SkillLv(SkillData.WeaponMastery))); // WZ: "Final Damage": its own zone
         mods.Add(new(StatKey.CRIT_RATE, StatValueType.FLAT,
             _skills[SkillData.WeaponMastery].CritPct * SkillLv(SkillData.WeaponMastery)
             + _skills[SkillData.ChanceAttack].CritPct * SkillLv(SkillData.ChanceAttack), StatSource.Skill));

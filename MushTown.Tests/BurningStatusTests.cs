@@ -41,7 +41,8 @@ public partial class FirePoisonCombatTests
     [DataRow(MobStatusKind.Paralysis)]
     public void BurningMagic_EachStatus_DirectHitAndTickTakeIt(MobStatusKind kind)
     {
-        var trained = Mage with { DotFinalPct = 15 };
+        var heavy = Mage with { DmgPct = 100 }; // DmgPct 100: the damage zone and the final zone give different numbers
+        var trained = heavy with { DotFinalPct = 15 };
         var mob = new Mob { Uid = 1, Map = 7, Level = 200, Def = 0.1, Hp = 1_000_000_000_000, MaxHp = 1_000_000_000_000 };
         var pipeline = new HitPipeline(_ => throw new InvalidOperationException("no file"), new List<Mob> { mob }, (_, _, _) => { }, _ => { });
         long Hit(Build build, int seed, int pct, bool magic, bool tick = false) => pipeline.Resolve(new[] { mob }, new HitPipeline.Attack
@@ -53,18 +54,24 @@ public partial class FirePoisonCombatTests
             Tick = tick,
             Element = AttackElement.Poison,
         })[0].Damage;
-        long Expected(Build build, int seed, int pct, double extraFinal, bool tick = false)
+        long Expected(Build build, int seed, int pct, double extra, bool tick = false, bool asDamage = false)
         {
             var rng = new Random(seed);
-            return Damage.SkillCalc(rng.NextDouble(), tick ? 1.0 : rng.NextDouble(), 0.1, build, pct, 200, "", AttackElement.Poison, extraFinalPct: extraFinal);
+            double roll = rng.NextDouble(), crit = tick ? 1.0 : rng.NextDouble();
+            return asDamage // the same number in the damage zone instead
+                ? Damage.SkillCalc(roll, crit, 0.1, build, pct, 200, "", AttackElement.Poison, extraDmgPct: extra)
+                : Damage.SkillCalc(roll, crit, 0.1, build, pct, 200, "", AttackElement.Poison, extraFinalPct: extra);
         }
         Assert.IsFalse(mob.Statuses.HasBurningTarget);
         Assert.AreEqual(Expected(trained, 3, 78, 0), Hit(trained, 3, 78, true)); // no status yet: nothing
         mob.Statuses.Add(kind, 0, 600_000);
         Assert.IsTrue(mob.Statuses.Has(kind) && mob.Statuses.HasBurningTarget);
         Assert.AreEqual(Expected(trained, 3, 78, 15), Hit(trained, 3, 78, true)); // a skill hit
+        Assert.AreNotEqual(Expected(trained, 3, 78, 15), Expected(trained, 3, 78, 15, asDamage: true));
         Assert.AreEqual(Expected(trained, 4, 100, 15), Hit(trained, 4, 100, false)); // a basic swing
+        Assert.AreNotEqual(Expected(trained, 4, 100, 15), Expected(trained, 4, 100, 15, asDamage: true));
         Assert.AreEqual(Expected(trained, 5, 60, 15, tick: true), Hit(trained, 5, 60, true, tick: true)); // a DoT tick
-        Assert.AreEqual(Expected(Mage, 3, 78, 0), Hit(Mage, 3, 78, true)); // not learned: nothing
+        Assert.AreNotEqual(Expected(trained, 5, 60, 15, tick: true), Expected(trained, 5, 60, 15, tick: true, asDamage: true));
+        Assert.AreEqual(Expected(heavy, 3, 78, 0), Hit(heavy, 3, 78, true)); // not learned: nothing
     }
 }

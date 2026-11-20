@@ -52,32 +52,34 @@ public partial class FirePoisonCombatTests
     public void MobStatuses_Dots_CountedBySkill_RefreshAndExpire()
     {
         var list = new MobStatuses();
-        Assert.AreEqual(0, list.DotCount);
+        Assert.AreEqual(0, list.DotCount(0));
         list.AddDot(DotOf(Breath, 5000));
         list.AddDot(DotOf(Breath, 5000)); // the same skill: refresh, no second layer
-        Assert.AreEqual(1, list.DotCount);
+        Assert.AreEqual(1, list.DotCount(0));
         list.AddDot(DotOf(2111003, 2000)); // another skill: another layer
-        Assert.AreEqual(2, list.DotCount);
+        Assert.AreEqual(2, list.DotCount(0));
         list.Step(2000); // the second one runs out at 0
-        Assert.AreEqual(1, list.DotCount);
+        Assert.AreEqual(1, list.DotCount(0));
         list.AddDot(DotOf(Breath, 5000)); // a refresh restarts the time
         list.Step(4999);
-        Assert.AreEqual(1, list.DotCount);
+        Assert.AreEqual(1, list.DotCount(0));
         list.Step(1);
-        Assert.AreEqual(0, list.DotCount);
+        Assert.AreEqual(0, list.DotCount(0));
     }
 
-    // Two sources, the same skill: two independent effects, each with its own clock. DotCount counts the skill once (it is
-    // the Elemental Drain layer count), but both sources tick every interval, and each stops at its own dotTime.
+    // Two sources, the same skill: two independent effects, each with its own clock. DotCount(source) counts only that source's DoTs (it is
+    // the Elemental Drain layer count: WZ says "your" DoTs), and both sources tick every interval, and each stops at its own dotTime.
     [TestMethod]
     public void MobStatuses_Dots_TwoSourcesSameSkill_AreIndependent()
     {
         var list = new MobStatuses();
         list.AddDot(DotOf(Breath, 3000, attacker: 5));
         list.AddDot(DotOf(Breath, 5000, attacker: 6)); // another source: another effect on its own clock
-        Assert.AreEqual(1, list.DotCount); // DotCount is per skill, not per source
+        Assert.AreEqual(1, list.DotCount(5)); // each source counts only its own DoT
+        Assert.AreEqual(1, list.DotCount(6));
+        Assert.AreEqual(0, list.DotCount(7));
         list.AddDot(DotOf(Breath, 3000, attacker: 5)); // same source and skill: refresh, no second effect
-        Assert.AreEqual(1, list.DotCount);
+        Assert.AreEqual(1, list.DotCount(5));
         list.Step(1000);
         Assert.AreEqual(2, list.TakeDue().Count); // both sources ticked
         list.Step(2000);
@@ -86,7 +88,8 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(2, list.TakeDue().Count); // 3..5 s: source 5 is gone, source 6 still ticks
         list.Step(1000);
         Assert.AreEqual(0, list.TakeDue().Count);
-        Assert.AreEqual(0, list.DotCount);
+        Assert.AreEqual(0, list.DotCount(5));
+        Assert.AreEqual(0, list.DotCount(6));
     }
 
     // The clock: the first tick comes one interval after the cast, then one every interval, the last one at the end of the time (3 ticks for 3 s of
@@ -103,7 +106,7 @@ public partial class FirePoisonCombatTests
         list.Step(1000);
         list.Step(1000); // the dot ran out in this step: its last tick still comes
         Assert.AreEqual(2, list.TakeDue().Count);
-        Assert.AreEqual(0, list.DotCount);
+        Assert.AreEqual(0, list.DotCount(0));
         list.Step(5000);
         Assert.AreEqual(0, list.TakeDue().Count);
         list.AddDot(DotOf(Breath, 3000));

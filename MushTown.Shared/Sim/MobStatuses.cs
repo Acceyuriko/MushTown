@@ -28,6 +28,9 @@ public sealed class Dot
     public int IntervalMs;
     public int MsLeft; // the time left (WZ dotTime at the cast)
     public int NextMs; // ms to the next tick
+    public int Map; // where the caster stood at the cast: the ticks read Elemental Drain around this place (a smaller choice than reading the caster's place every tick)
+    public float CasterX;
+    public float CasterY;
 
     public Dot Clone() => (Dot)MemberwiseClone(); // one cast's numbers for each mob it hits (the clock is the mob's own)
 }
@@ -37,7 +40,7 @@ public sealed class Dot
 // on every AI tick; a dead mob is gone with its list.
 // The DoTs are kept apart by SOURCE AND SKILL: the same source's same skill again only refreshes its time (and takes the new
 // cast's numbers); another source, or another skill, is another independent effect (the user's rule). DotCount is the number of
-// distinct skills, for Elemental Drain (one layer per skill, whatever the number of sources). A tick that came due while stepping
+// DoTs of one source, for Elemental Drain (WZ: "your" damage-over-time effects: one layer per skill of the caster, the DoTs of others do not count). A tick that came due while stepping
 // waits in TakeDue until the server does its damage.
 // The Empirical Knowledge marks are kept apart by SOURCE only: each attacker has its own stacks and its own clock on this mob,
 // and only that attacker's client shows them (the server tells only the owner). A hit adds a stack (up to the skill's max) and
@@ -65,11 +68,11 @@ public sealed class MobStatuses
         _dots[key] = dot;
     }
 
-    // How many distinct DoT skills are on the mob (one layer per skill, whatever the number of sources), for Elemental Drain.
-    public int DotCount => _dots.Keys.Select(k => k.Skill).Distinct().Count();
+    // How many DoTs of this source are on the mob (one per skill), for Elemental Drain.
+    public int DotCount(int attacker) => _dots.Keys.Count(k => k.Attacker == attacker);
 
-    // Whether any source's DoT of this skill is on the mob (for the layer count of a DoT that is about to land).
-    public bool HasDotSkill(int skill) => _dots.Keys.Any(k => k.Skill == skill);
+    // Whether this source's DoT of this skill is on the mob (for the layer count of a DoT that is about to land).
+    public bool HasDot(int attacker, int skill) => _dots.ContainsKey((attacker, skill));
 
     // The stacks this attacker will have after one more hit: a proc adds one up to the cap, a hit with no proc keeps them (HitMark does the same).
     public int StacksAfterHit(int attacker, int maxStacks, bool proc) =>

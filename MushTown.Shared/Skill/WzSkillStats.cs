@@ -50,8 +50,8 @@ public static class WzSkillStats
     }
 
     // Elemental Drain at max level: the final damage percent for each damage-over-time effect on the mobs near the caster (WZ x) and the most
-    // effects that count (WZ y). The WZ text counts nearby enemies with a DoT (range 800); MobWorld.DrainLayers counts the
-    // DoT skills on the mobs near the caster (a circle of radius 800), one layer per distinct skill.
+    // effects that count (WZ y). The WZ text counts the caster's own DoTs on nearby enemies (range 800); MobWorld.DrainLayers counts the
+    // caster's DoT skills on the mobs near the caster (a circle of radius 800), one layer per skill.
     public static (int pct, int max) ElementalDrain(IReadOnlyDictionary<int, WzSkillData> skills)
     {
         var drain = skills[WzSkillData.ElementalDrain];

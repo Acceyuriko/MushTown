@@ -313,7 +313,7 @@ public sealed class MobWorld
 
     // Elemental Drain: how many layers count near one point (the pipeline counts them for a hit; the server also asks once a tick,
     // to tell each caster the layers it displays). 0 when not learned (max 0).
-    public int DrainLayers(int map, float x, float y, int max) => _pipeline.DrainLayers(map, x, y, max);
+    public int DrainLayers(int map, float x, float y, int max, int attacker) => _pipeline.DrainLayers(map, x, y, max, attacker);
 
     // The Empirical Knowledge stacks one attacker has on one mob (0 = none), for the client's own view and the shot staging.
     public int MarkStacks(int uid, int attacker)
@@ -511,6 +511,9 @@ public sealed class MobWorld
             Pct = (int)wz.Value("dot", wz.MaxLevel),
             Element = element,
             Rng = rng,
+            Map = map,
+            CasterX = x,
+            CasterY = y,
             IntervalMs = (int)(wz.Value("dotInterval", wz.MaxLevel) * 1000),
             MsLeft = (int)(wz.Value("dotTime", wz.MaxLevel) * 1000 * (100 + build.DotTimePct) / 100), // Burning Magic: a longer DoT
         };
@@ -605,7 +608,7 @@ public sealed class MobWorld
     }
 
     // One tick of a DoT: one attack of the hit pipeline with the caster's snapshot (Build), the DoT's damage % and element (the mob already has
-    // the DoT, so Burning Magic counts). The tick is a settled hit flagged Dot: HP and death are set, the client skips the flinch and the spark.
+    // the DoT, so Burning Magic counts; a tick takes every bonus a hit takes, Elemental Drain read around the place where the DoT was cast). The tick is a settled hit flagged Dot: HP and death are set, the client skips the flinch and the spark.
     // A kill buries the mob and its statuses go with it, and the kill is credited to the DoT's own source (Attacker). A DoT is removed when its
     // source disconnects or leaves the map (CancelDoTs), so a tick never belongs to a source that is gone.
     private Hit DotTick(Mob m, Dot dot) =>
@@ -619,6 +622,9 @@ public sealed class MobWorld
             Element = dot.Element,
             Magic = true,
             Tick = true,
+            Map = dot.Map,
+            CasterX = dot.CasterX,
+            CasterY = dot.CasterY,
         })[0];
 
     // One mob's mark changes gathered into the broadcast queue (the caller sends each to its own attacker's client).
