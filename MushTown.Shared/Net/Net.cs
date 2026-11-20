@@ -50,6 +50,7 @@ public static class Net
     public const byte MarkStack = 40; // server -> client (the owner only): int uid, int stacks (Empirical Knowledge on that mob; 0 = gone)
     public const byte DrainStacks = 41; // server -> client (the owner only): byte layers (Elemental Drain layers near the player; 0 = none)
     public const byte Zone = 42; // server -> client: int uid, int skill, int map, float left, float right, float y (the caster's feet), int lifeMs, int delayMs, byte gone (a ground zone appears: lifeMs of it left after delayMs of waiting; gone 1 = take it away now)
+    public const byte MobDot = 43; // server -> client (everyone): int uid, int skill, byte on (a skill's DoT is on that mob = 1, or has left it = 0: the client draws that skill's own head icon)
 
     // A meso drop rides DropItem with tab 4: itemId holds the high 32 bits and
     // count the low 32, so the amount stays one long without a new command.
@@ -235,7 +236,7 @@ public readonly record struct SkillFxEvent(int Attacker, int Skill, int Map, flo
 // Projectile.FlightMs of the four numbers.
 public readonly record struct BallEvent(int Skill, int Map, float FromX, float FromY, float ToX, float ToY, int DelayMs = 0);
 
-// One ground zone (Poison Mist): Skill's art rings the point (middle of Left..Right, Y) of Map (the caster's feet at the cast) for LifeMs after DelayMs (the body action's attack frame;
+// One ground zone (Poison Mist): Skill's art fills the box Left..Right (the vertical size is the skill's lt/rb) round Y of Map (the caster's feet at the cast) for LifeMs after DelayMs (the body action's attack frame;
 // a client that enters later gets the time that is left). Gone: the caster left, take the zone away now. Every client on the map gets it, the caster too.
 public readonly record struct ZoneEvent(int Uid, int Skill, int Map, float Left, float Right, float Y, int LifeMs, int DelayMs, bool Gone = false);
 
@@ -243,6 +244,9 @@ public readonly record struct ZoneEvent(int Uid, int Skill, int Map, float Left,
 // Clients drop moves for other maps and for mobs mid-flinch (hit1/die1 own
 // the pose until they finish).
 public readonly record struct MoveEvent(int Uid, int Map, float X, float Y, bool FacingRight);
+
+// One DoT skill that came on a mob (On) or left it, sent to everyone: the client keeps one head icon for each skill on the mob.
+public readonly record struct MobDotEvent(int Uid, int Skill, bool On);
 
 // One Empirical Knowledge stack change on a mob, sent only to its owner: Uid now has Stacks (0 = the marks are gone).
 public readonly record struct MarkEvent(int Uid, int Stacks);

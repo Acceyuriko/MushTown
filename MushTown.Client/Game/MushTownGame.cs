@@ -126,6 +126,8 @@ public partial class MushTownGame : Game
     private readonly Dictionary<int, MobArt> _mobs = new();
     private readonly Dictionary<int, int> _markStacks = new(); // mob uid -> my Empirical Knowledge stacks (net play; local reads the world)
     private int _drainLayers; // my Elemental Drain layers near me (net play: the server sends them; local reads the world)
+    private readonly Dictionary<int, List<int>> _mobDots = new(); // mob uid -> the skills whose DoT is on it, in the order they came (net play; local reads the world)
+    private readonly Dictionary<int, IdleArt?> _dotArt = new(); // skill -> its own mob loop for the head icon (null: the skill has none), built once
     private IdleArt?[]? _markArt; // the mob/0, mob/1, mob/2 loops (1/2/3 stacks), built once from the exported skill
     private readonly Dictionary<int, MobData> _mobData = new();
     private readonly List<FloatingNumber> _numbers = new();
@@ -819,7 +821,7 @@ public partial class MushTownGame : Game
         // Frame == Frames.Count, and the draw reads that frame. A number does
         // not crash, it just keeps drawing and ageing. All three belong here.
         SpawnImpacts(); // a ball that arrived explodes (before the sweep takes it away)
-        MobArt.CollectDead(_mobs, _world, _markStacks);
+        MobArt.CollectDead(_mobs, _world, _markStacks, _mobDots);
         DropArt.CollectDead(_drops, _world);
         PoolSweep.CollectDead(_numbers, _world, _numberPool);
         PoolSweep.CollectDead(_fx, _world, _fxPool);
@@ -897,6 +899,13 @@ public partial class MushTownGame : Game
             {
                 if (mk.Stacks > 0) _markStacks[mk.Uid] = mk.Stacks;
                 else _markStacks.Remove(mk.Uid);
+            }
+            while (_net.TryTakeDot(out var dot)) // a skill's DoT came on a mob or left it (sent to everyone)
+            {
+                if (!_mobs.ContainsKey(dot.Uid)) continue; // another map's mob, or one that is gone
+                if (!_mobDots.TryGetValue(dot.Uid, out var skills)) _mobDots[dot.Uid] = skills = new List<int>();
+                if (dot.On && !skills.Contains(dot.Skill)) skills.Add(dot.Skill);
+                else if (!dot.On) skills.Remove(dot.Skill);
             }
             while (_net.TryTakeDrain(out var dr)) // my Elemental Drain layers near me (only ever sent to me)
                 _drainLayers = dr.Stacks;

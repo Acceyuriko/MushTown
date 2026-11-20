@@ -3,7 +3,8 @@ using MushTown.Shared;
 
 namespace MushTown.Tests;
 
-// The generic ground zone (GroundZone, MobWorld.StartZone) and Poison Mist (211.img), its first user. Shares the helpers of FirePoisonCombatTests.
+// The generic ground zone (GroundZone, MobWorld.StartZone) and Poison Mist (211.img), its first user: the cast hits the mobs in the box once, the mist poisons every
+// mob in the box on every tick and does no damage itself. Shares the helpers of FirePoisonCombatTests.
 public partial class FirePoisonCombatTests
 {
     private const int Mist = WzSkillData.PoisonMist;
@@ -31,19 +32,24 @@ public partial class FirePoisonCombatTests
         return hits;
     }
 
-    // GroundZone alone: it waits, then the first period goes off at once, the next ones every period, none at or after the end (3 s of 1 s: 3 periods).
+    // GroundZone alone: it waits, then it is up on every step until the end (3 s: the step that reaches the end is not up). JustStarted is true for the first up step only,
+    // also when the wait ended exactly at the end of an earlier step.
     [TestMethod]
-    public void GroundZone_WaitsThenPeriods_NoneAtTheEnd()
+    public void GroundZone_WaitsThenIsUpEveryStep_StartedOnce_NotAtTheEnd()
     {
-        var zone = new GroundZone { PeriodMs = 1000, LifeMs = 3000, WaitMs = 500 };
-        Assert.AreEqual(0, zone.Step(499));
-        Assert.AreEqual(0, zone.Step(1)); // the wait ends exactly here: no time of this step is left
+        var zone = new GroundZone { LifeMs = 3000, WaitMs = 500 };
+        Assert.IsFalse(zone.Step(499));
+        Assert.IsFalse(zone.Step(1)); // the wait ends exactly here: no time of this step is left
         Assert.IsFalse(zone.Over);
-        Assert.AreEqual(1, zone.Step(1)); // the first period, at the start
-        Assert.AreEqual(1, zone.Step(999)); // 1000 ms in
-        Assert.AreEqual(1, zone.Step(2000)); // one big step: 2000 ms is a period, 3000 ms is the end and not one
+        Assert.IsTrue(zone.Step(1)); // the first up step
+        Assert.IsTrue(zone.JustStarted);
+        Assert.IsTrue(zone.Step(999));
+        Assert.IsFalse(zone.JustStarted);
+        Assert.IsTrue(zone.Step(1000));
+        Assert.IsFalse(zone.Step(2000)); // 2000 ms is the end
         Assert.IsTrue(zone.Over);
-        Assert.AreEqual(0, zone.Step(5000));
+        Assert.IsFalse(zone.Step(5000));
+        Assert.IsFalse(zone.JustStarted);
     }
 
     // The box: edges are inside, and the body height counts (a body that reaches into the box is in). A zone ended by Detonate is over at once
@@ -51,7 +57,7 @@ public partial class FirePoisonCombatTests
     [TestMethod]
     public void GroundZone_Contains_EdgesInside_Detonate_Ends()
     {
-        var zone = new GroundZone { Left = -250, Right = 250, Top = -100, Bottom = 300, PeriodMs = 1000, LifeMs = 5000 };
+        var zone = new GroundZone { Left = -250, Right = 250, Top = -100, Bottom = 300, LifeMs = 5000 };
         Assert.IsTrue(zone.Contains(-250, 100, 0));
         Assert.IsTrue(zone.Contains(250, 100, 0));
         Assert.IsFalse(zone.Contains(251, 100, 0));
@@ -62,7 +68,7 @@ public partial class FirePoisonCombatTests
         Assert.IsFalse(zone.Over);
         zone.Detonate();
         Assert.IsTrue(zone.Over);
-        Assert.AreEqual(0, zone.Step(1000));
+        Assert.IsFalse(zone.Step(1000));
     }
 
     // The ground zone skills are the ones listed in WzSkillData.GroundZones (Poison Mist only); Explosion and Poison Breath are not.
@@ -100,7 +106,7 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(0, world.ZonesOn(8).Count); // another map
     }
 
-    // The zone lives `time` seconds from its start and then goes. The mob in it takes the hit once (the first period) and every later period refreshes
+    // The zone lives `time` seconds from its start and then goes. The mob in it takes the cast's hit once (the start) and every later tick refreshes
     // the poison, so the poison ticks run on until the zone is over and 6 s after the last refresh.
     [TestMethod]
     public void PoisonMist_LivesTimeSeconds_OneHit_PoisonRefreshedToTheEnd_ThenGone()
@@ -138,10 +144,10 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(0, Hits(301));
     }
 
-    // Many zones: casts one after another leave many zones standing, and a mob in all of them takes the direct hit once (the first zone poisons it, the
-    // others only refresh); a cast later, while the poison lasts, does the same.
+    // Many zones: every cast hits the mobs in its box once at its start (3 casts, 3 hits), but the poison is one DoT: the first zone puts it on, the other zones
+    // and the later ticks only refresh it.
     [TestMethod]
-    public void PoisonMist_ManyZones_OneDirectHitForAMob()
+    public void PoisonMist_EveryCastHitsOnce_ManyZonesGiveOneDot()
     {
         using var assets = new TempAssets();
         assets.AddWzSkill(MistData());
@@ -150,15 +156,17 @@ public partial class FirePoisonCombatTests
         world.SkillStrike(7, 0, 100, true, new Random(2), Mage, Mist, 270); // the same moment: two zones
         Assert.AreEqual(2, world.ZonesOn(7).Count);
         var hits = ZoneRun(world, 3000);
+        Assert.AreEqual(1, world.DrainLayers(7, 0, 100, 10, 0)); // two zones, one DoT
         world.SkillStrike(7, 0, 100, true, new Random(3), Mage, Mist, 270); // a third, while the poison runs
         hits.AddRange(ZoneRun(world, 3000));
         Assert.AreEqual(3, world.ZonesOn(7).Count);
-        Assert.AreEqual(1, hits.Count(h => !h.Dot && h.Skill == Mist));
+        Assert.AreEqual(3, hits.Count(h => !h.Dot && h.Skill == Mist));
+        Assert.AreEqual(1, world.DrainLayers(7, 0, 100, 10, 0));
         Assert.IsTrue(hits.Count(h => h.Dot) >= 5);
     }
 
-    // Only the mist's own DoT from the same caster counts: a mob poisoned by Poison Breath still takes the direct hit of the mist, and so does a mob that
-    // has the mist's DoT of another caster (each caster's poison is his own).
+    // Only the mist's own DoT from the same caster counts for the poison: a mob poisoned by Poison Breath still gets the mist's DoT (a layer of its own), and so does
+    // a mob that has the mist's DoT of another caster (each caster's poison is his own). Each cast hits once either way.
     [TestMethod]
     public void PoisonMist_OnlyItsOwnDotFromTheSameCasterCounts()
     {
@@ -203,7 +211,7 @@ public partial class FirePoisonCombatTests
         world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Mist, 270);
         Assert.AreEqual(0, world.DrainLayers(7, 0, 100, 10, 0));
         var hits = ZoneRun(world, 3000);
-        Assert.AreEqual(1, world.DrainLayers(7, 0, 100, 10, 0)); // many periods and one layer
+        Assert.AreEqual(1, world.DrainLayers(7, 0, 100, 10, 0)); // many ticks and one layer
         Assert.IsTrue(hits.Count(h => h.Dot) >= 2); // the DoT ticks, one a second
         world.SkillStrike(7, 0, 100, true, new Random(2), Mage, Mist, 270); // the second cast: the zones overlap, the layer does not
         ZoneRun(world, 1000);
@@ -213,7 +221,7 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(2, world.DrainLayers(7, 0, 100, 10, 0)); // another skill is another layer
     }
 
-    // A mob that leaves the box has its poison run out on its own: no refresh, so the last tick is 6 s after the last period it stood in. The mob walks right at
+    // A mob that leaves the box has its poison run out on its own: no refresh, so the last tick is 6 s after the last tick it stood in. The mob walks right at
     // 100 px/s toward a player far on that side and leaves the box (250 px) at 2.5 s; the poison ends by 8.6 s and the mob is never hit again.
     [TestMethod]
     public void PoisonMist_MobLeaves_PoisonRunsOut_NoMoreHits()
@@ -230,9 +238,88 @@ public partial class FirePoisonCombatTests
         for (int ms = 100; ms <= 20000; ms += 100)
             foreach (var s in world.Tick(100, players).Strikes)
                 timeline.Add((ms, s.hit.Dot));
-        Assert.AreEqual(1, timeline.Count(t => !t.dot)); // the first period only; the later ones in the box refreshed the poison
+        Assert.AreEqual(1, timeline.Count(t => !t.dot)); // the cast's hit only; the later ticks in the box refreshed the poison
         int lastTick = timeline.Last(t => t.dot).ms;
-        Assert.IsTrue(lastTick >= 7000 && lastTick <= 2600 + 6000 + 100, $"the poison must end 6 s after the last period in the box (last tick at {lastTick} ms)");
+        Assert.IsTrue(lastTick >= 7000 && lastTick <= 2600 + 6000 + 100, $"the poison must end 6 s after the last tick in the box (last tick at {lastTick} ms)");
+    }
+
+    // A mob that walks into the box after the cast is poisoned in the very tick it steps in (not at a period), and takes no direct hit: the cast's hit is only for the
+    // mobs that were in the box when the zone started. The mob starts 400 px out (box x -250..250), a player at 0 pulls it right at 100 px/s.
+    [TestMethod]
+    public void PoisonMist_MobWalksIn_PoisonedThatTick_NoDirectHit()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(MistData());
+        assets.AddMap(7, """[{"MobId":100000,"X":-400,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 100, aggro: 600, level: 200);
+        var world = new MobWorld(assets.Dir);
+        world.EnterMap(7);
+        world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Mist, 270);
+        var players = new List<(int id, int map, float x, float y)> { (1, 7, 0, 100) };
+        float lastX = -400;
+        int poisonedAt = -1, direct = 0;
+        for (int ms = 100; ms <= 4000; ms += 100)
+        {
+            var ev = world.Tick(100, players);
+            direct += ev.Strikes.Count(s => !s.hit.Dot);
+            float x = ev.Moves.Single().X;
+            if (poisonedAt < 0 && world.DrainLayers(7, 0, 100, 10, 0) == 1)
+            {
+                poisonedAt = ms;
+                Assert.IsTrue(lastX < -250 && x >= -250, $"it must be poisoned the tick it steps in (it moved {lastX} -> {x})");
+            }
+            lastX = x;
+        }
+        Assert.IsTrue(poisonedAt > 600, "the zone starts at 600 ms and the mob is out until about 1500 ms");
+        Assert.AreEqual(0, direct);
+    }
+
+    // The DoT skills of a mob tell their changes once, per skill: on when the first DoT of a skill comes (a refresh says nothing), off when the last one of the skill
+    // is gone (two sources of one skill keep it on until both have left). This is what the head icons follow.
+    [TestMethod]
+    public void MobStatuses_DotSkillChanges_OnAndOffOncePerSkill()
+    {
+        var list = new MobStatuses();
+        list.AddDot(DotOf(Mist, 3000, attacker: 5));
+        list.AddDot(DotOf(Mist, 3000, attacker: 5)); // a refresh
+        list.AddDot(DotOf(Mist, 5000, attacker: 6)); // another source of the same skill
+        list.AddDot(DotOf(Breath, 5000, attacker: 5));
+        CollectionAssert.AreEqual(new[] { (Mist, true), (Breath, true) }, list.TakeDotChanges().ToArray());
+        CollectionAssert.AreEqual(new[] { Mist, Breath }, list.DotSkills().ToArray());
+        Assert.AreEqual(0, list.TakeDotChanges().Count);
+        list.Step(3000); // the mist of 5 is gone, the mist of 6 stays
+        Assert.AreEqual(0, list.TakeDotChanges().Count);
+        list.Step(2000); // both of the others are gone now
+        CollectionAssert.AreEquivalent(new[] { (Mist, false), (Breath, false) }, list.TakeDotChanges().ToArray());
+        Assert.AreEqual(0, list.DotSkills().Count);
+        list.AddDot(DotOf(Breath, 5000, attacker: 5));
+        list.TakeDotChanges();
+        list.RemoveDotsOf(5); // a source leaving
+        CollectionAssert.AreEqual(new[] { (Breath, false) }, list.TakeDotChanges().ToArray());
+    }
+
+    // The world hands the changes to the server (uid, skill, on): the mist puts its DoT on the mob in the tick it starts, and a newcomer to the map is told the
+    // skills that are on the mobs now.
+    [TestMethod]
+    public void PoisonMist_WorldReportsDotChanges_AndTheSkillsOnTheMobs()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(MistData());
+        var world = World(assets, (100, 100));
+        int uid = world.MobsOn(7).Single().Uid;
+        world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Mist, 270);
+        Assert.AreEqual(0, world.TakeDotChanges().Count);
+        ZoneRun(world, 1000);
+        CollectionAssert.AreEqual(new[] { (uid, Mist, true) }, world.TakeDotChanges().ToArray());
+        CollectionAssert.AreEqual(new[] { (uid, Mist) }, world.DotsOn(7).ToArray());
+        Assert.AreEqual(0, world.DotsOn(8).Count);
+        CollectionAssert.AreEqual(new[] { Mist }, world.DotSkills(uid).ToArray());
+        ZoneRun(world, 1000); // refreshed every tick: no more changes
+        Assert.AreEqual(0, world.TakeDotChanges().Count);
+        world.CancelZones(0); // the caster leaves: his zones and his poison go
+        world.CancelDoTs(0);
+        ZoneRun(world, 100);
+        CollectionAssert.AreEqual(new[] { (uid, Mist, false) }, world.TakeDotChanges().ToArray());
     }
 
     // The zone goes through the pipeline: Elemental Drain (a final damage for each of the caster's DoT skills near him) raises the hit of a zone like any other.
@@ -303,12 +390,27 @@ public partial class FirePoisonCombatTests
             Thread.Sleep(10);
         }
         Assert.AreEqual(Mist, hit.Skill, "b must see the poison hit the server judged");
+        var dotAtB = WaitDot(b);
+        Assert.AreEqual((hit.Uid, Mist, true), (dotAtB.Uid, dotAtB.Skill, dotAtB.On)); // everyone sees the poison on the mob, not only the caster
         Thread.Sleep(300);
         c.SendState(9, -50, 100, Net.ActStand, 0, true); // entering the map: the server lists the zones that run there
         var atC = WaitZone(c);
         Assert.AreEqual(atA.Uid, atC.Uid);
         Assert.IsTrue(atC.LifeMs > 0 && atC.LifeMs < 15000, $"the time left, not the whole time ({atC.LifeMs})");
         Assert.AreEqual(0, atC.DelayMs);
+        var dotAtC = WaitDot(c); // and the poison that is on the mob now
+        Assert.AreEqual((hit.Uid, Mist, true), (dotAtC.Uid, dotAtC.Skill, dotAtC.On));
+    }
+
+    private static MobDotEvent WaitDot(NetClient client)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            if (client.TryTakeDot(out var e)) return e;
+            Thread.Sleep(10);
+        }
+        Assert.Fail("timed out waiting for a DoT event");
+        throw new InvalidOperationException("unreachable");
     }
 
     private static ZoneEvent WaitZone(NetClient client)

@@ -87,6 +87,7 @@ public class WorldTests
         var world = new GameObject();
         var mobs = new Dictionary<int, MobArt>();
         var marks = new Dictionary<int, int> { [1] = 2, [2] = 3 };
+        var dots = new Dictionary<int, List<int>> { [1] = new() { 2111003 }, [2] = new() { 2111003 } };
         var live = Mob(Data(("stand", 1), ("hit1", 1), ("die1", 1)), "stand");
         world.AddChild(live.Owner);
         mobs[1] = live;
@@ -95,12 +96,14 @@ public class WorldTests
         mobs[2] = dying;
         dying.Update(0.1f); // the death anim is one frame: it ends here
         Assert.IsTrue(dying.Owner.Dead);
-        MobArt.CollectDead(mobs, world, marks);
+        MobArt.CollectDead(mobs, world, marks, dots);
         Assert.AreEqual(1, world.Children.Count);
         Assert.IsTrue(mobs.ContainsKey(1));
         Assert.IsFalse(mobs.ContainsKey(2));
         Assert.IsTrue(marks.ContainsKey(1));
         Assert.IsFalse(marks.ContainsKey(2)); // a dead mob's mark stacks go with it
+        Assert.IsTrue(dots.ContainsKey(1));
+        Assert.IsFalse(dots.ContainsKey(2)); // and its poison
     }
 
     [TestMethod]

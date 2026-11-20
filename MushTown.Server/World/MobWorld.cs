@@ -89,7 +89,7 @@ public sealed class MobWorld
         public Dot? Dot; // the DoT this cast puts on each mob it leaves alive (a copy for each mob), built at the cast
     }
 
-    // A ground zone and the cast that made it: each period the zone judges the mobs in its box with these numbers (read at the cast).
+    // A ground zone and the cast that made it: the zone judges the mobs in its box with these numbers (read at the cast).
     private sealed class LiveZone
     {
         public GroundZone Zone = null!;
@@ -128,6 +128,7 @@ public sealed class MobWorld
     private readonly List<ZoneEvent> _zoneEvents = new(); // zones started or taken away, waiting for broadcast
     private readonly List<BallEvent> _launches = new(); // balls thrown, waiting for broadcast (the flight time is Projectile.FlightMs of the four numbers, the same rule on the client)
     private readonly List<(int attacker, int uid, int stacks)> _markDirty = new(); // Empirical Knowledge stack changes to send to their owner
+    private readonly List<(int uid, int skill, bool on)> _dotDirty = new(); // DoT skills that came on a mob or left it, to send to everyone
     private readonly HashSet<int> _spawned = new();
     private int _nextUid = 1;
     private int _nextZone = 1;
@@ -253,16 +254,6 @@ public sealed class MobWorld
             foreach (var h in WzHits(p.Map, p.X, p.Y, p.FacingRight, p.Rng, p.Build, p.Wz, p.Element, p.MobCount, p.Segments, p.Pct, p.Attacker, p.Dot, p.CasterX, p.CasterY))
                 strikes.Add((h, p.Attacker));
         }
-        for (int i = 0; i < _zones.Count;) // the zones that run: each period they judge the mobs inside, in the order the zones were cast
-        {
-            var z = _zones[i];
-            int periods = z.Zone.Step(ms);
-            if (z.Zone.Over) _zones.RemoveAt(i); // the clients end their copy by the time they were given
-            else i++;
-            for (int k = 0; k < periods; k++)
-                foreach (var h in ZoneHits(z))
-                    strikes.Add((h, z.Cast.Attacker));
-        }
         var onMap = new HashSet<int>();
         foreach (var p in players) onMap.Add(p.map);
         var moves = new List<Move>();
@@ -281,9 +272,20 @@ public sealed class MobWorld
             if (onMap.Contains(m.Map))
                 moves.Add(new Move(m.Uid, m.Map, m.X, m.Y, m.FacingRight));
         }
+        for (int i = 0; i < _zones.Count;) // the zones that run: every tick, after the mobs moved, they judge the mobs inside (a mob that steps in is poisoned in that very tick), in the order the zones were cast
+        {
+            var z = _zones[i];
+            bool up = z.Zone.Step(ms);
+            if (z.Zone.Over) _zones.RemoveAt(i); // the clients end their copy by the time they were given
+            else i++;
+            if (!up) continue;
+            foreach (var h in ZoneTick(z))
+                strikes.Add((h, z.Cast.Attacker));
+        }
         for (int i = 0; i < _lives.Count;) // the DoT ticks that came due in the steps above (a kill removes the mob from _lives, so the index stays)
         {
             var m = _lives[i];
+            FlushDots(m); // the DoT skills that came on (the zones above) or ran out (the steps above) tell everyone
             foreach (var dot in m.Statuses.TakeDue())
             {
                 strikes.Add((DotTick(m, dot), dot.Attacker));
@@ -389,9 +391,40 @@ public sealed class MobWorld
         return list;
     }
 
-    // Drops the mark changes nobody reads (a local world, a shot, the cash shop: the client shows its own stacks from the world
-    // directly, so the queue would only grow).
-    public void DiscardMarkChanges() => _markDirty.Clear();
+    // The DoT skills that came on a mob or left it since the last call (uid, skill, on), to send to everyone.
+    public IReadOnlyList<(int uid, int skill, bool on)> TakeDotChanges()
+    {
+        if (_dotDirty.Count == 0) return Array.Empty<(int, int, bool)>(); // most steps change no DoT
+        var list = new List<(int, int, bool)>(_dotDirty);
+        _dotDirty.Clear();
+        return list;
+    }
+
+    // The DoT skills on each live mob of a map (uid, skill), for a client that enters it.
+    public List<(int uid, int skill)> DotsOn(int map)
+    {
+        var list = new List<(int, int)>();
+        foreach (var m in _lives)
+            if (m.Map == map)
+                foreach (int skill in m.Statuses.DotSkills()) list.Add((m.Uid, skill));
+        return list;
+    }
+
+    // The skills that have a DoT on one mob now, for the client's own view of a local world and the shot staging.
+    public IReadOnlyList<int> DotSkills(int uid)
+    {
+        foreach (var m in _lives)
+            if (m.Uid == uid) return m.Statuses.DotSkills();
+        return Array.Empty<int>();
+    }
+
+    // Drops the mark and DoT changes nobody reads (a local world, a shot, the cash shop: the client shows its own stacks and the DoT icons from the world
+    // directly, so the queues would only grow).
+    public void DiscardChangeQueues()
+    {
+        _markDirty.Clear();
+        _dotDirty.Clear();
+    }
 
     // Balls thrown by the casts since the last call (the caller broadcasts them to the map).
     public List<BallEvent> TakeLaunches()
@@ -668,8 +701,7 @@ public sealed class MobWorld
 
     // A ground zone cast at the caster's feet (x, y): the WZ box lt..rb (mirrored by facing, like every box) with its origin on the caster's feet (not
     // on the ground below: a caster in the air has the box around him), fixed there for `time` seconds at max level, starting at the body action's attack
-    // frame (the first tick after it, like a ball's landing). It goes off every dotInterval (the WZ has no period of its own for the zone, 未核实):
-    // see ZoneHits for what a period does. The clients get the zone as one event.
+    // frame (the first tick after it, like a ball's landing). It is judged every tick: see ZoneTick. The clients get the zone as one event.
     private void StartZone(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, AttackElement element, int pct, int attacker, Dot? dot)
     {
         var lt = wz.Vectors["lt"];
@@ -684,7 +716,6 @@ public sealed class MobWorld
             Top = y + lt[1],
             Bottom = y + rb[1],
             OriginY = y,
-            PeriodMs = (int)(wz.Value("dotInterval", wz.MaxLevel) * 1000),
             LifeMs = (int)(wz.Value("time", wz.MaxLevel) * 1000),
             WaitMs = wz.AttackDelayMs + TickMs,
         };
@@ -696,20 +727,22 @@ public sealed class MobWorld
         _zoneEvents.Add(new ZoneEvent(zone.Uid, wz.SkillId, map, zone.Left, zone.Right, y, zone.LifeMs, zone.WaitMs));
     }
 
-    // One period of a zone. A mob in the box that has no DoT of this skill from this caster takes the cast's hit (damage %, one segment, no mob cap: WZ has no
-    // mobCount) and the DoT with it. A mob that already has it takes no hit: only its DoT is refreshed (its time starts again, the beat of its ticks stays).
-    // So many zones of one caster, cast one after another, hit a mob once between them; a DoT of another skill or of another caster does not count.
-    private List<Hit> ZoneHits(LiveZone z)
+    // One tick of a zone that is up. Every mob in the box is poisoned: one that has no DoT of this skill from this caster gets the cast's DoT, one that has it only
+    // gets it refreshed (its time starts again, the beat of its ticks stays). So a mob that walks in is poisoned in that very tick, and many zones of one caster
+    // give a mob one DoT between them; a DoT of another skill or of another caster does not count. In the tick the zone starts, the cast also hits every mob in the box
+    // once (the cast's damage %, one segment, no mob cap: WZ has no mobCount); the mist itself does no damage, only its poison does, through the pipeline in DotTick.
+    private List<Hit> ZoneTick(LiveZone z)
     {
         var c = z.Cast;
-        var targets = new List<Mob>();
+        var inBox = new List<Mob>();
         foreach (var m in _lives)
         {
             if (m.Map != z.Zone.Map || !z.Zone.Contains(m.X, m.Y, m.BodyH)) continue;
-            if (c.Dot != null && m.Statuses.HasDot(c.Attacker, c.Wz.SkillId)) m.Statuses.AddDot(c.Dot.Clone());
-            else targets.Add(m);
+            if (m.Statuses.HasDot(c.Attacker, c.Wz.SkillId)) m.Statuses.RefreshDot(c.Attacker, c.Wz.SkillId, c.Dot!.MsLeft);
+            else m.Statuses.AddDot(c.Dot!.Clone());
+            inBox.Add(m);
         }
-        return ResolveWz(targets, c.Map, c.Rng, c.Build, c.Wz, c.Element, 1, c.Pct, c.Attacker, c.Dot, c.CasterX, c.CasterY);
+        return z.Zone.JustStarted ? ResolveWz(inBox, c.Map, c.Rng, c.Build, c.Wz, c.Element, 1, c.Pct, c.Attacker, null, c.CasterX, c.CasterY) : new List<Hit>();
     }
 
     // One tick of a DoT: one attack of the hit pipeline with the caster's snapshot (Build), the DoT's damage % and element (the mob already has
@@ -731,6 +764,12 @@ public sealed class MobWorld
             CasterX = dot.CasterX,
             CasterY = dot.CasterY,
         })[0];
+
+    // One mob's DoT skill changes gathered into the broadcast queue (everyone draws the icons).
+    private void FlushDots(Mob m)
+    {
+        foreach (var (skill, on) in m.Statuses.TakeDotChanges()) _dotDirty.Add((m.Uid, skill, on));
+    }
 
     // One mob's mark changes gathered into the broadcast queue (the caller sends each to its own attacker's client).
     private void FlushMarks(Mob m)

@@ -57,6 +57,8 @@ public sealed class MobStatuses
 
     private readonly List<(int attacker, int stacks)> _markChanges = new(); // stack changes to report to the owner
 
+    private readonly List<(int skill, bool on)> _dotChanges = new(); // DoT skills that came on the mob or left it entirely, to report to everyone
+
     public void Add(MobStatusKind kind, double value, int ms) => _list[kind] = (value, ms);
 
     // The first tick comes one interval after the cast. A refresh (the same source's same skill is on the mob already) takes the new
@@ -64,8 +66,40 @@ public sealed class MobStatuses
     public void AddDot(Dot dot)
     {
         var key = (dot.Attacker, dot.Skill);
-        dot.NextMs = _dots.TryGetValue(key, out var old) ? old.NextMs : dot.IntervalMs;
+        if (_dots.TryGetValue(key, out var old))
+        {
+            dot.NextMs = old.NextMs; // a refresh: the skill is on the mob already, nothing to tell
+            _dots[key] = dot;
+            return;
+        }
+        dot.NextMs = dot.IntervalMs;
+        if (!DotSkillOn(dot.Skill)) _dotChanges.Add((dot.Skill, true));
         _dots[key] = dot;
+    }
+
+    // Starts the time of an existing DoT again (the zone does this every tick for a mob it already poisoned: no new copy of the numbers, only the time).
+    public void RefreshDot(int attacker, int skill, int ms) => _dots[(attacker, skill)].MsLeft = ms;
+
+    // Whether any source has a DoT of this skill on the mob (the head icon of a skill is shown once, whoever the sources are).
+    private bool DotSkillOn(int skill) => _dots.Keys.Any(k => k.Skill == skill);
+
+    // The skills that have a DoT on the mob now, one entry each (the head icons, and what a map entry tells a newcomer).
+    public IReadOnlyList<int> DotSkills() => _dots.Count == 0 ? Array.Empty<int>() : _dots.Keys.Select(k => k.Skill).Distinct().ToList(); // most mobs have none: no allocation per drawn frame
+
+    // The DoT skills that came on the mob (true) or left it (false) since the last call, to tell every client (it draws one head icon per skill).
+    public IReadOnlyList<(int skill, bool on)> TakeDotChanges()
+    {
+        if (_dotChanges.Count == 0) return Array.Empty<(int, bool)>(); // most steps change no DoT
+        var changes = new List<(int, bool)>(_dotChanges);
+        _dotChanges.Clear();
+        return changes;
+    }
+
+    // Takes a DoT off the list; when it was the last one of its skill, the skill leaves the mob.
+    private void RemoveDot((int Attacker, int Skill) key)
+    {
+        _dots.Remove(key);
+        if (!DotSkillOn(key.Skill)) _dotChanges.Add((key.Skill, false));
     }
 
     // How many DoTs of this source are on the mob (one per skill), for Elemental Drain.
@@ -102,7 +136,7 @@ public sealed class MobStatuses
     {
         if (_dots.Count == 0) return;
         foreach (var key in _dots.Keys.Where(k => k.Attacker == attacker).ToList())
-            _dots.Remove(key);
+            RemoveDot(key);
     }
 
     // The ticks that came due in the steps since the last call, oldest first (a dot that ran out in the same step still gives its last tick).
@@ -183,7 +217,7 @@ public sealed class MobStatuses
                 dot.MsLeft -= run;
                 dot.NextMs -= run;
                 for (; dot.NextMs <= 0; dot.NextMs += dot.IntervalMs) _due.Add(dot);
-                if (dot.MsLeft == 0) _dots.Remove(key);
+                if (dot.MsLeft == 0) RemoveDot(key);
             }
         }
         if (_marks.Count > 0)

@@ -2,16 +2,15 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The look of one ground zone (Poison Mist): the looping WZ tile art set in a ring around the caster's feet at the cast (the reference picture shows the mist
-// all around the hero), for the time the server gave it. The ring is an ellipse of RingRx and RingRy whose middle is RingUp over the feet; WZ has no tile
-// layout, so these three numbers and the order of the tiles round the ring are ours (未核实).
+// The look of one ground zone (Poison Mist): the zone box (WZ lt/rb round the caster's feet at the cast) cut into 3x3 cells, and in each cell one looping WZ tile
+// (tile0..tile8, row by row, tile0 at the top left), for the time the server gave it. Each tile is stretched to the size of its cell (the box width and height over 3,
+// 167 by 133 for lt/rb 500 by 400), so the nine tiles cover the whole box. WZ has no layout of its own for the tiles: the row-by-row order and the stretch to the cell
+// are our reading (未核实).
 // It waits WaitMs first (the body action's attack frame), shows for LifeMs and then ends its own life. The server
-// owns the box and the damage; this only draws. Every client on the map builds one from the same ZoneEvent.
+// owns the box and the poison; this only draws. Every client on the map builds one from the same ZoneEvent.
 public sealed class GroundZoneFx : Component
 {
-    private const float RingRx = 110;
-    private const float RingRy = 50;
-    private const float RingUp = 60;
+    private const int Grid = 3; // the box is Grid x Grid cells (the nine tiles)
 
     public int Uid;
     public int Skill;
@@ -19,25 +18,28 @@ public sealed class GroundZoneFx : Component
     public float LifeMs;
     public bool Started => WaitMs <= 0;
     public readonly WzArt?[] Tiles = new WzArt?[WzSkillData.ZoneTiles];
+    public float CellW; // the size of one cell: every tile is drawn stretched to it
+    public float CellH;
     public readonly float[] TileX = new float[WzSkillData.ZoneTiles];
     public readonly float[] TileY = new float[WzSkillData.ZoneTiles];
     public readonly int[] Frame = new int[WzSkillData.ZoneTiles];
     public readonly float[] Timer = new float[WzSkillData.ZoneTiles];
 
-    // A pooled node comes back clean. The tiles stand evenly round the ring, each on its own frame, so the puffs do not move together.
+    // A pooled node comes back clean. Each tile starts on its own frame, so the puffs do not move together.
     public void Start(ZoneEvent e, WzSkillData wz)
     {
         Uid = e.Uid;
         Skill = e.Skill;
-        float centerX = (e.Left + e.Right) / 2;
+        float top = e.Y + wz.Vectors["lt"][1];
+        CellW = (e.Right - e.Left) / Grid;
+        CellH = (wz.Vectors["rb"][1] - wz.Vectors["lt"][1]) / (float)Grid;
         WaitMs = e.DelayMs;
         LifeMs = e.LifeMs;
         for (int i = 0; i < Tiles.Length; i++)
         {
             Tiles[i] = wz.Art[$"tile{i}"];
-            float angle = i * MathF.Tau / Tiles.Length;
-            TileX[i] = centerX + RingRx * MathF.Cos(angle);
-            TileY[i] = e.Y - RingUp + RingRy * MathF.Sin(angle);
+            TileX[i] = e.Left + i % Grid * CellW; // the top left of its cell
+            TileY[i] = top + i / Grid * CellH;
             Frame[i] = i % Tiles[i]!.Frames.Count;
             Timer[i] = 0;
         }

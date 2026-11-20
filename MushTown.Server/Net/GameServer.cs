@@ -109,6 +109,7 @@ public sealed partial class GameServer : IDisposable
                         BroadcastHit(s.hit, s.attacker);
                     BroadcastFreshDrops();
                     BroadcastMarkChanges();
+                    BroadcastDotChanges();
                     BroadcastDrainLayers(players);
                     foreach (var mv in ev.Moves)
                         Broadcast(Net.Encode(Net.MobMove, w =>
@@ -726,6 +727,21 @@ public sealed partial class GameServer : IDisposable
                 Send(client, Net.Encode(Net.MarkStack, w => { w.Write(uid); w.Write(stacks); }));
     }
 
+    // The DoT skills that came on a mob or left it, to everyone (each client draws one head icon per skill on the mob). Call it under the mob lock.
+    private void BroadcastDotChanges()
+    {
+        foreach (var (uid, skill, on) in _mobs.TakeDotChanges())
+            Broadcast(DotFrame(uid, skill, on));
+    }
+
+    private static byte[] DotFrame(int uid, int skill, bool on) =>
+        Net.Encode(Net.MobDot, w =>
+        {
+            w.Write(uid);
+            w.Write(skill);
+            w.Write(on);
+        });
+
     // Elemental Drain layers: once a tick, each player who has the skill gets the count near him (the caster's own DoT skills on the nearby mobs),
     // sent to that player every tick; the client draws the buff icon and the two stat rows from it. Caller holds
     // _mobLock (players is that tick's _pos snapshot).
@@ -813,6 +829,8 @@ public sealed partial class GameServer : IDisposable
                 Send(client, DropSpawnFrame(d));
             foreach (var z in _mobs.ZonesOn(map))
                 Send(client, ZoneFrame(z));
+            foreach (var (uid, skill) in _mobs.DotsOn(map)) // the poisoned mobs of the map keep their head icons
+                Send(client, DotFrame(uid, skill, true));
         }
     }
 

@@ -24,6 +24,7 @@ public partial class MushTownGame
         foreach (var m in _mobs.Values) _world.RemoveChild(m.Owner);
         _mobs.Clear();
         _markStacks.Clear();
+        _mobDots.Clear();
         _drainLayers = 0;
     }
 
@@ -39,7 +40,8 @@ public partial class MushTownGame
             : feetX - frame.OriginX;
         int y = (int)Math.Floor(m.Y) - frame.OriginY;
         DrawTexture(frame.Image, x, y, m.FacingRight); // raw art faces left; the AI faces along
-        DrawMark(uid, m); // my own Empirical Knowledge stacks over the head
+        int iconsH = DrawDotIcons(uid, m); // the poison icons of the skills on it, a row over the head
+        DrawMark(uid, m, iconsH); // my own Empirical Knowledge stacks above that row
         if (m.Hp >= m.MaxHp || m.Hp <= 0) return; // fresh and dying mobs hide their bar
         int px = (int)Math.Floor(m.X) - BarWidth / 2 - _camera.X, py = y - 8 - _camera.Y;
         _spriteBatch.Draw(_pixel, new Rectangle(px, py, BarWidth, 5), Color.Black);
@@ -51,6 +53,50 @@ public partial class MushTownGame
     private int LocalMarkStacks(int uid) => _localWorld != null
         ? _localWorld.MarkStacks(uid, 0)
         : _markStacks.TryGetValue(uid, out var s) ? s : 0;
+
+    // The skills whose DoT is on this mob: the local world reads its own status list; net play reads what the server told (everyone's DoTs, not only mine).
+    private IReadOnlyList<int> LocalDotSkills(int uid) => _localWorld != null
+        ? _localWorld.DotSkills(uid)
+        : _mobDots.TryGetValue(uid, out var s) ? s : Array.Empty<int>();
+
+    // A skill's own head icon: the loop of its WZ mob node (each skill reads its own; null when it has none, like Poison Breath), built once.
+    private IdleArt? DotArt(int skill)
+    {
+        if (_dotArt.TryGetValue(skill, out var cached)) return cached;
+        IdleArt? built = null;
+        if (_wzSkills.TryGetValue(skill, out var wz) && wz.Art.TryGetValue("mob", out var art) && art.Frames.Count > 0)
+            built = new IdleArt(art.Frames, art.Delays, art.Origins.Select(o => new Origin(o[0], o[1])).ToList());
+        return _dotArt[skill] = built;
+    }
+
+    // The poison icons over a mob's head, side by side and centred on it, each anchored by its own origin (the middle of the bottom edge) just over the head top.
+    // A slot is as wide as the first picture of its loop. Returns the height of the row (the tallest first picture), 0 when there is none: the stack mark goes above the row.
+    private int DrawDotIcons(int uid, MobArt m)
+    {
+        if (m.Hp <= 0) return 0; // a dead mob shows no icon
+        var skills = LocalDotSkills(uid);
+        int total = 0, rowH = 0;
+        foreach (int skill in skills)
+        {
+            if (DotArt(skill) is not { } art) continue;
+            var first = _textures[art.Images[0]];
+            total += first.Width;
+            rowH = Math.Max(rowH, first.Height);
+        }
+        if (total == 0) return 0;
+        int headTop = (int)Math.Floor(m.Y) - m.Frames[0].OriginY; // origin to feet: the top of the head
+        int left = (int)Math.Floor(m.X) - total / 2, ay = headTop - 6;
+        foreach (int skill in skills)
+        {
+            if (DotArt(skill) is not { } art) continue;
+            int frame = Idle.At(art.Delays, (float)_timeMs);
+            var org = art.Origins[frame];
+            int slot = _textures[art.Images[0]].Width;
+            DrawTexture(art.Images[frame], left + slot / 2 - org.X, ay - org.Y, false);
+            left += slot;
+        }
+        return rowH;
+    }
 
     // Elemental Drain layers around the player: the local world reads its own mobs (attacker 0 is the single player); net play
     // reads the count the server last sent. A shot stages a fixed count (--drain).
@@ -85,8 +131,8 @@ public partial class MushTownGame
         }
     }
 
-    // The stack mark over a mob's head: 1, 2 or 3 stacks play mob/0, mob/1, mob/2. Anchored by the art's origin at the head top.
-    private void DrawMark(int uid, MobArt m)
+    // The stack mark over a mob's head: 1, 2 or 3 stacks play mob/0, mob/1, mob/2. Anchored by the art's origin at the head top, above the poison icon row (iconsH tall).
+    private void DrawMark(int uid, MobArt m, int iconsH)
     {
         if (m.Hp <= 0) return; // a dead mob shows no mark
         int stacks = LocalMarkStacks(uid);
@@ -97,7 +143,7 @@ public partial class MushTownGame
         int frame = Idle.At(art.Delays, (float)_timeMs);
         var org = art.Origins[frame];
         int headTop = (int)Math.Floor(m.Y) - m.Frames[0].OriginY; // origin to feet: the top of the head
-        int ax = (int)Math.Floor(m.X), ay = headTop - 6;
+        int ax = (int)Math.Floor(m.X), ay = headTop - 6 - iconsH;
         DrawTexture(art.Images[frame], ax - org.X, ay - org.Y, false);
     }
 

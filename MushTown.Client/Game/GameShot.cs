@@ -483,7 +483,7 @@ public partial class MushTownGame
         var world = _localWorld!; // StartLocalWorld just built it
         var players = new List<(int id, int map, float x, float y)> { (0, _mapId, _mover.X, _mover.Y) };
         var ev = world.Tick(ms, players);
-        world.DiscardMarkChanges(); // a shot reads stacks from the world, so the queue is not sent anywhere
+        world.DiscardChangeQueues(); // a shot reads stacks and DoT icons from the world, so the queues are not sent anywhere
         if (showStrikes)
         {
             foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpGain, s.hit.Dot);

@@ -17,6 +17,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<ZoneEvent> _zoneEvents = new();
     private readonly ConcurrentQueue<MoveEvent> _moveEvents = new();
     private readonly ConcurrentQueue<MarkEvent> _markEvents = new();
+    private readonly ConcurrentQueue<MobDotEvent> _dotEvents = new();
     private readonly ConcurrentQueue<DrainEvent> _drainEvents = new();
     private readonly ConcurrentQueue<HurtEvent> _hurtEvents = new();
     private readonly ConcurrentQueue<DropEvent> _dropEvents = new();
@@ -333,6 +334,8 @@ public sealed class NetClient : IDisposable
 
     public bool TryTakeMark(out MarkEvent e) => _markEvents.TryDequeue(out e);
 
+    public bool TryTakeDot(out MobDotEvent e) => _dotEvents.TryDequeue(out e);
+
     public bool TryTakeDrain(out DrainEvent e) => _drainEvents.TryDequeue(out e);
 
     public bool TryTakeHurt(out HurtEvent e) => _hurtEvents.TryDequeue(out e);
@@ -418,6 +421,8 @@ public sealed class NetClient : IDisposable
                 BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13), p[17] != 0));
         else if (p[0] == Net.MarkStack && p.Length == 9)
             _markEvents.Enqueue(new MarkEvent(BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5)));
+        else if (p[0] == Net.MobDot && p.Length == 10)
+            _dotEvents.Enqueue(new MobDotEvent(BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), p[9] != 0));
         else if (p[0] == Net.DrainStacks && p.Length == 2)
             _drainEvents.Enqueue(new DrainEvent(p[1]));
         else if (p[0] == Net.Hurt && p.Length == 21)
