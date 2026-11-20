@@ -63,15 +63,17 @@ public partial class MushTownGame
         _zones.Add(z);
     }
 
-    // The tiles of every zone that has started: each is a looping WZ frame stretched to its cell of the 3x3 box.
+    // The tiles of every zone that has started: each element is a looping WZ frame on its WZ origin (see GroundZoneFx).
     private void DrawZones()
     {
         foreach (var z in _zones)
         {
             if (!z.Started) continue;
-            for (int i = 0; i < z.Tiles.Length; i++)
-                _spriteBatch.Draw(_textures[z.Tiles[i]!.Frames[z.Frame[i]]],
-                    new Rectangle((int)MathF.Round(z.TileX[i] - _camera.X), (int)MathF.Round(z.TileY[i] - _camera.Y), (int)MathF.Round(z.CellW), (int)MathF.Round(z.CellH)), Color.White);
+            for (int i = 0; i < z.Count; i++)
+            {
+                var o = z.Arts[i]!.Origins[z.Frame[i]];
+                _spriteBatch.Draw(_textures[z.Arts[i]!.Frames[z.Frame[i]]], new Vector2(MathF.Round(z.X[i] - _camera.X), MathF.Round(z.Y[i] - _camera.Y)), null, Color.White * GroundZoneFx.Alpha, 0, new Vector2(o[0], o[1]), 1, SpriteEffects.None, 0);
+            }
         }
     }
 

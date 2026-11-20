@@ -36,7 +36,7 @@ CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 // Meditation (2101001) is a passive: its magic attack is always on (--screen stat200 with --job 210 shows it in the stat window).
 // Explosion (2111002) judges at its action's attack frame (390 ms): it needs --flyms 500 or more to show its numbers.
 // Poison Mist (2111003) is a ground zone: it judges and shows from the action's attack frame (480 ms + one tick), so it needs --flyms 700 or more to show the mist; the
-// mist fills the 500 x 400 box round the hero (3 x 3 tiles) and stays 15 s (--flyms 16000 or more shows it gone). The cast hits the mobs in the box once; the mist only poisons
+// mist is random tiles over an ellipse round the hero (see GroundZoneFx; the judged box is 500 x 400) and stays 15 s (--flyms 16000 or more shows it gone). The cast hits the mobs in the box once; the mist only poisons
 // (the poison icon over the head, then one tick a second); a mob that walks in later is poisoned and takes no direct hit.
 // --recast <ms> with it steps the hero 400 px forward and casts a second zone there (two clouds apart). --hover <x,y> at the buff bar (the icons stand at the top right) shows the tooltip of the buff there.
 // Elemental Adaptation (2111011) is cast for real with --skill 2111011 --job 210 (MP, cooldown, the shield and both cast layers; --flyms <ms> shows

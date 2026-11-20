@@ -34,7 +34,7 @@ namespace MushTown.Exporter;
 // Its special (the barrier flash, played once per blocked status) goes to Art["block"] the same way (png under 2111011/block/); its special0
 // (a faint back column with a floor ring, z -2) is not used. Re-run `export` after pulling this: an old export has no block art.
 // Poison Mist (211.img) is a ground zone (WzSkillData.GroundZones): besides effect (the cast) and hit it keeps effect1 (a second cast layer, played with
-// the first) and tile/0..8 (nine looping puffs of 8 pictures, one in each cell of the 3x3 box, drawn by the client) as Art["effect1"], Art["tile0"]..Art["tile8"] (png under 2111003/effect1/ and 2111003/tile<i>/).
+// the first) and tile/0..8 (nine looping puffs of 8 pictures; the client lays them out, see GroundZoneFx) as Art["effect1"], Art["tile0"]..Art["tile8"] (png under 2111003/effect1/ and 2111003/tile<i>/).
 // A skill with a dot and a flat mob node (a loop of pictures with origins; Poison Mist has one, Poison Breath none) also keeps it as Art["mob"] (png under <id>/mob/): the icon that
 // shows over a mob that has the skill's DoT. (Empirical Knowledge's mob node is three loops and goes through SaveMarkArt; Elemental Weakness, Teleport Mastery, Paralyze and Flame Haze
 // have mob nodes too but are not DoTs or not made yet.) The node also has pos = 2 and repeat = 1: neither is used (pos 未核实).

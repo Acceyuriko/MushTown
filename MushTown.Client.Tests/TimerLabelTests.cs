@@ -22,6 +22,16 @@ public class TimerLabelTests
         Assert.AreEqual((2, true), TimerOverlay.Label(120000));
     }
 
+    // A whole time under 1 s (Teleport's 0.48 s cooldown) is no countdown: Draw returns at once on Active, in the buff bar, the key window, the quick slots and the skill window.
+    [TestMethod]
+    public void UnderOneSecondTotal_IsNotActive_OneSecondIs()
+    {
+        Assert.IsFalse(new SkillTimer(480, 480).Active);
+        Assert.IsFalse(MushTownGame.PickTimer(0, () => throw new InvalidOperationException(), 300, () => 480).Active);
+        Assert.IsTrue(new SkillTimer(1000, 1000).Active);
+        Assert.IsTrue(new SkillTimer(500, 1000).Active);
+    }
+
     // Buff and cooldown at once: the buff time shows; once the buff is over (left 0) the cooldown shows; with neither, nothing. Only the shown one asks its whole time.
     [TestMethod]
     public void PickTimer_BuffFirst_ThenCooldown_ThenNothing()

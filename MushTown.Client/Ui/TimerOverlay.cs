@@ -4,10 +4,11 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace MushTown.Client;
 
-// The time left on a skill icon: what is left and the whole time. The whole time is 0 for a skill with no countdown.
+// The time left on a skill icon: what is left and the whole time. The whole time is 0 for a skill with no countdown. A whole time under 1 s (Teleport's 0.48 s cooldown) is no countdown either: no mask, no number.
 public readonly record struct SkillTimer(float LeftMs, float TotalMs)
 {
-    public bool Active => TotalMs > 0 && LeftMs > 0;
+    public bool Active => TotalMs >= MinTotalMs && LeftMs > 0;
+    private const float MinTotalMs = 1000;
 }
 
 // The countdown look of a skill icon, drawn the same way in the buff bar, the key window, the quick slots and the skill window.
@@ -27,7 +28,7 @@ public static class TimerOverlay
         gfx.Sb.Draw(gfx.Pixel, new Rectangle(inner.X, inner.Bottom - covered, inner.Width, covered),
             new Color(Lay.Get("maskR", 128), Lay.Get("maskG", 128), Lay.Get("maskB", 128), Lay.Get("maskA", 170)));
         var (number, minutes) = Label(timer.LeftMs);
-        if (number == 0) return; // under 1 s nothing is written (Teleport's 0.48 s cooldown); the mask still shows
+        if (number == 0) return; // the last second of a longer countdown: the mask shows, the number 0 is not written
         if (!minutes)
         {
             var t = gfx.Ui.GetSized(number.ToString(), Lay.Get("secondsPx", 14));
