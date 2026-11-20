@@ -27,6 +27,7 @@ public class WzSkillTests
                 WzSkillData.ElementalDecrease => "Elemental Decrease",
                 WzSkillData.TeleportBoost => "Teleport Boost",
                 WzSkillData.Meditation => "Meditation",
+                WzSkillData.ElementalAdaptation => "Elemental Adaptation (Fire, Poison)",
                 _ => "Magic Armor",
             }
         };
@@ -53,6 +54,7 @@ public class WzSkillTests
         [WzSkillData.MagicCritical] = Skill(WzSkillData.MagicCritical, 10, ("cr", "10+2*x"), ("criticaldamage", "3+x")),
         [WzSkillData.ElementalDecrease] = Skill(WzSkillData.ElementalDecrease, 9, ("mdR", "4*x+4"), ("u", "x+1")),
         [WzSkillData.TeleportBoost] = Skill(WzSkillData.TeleportBoost, 1, ("x", "65"), ("y", "25")),
+        [WzSkillData.ElementalAdaptation] = Skill(WzSkillData.ElementalAdaptation, 20, ("asrR", "x"), ("terR", "x")), // a passive here: always-on resistances
     };
 
     // psdWT/37/cr = 5 in 200.img: the wand (item family 137, weapon code 37) gives 5 crit rate.
@@ -216,7 +218,7 @@ public class WzSkillTests
         Assert.AreEqual(0.9375, StatTables.DelayScale(5));
     }
 
-    // The window shows the 1st job page, the 2nd job page and the 3rd job passives; the other pages wait for their jobs.
+    // The window shows the 1st job page, the 2nd job page and the 3rd job page (passives, then Explosion and Elemental Adaptation); the other pages wait for their jobs.
     [TestMethod]
     public void FirstThreePages_HaveTheirSkills_OthersEmpty()
     {
@@ -229,7 +231,7 @@ public class WzSkillTests
             new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath },
             pages[1]);
         CollectionAssert.AreEqual(
-            new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost },
+            new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.ElementalAdaptation },
             pages[2]);
         Assert.IsTrue(pages.Skip(3).All(p => p.Length == 0));
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.ElementalWeakness)); // invisible in WZ

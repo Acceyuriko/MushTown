@@ -50,6 +50,11 @@ using MushTown.Exporter;
 //           - the Fire/Poison 3rd-job passives were added (assets/skill/wz/2110000, 2110001, 2110009, 2110015, 2110016 .json and their
 //             icons). The skill window's page III shows them; an old export makes the client stop at start (no exported wz def for the
 //             page III ids).
+//           - the Fire/Poison 3rd-job skills were added (assets/skill/wz/2111002.json Explosion with its effect and hit art, and
+//             2111011.json Elemental Adaptation, a passive: Kind passive, our own Desc and Effect lines, no effect, effect0 or special art;
+//             the old json is a buff with art and the client stops at start). The skill window's page III lists them; an old export makes
+//             the client stop at start (no exported wz def for the page III ids). Delete assets/skill/wz/2111011/effect and effect0 if an
+//             earlier export left them (the exporter does not clean old art).
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of
 //             each map and the login theme.
 //   panel   - exports one panel's art only.

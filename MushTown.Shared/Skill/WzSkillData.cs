@@ -3,8 +3,9 @@ namespace MushTown.Shared;
 // One skill read straight from the WZ skill node (the Fire/Poison line): the numbers of every level
 // (the common formulas, already worked out), the rectangles, the flags, and the tooltip text at max
 // level. This is a table of its own: the warrior SkillData is a hand-made feel table and is not
-// extended. Energy Bolt is cast (the ball flies, the rectangle and the segments judge on arrival, the art); Flame Orb is cast (no ball:
-// the rectangle judges at the body action's attack frame); Meditation is a passive (MATT, always on); Teleport is cast (TeleportRules);
+// extended. Energy Bolt is cast (the ball flies, the rectangle and the segments judge on arrival, the art); Flame Orb and Explosion are cast (no ball:
+// the rectangle judges at the body action's attack frame); Meditation is a passive (MATT, always on); Elemental Adaptation is a passive (status and
+// elemental resistance, always on); Teleport is cast (TeleportRules);
 // Magic Guard, Elemental Weakness, Magic Armor and MP Boost take effect; Mana Wave is cast.
 // The frame meta of one art: per frame, the origin (x, y: the point of the png that sits on the anchor) and the delay in ms.
 public sealed class WzArt
@@ -37,6 +38,11 @@ public sealed class WzSkillData
     public const int MagicCritical = 2110009;
     public const int ElementalDecrease = 2110015;
     public const int TeleportBoost = 2110016;
+    // 211 Mage (Fire/Poison): the 3rd job active Explosion and the passive Elemental Adaptation (WZ has it as a buff).
+    public const int Explosion = 2111002;
+    public const int ElementalAdaptation = 2111011;
+    // WZ has these as buffs, the user made them passives (always on, no cast): the exporter forces their Kind, the client start checks it.
+    public static readonly IReadOnlySet<int> UserPassives = new HashSet<int> { Meditation, ElementalAdaptation };
     public const int MagicGuard = 2000002;
     public const int MagicArmor = 2000010;
     public const int MpBoost = 2000006;

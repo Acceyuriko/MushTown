@@ -34,6 +34,9 @@ CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 // (buff timers, cooldowns); --skilltab picks the window tab.
 // Flame Orb (2101004) judges at the action's attack frame (300 ms), so it needs --flyms 400 or more to show its numbers.
 // Meditation (2101001) is a passive: its magic attack is always on (--screen stat200 with --job 210 shows it in the stat window).
+// Explosion (2111002) judges at its action's attack frame (390 ms): it needs --flyms 500 or more to show its numbers.
+// Elemental Adaptation (2111011) is a passive: its status and elemental resistances are always on (--screen stat2 with --job 210 shows the
+// status resistance row with it).
 // A WZ skill (Fire/Poison, ids 20xxxxx) follows --facing: left poses the caster
 // right of the first mob, facing left. It stands 250 px from the first mob (the other poses 50), so a ball has room to fly. With --job (a game pose shot, no --screen) the demo is a fresh
 // level 200 hero of that class, so the numbers are real ones. --aiticks runs BEFORE the

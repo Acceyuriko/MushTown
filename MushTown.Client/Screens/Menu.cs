@@ -193,7 +193,7 @@ public partial class MushTownGame
             //   worldmap poses the world map window: worldmapsearch with the search window, worldmapask the confirm box,
             //     worldmapcombo the open area list, worldmapworld the open world list, worldmapmaps the open map list,
             //     worldmaproot the Arcane River root page after Arcane River is picked in the first list.
-            //   keyskills is the key window with Slash Blast, Meditation, Flame Orb and Poison Breath on the keys 2 to 5 (the strip shows them too):
+            //   keyskills is the key window with Slash Blast, Meditation, Flame Orb, Poison Breath, Explosion and Elemental Adaptation on the keys 2 to 7 (the strip shows them too; Meditation and Elemental Adaptation are passives that an old save may keep on a key):
             //     park --hover on a key of the keyboard or a cell of the strip to see the skill tooltip.
             //   keys poses the key window: quickedit has the Quick Slots button clicked and the Q cell picked, quickeditswap
             //     has W pressed on the Q cell (two cells swap keys), quickeditnocap has Backspace, CapsLock, right Shift,
@@ -294,7 +294,7 @@ public partial class MushTownGame
             if (shotScreen == "worldmapmaps") _worldMapWindow.PoseCombo(2);
             if (shotScreen == "worldmaproot") _worldMapWindow.PoseWorld(1);
             if (shotScreen == "keys") KeyWindow?.Open();
-            if (shotScreen == "keyskills") // the key window with four skills on keys 2 to 5 (the same keys sit on the strip): --hover on a key or a strip cell shows the skill tooltip
+            if (shotScreen == "keyskills") // the key window with six skills on keys 2 to 7 (the same keys sit on the strip): --hover on a key or a strip cell shows the skill tooltip
             {
                 var chara = _save!.Slots[_slot]!;
                 KeyBindings.Ensure(chara);
@@ -303,6 +303,8 @@ public partial class MushTownGame
                 table["D3"] = $"Skill:{WzSkillData.Meditation}"; // a passive (an old save may keep it on a key)
                 table["D4"] = $"Skill:{WzSkillData.FlameOrb}";
                 table["D5"] = $"Skill:{WzSkillData.PoisonBreath}";
+                table["D6"] = $"Skill:{WzSkillData.Explosion}";
+                table["D7"] = $"Skill:{WzSkillData.ElementalAdaptation}"; // a passive too
                 KeyWindow?.Open();
             }
             if (shotScreen is "quickedit" or "quickeditswap" or "quickeditnocap") // the strip key editing: the Q cell picked; the swap shot has pressed W on it; the nocap shot has pressed five keys without cap art on cells 0..4
@@ -637,7 +639,7 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
             if (wz.SkillId == WzSkillData.ManaWave && !wz.Children.Any(c => c.SkillId == WzSkillData.ManaWaveFloat && c.HasFloatArt))
                 throw new InvalidDataException($"skill {wz.SkillId} has no child {WzSkillData.ManaWaveFloat} (the slow fall) with its art (special, specialAffected): run the exporter (export)");
-            if (wz.SkillId == WzSkillData.Meditation && wz.Kind != SkillData.KindPassive)
+            if (WzSkillData.UserPassives.Contains(wz.SkillId) && wz.Kind != SkillData.KindPassive)
                 throw new InvalidDataException($"skill {wz.SkillId} is not a passive: run the exporter (export)");
             if ((wz.Common.ContainsKey("damage") || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");

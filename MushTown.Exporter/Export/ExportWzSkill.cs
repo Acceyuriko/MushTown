@@ -28,6 +28,9 @@ namespace MushTown.Exporter;
 // Common also keeps dot, dotInterval and dotTime (the damage-over-time numbers), and there is no ball, so its box is centred on the target mob.
 // The 3rd job passives (211.img: Burning Magic, Element Amplification, Magic Critical, Elemental Decrease, Teleport Boost) have no art but their
 // icons: the generic path above (formulas, text, icon and disabled icon) is all they need.
+// The 3rd job actives (211.img): Explosion is a damage skill with no ball and no special (the effect is the blast at the caster, hit/0 the spark on each
+// mob). Elemental Adaptation is a buff in WZ (info type 10, mpCon), but the user made it a passive (status and elemental resistance always on): it is
+// exported as a passive (no effect, effect0 or special art), with our own Desc and Effect lines (the WZ text is about blocking a status and the MP it eats).
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -58,8 +61,16 @@ public static partial class Export
             var values = WzSkillValues(baseRoot, id);
             data.Desc = Lines(Fill(Text(strNode.Nodes["desc"]), values, data.MaxLevel));
             data.Effect = Lines(Fill(Text(strNode.Nodes["h"]), values, data.MaxLevel));
-            if (id == WzSkillData.Meditation) data.Effect = new() { $"Magic ATT: +{(int)data.Value("indieMad", data.MaxLevel)}" }; // the WZ line has the MP cost, the party and the duration: none of them is true for a passive
-            if (id == WzSkillData.Meditation) data.Desc = new() { "Permanently enhances your Magic ATT." }; // our own line, not the WZ text (which says temporary and party)
+            if (id == WzSkillData.Meditation) // our own lines, not the WZ text (which has the MP cost, the party and the duration: none of them is true for a passive)
+            {
+                data.Effect = new() { $"Magic ATT: +{(int)data.Value("indieMad", data.MaxLevel)}" };
+                data.Desc = new() { "Permanently enhances your Magic ATT." };
+            }
+            if (id == WzSkillData.ElementalAdaptation) // our own lines, not the WZ text (which has the MP cost and is about blocking a status)
+            {
+                data.Effect = new() { $"Status Resistance +{(int)data.Value("asrR", data.MaxLevel)}%, Elemental Resistance +{(int)data.Value("terR", data.MaxLevel)}%" };
+                data.Desc = new() { "Permanently increases status and elemental resistances." };
+            }
             data.Icon = $"skill/wz/{id}/icon.png";
             data.Disabled = $"skill/wz/{id}/dis.png";
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
@@ -264,8 +275,8 @@ public static partial class Export
         data.ElemAttr = Text(node.Nodes["elemAttr"]);
         data.Invisible = node.Nodes["invisible"] != null;
         // No mpCon: always on (passive). info.type 10: a timed self effect (buff). Else cast for an effect.
-        // Meditation is the exception: WZ has it as a buff, the user made it a passive (always-on magic attack, no cast).
-        data.Kind = !data.Common.ContainsKey("mpCon") || id == WzSkillData.Meditation ? SkillData.KindPassive
+        // Meditation and Elemental Adaptation are the exceptions: WZ has them as buffs, the user made them passives (always on, no cast).
+        data.Kind = !data.Common.ContainsKey("mpCon") || WzSkillData.UserPassives.Contains(id) ? SkillData.KindPassive
             : data.Info.GetValueOrDefault("type") == "10" ? SkillData.KindBuff
             : SkillData.KindActive;
         return data;
