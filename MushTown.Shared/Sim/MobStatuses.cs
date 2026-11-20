@@ -5,6 +5,11 @@ namespace MushTown.Shared;
 public enum MobStatusKind
 {
     ElementalWeakness, // value = the extra magic damage taken, in percent
+    Dot, // damage over time: kept in the DoT list (Dot, AddDot), never in the kind list; here so Has(Dot) answers like the others
+    Stun, // no skill puts these four on a mob yet: the names are here so Burning Magic already counts them (WZ: stun, freeze, darkness, paralysis)
+    Freeze,
+    Darkness,
+    Paralysis,
 }
 
 // One damage-over-time effect (DoT) on a mob: the numbers are taken from the caster at the cast (the Build snapshot, the
@@ -63,8 +68,30 @@ public sealed class MobStatuses
     // How many distinct DoT skills are on the mob (one layer per skill, whatever the number of sources), for Elemental Drain.
     public int DotCount => _dots.Keys.Select(k => k.Skill).Distinct().Count();
 
-    // Whether any DoT is on the mob (from any source), for Burning Magic's final damage.
-    public bool HasDot => _dots.Count > 0;
+    // Whether any source's DoT of this skill is on the mob (for the layer count of a DoT that is about to land).
+    public bool HasDotSkill(int skill) => _dots.Keys.Any(k => k.Skill == skill);
+
+    // The stacks this attacker will have after one more hit: a proc adds one up to the cap, a hit with no proc keeps them (HitMark does the same).
+    public int StacksAfterHit(int attacker, int maxStacks, bool proc) =>
+        proc ? Math.Min(MarkStacks(attacker) + 1, maxStacks) : MarkStacks(attacker);
+
+    // Whether the mob has this status now. A DoT is any DoT, from any source: it lives in the DoT list (AddDot), so never Add(Dot, ...).
+    public bool Has(MobStatusKind kind) => kind == MobStatusKind.Dot ? _dots.Count > 0 : _list.ContainsKey(kind);
+
+    // The statuses Burning Magic counts (WZ: damage over time, stun, freeze, darkness, paralysis).
+    private static readonly MobStatusKind[] BurningKinds =
+        { MobStatusKind.Dot, MobStatusKind.Stun, MobStatusKind.Freeze, MobStatusKind.Darkness, MobStatusKind.Paralysis };
+
+    // The one place that says whether a hit on this mob gets Burning Magic's final damage: the mob has any of those statuses.
+    public bool HasBurningTarget
+    {
+        get
+        {
+            foreach (var kind in BurningKinds)
+                if (Has(kind)) return true;
+            return false;
+        }
+    }
 
     // The DoTs of one source leave with it (its disconnect, map change or cash-shop entry): no tick of a source
     // that is no longer here. Nothing else changes.

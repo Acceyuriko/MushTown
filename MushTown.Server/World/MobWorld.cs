@@ -55,7 +55,6 @@ public sealed class MobWorld
     private const int LaunchDy = 40; // ...at the torso (the height of the cast effect); a proposal, WZ has no start point
     private const int RespawnMs = 10000; // graves re-plant after 10s
     private const int BossRespawnMs = 300000; // the boss rests 5 min between fights
-    private const int DrainRangePx = 800; // Elemental Drain: the WZ range, the radius of the circle around the caster whose DoTs count
     private const int DropMs = 60000; // drops fade after 60s unclaimed
     public const int PickDx = 90; // pickup reach, x half-box (the client filters Z with these)
     public const int PickDy = 90; // ... and the server judges with them (a miss sends nothing)
@@ -120,18 +119,16 @@ public sealed class MobWorld
     private readonly List<Pending> _pending = new(); // balls in the air
     private readonly List<BallEvent> _launches = new(); // balls thrown, waiting for broadcast (the flight time is Projectile.FlightMs of the four numbers, the same rule on the client)
     private readonly List<(int attacker, int uid, int stacks)> _markDirty = new(); // Empirical Knowledge stack changes to send to their owner
-    private bool _markLoaded; // the Empirical Knowledge numbers, read once from skill/wz/80002762.json
-    private int _markMaxStacks;
-    private int _markTimeMs;
-    private double _markDamagePct; // the damage %, per stack (WZ common y)
-    private double _markIedPct; // the DEF-ignored %, per stack (WZ common w)
     private readonly HashSet<int> _spawned = new();
     private int _nextUid = 1;
     private int _nextDrop = 1;
 
+    private readonly HitPipeline _pipeline; // every hit on a mob (swing, skill hit, DoT tick) is calculated here, in one order
+
     public MobWorld(string assetsDir)
     {
         _assetsDir = assetsDir;
+        _pipeline = new HitPipeline(Wz, _lives, (m, rng, attacker) => { _lives.Remove(m); Bury(m, rng, attacker); }, FlushMarks);
     }
 
     private static T LoadJson<T>(string path)
@@ -314,33 +311,9 @@ public sealed class MobWorld
         }
     }
 
-    // Elemental Drain: how many layers count near one point. It walks the live mobs of the map and sums each one's distinct
-    // DoT skills (MobStatuses.DotCount: one per skill, whatever the source), inside the WZ range circle (800 px around the
-    // caster's feet), then caps the sum at max (the skill's DrainMax; 0 when not learned). Called by the hit judge and, once a
-    // tick, by the server to tell each caster the layers it displays.
-    public int DrainLayers(int map, float x, float y, int max)
-    {
-        if (max <= 0) return 0;
-        int layers = 0;
-        foreach (var m in _lives)
-        {
-            if (m.Map != map) continue;
-            float dx = m.X - x, dy = m.Y - y;
-            if (dx * dx + dy * dy > DrainRangePx * DrainRangePx) continue;
-            layers += m.Statuses.DotCount;
-        }
-        return Math.Min(layers, max);
-    }
-
-    // Elemental Drain's final damage percent for one hit, read around one point: the per-stack percent times the layers near it (0 = not learned).
-    private double DrainBonus(int map, float x, float y, Build build) =>
-        build.DrainPct > 0 ? build.DrainPct * DrainLayers(map, x, y, build.DrainMax) : 0;
-
-    // Burning Magic's final damage percent for one hit on this mob: DotFinalPct while the mob has a DoT (0 = not learned or no DoT).
-    private static double BurningBonus(Mob m, Build build) => m.Statuses.HasDot ? build.DotFinalPct : 0;
-
-    // Final damage sources multiply (Elemental Drain, Burning Magic): the percent of their product.
-    private static double FinalBonus(double a, double b) => ((1 + a / 100) * (1 + b / 100) - 1) * 100;
+    // Elemental Drain: how many layers count near one point (the pipeline counts them for a hit; the server also asks once a tick,
+    // to tell each caster the layers it displays). 0 when not learned (max 0).
+    public int DrainLayers(int map, float x, float y, int max) => _pipeline.DrainLayers(map, x, y, max);
 
     // The Empirical Knowledge stacks one attacker has on one mob (0 = none), for the client's own view and the shot staging.
     public int MarkStacks(int uid, int attacker)
@@ -420,12 +393,11 @@ public sealed class MobWorld
 
     // One basic-attack swing at (x, y): every mob in reach takes one damage
     // roll, and the dead are removed. rng comes from the caller (tests pass a seed).
-    // build is the attacker's combat stats (the server stores one per client).
+    // build is the attacker's combat stats (the server stores one per client). The swing is one attack of the hit pipeline (physical, one segment).
     public List<Hit> Strike(int map, float x, float y, bool facingRight, Random rng, Build build, int attacker = 0)
     {
-        if (build.MarkProp > 0) LoadMark(); // read the mark numbers now, in the cast
-        double drain = DrainBonus(map, x, y, build); // Elemental Drain: near the caster
-        var hits = new List<Hit>();
+        _pipeline.Prepare(build); // read the status numbers now, in the cast
+        var targets = new List<Mob>();
         for (int i = _lives.Count - 1; i >= 0; i--)
         {
             var m = _lives[i];
@@ -433,19 +405,9 @@ public sealed class MobWorld
             float dx = m.X - x;
             bool ahead = facingRight ? dx >= -BehindX : dx <= BehindX;
             if (!ahead || Math.Abs(dx) > ReachX || Math.Abs(m.Y - y) > ReachY) continue;
-            TryWeaken(m, build, rng);
-            TryMark(m, build, rng, attacker);
-            var (markDmg, markIed) = MarkBonus(m, build, attacker);
-            var result = Damage.CalcResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, m.Level, m.ElemAttr,
-                AttackElement.Physical, m.Boss, markDmg, FinalBonus(drain, BurningBonus(m, build)), markIed);
-            long damage = result.TotalDamage;
-            m.Hp = Math.Max(0, m.Hp - damage);
-            hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId, result.CritMultiplier > 1.0));
-            if (m.Hp != 0) continue;
-            _lives.RemoveAt(i);
-            Bury(m, rng, attacker);
+            targets.Add(m);
         }
-        return hits;
+        return _pipeline.Resolve(targets, new HitPipeline.Attack { Build = build, Rng = rng, Attacker = attacker, Map = map, CasterX = x, CasterY = y });
     }
 
     // Cast routing: damaging actives are judged, everything else (War Leap
@@ -493,7 +455,7 @@ public sealed class MobWorld
     public List<Hit> SkillStrike(int map, float x, float y, bool facingRight, Random rng, Build build, int skill, int pct, int attacker = 0)
     {
         IsDamageSkill(skill); // loads and caches (a buff id here is a caller bug, caught below)
-        if (build.MarkProp > 0) LoadMark(); // the mark numbers are read now, in the cast (a plain skill and Final Attack use them in HitOne)
+        _pipeline.Prepare(build); // the status numbers are read now, in the cast (a ball lands later, in the tick loop)
         if (_wzSkills.TryGetValue(skill, out var wz)) return WzStrike(map, x, y, facingRight, rng, build, wz, pct, attacker);
         var st = _skills[skill];
         if (st.mobCount <= 0 || st.range <= 0)
@@ -507,19 +469,19 @@ public sealed class MobWorld
             if (dist2 <= st.range * st.range) inRing.Add((dist2, m));
         }
         inRing.Sort((a, b) => a.dist2.CompareTo(b.dist2)); // nearest first: the cap keeps the close ones
-        var hits = new List<Hit>();
+        var targets = inRing.Take(st.mobCount).Select(r => r.m).ToList();
+        var hits = _pipeline.Resolve(targets, new HitPipeline.Attack { Build = build, Rng = rng, Attacker = attacker, Skill = skill, Pct = pct, Map = map, CasterX = x, CasterY = y });
         Mob? firstAlive = null;
-        foreach ((float _, Mob m) in inRing)
+        foreach (var m in targets)
         {
-            if (hits.Count >= st.mobCount) break;
-            hits.Add(HitOne(m, skill, rng, build, pct, attacker));
             if (skill == SkillData.Rush && m.Hp > 0) // the living slide along the dash
                 m.X = Math.Clamp(m.X + (facingRight ? PushPx : -PushPx),
                     _maps[map].Info.VrLeft, _maps[map].Info.VrRight);
             if (m.Hp > 0) firstAlive ??= m;
         }
         if (firstAlive != null && rng.NextDouble() * 100 < build.FinalPct)
-            hits.Add(HitOne(firstAlive, SkillData.FinalAttack, rng, build, pct, attacker));
+            hits.AddRange(_pipeline.Resolve(new[] { firstAlive }, new HitPipeline.Attack
+            { Build = build, Rng = rng, Attacker = attacker, Skill = SkillData.FinalAttack, Pct = pct, Map = map, CasterX = x, CasterY = y }));
         return hits;
     }
 
@@ -540,9 +502,6 @@ public sealed class MobWorld
         var element = wz.Element();
         int mobCount = (int)wz.Value("mobCount", wz.MaxLevel);
         int segments = (int)wz.Value("attackCount", wz.MaxLevel);
-        // The mark reads the Elemental Weakness file the first time it is used. Load it now, in the cast: the tick loop
-        // that lands the ball must not read files (a missing file would throw there and end the loop).
-        if (build.WeaknessProp > 0) Wz(WzSkillData.ElementalWeakness);
         // The DoT of the cast (dot, dotInterval, dotTime at max level), read here too: Tick must not read the WZ numbers.
         Dot? dot = !wz.Common.ContainsKey("dot") ? null : new Dot
         {
@@ -613,21 +572,13 @@ public sealed class MobWorld
     // (a hit each, so the numbers equal the segments). The mob loses the TOTAL of its segments once, and that total
     // decides its death (a drop and EXP once): a segment never kills the mob in the middle, so every segment keeps its
     // number. The first hit of the mob settles (Hit.Settle), the others only show.
-    // The element comes from the skill; a mob with Elemental Weakness takes the extra magic damage.
-    // Before its segments a mob may get marked (Elemental Weakness): the mark counts in this cast's segments too.
-    // The caster's own Empirical Knowledge stacks on the mob add damage % and DEF-ignored % to this cast (that attacker only).
-    // A skill with a DoT (common dot, dotInterval, dotTime at max level) puts it on each mob it leaves alive, after its segments (DotTick does the ticks).
-    // Elemental Drain adds final damage for each DoT on the mobs near the caster (a circle of WZ range 800 around the caster's feet,
-    // counted by distinct DoT skill, at most DrainMax); MP Eater may absorb MP from each mob once (Hit.MpGain on its first hit:
-    // the server rolls and takes it from the mob, the attacker's client adds it).
-    // Element Amplification adds its damage % to every segment (and to the DoT ticks: they are magic skill damage). Burning Magic adds final
-    // damage to a hit (a basic swing too, not a DoT tick) on a mob that has a DoT, and makes the DoT this cast adds last longer.
+    // The cast is one attack of the hit pipeline (HitPipeline, five steps, statuses first): the element comes from the skill; the mark of
+    // Elemental Weakness, the Empirical Knowledge stack and the DoT of the skill (common dot, dotInterval, dotTime at max level; DotTick does the ticks)
+    // are on the mob before the first segment is rolled. Elemental Drain, MP Eater, Element Amplification and Burning Magic are in HitPipeline too.
     // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
     private List<Hit> WzHits(int map, float ox, float oy, bool facingRight, Random rng, Build build, WzSkillData wz,
         AttackElement element, int mobCount, int segments, int pct, int attacker, Dot? dot, float casterX, float casterY)
     {
-        // Elemental Drain: one number for the whole cast, read around the caster (not the box). 0 = not learned.
-        double drain = DrainBonus(map, casterX, casterY, build);
         var inBox = new List<(float dist2, Mob m)>();
         foreach (var m in _lives)
         {
@@ -635,104 +586,40 @@ public sealed class MobWorld
             if (m.Map == map && wz.InBodyRect(dx, dy, m.BodyH, facingRight)) inBox.Add((dx * dx + dy * dy, m));
         }
         inBox.Sort((a, b) => a.dist2.CompareTo(b.dist2));
-        var hits = new List<Hit>();
-        foreach ((float _, Mob m) in inBox.Take(mobCount).ToList())
+        var targets = inBox.Take(mobCount).Select(t => t.m).ToList();
+        return _pipeline.Resolve(targets, new HitPipeline.Attack
         {
-            TryWeaken(m, build, rng);
-            TryMark(m, build, rng, attacker); // Empirical Knowledge: this attacker's own stacks (a proc adds one, else refresh)
-            var (markDmg, markIed) = MarkBonus(m, build, attacker);
-            double final = FinalBonus(drain, BurningBonus(m, build)); // read before the segments: the DoT this cast adds comes after them
-            var rolls = new List<(long damage, bool crit)>();
-            for (int i = 0; i < segments; i++)
-            {
-                var result = Damage.SkillResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
-                    m.Level, m.ElemAttr, element, m.Boss, m.Statuses.MagicExtraDamagePct + markDmg + build.MagicDmgPct, final, markIed);
-                rolls.Add((result.TotalDamage, result.CritMultiplier > 1.0));
-            }
-            // MP Eater: one roll for each mob hit by the cast (0 = not learned, no random number is spent). A proc absorbs
-            // ceil(maxMP x pct%) of the mob's current MP (at least 1 when it has any; Boss uses the boss share), never more
-            // than it holds: the mob's MP falls and the attacker's client adds the same amount.
-            int mpGain = 0;
-            if (build.MpEaterProp > 0 && rng.NextDouble() * 100 < build.MpEaterProp && m.MaxMp > 0 && m.Mp > 0)
-            {
-                int sharePct = m.Boss ? build.MpEaterBossPct : build.MpEaterPct;
-                long amount = Math.Min((long)Math.Ceiling(m.MaxMp * sharePct / 100.0), m.Mp);
-                m.Mp -= amount;
-                mpGain = (int)amount;
-            }
-            m.Hp = Math.Max(0, m.Hp - rolls.Sum(r => r.damage));
-            if (m.Hp == 0)
-            {
-                _lives.Remove(m);
-                Bury(m, rng, attacker);
-            }
-            if (dot != null && m.Hp > 0 && MobElemAttr.Multiplier(m.ElemAttr, element) > 0) // a mob that is immune to the element does not get its DoT
-                m.Statuses.AddDot(dot.Clone());
-            for (int i = 0; i < segments; i++)
-                hits.Add(new Hit(m.Uid, m.Map, rolls[i].damage, m.Hp, m.Exp, wz.SkillId, m.MobId, rolls[i].crit, Settle: i == 0, MpGain: i == 0 ? mpGain : 0));
-        }
-        return hits;
+            Build = build,
+            Rng = rng,
+            Attacker = attacker,
+            Skill = wz.SkillId,
+            Pct = pct,
+            Element = element,
+            Segments = segments,
+            Magic = true,
+            Dot = dot,
+            Map = map,
+            CasterX = casterX,
+            CasterY = casterY,
+        });
     }
 
-    // One tick of a DoT: one roll through the Damage chain with the caster's snapshot (Build), the DoT's damage % and element, and the mob's
-    // Def, level and element, plus the extra magic damage of Elemental Weakness. A DoT never crits (crit roll 1.0). The tick is a settled hit
-    // flagged Dot: HP and death are set, the client skips the flinch and the spark. A kill buries the mob and its statuses go with it, and
-    // the kill is credited to the DoT's own source (Attacker). A DoT is removed when its source disconnects or leaves the map (CancelDoTs),
-    // so a tick never belongs to a source that is gone.
-    private Hit DotTick(Mob m, Dot dot)
-    {
-        var result = Damage.SkillResult(dot.Rng.NextDouble(), 1.0, m.Def, dot.Build, dot.Pct, m.Level, m.ElemAttr, dot.Element, m.Boss, m.Statuses.MagicExtraDamagePct + dot.Build.MagicDmgPct);
-        m.Hp = Math.Max(0, m.Hp - result.TotalDamage);
-        if (m.Hp == 0)
+    // One tick of a DoT: one attack of the hit pipeline with the caster's snapshot (Build), the DoT's damage % and element (the mob already has
+    // the DoT, so Burning Magic counts). The tick is a settled hit flagged Dot: HP and death are set, the client skips the flinch and the spark.
+    // A kill buries the mob and its statuses go with it, and the kill is credited to the DoT's own source (Attacker). A DoT is removed when its
+    // source disconnects or leaves the map (CancelDoTs), so a tick never belongs to a source that is gone.
+    private Hit DotTick(Mob m, Dot dot) =>
+        _pipeline.Resolve(new[] { m }, new HitPipeline.Attack
         {
-            _lives.Remove(m);
-            Bury(m, dot.Rng, dot.Attacker);
-        }
-        return new Hit(m.Uid, m.Map, result.TotalDamage, m.Hp, m.Exp, dot.Skill, m.MobId, false, Dot: true);
-    }
-
-    // Elemental Weakness: one of our attacks marks the mob (rolled once per mob, before its damage) with the chance of the build (prop, in percent;
-    // 0 means the skill is not learned and no random number is spent). The mark adds x to the damage % of
-    // magic hits on the mob for time seconds (the numbers of skill/wz/2000007.json at its max level). A mark on the mob
-    // refreshes.
-    private void TryWeaken(Mob m, Build build, Random rng)
-    {
-        if (build.WeaknessProp <= 0 || rng.NextDouble() * 100 >= build.WeaknessProp) return;
-        var weak = Wz(WzSkillData.ElementalWeakness);
-        m.Statuses.Add(MobStatusKind.ElementalWeakness, weak.Value("x", weak.MaxLevel), (int)weak.Value("time", weak.MaxLevel) * 1000);
-    }
-
-    // The Empirical Knowledge numbers, read once from skill/wz/80002762.json at its max level: the stack cap (WZ x), the time
-    // (WZ time, seconds), the damage % per stack (WZ y) and the DEF-ignored % per stack (WZ w).
-    private void LoadMark()
-    {
-        if (_markLoaded) return;
-        var wz = Wz(WzSkillData.EmpiricalKnowledge);
-        _markMaxStacks = (int)wz.Value("x", wz.MaxLevel);
-        _markTimeMs = (int)(wz.Value("time", wz.MaxLevel) * 1000);
-        _markDamagePct = wz.Value("y", wz.MaxLevel); // damage % per stack
-        _markIedPct = wz.Value("w", wz.MaxLevel); // DEF-ignored % per stack
-        _markLoaded = true;
-    }
-
-    // Empirical Knowledge: one roll of the build's chance (0 = not learned, no random number is spent). A proc adds one stack (up
-    // to the cap) and restarts the time; a hit that does not proc only refreshes the stacks already there. Each attacker has its
-    // own stacks (the status list keys by attacker); only that attacker's client is told.
-    private void TryMark(Mob m, Build build, Random rng, int attacker)
-    {
-        if (build.MarkProp <= 0) return;
-        m.Statuses.HitMark(attacker, _markMaxStacks, _markTimeMs, rng.NextDouble() * 100 < build.MarkProp);
-        FlushMarks(m);
-    }
-
-    // The damage % and the DEF-ignored % this hit gets from this attacker's own stacks on this mob (0 = none).
-    private (double dmg, double ied) MarkBonus(Mob m, Build build, int attacker)
-    {
-        if (build.MarkProp <= 0) return (0, 0);
-        int stacks = m.Statuses.MarkStacks(attacker);
-        if (stacks <= 0) return (0, 0);
-        return (stacks * _markDamagePct, stacks * _markIedPct);
-    }
+            Build = dot.Build,
+            Rng = dot.Rng,
+            Attacker = dot.Attacker,
+            Skill = dot.Skill,
+            Pct = dot.Pct,
+            Element = dot.Element,
+            Magic = true,
+            Tick = true,
+        })[0];
 
     // One mob's mark changes gathered into the broadcast queue (the caller sends each to its own attacker's client).
     private void FlushMarks(Mob m)
@@ -740,25 +627,6 @@ public sealed class MobWorld
         var changes = m.Statuses.TakeMarkChanges();
         if (changes.Count == 0) return;
         foreach (var (attacker, stacks) in changes) _markDirty.Add((attacker, m.Uid, stacks));
-    }
-
-    // One damage roll applied to one live mob. The dead leave the world, a
-    // grave (respawn), and their drops: mesos always, a potion sometimes
-    // (the boss always pays its purse). A warrior skill hits physical with the attacker's own mark bonus.
-    private Hit HitOne(Mob m, int tag, Random rng, Build build, int pct, int attacker)
-    {
-        TryMark(m, build, rng, attacker); // Empirical Knowledge: any hit (a plain skill, Final Attack) marks the mob
-        var (markDmg, markIed) = MarkBonus(m, build, attacker);
-        var result = Damage.SkillResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
-            m.Level, m.ElemAttr, AttackElement.Physical, m.Boss, extraDmgPct: markDmg, extraIedPct: markIed);
-        long damage = result.TotalDamage;
-        m.Hp = Math.Max(0, m.Hp - damage);
-        if (m.Hp == 0)
-        {
-            _lives.Remove(m);
-            Bury(m, rng, attacker);
-        }
-        return new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, tag, m.MobId, result.CritMultiplier > 1.0);
     }
 
     // One death's aftermath (swings and skills share it): a grave at home

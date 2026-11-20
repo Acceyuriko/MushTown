@@ -184,19 +184,28 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.1, Mage, 78, 200, extraFinalPct: (1.03 * 1.15 - 1) * 100), hit.Damage);
     }
 
-    // The DoT tick takes the Element Amplification damage % too (it is magic skill damage) but not Burning Magic's final damage (a tick is not an attack).
+    // The DoT tick takes the Element Amplification damage % (damage bucket) and Burning Magic's final damage (final bucket): the mob has the DoT the
+    // tick comes from. The same tick (same seed) of a build that learned Burning Magic and one that did not: the ratio is 1.15.
     [TestMethod]
-    public void DotTick_TakesElementAmplification_NotBurningFinal()
+    public void DotTick_TakesElementAmplification_AndBurningFinal()
     {
-        using var assets = new TempAssets();
-        assets.AddWzSkill(BreathData());
-        var world = OneMob(assets, 1_000_000_000);
-        var build = Mage with { MagicDmgPct = 50, DotFinalPct = 15 };
-        world.SkillStrike(7, 0, 100, true, new Random(4), build, Breath, 180);
+        long Tick(Build build)
+        {
+            using var assets = new TempAssets();
+            assets.AddWzSkill(BreathData());
+            var world = OneMob(assets, 1_000_000_000);
+            world.SkillStrike(7, 0, 100, true, new Random(4), build, Breath, 180);
+            return Ticks(world, 1000).Single().Damage;
+        }
+        var amplified = Mage with { MagicDmgPct = 50 };
         var rng = new Random(4);
         for (int i = 0; i < 12; i++) rng.NextDouble(); // the 6 segments' rolls
-        var tick = Ticks(world, 1000).Single();
-        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), 1.0, 0.1, build, 60, 200, "", AttackElement.Poison, extraDmgPct: 50), tick.Damage);
+        double roll = rng.NextDouble();
+        long without = Tick(amplified);
+        long with = Tick(amplified with { DotFinalPct = 15 });
+        Assert.AreEqual(Damage.SkillCalc(roll, 1.0, 0.1, amplified, 60, 200, "", AttackElement.Poison, extraDmgPct: 50), without);
+        Assert.AreEqual(Damage.SkillCalc(roll, 1.0, 0.1, amplified, 60, 200, "", AttackElement.Poison, extraDmgPct: 50, extraFinalPct: 15), with);
+        Assert.AreEqual(without * 1.15, with, without * 0.001);
     }
 
     // Over the wire: the server judges with the Build it was sent. Steady (mastery 100: the min and the max are the same to 2 points) makes the
@@ -217,7 +226,7 @@ public partial class FirePoisonCombatTests
         a.SendBuild(Steady with { MagicDmgPct = 100, DotTimePct = 100, DotFinalPct = 15, IgnoreElemPct = 10 });
         a.SendSkillCast(Breath, 180);
         var hit = WaitHit(a);
-        long expected = Damage.SkillCalc(0.5, 1.0, 0.1, Steady, 180, 200, "", AttackElement.Poison, extraDmgPct: 100);
+        long expected = Damage.SkillCalc(0.5, 1.0, 0.1, Steady, 180, 200, "", AttackElement.Poison, extraDmgPct: 100, extraFinalPct: 15); // the first segment already has the DoT: Burning Magic
         Assert.AreEqual(expected, hit.Damage, 2);
         Assert.IsTrue(hit.Damage > Damage.SkillCalc(0.5, 1.0, 0.1, Steady, 180, 200, "", AttackElement.Poison) * 1.5);
     }

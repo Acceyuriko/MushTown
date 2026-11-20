@@ -206,6 +206,22 @@ public static class DamageChain
         return 0.50 - 0.025 * (-20 - d); // -21..-39: 0.475 -> 0.025
     }
 
+    // Everything of one hit that the two dice (the damage roll and the crit roll) do not change: the result of step 2 of the hit pipeline for
+    // one target and one attack. It is worked out once (Prepare); each segment then only multiplies it by its own dice (Roll).
+    public readonly record struct HitBase(
+        long StatValue,
+        long MinActual,
+        long MaxActual,
+        long MinPanel,
+        long MaxPanel,
+        double MinSkill,
+        double MaxSkill,
+        double CritPct, // the crit chance, 0..100
+        double CritDamage,
+        double DefenseMultiplier,
+        double ElementMultiplier,
+        double LevelMultiplier);
+
     // The production chain. Build carries the snapshot values; the target's
     // level and ElemAttr are passed separately because they are not attacker
     // stats. Step 8 keeps one hit per call; TotalDamage is the production
@@ -215,10 +231,17 @@ public static class DamageChain
     // (Elemental Drain: a share for each DoT on it): it multiplies with the build's own final damage, like another source.
     // extraIedPct is enemy DEF ignored that only this hit gets (Empirical Knowledge stacks): it joins the build's own IED as
     // one more source (1 - ied) x (1 - extraIed), never changing the global IED. The enemy's elemental resistance is cut by the build's IgnoreElemPct.
+    // Calculate is Prepare then Roll: the formulas live there, once.
     public static DamageResult Calculate(Build build, double roll01, double crit01, double mobDef,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
         int skillPct = 100, bool boss = false, double extraDmgPct = 0, double extraFinalPct = 0,
-        double extraIedPct = 0)
+        double extraIedPct = 0) =>
+        Roll(Prepare(build, mobDef, mobLevel, mobElemAttr, element, skillPct, boss, extraDmgPct, extraFinalPct, extraIedPct), roll01, crit01);
+
+    // The part of the chain that does not depend on the dice (the panel range, the damage and final zones, the skill percent, DEF, element, level).
+    public static HitBase Prepare(Build build, double mobDef, int mobLevel, string mobElemAttr = "",
+        AttackElement element = AttackElement.Physical, int skillPct = 100, bool boss = false, double extraDmgPct = 0,
+        double extraFinalPct = 0, double extraIedPct = 0)
     {
         var weapon = StatTables.Weapon((WeaponType)build.WeaponType);
         long statValue = StatValue(build.Str, build.Dex);
@@ -229,15 +252,22 @@ public static class DamageChain
         double target = 1.0 + (damage + extraDmgPct + (boss ? build.BossPct : build.NormalPct)) / 100.0;
         double minSkill = minPanel / (1.0 + damage / 100.0) * skillPct / 100.0 * target;
         double maxSkill = maxPanel / (1.0 + damage / 100.0) * skillPct / 100.0 * target;
-        double actual = minSkill + (maxSkill - minSkill) * Math.Clamp(roll01, 0.0, 1.0);
-        bool crit = crit01 * 100.0 < Math.Clamp(build.CritPct, 0.0, 100.0);
-        double critMult = CritMultiplier(crit, build.CritDamage);
         double defense = DefenseMultiplier(mobDef * 100.0, (1.0 - build.IedPct / 100.0) * (1.0 - extraIedPct / 100.0));
         double level = mobLevel <= 0 ? 1.0 : LevelMultiplier(build.Level, mobLevel);
         double elemMult = string.IsNullOrEmpty(mobElemAttr) ? 1.0 : MobElemAttr.Multiplier(mobElemAttr, element, build.IgnoreElemPct);
-        double after = actual * critMult * defense * elemMult * level;
+        return new HitBase(statValue, minActual, maxActual, minPanel, maxPanel, minSkill, maxSkill,
+            Math.Clamp(build.CritPct, 0.0, 100.0), build.CritDamage, defense, elemMult, level);
+    }
+
+    // One segment: only the two dice are used (roll01 picks the point between min and max, crit01 decides the crit).
+    public static DamageResult Roll(in HitBase b, double roll01, double crit01)
+    {
+        double actual = b.MinSkill + (b.MaxSkill - b.MinSkill) * Math.Clamp(roll01, 0.0, 1.0);
+        bool crit = crit01 * 100.0 < b.CritPct;
+        double critMult = CritMultiplier(crit, b.CritDamage);
+        double after = actual * critMult * b.DefenseMultiplier * b.ElementMultiplier * b.LevelMultiplier;
         long perHit = Math.Max(1L, (long)Math.Floor(after));
-        return new DamageResult(statValue, minActual, maxActual,
-            minPanel, maxPanel, minSkill, maxSkill, critMult, defense, elemMult, level, perHit);
+        return new DamageResult(b.StatValue, b.MinActual, b.MaxActual,
+            b.MinPanel, b.MaxPanel, b.MinSkill, b.MaxSkill, critMult, b.DefenseMultiplier, b.ElementMultiplier, b.LevelMultiplier, perHit);
     }
 }

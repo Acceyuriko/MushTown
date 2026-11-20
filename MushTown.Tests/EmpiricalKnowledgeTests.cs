@@ -52,7 +52,7 @@ public class EmpiricalKnowledgeTests
         return world;
     }
 
-    // The same world, but the damage skill is a plain warrior skill (<id>.json), so SkillStrike takes the HitOne path.
+    // The same world, but the damage skill is a plain warrior skill (<id>.json), so SkillStrike takes the warrior skill path.
     private static MobWorld PlainWorld(TempAssets assets, int x = 100)
     {
         assets.AddMap(7, $$"""[{"MobId":100000,"X":{{x}},"Cy":100}]""", Floor);
@@ -150,7 +150,7 @@ public class EmpiricalKnowledgeTests
         Assert.AreEqual(ownPlain, otherOnMarked, "attacker 6 must not get attacker 0's mark");
     }
 
-    // A plain warrior skill (the HitOne path, not a WZ file) also gets the attacker's mark bonus.
+    // A plain warrior skill (the warrior skill path, not a WZ file) also gets the attacker's mark bonus.
     [TestMethod]
     public void SkillStrike_PlainSkill_AlsoGetsTheMarkBonus()
     {
@@ -163,6 +163,28 @@ public class EmpiricalKnowledgeTests
         long ownMarked = wm.SkillStrike(7, 0, 100, true, new Random(0), build, SkillId, 100)[0].Damage;
         long ownPlain = wp.SkillStrike(7, 0, 100, true, new Random(0), build, SkillId, 100)[0].Damage;
         Assert.IsTrue(ownMarked > ownPlain, $"3 own stacks should raise a plain skill hit ({ownMarked} vs {ownPlain})");
+    }
+
+    // Statuses first: with a certain chance (100) the first hit rolls its stack in step 1 and already takes that stack's damage % and DEF ignored
+    // (5 % each at one stack), a skill hit and a basic swing alike; the stack then lands on the mob.
+    [TestMethod]
+    public void FirstHit_AlreadyCarriesTheStackItAdds_ThenTheStackLands()
+    {
+        var build = Mage(markProp: 100);
+        using var skillAssets = new TempAssets();
+        var skillWorld = World(skillAssets);
+        long skillHit = skillWorld.SkillStrike(7, 0, 100, true, new Random(1), build, SkillId, 100)[0].Damage;
+        var rng = new Random(1);
+        rng.NextDouble(); // the stack roll comes first
+        Assert.AreEqual(Damage.SkillCalc(rng.NextDouble(), rng.NextDouble(), 0.5, build, 100, 200, extraDmgPct: 5, extraIedPct: 5), skillHit);
+        Assert.AreEqual(1, skillWorld.MarkStacks(Uid(skillWorld), 0));
+        using var swingAssets = new TempAssets();
+        var swingWorld = World(swingAssets, x: 50);
+        long swing = swingWorld.Strike(7, 0, 100, true, new Random(1), build)[0].Damage;
+        rng = new Random(1);
+        rng.NextDouble();
+        Assert.AreEqual(Damage.Calc(rng.NextDouble(), rng.NextDouble(), 0.5, build, 200, extraDmgPct: 5, extraIedPct: 5), swing);
+        Assert.AreEqual(1, swingWorld.MarkStacks(Uid(swingWorld), 0));
     }
 
     // The two terms the mark feeds the chain: additive damage % and DEF-ignored % for this hit only.

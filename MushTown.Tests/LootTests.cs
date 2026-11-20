@@ -57,7 +57,7 @@ public sealed class LootTests
     }
 
     // The skill path carries the killer too (Slash always lands >= 1: the
-    // 1-hp snail dies and the hook hears it through HitOne).
+    // 1-hp snail dies and the hook hears it through the warrior skill path).
     [TestMethod]
     public void Bonus_SkillPathCarriesAttacker()
     {
