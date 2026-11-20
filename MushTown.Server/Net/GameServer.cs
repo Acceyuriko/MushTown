@@ -201,6 +201,8 @@ public sealed partial class GameServer : IDisposable
             _clients.TryRemove(id, out _);
             _mobs.CancelBalls(id);
             _mobs.CancelDoTs(id);
+            _mobs.CancelZones(id);
+            BroadcastZones();
             _pos.Remove(id);
             _away.Remove(id);
             _builds.Remove(id);
@@ -231,8 +233,10 @@ public sealed partial class GameServer : IDisposable
         lock (_mobLock)
         {
             _away.Add(id);
-            _mobs.CancelBalls(id); // a cash-shop entry leaves the map (it counts as leaving): its balls and DoTs go
+            _mobs.CancelBalls(id); // a cash-shop entry leaves the map (it counts as leaving): its balls, DoTs and zones go
             _mobs.CancelDoTs(id);
+            _mobs.CancelZones(id);
+            BroadcastZones();
             had = _pos.Remove(id);
         }
         if (had) Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
@@ -380,6 +384,8 @@ public sealed partial class GameServer : IDisposable
             {
                 _mobs.CancelBalls(id); // the balls it threw on the old map do not land
                 _mobs.CancelDoTs(id); // and the DoTs it left there do not tick
+                _mobs.CancelZones(id); // and its zones there go away
+                BroadcastZones();
                 Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
             }
             if (first || switched)
@@ -662,10 +668,32 @@ public sealed partial class GameServer : IDisposable
                     w.Write(b.ToY);
                     w.Write(b.DelayMs);
                 }));
+            BroadcastZones(); // a ground zone is started: everyone sees it, the poison comes from the tick loop
             BroadcastMarkChanges();
             BroadcastFreshDrops();
         }
     }
+
+    // The zones started or taken away since the last call, to everyone (clients drop the ones of other maps). Call it under the mob lock.
+    private void BroadcastZones()
+    {
+        foreach (var z in _mobs.TakeZones())
+            Broadcast(ZoneFrame(z));
+    }
+
+    private static byte[] ZoneFrame(ZoneEvent z) =>
+        Net.Encode(Net.Zone, w =>
+        {
+            w.Write(z.Uid);
+            w.Write(z.Skill);
+            w.Write(z.Map);
+            w.Write(z.Left);
+            w.Write(z.Right);
+            w.Write(z.Y);
+            w.Write(z.LifeMs);
+            w.Write(z.DelayMs);
+            w.Write(z.Gone);
+        });
 
     // One pickup: the drop must exist on the taker's map within reach. The
     // take carries the loot, so the taker's client claims it and every other
@@ -783,6 +811,8 @@ public sealed partial class GameServer : IDisposable
                 Send(client, MobSpawnFrame(s));
             foreach (var d in _mobs.DropsOn(map))
                 Send(client, DropSpawnFrame(d));
+            foreach (var z in _mobs.ZonesOn(map))
+                Send(client, ZoneFrame(z));
         }
     }
 

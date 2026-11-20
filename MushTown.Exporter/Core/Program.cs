@@ -60,6 +60,9 @@ using MushTown.Exporter;
 //             the passive json of Elemental Adaptation, with no art, is refused by Menu.cs: run `export`).
 //           - Poison Breath got its body action script (assets/skill/wz/2101005.json has Script: the steps of Character 00002000.img/
 //             poisonBreath, an action name, a frame and a time each). An old json has no Script and Menu.cs refuses it: run `export`.
+//           - Poison Mist was added (assets/skill/wz/2111003.json, its icons and its art under assets/skill/wz/2111003/: effect, hit, effect1 (the second
+//             cast layer) and tile0..tile8 (the looping puffs of the ground zone), all in Art with origins and delays). The skill window's page III lists it;
+//             an old export makes the client stop at start (no wz def for the page III id, or no effect1 / tile art: Menu.cs refuses it): run `export`.
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of
 //             each map and the login theme.
 //   panel   - exports one panel's art only.

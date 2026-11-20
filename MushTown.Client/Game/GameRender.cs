@@ -16,6 +16,7 @@ public partial class MushTownGame
         _spriteBatch.Begin(blendState: BlendState.NonPremultiplied);
 
         DrawMapBack();
+        DrawZones(); // the mist lies on the ground, behind the actors
 
         // the player, then each peer, then each mob: current frames, actors
         // by feet height (lower feet draw in front; ties keep this order)

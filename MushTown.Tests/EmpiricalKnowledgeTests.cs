@@ -9,7 +9,7 @@ namespace MushTown.Tests;
 public class EmpiricalKnowledgeTests
 {
     private const string Floor = """[{"X1":-1000,"Y1":100,"X2":1000,"Y2":100,"Layer":0}]""";
-    private const int SkillId = 2111003; // a plain one-segment damage skill for the mark tests
+    private const int SkillId = 2111099; // a plain one-segment damage skill for the mark tests
 
     // 80002762 at max level 9: stack cap 3 (x), time 10 s, chance 13+2*level = 31% (prop), damage % per stack and
     // DEF-ignored % per stack u(level/2) = 5 (y for damage, w for DEF ignored). The same numbers the exporter writes into

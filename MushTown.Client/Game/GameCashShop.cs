@@ -119,6 +119,7 @@ public partial class MushTownGame
         while (_net.TryTakeDrop(out _)) { }
         while (_net.TryTakeFx(out _)) { }
         while (_net.TryTakeBall(out _)) { }
+        while (_net.TryTakeZone(out _)) { }
     }
 
     // The local world's one step. The shop calls it with no player: mobs keep

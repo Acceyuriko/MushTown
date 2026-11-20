@@ -42,6 +42,36 @@ public partial class MushTownGame
     {
         PoolSweep.DropAll(_fx, _world, _fxPool);
         PoolSweep.DropAll(_balls, _world, _ballPool);
+        PoolSweep.DropAll(_zones, _world, _zonePool);
+    }
+
+    // One zone event of this map: a new zone (or the rest of one that runs, listed on entry) gets its look; a gone one takes the look away.
+    // Only call this outside the tree step (it adds nodes).
+    private void ApplyZone(ZoneEvent e)
+    {
+        for (int i = _zones.Count - 1; i >= 0; i--)
+        {
+            if (_zones[i].Uid != e.Uid) continue;
+            _world.RemoveChild(_zones[i].Owner);
+            _zonePool.Push(_zones[i]);
+            _zones.RemoveAt(i);
+        }
+        if (e.Gone) return;
+        var z = _zonePool.TryPop(out var p) ? p : new GameObject().Add(new GroundZoneFx());
+        z.Start(e, _wzSkills[e.Skill]);
+        _world.AddChild(z.Owner);
+        _zones.Add(z);
+    }
+
+    // The tiles of every zone that has started: each is a looping WZ frame with its origin on the ground line.
+    private void DrawZones()
+    {
+        foreach (var z in _zones)
+        {
+            if (!z.Started) continue;
+            for (int i = 0; i < z.Tiles.Length; i++)
+                DrawFxFrame(z.Tiles[i]!.Frames[z.Frame[i]], z.Tiles[i]!.Origins[z.Frame[i]], z.TileX[i], z.Y, false);
+        }
     }
 
     // A ball in the air: one node with a Projectile (the attack-frame delay and flight) and a SkillFx (the looping art
@@ -513,6 +543,7 @@ public partial class MushTownGame
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), wz.SkillId, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
             foreach (var l in _localWorld.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
+            foreach (var z in _localWorld.TakeZones()) ApplyZone(z);
             DrainDrops(_localWorld);
         }
     }
@@ -642,6 +673,14 @@ public partial class MushTownGame
         fx.X = x; fx.Y = origins == null ? y - SkillFx.CastDy : y; fx.FacingRight = facingRight;
         // A second cast layer that plays together with the first (Elemental Adaptation's effect0; WZ z -2): drawn behind the caster's avatar,
         // so the column wraps the hero (the first layer is in front).
+        if (wz != null && wz.Art.TryGetValue("effect1", out var front)) // a second layer in front (Poison Mist's effect1), plays together with the first
+        {
+            var top = TakeFx();
+            top.Frames = front.Frames;
+            top.Origins = front.Origins;
+            top.Delays = front.Delays;
+            top.X = x; top.Y = y; top.FacingRight = facingRight;
+        }
         if (wz == null || !wz.Art.TryGetValue("effect0", out var second)) return;
         var back = TakeFx();
         back.Frames = second.Frames;

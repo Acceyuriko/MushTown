@@ -14,6 +14,7 @@ public sealed class NetClient : IDisposable
     private readonly ConcurrentQueue<MobEvent> _mobEvents = new();
     private readonly ConcurrentQueue<SkillFxEvent> _fxEvents = new();
     private readonly ConcurrentQueue<BallEvent> _ballEvents = new();
+    private readonly ConcurrentQueue<ZoneEvent> _zoneEvents = new();
     private readonly ConcurrentQueue<MoveEvent> _moveEvents = new();
     private readonly ConcurrentQueue<MarkEvent> _markEvents = new();
     private readonly ConcurrentQueue<DrainEvent> _drainEvents = new();
@@ -326,6 +327,7 @@ public sealed class NetClient : IDisposable
     public bool TryTakeFx(out SkillFxEvent e) => _fxEvents.TryDequeue(out e);
 
     public bool TryTakeBall(out BallEvent e) => _ballEvents.TryDequeue(out e);
+    public bool TryTakeZone(out ZoneEvent e) => _zoneEvents.TryDequeue(out e);
 
     public bool TryTakeMove(out MoveEvent e) => _moveEvents.TryDequeue(out e);
 
@@ -405,6 +407,11 @@ public sealed class NetClient : IDisposable
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),
                 BitConverter.ToSingle(p, 9), BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), BitConverter.ToSingle(p, 21),
                 BitConverter.ToInt32(p, 25)));
+        else if (p[0] == Net.Zone && p.Length == 34)
+            _zoneEvents.Enqueue(new ZoneEvent(
+                BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
+                BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), BitConverter.ToSingle(p, 21),
+                BitConverter.ToInt32(p, 25), BitConverter.ToInt32(p, 29), p[33] != 0));
         else if (p[0] == Net.MobMove && p.Length == 18)
             _moveEvents.Enqueue(new MoveEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),

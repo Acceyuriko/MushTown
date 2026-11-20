@@ -16,13 +16,13 @@ public static class JobSkills
 
     // Fire/Poison: the 1st job (200.img, the visible ones: Elemental Weakness is invisible in WZ) and the 2nd job
     // (210.img: the passives, then Meditation, Flame Orb and Poison Breath; Ignite follows with its own ticket) and the 3rd job
-    // (211.img: the passives, then the actives Explosion and Elemental Adaptation; the other 3rd job actives follow with their own tickets).
+    // (211.img: the passives, then the actives Explosion, Poison Mist and Elemental Adaptation; the other 3rd job actives follow with their own tickets).
     // Pages IV and V follow with their own jobs' tickets.
     private static readonly int[][] FirePoison =
     {
         new[] { WzSkillData.EnergyBolt, WzSkillData.Teleport, WzSkillData.ManaWave, WzSkillData.MagicGuard, WzSkillData.MagicArmor, WzSkillData.MpBoost },
         new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath },
-        new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.ElementalAdaptation },
+        new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation },
         Array.Empty<int>(), // IV
         Array.Empty<int>(), // V
     };

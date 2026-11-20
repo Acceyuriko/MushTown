@@ -40,6 +40,8 @@ public sealed class WzSkillData
     public const int TeleportBoost = 2110016;
     // 211 Mage (Fire/Poison): the 3rd job actives.
     public const int Explosion = 2111002;
+    public const int PoisonMist = 2111003;
+    public const int ZoneTiles = 9; // a ground zone's looping art: Art["tile0"]..Art["tile8"]
     public const int ElementalAdaptation = 2111011;
     // WZ has Meditation as a buff, the user made it a passive (always on, no cast): the exporter forces its Kind, the client start checks it.
     public static readonly IReadOnlySet<int> UserPassives = new HashSet<int> { Meditation };
@@ -83,6 +85,12 @@ public sealed class WzSkillData
     public List<WzSkillData> Children { get; set; } = new();
 
     public double Value(string field, int level) => Common[field][level - 1];
+
+    // The skills that are ground zones (Poison Mist): the cast puts the lt..rb box on the ground for `time` seconds and the box hits everything inside
+    // once each period, instead of judging a single swing. Such a skill has no mobCount and no attackCount in its file.
+    public static readonly IReadOnlySet<int> GroundZones = new HashSet<int> { PoisonMist };
+
+    public bool IsGroundZone => GroundZones.Contains(SkillId);
 
     // How far ahead a ball skill looks, in px: the WZ range at max level (or the box half-width when a file has no
     // range). Only a ball reads it; a skill with no ball judges with its full box on the caster and does not use a reach.

@@ -190,11 +190,15 @@ public partial class MushTownGame
     // nothing running, a default passive (0) or an old key id, asks the data nothing).
     internal SkillTimer TimerOf(int id)
     {
-        if (_fighter.Buffs.TryGetValue(id, out float buff) && buff > 0) return new SkillTimer(buff, _skills[id].BuffMs);
-        if (!_fighter.Cooldowns.TryGetValue(id, out float cd) || cd <= 0) return default;
-        float total = _wzSkills.TryGetValue(id, out var wz) ? SkillCost.CooldownMs(wz, WzLv(wz)) : _skills[id].CooldownMs;
-        return new SkillTimer(cd, total);
+        _fighter.Buffs.TryGetValue(id, out float buff);
+        _fighter.Cooldowns.TryGetValue(id, out float cd);
+        return PickTimer(buff, () => _skills[id].BuffMs, cd,
+            () => _wzSkills.TryGetValue(id, out var wz) ? SkillCost.CooldownMs(wz, WzLv(wz)) : _skills[id].CooldownMs);
     }
+
+    // The choice: the buff time while the buff runs (left above 0), else the cooldown while it runs, else nothing. A whole time is asked only for the one shown.
+    internal static SkillTimer PickTimer(float buffLeft, Func<float> buffTotal, float cooldownLeft, Func<float> cooldownTotal) =>
+        buffLeft > 0 ? new SkillTimer(buffLeft, buffTotal()) : cooldownLeft > 0 ? new SkillTimer(cooldownLeft, cooldownTotal()) : default;
 
     // The wheel scrolls the cells while the mouse is over the window: one notch is one row.
     private void UpdateSkillWheel()

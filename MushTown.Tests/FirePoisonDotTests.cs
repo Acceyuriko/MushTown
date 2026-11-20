@@ -56,7 +56,7 @@ public partial class FirePoisonCombatTests
         list.AddDot(DotOf(Breath, 5000));
         list.AddDot(DotOf(Breath, 5000)); // the same skill: refresh, no second layer
         Assert.AreEqual(1, list.DotCount(0));
-        list.AddDot(DotOf(2111003, 2000)); // another skill: another layer
+        list.AddDot(DotOf(2111099, 2000)); // another skill: another layer
         Assert.AreEqual(2, list.DotCount(0));
         list.Step(2000); // the second one runs out at 0
         Assert.AreEqual(1, list.DotCount(0));
@@ -150,7 +150,7 @@ public partial class FirePoisonCombatTests
     {
         using var assets = new TempAssets();
         assets.AddWzSkill(BreathData());
-        assets.AddWzSkill(DotSkillData(2111003));
+        assets.AddWzSkill(DotSkillData(2111099));
         var world = OneMob(assets, 1_000_000_000);
         world.SkillStrike(7, 0, 100, true, new Random(1), Mage, Breath, 180);
         Assert.AreEqual(5, Enumerable.Range(0, 5).Sum(_ => Ticks(world, 1000).Count)); // 5 s in
@@ -159,9 +159,9 @@ public partial class FirePoisonCombatTests
             Assert.AreEqual(1, Ticks(world, 1000).Count, $"second {sec} after the refresh"); // one layer, and 10 s, not the 5 s that were left
         Assert.AreEqual(0, Ticks(world, 1000).Count);
         world.SkillStrike(7, 0, 100, true, new Random(3), Mage, Breath, 180);
-        world.SkillStrike(7, 0, 100, true, new Random(3), Mage, 2111003, 180); // another skill: its own layer
+        world.SkillStrike(7, 0, 100, true, new Random(3), Mage, 2111099, 180); // another skill: its own layer
         var both = Ticks(world, 1000);
-        CollectionAssert.AreEquivalent(new[] { Breath, 2111003 }, both.Select(h => h.Skill).ToArray());
+        CollectionAssert.AreEquivalent(new[] { Breath, 2111099 }, both.Select(h => h.Skill).ToArray());
     }
 
     // The element is poison: a poison-weak mob (S3, x1.5) takes more of each tick and of the cast than a mob with no element, a poison-resist one
@@ -355,13 +355,13 @@ public partial class FirePoisonCombatTests
     {
         long seg = Poison(Steady, 180, 1.0), tick = Poison(Steady, 60, 1.0);
         using var assets = new TempAssets();
-        assets.AddWzSkill(BreathData(2111003, dotTime: 1)); // A: one tick, then it runs out
+        assets.AddWzSkill(BreathData(2111099, dotTime: 1)); // A: one tick, then it runs out
         assets.AddWzSkill(BreathData());                     // B: the full 10 s
         assets.AddMap(7, """[{"MobId":100000,"X":100,"Cy":100}]""", Floor);
         assets.AddMob(100000, 12 * seg + 3 * tick, 0.1, exp: 50, speed: 1, level: 200);
         var world = new MobWorld(assets.Dir);
         world.EnterMap(7);
-        world.SkillStrike(7, 0, 100, true, new Random(1), Steady, 2111003, 180, attacker: 5); // both casts leave 3 ticks of HP
+        world.SkillStrike(7, 0, 100, true, new Random(1), Steady, 2111099, 180, attacker: 5); // both casts leave 3 ticks of HP
         world.SkillStrike(7, 0, 100, true, new Random(2), Steady, Breath, 180, attacker: 6);
         var firstSecond = world.Tick(1000, new()).Strikes; // 1 s: A and B both tick, the mob lives
         Assert.AreEqual(2, firstSecond.Count);

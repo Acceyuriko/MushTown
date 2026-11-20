@@ -134,6 +134,8 @@ public partial class MushTownGame : Game
     private readonly Stack<SkillFx> _fxPool = new();
     private readonly List<SkillFx> _balls = new(); // balls in the air (Energy Bolt): each node holds a Projectile and a SkillFx
     private readonly Stack<SkillFx> _ballPool = new();
+    private readonly List<GroundZoneFx> _zones = new(); // ground zones on this map (Poison Mist): the looks the server's zones have here
+    private readonly Stack<GroundZoneFx> _zonePool = new();
     private readonly Dictionary<int, DmgData> _dmg = new(); // damage skins by key, loaded once each
 
     private readonly Dictionary<int, DropArt> _drops = new();
@@ -822,6 +824,7 @@ public partial class MushTownGame : Game
         PoolSweep.CollectDead(_numbers, _world, _numberPool);
         PoolSweep.CollectDead(_fx, _world, _fxPool);
         PoolSweep.CollectDead(_balls, _world, _ballPool);
+        PoolSweep.CollectDead(_zones, _world, _zonePool);
         if (_mover.JumpSfx) PlaySfx("jump");
         if (_mover.Travel != null)
         {
@@ -920,6 +923,11 @@ public partial class MushTownGame : Game
             {
                 if (b.Map != _mapId) continue; // another map's ball: not shown here
                 SpawnBall(b.Skill, b.FromX, b.FromY, b.ToX, b.ToY, b.DelayMs);
+            }
+            while (_net.TryTakeZone(out var z))
+            {
+                if (z.Map != _mapId) continue; // another map's zone: not shown here
+                ApplyZone(z);
             }
             if (!_net.Connected && _remotes.Count > 0)
                 ClearPeers(); // link lost: peers vanish, the local world takes over

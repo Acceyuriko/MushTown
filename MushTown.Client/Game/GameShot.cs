@@ -383,6 +383,7 @@ public partial class MushTownGame
         {
             world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { WeaknessProp = 100 }, wz.SkillId, pct);
             world.TakeLaunches(); // unseen: the ball is not drawn
+            world.TakeZones(); // and so is the zone
             for (int i = 0; i < 30; i++)
                 if (ShotTick(100, showStrikes: false).Count > 0) break;
         }
@@ -391,6 +392,7 @@ public partial class MushTownGame
         foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(0), build, wz.SkillId, pct))
             ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
         foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
+        foreach (var z in world.TakeZones()) ApplyZone(z);
         DrainDrops(world, animate: false);
         RunShotFly(_shotFlyms);
         if (_shotRecastMs > 0) // --recast: the same cast again at the same mobs, never a crit, while the numbers of the first are still up
@@ -398,6 +400,7 @@ public partial class MushTownGame
             foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { CritPct = 0 }, wz.SkillId, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
             foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
+            foreach (var z in world.TakeZones()) ApplyZone(z);
             DrainDrops(world, animate: false);
             RunShotFly(_shotRecastMs);
         }
@@ -433,10 +436,12 @@ public partial class MushTownGame
             foreach (var f in _balls) TreeUpdate.UpdateObject(f.Owner, ms / 1000f);
             foreach (var f in _fx) TreeUpdate.UpdateObject(f.Owner, ms / 1000f);
             foreach (var n in _numbers) TreeUpdate.UpdateObject(n.Owner, ms / 1000f);
+            foreach (var z in _zones) TreeUpdate.UpdateObject(z.Owner, ms / 1000f);
             SpawnImpacts();
             PoolSweep.CollectDead(_balls, _world, _ballPool);
             PoolSweep.CollectDead(_fx, _world, _fxPool);
             PoolSweep.CollectDead(_numbers, _world, _numberPool);
+            PoolSweep.CollectDead(_zones, _world, _zonePool);
             ShotTick(ms);
         }
     }

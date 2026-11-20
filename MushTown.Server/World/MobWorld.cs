@@ -89,6 +89,13 @@ public sealed class MobWorld
         public Dot? Dot; // the DoT this cast puts on each mob it leaves alive (a copy for each mob), built at the cast
     }
 
+    // A ground zone and the cast that made it: each period the zone judges the mobs in its box with these numbers (read at the cast).
+    private sealed class LiveZone
+    {
+        public GroundZone Zone = null!;
+        public Pending Cast = null!; // only its attack numbers are used (no box, no wait)
+    }
+
     private sealed class GroundDrop
     {
         public int Uid;
@@ -117,10 +124,13 @@ public sealed class MobWorld
     private readonly List<GroundDrop> _drops = new();
     private readonly List<Drop> _fresh = new(); // kill drops waiting for broadcast
     private readonly List<Pending> _pending = new(); // balls in the air
+    private readonly List<LiveZone> _zones = new();
+    private readonly List<ZoneEvent> _zoneEvents = new(); // zones started or taken away, waiting for broadcast
     private readonly List<BallEvent> _launches = new(); // balls thrown, waiting for broadcast (the flight time is Projectile.FlightMs of the four numbers, the same rule on the client)
     private readonly List<(int attacker, int uid, int stacks)> _markDirty = new(); // Empirical Knowledge stack changes to send to their owner
     private readonly HashSet<int> _spawned = new();
     private int _nextUid = 1;
+    private int _nextZone = 1;
     private int _nextDrop = 1;
 
     private readonly HitPipeline _pipeline; // every hit on a mob (swing, skill hit, DoT tick) is calculated here, in one order
@@ -243,6 +253,16 @@ public sealed class MobWorld
             foreach (var h in WzHits(p.Map, p.X, p.Y, p.FacingRight, p.Rng, p.Build, p.Wz, p.Element, p.MobCount, p.Segments, p.Pct, p.Attacker, p.Dot, p.CasterX, p.CasterY))
                 strikes.Add((h, p.Attacker));
         }
+        for (int i = 0; i < _zones.Count;) // the zones that run: each period they judge the mobs inside, in the order the zones were cast
+        {
+            var z = _zones[i];
+            int periods = z.Zone.Step(ms);
+            if (z.Zone.Over) _zones.RemoveAt(i); // the clients end their copy by the time they were given
+            else i++;
+            for (int k = 0; k < periods; k++)
+                foreach (var h in ZoneHits(z))
+                    strikes.Add((h, z.Cast.Attacker));
+        }
         var onMap = new HashSet<int>();
         foreach (var p in players) onMap.Add(p.map);
         var moves = new List<Move>();
@@ -296,6 +316,36 @@ public sealed class MobWorld
 
     // The balls of one caster that are still in the air vanish with no damage (the caster left the game or changed map).
     public void CancelBalls(int attacker) => _pending.RemoveAll(p => p.Attacker == attacker);
+
+    // The zones of one caster vanish with the caster too (it left the game or the map): every client on the map is told to take them away.
+    public void CancelZones(int attacker)
+    {
+        for (int i = _zones.Count - 1; i >= 0; i--)
+        {
+            var z = _zones[i].Zone;
+            if (z.Attacker != attacker) continue;
+            _zoneEvents.Add(new ZoneEvent(z.Uid, _zones[i].Cast.Wz.SkillId, z.Map, z.Left, z.Right, z.GroundY, 0, 0, true));
+            _zones.RemoveAt(i);
+        }
+    }
+
+    // The zones that run on one map, for clients entering it (the time they have left; one still waiting keeps its wait).
+    public List<ZoneEvent> ZonesOn(int map)
+    {
+        var list = new List<ZoneEvent>();
+        foreach (var z in _zones)
+            if (z.Zone.Map == map)
+                list.Add(new ZoneEvent(z.Zone.Uid, z.Cast.Wz.SkillId, map, z.Zone.Left, z.Zone.Right, z.Zone.GroundY, z.Zone.MsLeft, z.Zone.WaitMs));
+        return list;
+    }
+
+    // Zones started or taken away since the last call (the caller broadcasts them to the map).
+    public List<ZoneEvent> TakeZones()
+    {
+        var list = new List<ZoneEvent>(_zoneEvents);
+        _zoneEvents.Clear();
+        return list;
+    }
 
     // The DoTs of one caster vanish with the caster: a disconnect, a map change or a cash-shop entry removes every
     // effect he put on a mob. It walks every live mob and removes the ones this source owns (a source stands on one map,
@@ -500,8 +550,6 @@ public sealed class MobWorld
         // Every number the damage needs is read here, in the cast, where a bad skill file fails the caster's call. A ball
         // lands later in the tick loop, which must not throw (it would end the loop for everyone).
         var element = wz.Element();
-        int mobCount = (int)wz.Value("mobCount", wz.MaxLevel);
-        int segments = (int)wz.Value("attackCount", wz.MaxLevel);
         // The DoT of the cast (dot, dotInterval, dotTime at max level), read here too: Tick must not read the WZ numbers.
         Dot? dot = !wz.Common.ContainsKey("dot") ? null : new Dot
         {
@@ -517,6 +565,13 @@ public sealed class MobWorld
             IntervalMs = (int)(wz.Value("dotInterval", wz.MaxLevel) * 1000),
             MsLeft = (int)(wz.Value("dotTime", wz.MaxLevel) * 1000 * (100 + build.DotTimePct) / 100), // Burning Magic: a longer DoT
         };
+        if (wz.IsGroundZone)
+        {
+            StartZone(map, x, y, facingRight, rng, build, wz, element, pct, attacker, dot);
+            return new List<Hit>();
+        }
+        int mobCount = (int)wz.Value("mobCount", wz.MaxLevel);
+        int segments = (int)wz.Value("attackCount", wz.MaxLevel);
         bool ball = wz.BallFrames.Count > 0;
         int attackDelay = wz.AttackDelayMs; // the ball appears when the body action reaches its attack frame
         // A skill with no ball judges with the full lt..rb box on the caster (Flame Orb, Poison Breath), on both sides: the
@@ -589,8 +644,13 @@ public sealed class MobWorld
             if (m.Map == map && wz.InBodyRect(dx, dy, m.BodyH, facingRight)) inBox.Add((dx * dx + dy * dy, m));
         }
         inBox.Sort((a, b) => a.dist2.CompareTo(b.dist2));
-        var targets = inBox.Take(mobCount).Select(t => t.m).ToList();
-        return _pipeline.Resolve(targets, new HitPipeline.Attack
+        return ResolveWz(inBox.Take(mobCount).Select(t => t.m).ToList(), map, rng, build, wz, element, segments, pct, attacker, dot, casterX, casterY);
+    }
+
+    // One WZ cast on the chosen mobs: one attack of the hit pipeline (a skill hit and, with a dot, the DoT put on the mobs it leaves alive).
+    private List<Hit> ResolveWz(List<Mob> targets, int map, Random rng, Build build, WzSkillData wz, AttackElement element, int segments, int pct,
+        int attacker, Dot? dot, float casterX, float casterY) =>
+        _pipeline.Resolve(targets, new HitPipeline.Attack
         {
             Build = build,
             Rng = rng,
@@ -605,6 +665,47 @@ public sealed class MobWorld
             CasterX = casterX,
             CasterY = casterY,
         });
+
+    // A ground zone cast at the caster's feet (x, y): the WZ box lt..rb (mirrored by facing, like every box) stands on the ground below
+    // for `time` seconds at max level, starting at the body action's attack frame (the first tick after it, like a ball's landing). The
+    // box is flat: the foothold slope is ignored. It goes off every dotInterval (the WZ has no period of its own for the zone, 未核实): each time every
+    // mob inside takes one hit of the skill (damage %, one segment, no mob cap: WZ has no mobCount) and the DoT (a DoT of the same skill only refreshes).
+    // The clients get the zone as one event.
+    private void StartZone(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, AttackElement element, int pct, int attacker, Dot? dot)
+    {
+        var lt = wz.Vectors["lt"];
+        var rb = wz.Vectors["rb"];
+        float ground = LandY(_maps[map].Footholds, x, y);
+        var zone = new GroundZone
+        {
+            Uid = _nextZone++,
+            Map = map,
+            Attacker = attacker,
+            Left = facingRight ? x - rb[0] : x + lt[0],
+            Right = facingRight ? x - lt[0] : x + rb[0],
+            Top = ground + lt[1],
+            Bottom = ground + rb[1],
+            GroundY = ground,
+            PeriodMs = (int)(wz.Value("dotInterval", wz.MaxLevel) * 1000),
+            LifeMs = (int)(wz.Value("time", wz.MaxLevel) * 1000),
+            WaitMs = wz.AttackDelayMs + TickMs,
+        };
+        _zones.Add(new LiveZone
+        {
+            Zone = zone,
+            Cast = new Pending { Wz = wz, Rng = rng, Build = build, Element = element, Pct = pct, Attacker = attacker, Dot = dot, CasterX = x, CasterY = y, Map = map },
+        });
+        _zoneEvents.Add(new ZoneEvent(zone.Uid, wz.SkillId, map, zone.Left, zone.Right, ground, zone.LifeMs, zone.WaitMs));
+    }
+
+    // One period of a zone: every mob in the box takes the cast's hit.
+    private List<Hit> ZoneHits(LiveZone z)
+    {
+        var c = z.Cast;
+        var targets = new List<Mob>();
+        foreach (var m in _lives)
+            if (m.Map == z.Zone.Map && z.Zone.Contains(m.X, m.Y, m.BodyH)) targets.Add(m);
+        return ResolveWz(targets, c.Map, c.Rng, c.Build, c.Wz, c.Element, 1, c.Pct, c.Attacker, c.Dot, c.CasterX, c.CasterY);
     }
 
     // One tick of a DoT: one attack of the hit pipeline with the caster's snapshot (Build), the DoT's damage % and element (the mob already has

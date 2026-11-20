@@ -17,6 +17,21 @@ public sealed class FighterTests
         Assert.AreEqual(0f, f.AttackLock);
     }
 
+    // A skill with a buff and a cooldown at once: the buff leaves the list when it ends and the cooldown is still running, so the countdown of the icon
+    // (HudSkill.TimerOf: the buff time while the buff is listed, else the cooldown) shows the buff first and the cooldown after it.
+    [TestMethod]
+    public void BuffEnds_CooldownKeepsRunning()
+    {
+        var f = new Fighter();
+        f.Buffs[1000003] = 1000;
+        f.Cooldowns[1000003] = 5000;
+        f.Tick(600f);
+        Assert.IsTrue(f.Buffs[1000003] > 0 && f.Cooldowns[1000003] > 0);
+        f.Tick(600f);
+        Assert.IsFalse(f.Buffs.ContainsKey(1000003));
+        Assert.AreEqual(3800f, f.Cooldowns[1000003]);
+    }
+
     [TestMethod]
     public void Cooldowns_TickDownAndStayListed()
     {

@@ -33,6 +33,9 @@ namespace MushTown.Exporter;
 // Art["effect0"] with its png paths), no affected loop and no hit (its text is the WZ text: it says the same as the design). The layer count of the buff bar is drawn by the client (the WZ number icons are not exported).
 // Its special (the barrier flash, played once per blocked status) goes to Art["block"] the same way (png under 2111011/block/); its special0
 // (a faint back column with a floor ring, z -2) is not used. Re-run `export` after pulling this: an old export has no block art.
+// Poison Mist (211.img) is a ground zone (a damage skill with a time and no mob count): besides effect (the cast) and hit it keeps effect1 (a second cast layer, played with
+// the first) and tile/0..8 (nine looping puffs of 8 pictures, the look of the zone) as Art["effect1"], Art["tile0"]..Art["tile8"] (png under 2111003/effect1/ and 2111003/tile<i>/).
+// Re-run `export` after pulling this: an old export has none of them and the client refuses to start (Menu.cs).
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -112,6 +115,12 @@ public static partial class Export
         if (!SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)) return false;
         if (id == WzSkillData.ElementalAdaptation // the cast's back layer, and the block art (special): kept apart from the generic ball/special art
             && (!SaveLayer(node!, meta, id, data, outDir, saved, "effect0", "effect0") || !SaveLayer(node!, meta, id, data, outDir, saved, "special", "block"))) return false;
+        if (id == WzSkillData.PoisonMist) // the ground zone: effect1 (a second cast layer) and the 9 looping tile variants, each 8 frames, kept as Art["effect1"], Art["tile0".."tile8"]
+        {
+            if (!SaveLayer(node!, meta, id, data, outDir, saved, "effect1", "effect1")) return false;
+            for (int i = 0; i < WzSkillData.ZoneTiles; i++)
+                if (!SaveLayer(node!.Nodes["tile"]!, meta.Nodes["tile"]!, id, data, outDir, saved, i.ToString(), $"tile{i}")) return false;
+        }
         if (hit != null)
         {
             data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);

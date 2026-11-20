@@ -610,6 +610,9 @@ public partial class MushTownGame
         }
     }
 
+    // Art that can be played: pictures, and an origin and a delay for each.
+    private static bool ArtComplete(WzArt a) => a.Frames.Count > 0 && a.Frames.Count == a.Origins.Length && a.Frames.Count == a.Delays.Length;
+
     // Skill defs (Initialize phase, same reason). Tabs keep their own roster
     // (window placement); a tabbed skill without a def fails loud instead of
     // drawing blank.
@@ -645,6 +648,8 @@ public partial class MushTownGame
                 || !wz.Art.TryGetValue("effect0", out var second) || second.Frames.Count == 0 || second.Frames.Count != second.Origins.Length || second.Frames.Count != second.Delays.Length
                 || !wz.Art.TryGetValue("block", out var block) || block.Frames.Count == 0 || block.Frames.Count != block.Origins.Length || block.Frames.Count != block.Delays.Length))
                 throw new InvalidDataException($"skill {wz.SkillId} is not a buff, has no second cast layer (effect0) or no block art (block): run the exporter (export)");
+            if (wz.IsGroundZone && !(wz.Art.TryGetValue("effect1", out var front) && ArtComplete(front) && Enumerable.Range(0, WzSkillData.ZoneTiles).All(i => wz.Art.TryGetValue($"tile{i}", out var tile) && ArtComplete(tile))))
+                throw new InvalidDataException($"skill {wz.SkillId} is a ground zone but has no second cast layer (effect1) or no tile0..tile{WzSkillData.ZoneTiles - 1} art: run the exporter (export)");
             if ((wz.Common.ContainsKey("damage") || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
             if (wz.SkillId == WzSkillData.PoisonBreath && wz.Script.Count == 0)
