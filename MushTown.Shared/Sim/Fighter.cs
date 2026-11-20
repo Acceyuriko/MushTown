@@ -15,7 +15,7 @@ public sealed class Fighter : Component
     public Dictionary<int, float> Cooldowns = new(); // ms left per cooling skill (clamped, never removed)
     public Dictionary<int, float> Buffs = new(); // ms left per live buff (removed on expiry)
     public int Orbs; // combo orbs held (Combo Attack live only)
-    public int StatusShield; // Elemental Adaptation's layers left: each blocks one abnormal status (no timer, only the cast gives them)
+    public int StatusShield; // Elemental Adaptation's layers left: each blocks one abnormal status (no timer, only the cast gives them; the last one spent starts the cooldown)
 
     // Outputs, fresh every tick: the Client drains them right after.
     public List<int> ExpiredBuffs = new(); // buffs that ran out: EndBuff each, in order
@@ -39,12 +39,25 @@ public sealed class Fighter : Component
         StatusShield = 0;
     }
 
-    // The entry a status asks before it is put on the player: a layer left is spent and the status is blocked (true); no layer, not blocked.
-    // No caller yet: no status exists (see IStatusEffect).
-    public bool TryBlockStatus()
+    // Elemental Adaptation's cast: refused while layers remain, else the usual pay (MP, level, cooldown check) and WZ y layers. The cast
+    // starts no cooldown: it starts when the last layer is spent.
+    public bool TryCastShield(SkillCost cost, CharaSlot? chara, WzSkillData wz, int lv)
+    {
+        if (StatusShield > 0 || !cost.Pay(chara, wz, lv, Cooldowns)) return false;
+        StatusShield = (int)wz.Value("y", lv);
+        return true;
+    }
+
+    // The entry a status asks before it is put on the player: a layer left and WZ x percent of the max MP in the pool (rounded down) make it
+    // blocked (true): the MP is paid and a layer is spent; the last layer starts the cooldown. No layer, or not enough MP (WZ does not say
+    // what happens then: unverified): not blocked, nothing is paid. No caller yet: no status exists (see IStatusEffect).
+    public bool TryBlockStatus(CharaSlot chara, WzSkillData wz, int lv, int maxMp)
     {
         if (StatusShield <= 0) return false;
-        StatusShield--;
+        int mp = maxMp * (int)wz.Value("x", lv) / 100;
+        if (chara.Mp < mp) return false;
+        chara.Mp -= mp;
+        if (--StatusShield == 0) Cooldowns[wz.SkillId] = SkillCost.CooldownMs(wz, lv);
         return true;
     }
 

@@ -645,6 +645,7 @@ public sealed partial class GameServer : IDisposable
                 w.Write(p.x);
                 w.Write(p.y);
                 w.Write(p.facing);
+                w.Write((byte)(skill == WzSkillData.ElementalAdaptation && pct == Net.BlockPct ? 1 : 0)); // only the shield reports a blocked status this way
             }), id);
             if (!damage) return; // utility/buff: the effect is the whole message
             if (!_builds.TryGetValue(id, out var build)) build = Progression.Beginner;

@@ -98,11 +98,18 @@ public partial class MushTownGame
         DrawFxList(_fx);
     }
 
+    // The effect layers of one actor that sit behind its avatar (the same slot as the slow fall's bubble).
+    private void DrawBehindFx(int actor)
+    {
+        foreach (var f in _fx)
+            if (f.Behind && f.Actor == actor) DrawFxFrame(f.Frames[f.Frame], f.Origins?[f.Frame], f.X, f.Y, f.FacingRight);
+    }
+
     private void DrawFxList(List<SkillFx> list)
     {
         foreach (var f in list)
         {
-            if (f.Flight is { Started: false }) continue; // the body action has not reached its attack frame
+            if (f.Behind || f.Flight is { Started: false }) continue; // behind: drawn by its actor; the body action has not reached its attack frame
             DrawFxFrame(f.Frames[f.Frame], f.Origins?[f.Frame], f.X, f.Y, f.FacingRight);
         }
     }
@@ -323,9 +330,7 @@ public partial class MushTownGame
     // The same for a WZ skill: it stands at its max level when the character's job has it.
     private bool TryPayWzSkill(WzSkillData wz)
     {
-        var chara = _save?.Slots[_slot];
-        int lv = chara != null && JobSkills.Has(chara.Job, wz.SkillId) ? wz.MaxLevel : 0;
-        return _skillCost.Pay(chara, wz, lv, _fighter.Cooldowns, (int)_stats.IntValue(StatKey.MP_COST_PCT));
+        return _skillCost.Pay(_save?.Slots[_slot], wz, WzLv(wz), _fighter.Cooldowns, (int)_stats.IntValue(StatKey.MP_COST_PCT));
     }
 
     // Every skill of the character's own job stands at its max level (no skill points); a skill of
@@ -393,12 +398,12 @@ public partial class MushTownGame
             default:
                 if (_wzSkills.TryGetValue(id, out var wz))
                 {
-                    // A damage skill casts, the buff (Elemental Adaptation) casts its shield (its cooldown keeps a held key from recasting it);
+                    // A damage skill casts, the buff (Elemental Adaptation) casts its shield (the layers left, or the cooldown after them, keep a held key from recasting it);
                     // a passive (a bound Meditation of an old save too) and the move Mana Wave are ignored.
                     if (wz.Kind == SkillData.KindActive && wz.Common.ContainsKey("damage") && _mover.Climb == null
                         && _fighter.AttackLock <= 0 && HasJudge() && TryPayWzSkill(wz))
                         CastWzActive(wz);
-                    else if (wz.Kind == SkillData.KindBuff && _mover.Climb == null && _fighter.AttackLock <= 0 && TryPayWzSkill(wz))
+                    else if (wz.Kind == SkillData.KindBuff && _mover.Climb == null && _fighter.AttackLock <= 0)
                         CastShield(wz);
                     return;
                 }
@@ -530,16 +535,31 @@ public partial class MushTownGame
         PushBuild();
     }
 
-    // Elemental Adaptation (the WZ buff): a paid cast gives the shield its layers (WZ y at max level: how many statuses it blocks). No timer
-    // (WZ has no time): only the cooldown limits the next cast, and a cast refills the layers. Its resistances are always on, so there is no
-    // build to push. Both cast layers play and the others see them (SkillFx relay); the layers are only ours, like the buff bar.
+    // Elemental Adaptation (the WZ buff): a paid cast gives the shield its layers (WZ y: how many statuses it blocks), refused while layers
+    // remain. No timer, and the cast starts no cooldown: the last layer spent does (Fighter.TryBlockStatus). Its resistances are always on, so
+    // there is no build to push. Both cast layers play and the others see them (SkillFx relay); the layers are only ours, like the buff bar.
     private void CastShield(WzSkillData wz)
     {
-        _fighter.StatusShield = (int)wz.Value("y", wz.MaxLevel);
+        var chara = _save?.Slots[_slot];
+        if (!_fighter.TryCastShield(_skillCost, chara, wz, WzLv(wz))) return;
         PlaySfx("buff");
         SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
         if (_net != null && _net.Connected) _net.SendSkillCast(wz.SkillId, 0);
     }
+
+    // A status was put on the hero: the shield blocks it when it has a layer and the MP (no game caller yet: no status exists; the
+    // shots and the tests call it). A block plays the block art here and on the other screens, pays 2% of the max MP and spends a layer.
+    private bool BlockStatus()
+    {
+        var wz = _wzSkills[WzSkillData.ElementalAdaptation];
+        if (_save?.Slots[_slot] is not { } chara || !_fighter.TryBlockStatus(chara, wz, WzLv(wz), (int)MaxMpNow())) return false;
+        SpawnBlockFx(wz, _mover.X, _mover.Y, _mover.FacingRight);
+        if (_net != null && _net.Connected) _net.SendSkillCast(wz.SkillId, Net.BlockPct);
+        return true;
+    }
+
+    // The level of a WZ skill the hero stands at: it stands at its max level when the character's job has it, 0 when not.
+    private int WzLv(WzSkillData wz) => _save?.Slots[_slot] is { } chara && JobSkills.Has(chara.Job, wz.SkillId) ? wz.MaxLevel : 0;
 
     // Buff loops are singletons per buff (cast and end both strip first).
     private void StripLoopFx(int id) => SkillFx.StripLoops(_fx, _world, _fxPool, id);
@@ -599,7 +619,7 @@ public partial class MushTownGame
 
     // Our own cast or a peer's echo: a WZ effect anchors its WZ origin at the caster's feet; an old bare effect
     // keeps the centered torso rule. Casts without art (Iron Body, Combo Attack) skip silently.
-    private void SpawnCastFx(int skill, float x, float y, bool facingRight)
+    private void SpawnCastFx(int skill, float x, float y, bool facingRight, int actor = SkillFx.HeroActor)
     {
         List<string> frames;
         int[][]? origins = null;
@@ -620,13 +640,26 @@ public partial class MushTownGame
         fx.Origins = origins;
         fx.Delays = delays;
         fx.X = x; fx.Y = origins == null ? y - SkillFx.CastDy : y; fx.FacingRight = facingRight;
-        // A second cast layer that plays together with the first (Elemental Adaptation's effect0; WZ z -2, behind the hero, drawn in front like the first).
+        // A second cast layer that plays together with the first (Elemental Adaptation's effect0; WZ z -2): drawn behind the caster's avatar,
+        // so the column wraps the hero (the first layer is in front).
         if (wz == null || !wz.Art.TryGetValue("effect0", out var second)) return;
         var back = TakeFx();
         back.Frames = second.Frames;
         back.Origins = second.Origins;
         back.Delays = second.Delays;
         back.X = x; back.Y = y; back.FacingRight = facingRight;
+        back.Behind = true; back.Actor = actor;
+    }
+
+    // A status blocked by Elemental Adaptation: its block art (WZ special: the barrier flash, z 0) plays once on the caster, in front.
+    private void SpawnBlockFx(WzSkillData wz, float x, float y, bool facingRight)
+    {
+        var art = wz.Art["block"];
+        var fx = TakeFx();
+        fx.Frames = art.Frames;
+        fx.Origins = art.Origins;
+        fx.Delays = art.Delays;
+        fx.X = x; fx.Y = y; fx.FacingRight = facingRight;
     }
 
     // The hero's frame as the WZ poses of Mana Wave show it: the boost is alert frame 2 (in the air alert is only that pose) and the

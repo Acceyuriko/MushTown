@@ -67,7 +67,7 @@ public partial class MushTownGame
             cell.Add(new Rect(QslotCell(slot)));
             cell.Add(new ItemTip(() => ItemOn(slot))); // the tooltip of the bound item
             cell.Add(new SkillTip(() => SkillViewOn(SlotTarget(slot)))); // the skill window's tooltip of the bound skill
-            cell.Add(new QuickCell(() => SlotName(slot), () => IconOn(slot), LoadArt));
+            cell.Add(new QuickCell(() => SlotName(slot), () => IconOn(slot), LoadArt, () => TimerOn(slot)));
             cell.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => PickSlot(slot) }); // the drop is taken before the click chain; PickSlot plays the click
             cell.Add(new Grab(() => Pickable(slot)));
             root.AddChild(cell);
@@ -182,6 +182,10 @@ public partial class MushTownGame
     // pool cell and the strip cell go blank until the drop lands.
     private string IconOn(int cell) =>
         SlotTarget(cell) is { } target && Held != target ? TargetArt(target) : "";
+
+    // The countdown of the skill on a cell: none for an item, a macro or an action, and none while the skill is in hand.
+    private SkillTimer TimerOn(int cell) =>
+        SlotTarget(cell) is { Kind: BindKind.Skill } target && Held != target ? TimerOf(target.Id) : default;
 
     // Art on demand: the strip binds live, so the icon of a new target may not
     // be in the cache yet. The component cannot add to it, the game can.

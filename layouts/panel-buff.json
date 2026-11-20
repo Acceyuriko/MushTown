@@ -1,10 +1,7 @@
 {
-  "_help": "The buff bar at the top right of the HUD: the live buff icons side by side, no frame and no padding. right = the right edge of the last icon (the bar grows to the left), top = the top edge of the icons. iconPitch = the distance from one icon to the next (32 is the icon width: they touch), maxCount = how many buffs the bar holds (the official maxCount is 10). timeRight/timeBottom = the space between the time left and the icon edge, shadow = the shadow offset of the time text. The icon size (32) is an art size, it stays in the code.",
+  "_help": "The buff bar at the top right of the HUD: the live buff icons side by side, no frame and no padding. right = the right edge of the last icon (the bar grows to the left), top = the top edge of the icons. iconPitch = the distance from one icon to the next (32 is the icon width: they touch), maxCount = how many buffs the bar holds (the official maxCount is 10). The countdown on the icons is in panel-timer.json. The icon size (32) is an art size, it stays in the code.",
   "right": 1357,
   "top": 5,
   "iconPitch": 32,
-  "maxCount": 10,
-  "timeRight": 1,
-  "timeBottom": 1,
-  "shadow": 1
+  "maxCount": 10
 }

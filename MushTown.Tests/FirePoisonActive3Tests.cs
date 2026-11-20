@@ -31,6 +31,7 @@ public partial class FirePoisonCombatTests
         var data = new WzSkillData { SkillId = Adaptation, MaxLevel = 20, Kind = SkillData.KindBuff, Name = "Elemental Adaptation (Fire, Poison)" };
         data.Common["mpCon"] = SkillFormula.Levels("20+5*u(x/7)", 20);
         data.Common["cooltime"] = SkillFormula.Levels("600-18*x", 20);
+        data.Common["x"] = SkillFormula.Levels("2", 20); // the MP of a block: 2% of the max MP
         data.Common["y"] = SkillFormula.Levels("10", 20);
         data.Common["asrR"] = SkillFormula.Levels("x", 20);
         data.Common["terR"] = SkillFormula.Levels("x", 20);
@@ -145,46 +146,82 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(1000, DamageChain.TakenDamage(snap, 1000)); // a plain hit is not cut
     }
 
-    // The cast pays 35 MP at once (the MP cost percent of Element Amplification does not raise it) and starts the 240 s cooldown; a second cast is
-    // refused while it runs (no MP paid), and when it is over the cast is paid again.
+    private static readonly SkillCost Cost = new(new Dictionary<int, SkillData>());
+
+    // The cast pays 35 MP at once (the MP cost percent of Element Amplification does not raise it) and gives the 10 layers, and it starts NO
+    // cooldown. A second cast is refused while layers remain (nothing paid); with a pool too small the cast is refused and gives nothing.
     [TestMethod]
-    public void ElementalAdaptation_PaysMpAndCooldown_RefusedWhileCooling()
+    public void ElementalAdaptation_CastPaysMp_TenLayers_NoCooldown_RefusedWhileLayersRemain()
     {
         var wz = AdaptationData();
         var chara = new CharaSlot { Mp = 100 };
-        var cost = new SkillCost(new Dictionary<int, SkillData>());
-        var cooldowns = new Dictionary<int, float>();
-        Assert.IsTrue(cost.Pay(chara, wz, wz.MaxLevel, cooldowns, mpCostPct: 50));
-        Assert.AreEqual(65, chara.Mp); // 100 - 35, the percent does not apply
-        Assert.AreEqual(240_000f, cooldowns[Adaptation]);
-        Assert.IsFalse(cost.Pay(chara, wz, wz.MaxLevel, cooldowns));
+        var fighter = new Fighter();
+        Assert.IsTrue(fighter.TryCastShield(Cost, chara, wz, wz.MaxLevel));
+        Assert.AreEqual(65, chara.Mp); // 100 - 35
+        Assert.AreEqual(10, fighter.StatusShield);
+        Assert.IsFalse(fighter.Cooldowns.TryGetValue(Adaptation, out float cd) && cd > 0); // no cooldown at the cast
+        Assert.IsFalse(fighter.TryCastShield(Cost, chara, wz, wz.MaxLevel)); // layers remain
         Assert.AreEqual(65, chara.Mp);
-        cooldowns[Adaptation] = 0; // the cooldown ran out
-        Assert.IsTrue(cost.Pay(chara, wz, wz.MaxLevel, cooldowns));
-        Assert.AreEqual(30, chara.Mp);
+        Assert.AreEqual(10, fighter.StatusShield);
+        var poor = new CharaSlot { Mp = 34 };
+        Assert.IsFalse(new Fighter().TryCastShield(Cost, poor, wz, wz.MaxLevel));
+        Assert.AreEqual(34, poor.Mp);
+        Assert.IsFalse(new Fighter().TryCastShield(Cost, chara, wz, 0)); // not learned
     }
 
-    // The shield: the layers are WZ y (10) at max level; each block spends one (and only a block spends anything: no MP, no time); the 11th is not
-    // blocked; the shield has no timer (Fighter.Tick leaves it alone). A new cast fills it again.
+    // A block: each one pays 2% of the max MP (WZ x), spends one layer and nothing else; the cooldown (240 s) starts only when the last layer
+    // is spent; the shield has no timer (Fighter.Tick leaves the layers alone). While it cools the cast is refused (no MP paid); when it is
+    // over the cast gives the 10 layers again. The 11th status finds no layer and is not blocked.
     [TestMethod]
-    public void StatusShield_TenBlocks_TheEleventhPasses_NoTimer()
+    public void StatusShield_BlockPaysTwoPercent_CooldownAfterTheLastLayer()
     {
         var wz = AdaptationData();
+        var chara = new CharaSlot { Mp = 1000 };
         var fighter = new Fighter();
-        Assert.IsFalse(fighter.TryBlockStatus()); // nothing cast yet: not blocked
-        fighter.StatusShield = (int)wz.Value("y", wz.MaxLevel);
-        Assert.AreEqual(10, fighter.StatusShield);
+        Assert.IsFalse(fighter.TryBlockStatus(chara, wz, wz.MaxLevel, 500)); // nothing cast yet: not blocked, nothing paid
+        Assert.AreEqual(1000, chara.Mp);
+        Assert.IsTrue(fighter.TryCastShield(Cost, chara, wz, wz.MaxLevel));
+        Assert.AreEqual(965, chara.Mp);
         fighter.Tick(1_000_000);
         Assert.AreEqual(10, fighter.StatusShield);
         for (int i = 1; i <= 10; i++)
         {
-            Assert.IsTrue(fighter.TryBlockStatus(), $"block {i}");
+            Assert.IsTrue(fighter.TryBlockStatus(chara, wz, wz.MaxLevel, 500), $"block {i}"); // 2% of 500 = 10 MP
+            Assert.AreEqual(965 - 10 * i, chara.Mp);
             Assert.AreEqual(10 - i, fighter.StatusShield);
+            bool cooling = fighter.Cooldowns.TryGetValue(Adaptation, out float left) && left > 0;
+            Assert.AreEqual(i == 10, cooling, $"cooldown after block {i}");
         }
-        Assert.IsFalse(fighter.TryBlockStatus());
-        Assert.AreEqual(0, fighter.StatusShield);
-        fighter.StatusShield = (int)wz.Value("y", wz.MaxLevel); // the next cast
+        Assert.AreEqual(240_000f, fighter.Cooldowns[Adaptation]);
+        Assert.IsFalse(fighter.TryBlockStatus(chara, wz, wz.MaxLevel, 500)); // the 11th
+        Assert.AreEqual(865, chara.Mp);
+        Assert.IsFalse(fighter.TryCastShield(Cost, chara, wz, wz.MaxLevel)); // cooling
+        Assert.AreEqual(865, chara.Mp);
+        fighter.Tick(239_999);
+        Assert.IsFalse(fighter.TryCastShield(Cost, chara, wz, wz.MaxLevel));
+        fighter.Tick(1);
+        Assert.IsTrue(fighter.TryCastShield(Cost, chara, wz, wz.MaxLevel));
+        Assert.AreEqual(830, chara.Mp);
         Assert.AreEqual(10, fighter.StatusShield);
+    }
+
+    // WZ does not say what a block does with too little MP (unverified): the status is not blocked, no MP is paid and no layer is lost.
+    [TestMethod]
+    public void StatusShield_NotEnoughMpForTheBlock_NotBlocked_NothingPaid()
+    {
+        var wz = AdaptationData();
+        var chara = new CharaSlot { Mp = 9 }; // 2% of 500 = 10
+        var fighter = new Fighter { StatusShield = 3 };
+        Assert.IsFalse(fighter.TryBlockStatus(chara, wz, wz.MaxLevel, 500));
+        Assert.AreEqual(9, chara.Mp);
+        Assert.AreEqual(3, fighter.StatusShield);
+        chara.Mp = 10;
+        Assert.IsTrue(fighter.TryBlockStatus(chara, wz, wz.MaxLevel, 500));
+        Assert.AreEqual(0, chara.Mp);
+        Assert.AreEqual(2, fighter.StatusShield);
+        chara.Mp = 100;
+        Assert.IsTrue(fighter.TryBlockStatus(chara, wz, wz.MaxLevel, 550)); // 2% of 550 = 11 (rounded down)
+        Assert.AreEqual(89, chara.Mp);
     }
 
     // A new session or character starts clean: the shield, the cooldowns and the buffs are gone, so nothing is blocked.
@@ -195,7 +232,7 @@ public partial class FirePoisonCombatTests
         fighter.Cooldowns[Adaptation] = 240_000f;
         fighter.Buffs[WzSkillData.Meditation] = 1000f;
         fighter.Reset();
-        Assert.IsFalse(fighter.TryBlockStatus());
+        Assert.IsFalse(fighter.TryBlockStatus(new CharaSlot { Mp = 100 }, AdaptationData(), 20, 100));
         Assert.AreEqual(0, fighter.StatusShield);
         Assert.AreEqual(0, fighter.Cooldowns.Count);
         Assert.AreEqual(0, fighter.Buffs.Count);
@@ -282,7 +319,38 @@ public partial class FirePoisonCombatTests
         for (int i = 0; i < 200 && !b.TryTakeFx(out fx); i++) Thread.Sleep(5);
         Assert.AreEqual(Adaptation, fx.Skill);
         Thread.Sleep(600);
+        Assert.IsFalse(fx.Block); // the cast, not a block
         Assert.IsFalse(a.TryTakeMob(out _)); // no hit for anyone
+        Assert.IsFalse(b.TryTakeMob(out _));
+    }
+
+    // A blocked status is relayed as the same message with the Block flag, so the other client plays the block art; the blocker gets no echo.
+    [TestMethod]
+    public void Loopback_ElementalAdaptation_BlockIsRelayedWithTheFlag()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(AdaptationData());
+        assets.AddMap(9, """[{"MobId":100000,"X":-100,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 2_000_000_000, 0.1, 0, speed: 1, level: 200);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 79);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 79);
+        b.Connect("127.0.0.1", Net.Port + 79);
+        a.SendState(9, 0, 100, Net.ActStand, 0, false);
+        b.SendState(9, 600, 100, Net.ActStand, 0, true);
+        WaitSpawn(a);
+        WaitSpawn(b);
+        a.SendBuild(Mage);
+        a.SendSkillCast(Adaptation, Net.BlockPct);
+        SkillFxEvent fx = default;
+        for (int i = 0; i < 200 && !b.TryTakeFx(out fx); i++) Thread.Sleep(5);
+        Assert.AreEqual(Adaptation, fx.Skill);
+        Assert.IsTrue(fx.Block);
+        Assert.AreEqual(a.PlayerId, fx.Attacker);
+        Thread.Sleep(300);
+        Assert.IsFalse(a.TryTakeFx(out _));
         Assert.IsFalse(b.TryTakeMob(out _));
     }
 }

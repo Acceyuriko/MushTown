@@ -20,7 +20,7 @@ public sealed class SkillCost : Component
     }
 
     // The same for a WZ skill at the level lv (0 = not learned): mpCon of the level, and the cooltime
-    // when the skill has one: WZ cooltime is seconds, Teleport's teleportCooltime is milliseconds (480; the user decided).
+    // when the skill has one (Teleport's 480 ms: the user decided). A buff pays its MP only.
     // mpCostPct (Element Amplification, percent points) raises the MP of a damage skill only (a buff, Teleport and Mana Wave cost what
     // they cost); the raised cost is rounded down (unverified).
     public bool Pay(CharaSlot? chara, WzSkillData skill, int lv, IDictionary<int, float> cooldowns, int mpCostPct = 0)
@@ -31,10 +31,14 @@ public sealed class SkillCost : Component
         if (skill.Common.ContainsKey("damage")) mp = mp * (100 + mpCostPct) / 100;
         if (chara.Mp < mp || left > 0) return false;
         chara.Mp -= mp;
-        cooldowns[skill.SkillId] = skill.Common.ContainsKey("cooltime") ? (float)skill.Value("cooltime", lv) * 1000f
-            : skill.Common.ContainsKey("teleportCooltime") ? (float)skill.Value("teleportCooltime", lv) : 0f;
+        if (skill.Kind != SkillData.KindBuff) cooldowns[skill.SkillId] = CooldownMs(skill, lv); // a shield (Elemental Adaptation) starts its cooldown when its layers run out (Fighter.TryBlockStatus)
         return true;
     }
+
+    // WZ cooltime is seconds, Teleport's teleportCooltime is milliseconds; no cooldown is 0.
+    public static float CooldownMs(WzSkillData skill, int lv) =>
+        skill.Common.ContainsKey("cooltime") ? (float)skill.Value("cooltime", lv) * 1000f
+        : skill.Common.ContainsKey("teleportCooltime") ? (float)skill.Value("teleportCooltime", lv) : 0f;
 }
 
 public sealed class SkillDamage : Component

@@ -158,7 +158,7 @@ public sealed class NetClient : IDisposable
     }
 
     // One skill cast: skill id plus the cast-time damage pct (skill level
-    // and combo orbs folded in; buffs send 0). The server judges damage
+    // and combo orbs folded in; buffs send 0, a blocked status of a shield sends Net.BlockPct). The server judges damage
     // skills and relays every cast's effect.
     public void SendSkillCast(int skill, int pct)
     {
@@ -396,10 +396,10 @@ public sealed class NetClient : IDisposable
                 BitConverter.ToInt32(p, 1), 0, BitConverter.ToInt32(p, 5), 0, 0, 0,
                 BitConverter.ToInt64(p, 9), BitConverter.ToInt64(p, 17),
                 BitConverter.ToInt32(p, 25), BitConverter.ToInt64(p, 29), BitConverter.ToInt32(p, 37), p[41] != 0, p[42] != 0, BitConverter.ToInt32(p, 43), p[47] != 0));
-        else if (p[0] == Net.SkillFx && p.Length == 22)
+        else if (p[0] == Net.SkillFx && p.Length == 23)
             _fxEvents.Enqueue(new SkillFxEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5), BitConverter.ToInt32(p, 9),
-                BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), p[21] != 0));
+                BitConverter.ToSingle(p, 13), BitConverter.ToSingle(p, 17), p[21] != 0, p[22] != 0));
         else if (p[0] == Net.Ball && p.Length == 29)
             _ballEvents.Enqueue(new BallEvent(
                 BitConverter.ToInt32(p, 1), BitConverter.ToInt32(p, 5),

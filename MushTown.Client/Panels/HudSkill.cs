@@ -65,7 +65,7 @@ public partial class MushTownGame
 
     // The cells of one page: the default passives or the skills of the job.
     private List<SkillView> SkillPageOf(int tab) => tab == SkillTabBeginner
-        ? _passives.Rows.Select(r => new SkillView(r.Name, r.Icon, r.Icon, r.MaxLevel, r.Desc, r.Effect, 0, true)).ToList()
+        ? _passives.Rows.Select(r => new SkillView(r.Name, r.Icon, r.MaxLevel, r.Desc, r.Effect, 0, true)).ToList()
         : JobSkills.Pages(SkillJob)[tab - 1].Select(id => SkillViewOf(id)!).ToList();
 
     // One skill as the cell and the tooltip show it: the skill window, the key window and the quick slots all read it from here.
@@ -73,9 +73,9 @@ public partial class MushTownGame
     internal SkillView? SkillViewOf(int id)
     {
         if (_wzSkills.TryGetValue(id, out var wz))
-            return new SkillView(wz.Name, wz.Icon, wz.Disabled, wz.MaxLevel, wz.Desc, wz.Effect, id, wz.Kind == SkillData.KindPassive);
+            return new SkillView(wz.Name, wz.Icon, wz.MaxLevel, wz.Desc, wz.Effect, id, wz.Kind == SkillData.KindPassive);
         if (!_skills.TryGetValue(id, out var s)) return null;
-        return new SkillView(s.Name, s.Icon, s.Disabled, s.MaxLevel, s.Desc, new[] { SkillText.Effect(s, s.MaxLevel) }, id, s.Kind == SkillData.KindPassive);
+        return new SkillView(s.Name, s.Icon, s.MaxLevel, s.Desc, new[] { SkillText.Effect(s, s.MaxLevel) }, id, s.Kind == SkillData.KindPassive);
     }
 
     // The skill a key or a quick slot binds: its view, null when the cell binds no skill.
@@ -137,7 +137,7 @@ public partial class MushTownGame
                 cell.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickUpSkill(View()) });
                 cell.Add(new Grab(() => CanPickUp(View())));
             }
-            cell.Add(new SkillCell(View, StateOf));
+            cell.Add(new SkillCell(View, v => TimerOf(v.SkillId)));
             cell.Add(new SkillTip(View));
             body.AddChild(cell);
         }
@@ -185,13 +185,15 @@ public partial class MushTownGame
     private bool DropOnOwnSkillCell(int gx, int gy, BindTarget target) =>
         target.Kind == BindKind.Skill && _uiScene.TopAt(gx, gy)?.Get<SkillCell>() is { SkillId: var id } && id == target.Id;
 
-    // The live part of a cell: the timers.
-    private SkillCellState StateOf(SkillView view)
+    // The countdown of a skill, for the skill window, the quick slots and the key window: the buff time left while the buff runs, else the
+    // cooldown left. The fighter keeps only what is left: the whole time comes from the data, and only when something is left (an id with
+    // nothing running, a default passive (0) or an old key id, asks the data nothing).
+    internal SkillTimer TimerOf(int id)
     {
-        if (view.SkillId == 0) return default;
-        _fighter.Cooldowns.TryGetValue(view.SkillId, out float cd);
-        _fighter.Buffs.TryGetValue(view.SkillId, out float buff);
-        return new SkillCellState(cd, buff);
+        if (_fighter.Buffs.TryGetValue(id, out float buff) && buff > 0) return new SkillTimer(buff, _skills[id].BuffMs);
+        if (!_fighter.Cooldowns.TryGetValue(id, out float cd) || cd <= 0) return default;
+        float total = _wzSkills.TryGetValue(id, out var wz) ? SkillCost.CooldownMs(wz, WzLv(wz)) : _skills[id].CooldownMs;
+        return new SkillTimer(cd, total);
     }
 
     // The wheel scrolls the cells while the mouse is over the window: one notch is one row.
@@ -231,11 +233,8 @@ public partial class MushTownGame
 
 // One skill of a page, as the cell and the tooltip show it: a job skill or a default
 // passive (SkillId 0). The numbers are the max level, read once when the page is built.
-public sealed record SkillView(string Name, string Icon, string IconOff, int MaxLevel,
+public sealed record SkillView(string Name, string Icon, int MaxLevel,
     IReadOnlyList<string> Desc, IReadOnlyList<string> Effect, int SkillId, bool Passive);
-
-// What changes from frame to frame in a cell.
-public readonly record struct SkillCellState(float CdMs, float BuffMs);
 
 // One page tab: the official Roman numeral art (the selected tab is orange).
 public sealed class SkillTabArt : Component, IDrawable
@@ -270,12 +269,12 @@ public sealed class SkillPageBar : Component, IDrawable
 }
 
 // One cell of the list: the official cell art (or the empty cell), the icon, the name
-// and the max level. The right of the second line shows what the skill is doing now.
+// and the max level. The icon carries the countdown of the skill (TimerOverlay).
 public sealed class SkillCell : Component, IDrawable
 {
     private readonly Func<SkillView?> _view;
-    private readonly Func<SkillView, SkillCellState> _state;
-    public SkillCell(Func<SkillView?> view, Func<SkillView, SkillCellState> state) { _view = view; _state = state; }
+    private readonly Func<SkillView, SkillTimer> _timer;
+    public SkillCell(Func<SkillView?> view, Func<SkillView, SkillTimer> timer) { _view = view; _timer = timer; }
     public int SkillId => _view()?.SkillId ?? 0;
     public void Draw(UiGfx gfx)
     {
@@ -285,17 +284,13 @@ public sealed class SkillCell : Component, IDrawable
         var art = gfx.Tex(view == null ? "ui/skill_blank.png" : "ui/skill_row.png");
         gfx.Sb.Draw(art, r, new Rectangle(0, 0, art.Width, r.Height), Color.White);
         if (view == null) return;
-        var s = _state(view);
-        bool cooling = s.CdMs > 0;
-        gfx.Sb.Draw(gfx.Tex(cooling ? view.IconOff : view.Icon), new Vector2(r.X + lay.Get("rowIconX", 1), r.Y + lay.Get("rowIconY", 0)), Color.White);
+        var icon = gfx.Tex(view.Icon);
+        int iconX = r.X + lay.Get("rowIconX", 1), iconY = r.Y + lay.Get("rowIconY", 0);
+        gfx.Sb.Draw(icon, new Vector2(iconX, iconY), Color.White);
+        TimerOverlay.Draw(gfx, new Rectangle(iconX, iconY, icon.Width, icon.Height), _timer(view));
         int textW = lay.Get("rowRightX", 136) - lay.Get("rowNameX", 38);
         gfx.Sb.Draw(Text.Fit(gfx, view.Name, textW), new Vector2(r.X + lay.Get("rowNameX", 38), r.Y + lay.Get("rowNameY", 3)), new Color(30, 30, 40));
         gfx.Sb.Draw(gfx.Ui.GetSmall(view.MaxLevel.ToString()), new Vector2(r.X + lay.Get("rowSubX", 38), r.Y + lay.Get("rowSubY", 19)), new Color(105, 105, 115));
-        string right = s.BuffMs > 0 ? $"{(int)Math.Ceiling(s.BuffMs / 1000)}s"
-            : cooling ? $"{(int)Math.Ceiling(s.CdMs / 1000)}s" : "";
-        if (right == "") return;
-        var rt = gfx.Ui.GetSmall(right);
-        gfx.Sb.Draw(rt, new Vector2(r.X + lay.Get("rowRightX", 136) - rt.Width, r.Y + lay.Get("rowSubY", 19)), new Color(190, 110, 0));
     }
 }
 

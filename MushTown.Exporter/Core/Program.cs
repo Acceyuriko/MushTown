@@ -44,17 +44,20 @@ using MushTown.Exporter;
 //             got the Miss word and effect/hurtdmg/Miss.png; an old hurtdmg.json has no Miss word and the client fails on a dodge).
 //           - Empirical Knowledge was added (assets/skill/wz/80002762.json: the common formulas x/time/prop/y plus the mark art
 //             Art["mob0"], ["mob1"], ["mob2"] under assets/skill/wz/80002762/mob0..2/). The client fails on a missing mark art.
-//           - the monster MP was added (the mob json got MaxMp from WZ info/maxMP; MP Eater absorbs it) and Elemental Drain's layer
-//             icons were added (assets/skill/wz/2100009/number/icon1..N from the WZ number node, kept in the json's NumberFrames, the
-//             buff-bar art). Rerun export after either change; an old mob json has MaxMp 0 and an old 2100009.json has no number icons.
+//           - the monster MP was added (the mob json got MaxMp from WZ info/maxMP; MP Eater absorbs it). Rerun export after the change;
+//             an old mob json has MaxMp 0.
+//           - the WZ number icons of Elemental Drain and Elemental Adaptation are no longer exported (the client draws the layer count in
+//             gold digits itself): the folders assets/skill/wz/2100009/num and assets/skill/wz/2111011/num are not used any more, delete them
+//             by hand (the export does not remove old files); the json no longer has NumberFrames/NumberOrigins.
 //           - the Fire/Poison 3rd-job passives were added (assets/skill/wz/2110000, 2110001, 2110009, 2110015, 2110016 .json and their
 //             icons). The skill window's page III shows them; an old export makes the client stop at start (no exported wz def for the
 //             page III ids).
 //           - the Fire/Poison 3rd-job actives were added (assets/skill/wz/2111002.json Explosion with its effect and hit art, and
 //             2111011.json Elemental Adaptation, a buff: Kind buff, the cast art effect plus Art["effect0"] with its png paths under
-//             assets/skill/wz/2111011/effect0/, and its NumberFrames (num/ icons, the layer count drawn in); its special is not exported).
+//             assets/skill/wz/2111011/effect0/, its special is exported as Art["block"], png under
+//             assets/skill/wz/2111011/block/: the block art, played once per blocked status (special0 is not used); an old json has none and Menu.cs refuses it: run `export`).
 //             The skill window's page III lists them. An old export makes the client stop at start (no exported wz def for the page III ids;
-//             the passive json of Elemental Adaptation, with no art and no number icons, is refused by Menu.cs: run `export`).
+//             the passive json of Elemental Adaptation, with no art, is refused by Menu.cs: run `export`).
 //           - Poison Breath got its body action script (assets/skill/wz/2101005.json has Script: the steps of Character 00002000.img/
 //             poisonBreath, an action name, a frame and a time each). An old json has no Script and Menu.cs refuses it: run `export`.
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of

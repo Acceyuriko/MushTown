@@ -505,18 +505,23 @@ public sealed class KeyConfigWindow : UiWindow
             var r = Owner.Get<Rect>()!.Screen;
             if (_w.DraftOn(KeyName(_spot.Code)) is { } target)
             {
-                if (_w._game.Held != target) DrawCentered(gfx, r, _w._game.TargetArt(target)); // in hand: the key is blank
+                if (_w._game.Held == target) return; // in hand: the key is blank
+                var drawn = DrawCentered(gfx, r, _w._game.TargetArt(target));
+                if (target.Kind == BindKind.Skill) TimerOverlay.Draw(gfx, drawn, _w._game.TimerOf(target.Id));
                 return;
             }
             if (_spot.Cap == "") return;
             DrawCentered(gfx, r, "ui/" + _spot.Cap);
         }
 
-        private static void DrawCentered(UiGfx gfx, Rectangle r, string tex)
+        // Draws the picture in the middle of r and says where it went.
+        private static Rectangle DrawCentered(UiGfx gfx, Rectangle r, string tex)
         {
-            if (tex == "") return;
+            if (tex == "") return Rectangle.Empty;
             var icon = gfx.Tex(tex);
-            gfx.Sb.Draw(icon, new Vector2(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2), Color.White);
+            var at = new Rectangle(r.X + (r.Width - icon.Width) / 2, r.Y + (r.Height - icon.Height) / 2, icon.Width, icon.Height);
+            gfx.Sb.Draw(icon, at.Location.ToVector2(), Color.White);
+            return at;
         }
     }
 

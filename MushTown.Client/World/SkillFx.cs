@@ -12,9 +12,13 @@ public sealed class SkillFx : Component
     private const int Delay = 100; // effects without WZ frame delays (and old exports) use one 100 ms delay
     public const int CastDy = 40; // old cast effects center on the torso (bare frames: no WZ origin)
 
+    public const int HeroActor = -1; // Actor of the local hero (a peer's is its player id)
+
     public int Skill; // which buff a loop belongs to; the spawn site's id
     public bool Loop;
     public bool FacingRight;
+    public bool Behind; // drawn behind the avatar of Actor (WZ z -2), in that actor's draw slot; the rest draw after every actor
+    public int Actor;
     public List<string> Frames = null!; // the frame list this effect plays
     public int Frame;
     public float Timer;
@@ -46,6 +50,8 @@ public sealed class SkillFx : Component
     public void Reset()
     {
         Loop = false;
+        Behind = false;
+        Actor = HeroActor;
         Rider = null;
         Origins = null;
         Delays = null;

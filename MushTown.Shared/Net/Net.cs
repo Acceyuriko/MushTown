@@ -14,7 +14,8 @@ public static class Net
     public const byte MobHit = 7;  // server -> client: int uid, int map, long damage, long hpLeft (0 = dead), int attacker, long exp, int skill (0 = basic), byte crit, byte settle, int mpGain (MP Eater: MP absorbed from the mob, the attacker's client adds it), byte dot (1 = a tick of a damage-over-time effect: it sets HP and death but plays no flinch and no spark)
     public const byte Build = 8;   // client -> server: Build fields (resent on level-up/learn/buff)
     public const byte SkillCast = 9; // client -> server: int skill, int pct (cast-time damage pct, orbs folded in; buffs send 0)
-    public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing
+    public const int BlockPct = 1;   // the pct a non-damage SkillCast carries when it reports a blocked status (Elemental Adaptation); a plain cast sends 0
+    public const byte SkillFx = 10;  // server -> client: int attacker, int skill, int map, float x, float y, byte facing, byte block (1 = a status was blocked: play the block art, not the cast)
     public const byte MobMove = 11;  // server -> client: int uid, int map, float x, float y, byte facing (10Hz, occupied maps only)
     public const byte Hurt = 12;     // server -> client: int uid, int mob, int map, long damage (sent to the victim only, so no victim id rides along)
     public const byte DropSpawn = 13; // server -> client: int uid, int map, float x, float y, float fromX, float fromY, int kind, int id, int count, long amount, byte fresh, byte tab
@@ -224,9 +225,9 @@ public readonly record struct MobEvent(
     int Attacker, long Exp, int Skill, bool Crit = false, bool Settle = true, int MpGain = 0, bool Dot = false);
 
 // One skill effect from the server: Attacker cast Skill at X/Y facing right
-// or left. The caster plays its own effect live and never gets this echo.
+// or left (Block: a blocked status, Elemental Adaptation's block art, not its cast). The caster plays its own effect live and never gets this echo.
 // Clients drop effects for other maps, like states.
-public readonly record struct SkillFxEvent(int Attacker, int Skill, int Map, float X, float Y, bool FacingRight);
+public readonly record struct SkillFxEvent(int Attacker, int Skill, int Map, float X, float Y, bool FacingRight, bool Block = false);
 
 // One ball thrown by a cast (Energy Bolt): Skill's art flies from From to To on Map after DelayMs, the body
 // action's attack-frame delay. Every client on the map gets it, the caster too. The flight time is

@@ -30,8 +30,9 @@ namespace MushTown.Exporter;
 // icons: the generic path above (formulas, text, icon and disabled icon) is all they need.
 // The 3rd job actives (211.img): Explosion is a damage skill with no ball and no special (the effect is the blast at the caster, hit/0 the spark on each
 // mob). Elemental Adaptation is a buff (info type 10, mpCon, no damage): it has two cast layers, effect and effect0 (both are saved; effect0 goes to
-// Art["effect0"] with its png paths), no affected loop and no hit, and the number icons (number/icon1..N, the layer count drawn in) for the buff bar.
-// Its special/special0 (the barrier flash when a status is blocked) are not exported: a block shows no effect.
+// Art["effect0"] with its png paths), no affected loop and no hit (its text is the WZ text: it says the same as the design). The layer count of the buff bar is drawn by the client (the WZ number icons are not exported).
+// Its special (the barrier flash, played once per blocked status) goes to Art["block"] the same way (png under 2111011/block/); its special0
+// (a faint back column with a floor ring, z -2) is not used. Re-run `export` after pulling this: an old export has no block art.
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -67,12 +68,6 @@ public static partial class Export
                 data.Effect = new() { $"Magic ATT: +{(int)data.Value("indieMad", data.MaxLevel)}" };
                 data.Desc = new() { "Permanently enhances your Magic ATT." };
             }
-            if (id == WzSkillData.ElementalAdaptation) // the WZ text also says the barrier regenerates, eats 2% of max MP per block and then cools down: none of it is done
-            {
-                int blocks = (int)data.Value("y", data.MaxLevel);
-                data.Desc = new() { $"Cover yourself with a veil of fire and poison to block {blocks} debilitating status conditions. Also permanently increases Status Resistance and Elemental Resistance." };
-                data.Effect = new() { data.Effect[0], $"Blocks {blocks} debilitating status conditions, one layer each.", data.Effect[2], data.Effect[3] }; // MP cost, our line, cooldown, passive effect
-            }
             data.Icon = $"skill/wz/{id}/icon.png";
             data.Disabled = $"skill/wz/{id}/dis.png";
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
@@ -80,7 +75,6 @@ public static partial class Export
                 return false;
             if ((data.Common.ContainsKey("damage") || id is WzSkillData.Teleport or WzSkillData.ManaWave or WzSkillData.ElementalAdaptation) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
             if (id == WzSkillData.EmpiricalKnowledge && !SaveMarkArt(baseRoot, id, data, outDir, saved)) return false;
-            if ((id is WzSkillData.ElementalDrain or WzSkillData.ElementalAdaptation) && !SaveNumberArt(baseRoot, skill, id, data, outDir)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child))
             {
                 var childData = ReadWzSkill(baseRoot, chara, child);
@@ -116,7 +110,8 @@ public static partial class Export
         var meta = WzSkillNode(baseRoot, id);
         data.Art["effect"] = ReadWzArt(teleport ? meta.Nodes["effect"]!.Nodes["0"]! : meta.Nodes["effect"]!);
         if (!SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)) return false;
-        if (id == WzSkillData.ElementalAdaptation && !SaveEffect0(node!, meta, id, data, outDir, saved)) return false;
+        if (id == WzSkillData.ElementalAdaptation // the cast's back layer, and the block art (special): kept apart from the generic ball/special art
+            && (!SaveLayer(node!, meta, id, data, outDir, saved, "effect0", "effect0") || !SaveLayer(node!, meta, id, data, outDir, saved, "special", "block"))) return false;
         if (hit != null)
         {
             data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);
@@ -124,21 +119,23 @@ public static partial class Export
         }
         foreach ((string name, List<string> into) in new[] { ("ball", data.BallFrames), ("special", data.SpecialFrames) })
         {
-            if ((id == WzSkillData.ElementalAdaptation && name == "special") || node!.Nodes[name] is not { } frames) continue; // its special is the barrier flash: not drawn
+            if ((id == WzSkillData.ElementalAdaptation && name == "special") || node!.Nodes[name] is not { } frames) continue; // its special is the block art, saved above as block
             if (!SaveSkillFrames(frames, $"skill/wz/{id}/{name}", into, outDir, saved, id)) return false;
             data.Art[name] = ReadWzArt(meta.Nodes[name]!);
         }
         return true;
     }
 
-    // Elemental Adaptation's second cast layer (effect0, z -2 in WZ: behind the hero; the client draws it in front like every cast effect):
-    // it plays together with effect. Its first frame is a blank 1x1 with no origin (like Mana Wave's effect): left out. Kept in Art["effect0"]
-    // with its png paths in Frames, so the three lists have the same count.
-    private static bool SaveEffect0(Wz_Node canvas, Wz_Node meta, int id, WzSkillData data, string outDir, HashSet<string> saved)
+    // One more art layer of Elemental Adaptation, WZ node wzName kept in Art[key] with its png paths in Frames, so the three lists have the
+    // same count: effect0 (the cast's back layer, z -2 in WZ: it plays together with effect, behind the hero) and special
+    // (the block art, saved as block; special0, the faint back column with the floor ring, is not used: one layer is played per block).
+    private static bool SaveLayer(Wz_Node canvas, Wz_Node meta, int id, WzSkillData data, string outDir, HashSet<string> saved, string wzName, string key)
     {
-        var art = ReadWzArt(meta.Nodes["effect0"]!);
-        if (!SaveSkillFrames(canvas.Nodes["effect0"]!, $"skill/wz/{id}/effect0", art.Frames, outDir, saved, id)) return false;
-        data.Art["effect0"] = art;
+        var art = ReadWzArt(meta.Nodes[wzName]!);
+        if (!SaveSkillFrames(canvas.Nodes[wzName]!, $"skill/wz/{id}/{key}", art.Frames, outDir, saved, id)) return false;
+        art.Origins = art.Origins[..art.Frames.Count]; // special has a last frame in Base (frame 14) with no picture in the canvas: left out
+        art.Delays = art.Delays[..art.Frames.Count];
+        data.Art[key] = art;
         return true;
     }
 
@@ -206,43 +203,6 @@ public static partial class Export
                 return false;
             }
             data.Art[$"mob{k}"] = art;
-        }
-        return true;
-    }
-
-    // The number icons of Elemental Drain and Elemental Adaptation (number/icon1..N), the buff-bar art. Drain's is the whole skill icon with the layer
-    // count drawn in (origin 0,32 like the icon); Elemental Adaptation's is only the digits, drawn over the skill icon at its origin (the point of the
-    // png that sits on the icon's origin, the icon's bottom left). Each child is a stub with an _outlink into the Skill category (like the icon).
-    // Saved as skill/wz/{id}/num/{i}.png, in order, with the origins in NumberOrigins.
-    private static bool SaveNumberArt(WzRoot baseRoot, WzRoot skill, int id, WzSkillData data, string outDir)
-    {
-        string id7 = id.ToString("D7");
-        string img = (id >= 80000000 ? id / 100 : id / 10000).ToString("D3") + ".img";
-        var number = baseRoot.Find($"Skill/{img}/skill/{id7}/number");
-        if (number == null)
-        {
-            Console.WriteLine($"skill {id}: no number node");
-            return false;
-        }
-        foreach (Wz_Node child in number.Nodes
-            .Where(n => n.Text.StartsWith("icon") && int.TryParse(n.Text[4..], NumberStyles.None, CultureInfo.InvariantCulture, out _))
-            .OrderBy(n => int.Parse(n.Text[4..], CultureInfo.InvariantCulture)))
-        {
-            string? link = child.Nodes["_outlink"]?.Value as string;
-            if (link == null || !link.StartsWith("Skill/"))
-            {
-                Console.WriteLine($"skill {id} number/{child.Text}: no icon link");
-                return false;
-            }
-            string path = $"skill/wz/{id}/num/{data.NumberFrames.Count}.png";
-            if (!UiPng.Save(skill, "Skill", link["Skill/".Length..], Path.Combine(outDir, path))) return false;
-            data.NumberFrames.Add(path);
-            data.NumberOrigins.Add(child.Nodes["origin"]?.Value is Wz_Vector v ? new[] { v.X, v.Y } : throw new InvalidDataException($"skill {id} number/{child.Text}: no origin"));
-        }
-        if (data.NumberFrames.Count == 0)
-        {
-            Console.WriteLine($"skill {id} number: no icons");
-            return false;
         }
         return true;
     }

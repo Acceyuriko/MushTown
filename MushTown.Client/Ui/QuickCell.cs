@@ -13,12 +13,14 @@ public sealed class QuickCell : Component, IDrawable
     private readonly Func<string> _key;             // the key name (it follows the preset)
     private readonly Func<string> _iconArt;         // the bound target's art name, "" when nothing is bound
     private readonly Func<string, Texture2D> _load; // load the art on demand: the component cannot add to the game's cache
+    private readonly Func<SkillTimer> _timer;       // the countdown of the bound skill, none for anything else
 
-    public QuickCell(Func<string> key, Func<string> iconArt, Func<string, Texture2D> load)
+    public QuickCell(Func<string> key, Func<string> iconArt, Func<string, Texture2D> load, Func<SkillTimer> timer)
     {
         _key = key;
         _iconArt = iconArt;
         _load = load;
+        _timer = timer;
     }
 
     public void Draw(UiGfx gfx)
@@ -28,9 +30,9 @@ public sealed class QuickCell : Component, IDrawable
         if (art != "") // an action with no official icon (Settings, the sub-windows) draws nothing
         {
             var icon = _load(art);
-            gfx.Sb.Draw(icon, new Vector2(
-                s.X + (s.Width - icon.Width) / 2,
-                s.Y + (s.Height - icon.Height) / 2), Color.White);
+            var at = new Point(s.X + (s.Width - icon.Width) / 2, s.Y + (s.Height - icon.Height) / 2);
+            gfx.Sb.Draw(icon, at.ToVector2(), Color.White);
+            TimerOverlay.Draw(gfx, new Rectangle(at.X, at.Y, icon.Width, icon.Height), _timer());
         }
         string key = _key();
         string cap = KeyConfigWindow.CapArt(key);

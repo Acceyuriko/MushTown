@@ -29,6 +29,7 @@ public partial class MushTownGame
             else
             {
                 DrawFloatBubble(_bubble, _mover.X, _mover.Y, _mover.FacingRight); // behind the avatar
+                DrawBehindFx(SkillFx.HeroActor);
                 DrawAvatar(feetX, feetY, _mover.Action, _frame, _mover.FacingRight, hero, tint: HurtTint);
             }
             if (hero != null)
@@ -42,6 +43,7 @@ public partial class MushTownGame
             draws.Add((ry, () =>
             {
                 DrawFloatBubble(r.Bubble, r.X, r.Y, r.FacingRight); // behind the avatar
+                DrawBehindFx(r.Id);
                 int centerX = DrawAvatar(rx, ry, Net.ActionName(r.Action), r.Frame, r.FacingRight,
                     r.Skin, r.Equips, r.CashWorn, r.Hair, r.Face);
                 int hpPct = PartyHpOf(r.Id);

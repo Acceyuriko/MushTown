@@ -641,13 +641,12 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} has no child {WzSkillData.ManaWaveFloat} (the slow fall) with its art (special, specialAffected): run the exporter (export)");
             if (WzSkillData.UserPassives.Contains(wz.SkillId) && wz.Kind != SkillData.KindPassive)
                 throw new InvalidDataException($"skill {wz.SkillId} is not a passive: run the exporter (export)");
-            if (wz.SkillId == WzSkillData.ElementalAdaptation && (wz.Kind != SkillData.KindBuff || wz.NumberFrames.Count < (int)wz.Value("y", wz.MaxLevel)
-                || !wz.Art.TryGetValue("effect0", out var second) || second.Frames.Count == 0 || second.Frames.Count != second.Origins.Length || second.Frames.Count != second.Delays.Length))
-                throw new InvalidDataException($"skill {wz.SkillId} is not a buff, has no layer icons or has no second cast layer (effect0): run the exporter (export)");
+            if (wz.SkillId == WzSkillData.ElementalAdaptation && (wz.Kind != SkillData.KindBuff
+                || !wz.Art.TryGetValue("effect0", out var second) || second.Frames.Count == 0 || second.Frames.Count != second.Origins.Length || second.Frames.Count != second.Delays.Length
+                || !wz.Art.TryGetValue("block", out var block) || block.Frames.Count == 0 || block.Frames.Count != block.Origins.Length || block.Frames.Count != block.Delays.Length))
+                throw new InvalidDataException($"skill {wz.SkillId} is not a buff, has no second cast layer (effect0) or no block art (block): run the exporter (export)");
             if ((wz.Common.ContainsKey("damage") || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
-            if (wz.NumberOrigins.Count != wz.NumberFrames.Count)
-                throw new InvalidDataException($"skill {wz.SkillId} has number icons without their origins: run the exporter (export)");
             if (wz.SkillId == WzSkillData.PoisonBreath && wz.Script.Count == 0)
                 throw new InvalidDataException($"skill {wz.SkillId} has no action script: run the exporter (export)");
             if (wz.SkillId == WzSkillData.EnergyBolt && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))

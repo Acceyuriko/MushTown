@@ -17,6 +17,7 @@ public partial class MushTownGame
         if (_shotJob != 0) { _save ??= new SaveData(); (_save.Slots[_slot] ??= DemoChara()).Job = _shotJob; } // --job on a stat shot: the demo plays that class
         RefreshStats();
         if (_shotScreen == "stat200" || (_shotScreen == null && _shotJob != 0)) ClampPoolsToMax(); // shots never update: the new hero's first frame is done here
+        if (_shotTimers >= 0) PoseTimers();
         if (_shotMark > 0) { PoseMarks(); return; } // --mark: pose the stacks over a mob, no cast
         if (_shotHit && _shotDmgSkin is { } hitSkin) Hero!.DamageSkin = hitSkin; // --dmgskin: the --hit number reads the demo's own skin
         if (_shotDmg > 0)
@@ -81,14 +82,16 @@ public partial class MushTownGame
         if (wzSkill && _wzSkills[_shotSkill].Kind == SkillData.KindBuff)
         {
             // Elemental Adaptation runs the real path: pay, cast (shield, both effect layers); --blocks <n> then blocks that many statuses through
-            // TryBlockStatus, and --flyms <ms> ages the effects, so the cast is shown mid-play. The demo must be a Fire/Poison hero (--job 210).
+            // BlockStatus (the block art, 2% of the max MP, a layer each, the cooldown after the last one) once the cast effects are over, and
+            // --flyms <ms> ages the effects, so the cast or the block is shown mid-play. The demo must be a Fire/Poison hero (--job 210).
             _save ??= new SaveData();
             _save.Slots[_slot] ??= DemoChara();
             var buff = _wzSkills[_shotSkill];
-            if (!TryPayWzSkill(buff))
-                throw new InvalidDataException($"--skill {_shotSkill} cannot cast: the demo needs the job (--job 210) and {(int)buff.Value("mpCon", buff.MaxLevel)} MP");
             CastShield(buff);
-            for (int i = 0; i < _shotBlocks; i++) _fighter.TryBlockStatus();
+            if (_fighter.StatusShield == 0)
+                throw new InvalidDataException($"--skill {_shotSkill} cannot cast: the demo needs the job (--job 210) and {(int)buff.Value("mpCon", buff.MaxLevel)} MP");
+            if (_shotBlocks > 0) RunShotFly(2500); // the cast effects end first: the block is seen alone
+            for (int i = 0; i < _shotBlocks; i++) BlockStatus();
             RunShotFly(_shotFlyms);
             SnapCamera();
             return;
@@ -398,6 +401,27 @@ public partial class MushTownGame
             DrainDrops(world, animate: false);
             RunShotFly(_shotRecastMs);
         }
+    }
+
+    // --timers: above 0 the shield is cast and spent for real (BlockStatus x10: the cooldown starts), the effects play out, and the cooldown is aged until
+    // that many seconds of the 240 s are left; then three timed buffs go live with a time left each (Iron Body 30 s of 120: seconds, Combo Attack 100 s
+    // of 180: minutes, Spirit Blade 120 s of 120: minutes, no mask yet).
+    private void PoseTimers()
+    {
+        if (_shotTimers > 0)
+        {
+            var wz = _wzSkills[WzSkillData.ElementalAdaptation];
+            _save!.Slots[_slot]!.Mp = MaxMpNow(); // enough MP for the cast and ten blocks
+            CastShield(wz);
+            if (_fighter.StatusShield == 0)
+                throw new InvalidDataException("--timers cannot cast the shield: the demo needs the job (--job 210)");
+            for (int i = 0; i < 10; i++) BlockStatus();
+            RunShotFly(2500);
+            _fighter.Tick(_fighter.Cooldowns[wz.SkillId] - _shotTimers * 1000f);
+        }
+        _fighter.Buffs[SkillData.IronBody] = 30_000;
+        _fighter.Buffs[SkillData.ComboAttack] = 100_000;
+        _fighter.Buffs[SkillData.SpiritBlade] = 120_000;
     }
 
     // The world runs ms after a cast, in 16 ms steps: the effects and the numbers age; the mobs and the hero stay posed.

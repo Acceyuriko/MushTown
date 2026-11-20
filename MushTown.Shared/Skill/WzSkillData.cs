@@ -68,8 +68,6 @@ public sealed class WzSkillData
     public List<string> HitFrames { get; set; } = new();  // the hit spark art (hit/0), only for a damage skill
     public List<string> BallFrames { get; set; } = new(); // the flying ball art (ball), only for a skill that throws one (Energy Bolt)
     public List<string> SpecialFrames { get; set; } = new(); // the landing explosion art (special), only for a skill that has one (Energy Bolt)
-    public List<string> NumberFrames { get; set; } = new(); // the number icons (WZ number/icon1..N) for the buff bar: Elemental Drain's with the count drawn in the whole icon, Elemental Adaptation's the digits only
-    public List<int[]> NumberOrigins { get; set; } = new(); // the WZ origin of each number icon: the point of the png that sits on the skill icon's origin (its bottom left)
     // The WZ origin and delay of every frame of the art that is drawn the WZ way: "effect", "hit", "ball", "special"
     // (the same order as the frame lists). The cast effect uses both its WZ delay and its WZ origin.
     public Dictionary<string, WzArt> Art { get; set; } = new();
