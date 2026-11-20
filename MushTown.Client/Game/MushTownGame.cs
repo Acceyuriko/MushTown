@@ -100,7 +100,7 @@ public partial class MushTownGame : Game
     private int _frame;
     private float _frameMs; // the shown action's clock: Idle.Frame reads it
     private readonly Fighter _fighter = new(); // combat clocks, ticked at frame-top (never in the world step)
-    private readonly ActionScript _script = new(); // the body pose of a skill whose WZ action is a script (Poison Breath), while its cast lock runs
+    private readonly ActionScript _script = new(); // the body pose of a skill whose WZ action is a script (WzSkillData.ActionScripts), while its cast lock runs
     private readonly SwingActions _swing; // the swing of the basic attack and the casts (a fixed seed in a --shot)
     private readonly DeathState _death = new(); // dead from HP 0 to the revive click
     private readonly HurtGuard _hurt = new(); // player hurt state: 60 frames, one timer with the invincibility

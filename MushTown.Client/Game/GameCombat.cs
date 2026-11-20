@@ -527,7 +527,7 @@ public partial class MushTownGame
         }
     }
 
-    // A paid WZ damage cast: the pose is a weapon swing (a skill with a WZ action script, Poison Breath, plays its script) and its lock is that
+    // A paid WZ damage cast: the pose is a weapon swing (a skill of WzSkillData.ActionScripts plays its script) and its lock is that
     // pose's time x the attack speed scale, like a basic swing. The cast-time pct is the skill's damage at its level. The judge is the
     // local world or the server (rectangle and segments, MobWorld.WzStrike). A skill with a ball judges when the
     // ball arrives: the local world hands the ball out here and the hits later through its tick; the server sends
@@ -576,6 +576,8 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         if (!_fighter.TryCastShield(_skillCost, chara, wz, WzLv(wz))) return;
+        _script.Start(wz.Script); // the cast poses WZ elementalAdaptingFP and locks the hero for it, like a swing
+        _fighter.StartAttack(wz.Script.Sum(s => s.DelayMs), AttackScale());
         PlaySfx("buff");
         SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
         if (_net != null && _net.Connected) _net.SendSkillCast(wz.SkillId, 0);

@@ -40,6 +40,11 @@ using MushTown.Exporter;
 //           - Poison Breath was added (assets/skill/wz/2101005.json, its icons and its art under assets/skill/wz/2101005/: effect and hit; the
 //             json has the dot, dotInterval and dotTime formulas in Common). The skill window's page II lists it; an old export makes the
 //             client stop at start (no exported wz def for the page II ids).
+//           - the map background was fixed (back is exported in the order of its node numbers, not the order of the WZ file: the Erda
+//             maps 450001000 and 450001010 store it out of order; an ani back is saved as back/<set>/ani/<no>.png, no longer over the plain back of the
+//             same number). The old assets/maps/*.json and assets/back pictures draw the sky layers over the scene: run `export`.
+//           - Energy Bolt (2001008), Poison Mist (2111003) and Elemental Adaptation (2111011) got a body action script (WzSkillData.ActionScripts: the
+//             json has Script, like Poison Breath's). An old json has none and Menu.cs refuses it: run `export`.
 //           - the dodge changed (the mob json got Acc; an old one reads 0 and the dodge rate comes out wrong. effect/hurtdmg.json
 //             got the Miss word and effect/hurtdmg/Miss.png; an old hurtdmg.json has no Miss word and the client fails on a dodge).
 //           - Empirical Knowledge was added (assets/skill/wz/80002762.json: the common formulas x/time/prop/y plus the mark art

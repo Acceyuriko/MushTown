@@ -64,7 +64,7 @@ public sealed class WzSkillData
     public List<string> Desc { get; set; } = new();   // String.wz desc
     public List<string> Effect { get; set; } = new(); // String.wz h, the numbers filled at max level
     public List<string> Actions { get; set; } = new(); // action/0.. names; the first names the body action for AttackDelayMs
-    public List<ActionStep> Script { get; set; } = new(); // the body action as steps, only for a skill whose action is played as a script (Poison Breath); empty: a plain swing
+    public List<ActionStep> Script { get; set; } = new(); // the body action as steps, only for a skill of ActionScripts; empty: a plain swing
     public int AttackDelayMs { get; set; } // from the action start to its attack frame, from Character.wz (ms)
     public List<string> CastFrames { get; set; } = new(); // the cast effect art (png paths), only for a damage skill
     public List<string> HitFrames { get; set; } = new();  // the hit spark art (hit/0), only for a damage skill
@@ -89,6 +89,9 @@ public sealed class WzSkillData
     // The skills that are ground zones (Poison Mist): the cast puts the lt..rb box on the ground for `time` seconds and the box hits everything inside
     // once each period, instead of judging a single swing. Such a skill has no mobCount and no attackCount in its file.
     public static readonly IReadOnlySet<int> GroundZones = new HashSet<int> { PoisonMist };
+
+    // The skills whose WZ action is played as a script (steps of other actions, see ActionScript): the exporter reads their steps into Script. The other skills still play a plain swing.
+    public static readonly IReadOnlySet<int> ActionScripts = new HashSet<int> { EnergyBolt, PoisonBreath, PoisonMist, ElementalAdaptation };
 
     public bool IsGroundZone => GroundZones.Contains(SkillId);
 

@@ -263,7 +263,7 @@ public static partial class Export
         if (node.Nodes["action"] is { } action)
             foreach (Wz_Node v in action.Nodes) data.Actions.Add(Text(v));
         if (data.Actions.Count > 0) data.AttackDelayMs = ReadAttackDelay(chara, data.Actions[0]);
-        if (id == WzSkillData.PoisonBreath) data.Script = ReadActionScript(chara, data.Actions[0]); // the other skills still play a plain swing
+        if (WzSkillData.ActionScripts.Contains(id)) data.Script = ReadActionScript(chara, data.Actions[0]); // the other skills still play a plain swing
         data.ElemAttr = Text(node.Nodes["elemAttr"]);
         data.Invisible = node.Nodes["invisible"] != null;
         // No mpCon: always on (passive). info.type 10: a timed self effect (buff). Else cast for an effect.
@@ -276,7 +276,8 @@ public static partial class Export
 
     // A body action written as steps: Character.wz/00002000.img/<action>/<n> holds the action name, the frame and the delay of each step.
     // The time of a step is the absolute delay (the sign marks the attack frame, see ReadAttackDelay); missing or zero counts as 100 ms.
-    // Poison Breath is alert 2 -180, swingO2 0 -240, swingO2 2 360 (780 ms). The WZ move (a shift of a pixel or so) is not used.
+    // Poison Breath is alert 2 -180, swingO2 0 -240, swingO2 2 360 (780 ms); Energy Bolt alert 2 -60, swingO3 0 -330, swingO3 1 270 (660 ms);
+    // Poison Mist alert 2 -60, alert 1 -60, alert 0 -360, swingO1 2 180 (660 ms); Elemental Adaptation alert 2 -120, 1 -120, 0 -300, swingO1 2 360, alert 2 90 (990 ms). The WZ move (a shift of a pixel or so) is not used.
     private static List<ActionStep> ReadActionScript(WzRoot chara, string action)
     {
         var node = chara.Find($@"00002000.img\{action}")

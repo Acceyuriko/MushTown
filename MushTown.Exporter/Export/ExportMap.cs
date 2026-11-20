@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using MushTown.Shared;
 using WzComparerR2.WzLib;
 
@@ -16,6 +17,11 @@ public static partial class Export
     // bottom margin varies in the official data (the art decides it), we
     // take 190 px.
     private const int VrSideMargin = 10, VrTopMargin = 360, VrBottomMargin = 190;
+
+    // The children of back are named 0..N and that number is the draw order (the back with the lower number is drawn first). The WZ file does not store
+    // them in that order in the Erda maps (450001000, 450001010: 0 1 2 7 8 ... 4 6 3 5), so the order of the children is not the order of the numbers.
+    // (The tile and obj nodes of many maps are not in number order either; they keep the file order, the tie of equal z, as before.)
+    private static IEnumerable<Wz_Node> BackByIndex(Wz_Node list) => list.Nodes.OrderBy(n => int.Parse(n.Text, CultureInfo.InvariantCulture));
 
     // Every portal with a real target must land on a portal name that exists
     // there ( Tn matches the target's Pn ). The target map is always exported:
@@ -384,20 +390,21 @@ public static partial class Export
         var back = scene.Nodes["back"];
         if (back != null)
         {
-            foreach (Wz_Node b in back.Nodes)
+            foreach (Wz_Node b in BackByIndex(back))
             {
                 string no = Str(b, "no");
                 string bS = Str(b, "bS");
                 // ani backs keep frames under ani\{no}; like objs, W6 freezes frame 0
                 // (the back\{no} node is a 1x1 placeholder, not a frame)
-                string path = Int(b, "ani") != 0
+                bool ani = Int(b, "ani") != 0;
+                string path = ani
                     ? $@"Map\Back\{bS}.img\ani\{no}\0"
                     : $@"Map\Back\{bS}.img\back\{no}";
                 var (png, origin) = WzNodeUtil.ReadCanvas(root, root.Find(path));
                 if (png == null) { missing++; Console.WriteLine($"  missing {path}"); continue; }
-                // png paths mirror the WZ tree (back/{set}/{no}), so one file per
+                // png paths mirror the WZ tree (back/{set}/{no}, back/{set}/ani/{no}), so one file per
                 // source node and no clashes between sets sharing a number
-                string img = $"back/{bS}/{no}.png";
+                string img = ani ? $"back/{bS}/ani/{no}.png" : $"back/{bS}/{no}.png"; // an ani back and a plain back of the same number are two pictures
                 SaveOnce(png, Path.Combine(outDir, img), saved);
                 int ox = origin?.X ?? 0, oy = origin?.Y ?? 0;
                 bool flip = Int(b, "f") != 0;

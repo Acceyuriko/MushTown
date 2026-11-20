@@ -9,7 +9,7 @@ public sealed class ActionStep
     public int DelayMs { get; set; }
 }
 
-// The body pose of a skill whose WZ action is a script (Poison Breath): the steps play in order on a clock of their own and Current is the step
+// The body pose of a skill whose WZ action is a script (WzSkillData.ActionScripts): the steps play in order on a clock of their own and Current is the step
 // on show (the last one once the time is up). The Client ticks it while the cast lock runs, scaled like a swing. Held directly like SwingActions
 // (never added to an object).
 public sealed class ActionScript : Component

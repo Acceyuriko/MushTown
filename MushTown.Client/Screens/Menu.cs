@@ -652,7 +652,7 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} is a ground zone but has no head icon (mob), second cast layer (effect1) or tile0..tile{WzSkillData.ZoneTiles - 1} art: run the exporter (export)");
             if ((wz.Common.ContainsKey("damage") || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
-            if (wz.SkillId == WzSkillData.PoisonBreath && wz.Script.Count == 0)
+            if (WzSkillData.ActionScripts.Contains(wz.SkillId) && wz.Script.Count == 0)
                 throw new InvalidDataException($"skill {wz.SkillId} has no action script: run the exporter (export)");
             if (wz.SkillId == WzSkillData.EnergyBolt && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no ball or special art: run the exporter (export)");
