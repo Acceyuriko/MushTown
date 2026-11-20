@@ -393,10 +393,13 @@ public partial class MushTownGame
             default:
                 if (_wzSkills.TryGetValue(id, out var wz))
                 {
-                    // A damage skill casts; a passive (a bound Meditation of an old save too) and the move Mana Wave are ignored.
+                    // A damage skill casts, the buff (Elemental Adaptation) casts its shield (its cooldown keeps a held key from recasting it);
+                    // a passive (a bound Meditation of an old save too) and the move Mana Wave are ignored.
                     if (wz.Kind == SkillData.KindActive && wz.Common.ContainsKey("damage") && _mover.Climb == null
                         && _fighter.AttackLock <= 0 && HasJudge() && TryPayWzSkill(wz))
                         CastWzActive(wz);
+                    else if (wz.Kind == SkillData.KindBuff && _mover.Climb == null && _fighter.AttackLock <= 0 && TryPayWzSkill(wz))
+                        CastShield(wz);
                     return;
                 }
                 // A bound passive is ignored and a bound buff casts as a
@@ -486,15 +489,16 @@ public partial class MushTownGame
         }
     }
 
-    // A paid WZ damage cast: the pose is a weapon swing and its lock is that swing's time x the attack speed
-    // scale, like a basic swing. The cast-time pct is the skill's damage at its level. The judge is the
+    // A paid WZ damage cast: the pose is a weapon swing (a skill with a WZ action script, Poison Breath, plays its script) and its lock is that
+    // pose's time x the attack speed scale, like a basic swing. The cast-time pct is the skill's damage at its level. The judge is the
     // local world or the server (rectangle and segments, MobWorld.WzStrike). A skill with a ball judges when the
     // ball arrives: the local world hands the ball out here and the hits later through its tick; the server sends
     // the ball to everyone (Net.Ball) and the hits later as MobHit.
     private void CastWzActive(WzSkillData wz)
     {
         string action = RollSwing();
-        _fighter.StartAttack(Delays(action, Hero?.Skin ?? 0).Sum(), AttackScale());
+        if (wz.Script.Count > 0) _script.Start(wz.Script);
+        _fighter.StartAttack(wz.Script.Count > 0 ? wz.Script.Sum(s => s.DelayMs) : Delays(action, Hero?.Skin ?? 0).Sum(), AttackScale());
         PlaySfx(SwingKey());
         SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
         int pct = (int)wz.Value("damage", wz.MaxLevel);
@@ -524,6 +528,17 @@ public partial class MushTownGame
         SpawnCastFx(id, _mover.X, _mover.Y, _mover.FacingRight);
         if (_net != null && _net.Connected) _net.SendSkillCast(id, 0);
         PushBuild();
+    }
+
+    // Elemental Adaptation (the WZ buff): a paid cast gives the shield its layers (WZ y at max level: how many statuses it blocks). No timer
+    // (WZ has no time): only the cooldown limits the next cast, and a cast refills the layers. Its resistances are always on, so there is no
+    // build to push. Both cast layers play and the others see them (SkillFx relay); the layers are only ours, like the buff bar.
+    private void CastShield(WzSkillData wz)
+    {
+        _fighter.StatusShield = (int)wz.Value("y", wz.MaxLevel);
+        PlaySfx("buff");
+        SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
+        if (_net != null && _net.Connected) _net.SendSkillCast(wz.SkillId, 0);
     }
 
     // Buff loops are singletons per buff (cast and end both strip first).
@@ -605,6 +620,13 @@ public partial class MushTownGame
         fx.Origins = origins;
         fx.Delays = delays;
         fx.X = x; fx.Y = origins == null ? y - SkillFx.CastDy : y; fx.FacingRight = facingRight;
+        // A second cast layer that plays together with the first (Elemental Adaptation's effect0; WZ z -2, behind the hero, drawn in front like the first).
+        if (wz == null || !wz.Art.TryGetValue("effect0", out var second)) return;
+        var back = TakeFx();
+        back.Frames = second.Frames;
+        back.Origins = second.Origins;
+        back.Delays = second.Delays;
+        back.X = x; back.Y = y; back.FacingRight = facingRight;
     }
 
     // The hero's frame as the WZ poses of Mana Wave show it: the boost is alert frame 2 (in the air alert is only that pose) and the
@@ -614,7 +636,11 @@ public partial class MushTownGame
 
     // Ctrl is a weapon swing: no weapon in hand means no swing at all.
     // The swing is rolled from the pool of the appearance: cash weapon first, then gear.
-    private string RollSwing() => _swing.Roll(Progression.SwingPool(Hero, _items));
+    private string RollSwing()
+    {
+        _script.Clear(); // a swing or a cast that plays a script starts it right after
+        return _swing.Roll(Progression.SwingPool(Hero, _items));
+    }
 
     // Our look, so peers draw our skin, hair, face and worn pieces (CLI
     // sessions have no chara: skip).

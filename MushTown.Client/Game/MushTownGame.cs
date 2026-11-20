@@ -57,6 +57,7 @@ public partial class MushTownGame : Game
     private readonly int _shotRecastMs; // --recast <ms>: after --flyms the same cast again, then the world runs this long (the numbers of two casts on one mob)
     private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (effect, attack frame, ball, explosion, numbers)
     private readonly int _shotMark; // --mark <1..3>: pose that many Empirical Knowledge stacks on the nearest mob
+    private readonly int _shotBlocks; // --blocks <n>: after the --skill 2111011 cast, n statuses are blocked (the shield loses n layers)
     private readonly int _shotDrain; // --drain <0..5>: pose that many Elemental Drain layers (the buff icon and the two stat rows)
     private readonly bool _shotHurtBlink; // --hurtblink: the same arc in the purple flash step
     private readonly bool _shotHurtPre; // --hurtpre: the same stage before the hit
@@ -98,6 +99,7 @@ public partial class MushTownGame : Game
     private int _frame;
     private float _frameMs; // the shown action's clock: Idle.Frame reads it
     private readonly Fighter _fighter = new(); // combat clocks, ticked at frame-top (never in the world step)
+    private readonly ActionScript _script = new(); // the body pose of a skill whose WZ action is a script (Poison Breath), while its cast lock runs
     private readonly SwingActions _swing; // the swing of the basic attack and the casts (a fixed seed in a --shot)
     private readonly DeathState _death = new(); // dead from HP 0 to the revive click
     private readonly HurtGuard _hurt = new(); // player hurt state: 60 frames, one timer with the invincibility
@@ -148,7 +150,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null, int shotMark = 0, int shotDrain = -1)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null, int shotMark = 0, int shotDrain = -1, int shotBlocks = 0)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -181,6 +183,7 @@ public partial class MushTownGame : Game
         _shotFlyms = shotFlyms;
         _shotMark = shotMark;
         _shotDrain = shotDrain;
+        _shotBlocks = shotBlocks;
         _shotRecastMs = shotRecastMs;
         _shotTeleport = shotTeleport;
         _shotAt = shotAt;
@@ -791,7 +794,8 @@ public partial class MushTownGame : Game
         // above already poked the state (leaps, dashes); travel and respawn
         // land after the step, same frame.
         UpdateManaWave(freshAlt, up);
-        _mover.AttackAction = _swing.Current;
+        if (_fighter.AttackLock > 0 && _script.Active) _script.Tick(dtMs / _fighter.AttackScale); // the script runs as long as the lock, like a swing
+        _mover.AttackAction = _script.Active ? _script.Current.Action : _swing.Current;
         _mover.Input = new PlayerInput
         {
             Dir = dirNow,
@@ -853,6 +857,7 @@ public partial class MushTownGame : Game
             _frame = Idle.Frame(_shownAction, Delays(_shownAction, Hero?.Skin ?? 0), _frameMs);
         }
         _frame = PoseFrame(_shownAction, _frame);
+        if (_fighter.AttackLock > 0 && _script.Active) _frame = _script.Current.Frame; // a script names its frame itself
 
         var (targetX, targetY) = CameraTarget();
         _camera.Follow(dt, targetX, targetY);

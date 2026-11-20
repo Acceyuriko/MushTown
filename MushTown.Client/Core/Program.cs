@@ -7,7 +7,7 @@ using MushTown.Shared;
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
-// [--host | --join <ip>] [--shot <file.png> [--skin <0..5>] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|dropqty|dropqtymax|cashuserename|invscroll|stat|stat2|stat200|death|equipui|equipsetpart|decorations|damageskins|damageskinsempty|damageskinsselect|damageskinsdeleted|damageskinsask|dec|hud|fashionworn|skill|skillscroll|quest|questask|questforfeit|questpick|talk|settings|shop|shopscroll|shopnotice|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|worldmapworld|worldmapmaps|worldmaproot|keys|keyskills|quickedit|quickeditswap|quickeditnocap|menu|guide|guidecard|macro|macrohold|macrobind|macromove|party|partysearch|partyask|cashshop|cashshopfashion|cashshopfashionoutfits|cashshopreset|cashshopempty|cashshopcart|cashshopladder|cashshopbeauty|cashshopbeautygear|cashshopface|cashshopfacegear|cashshopcheckout|cashshopbuyall|cashshopnotice] [--skilltab <0|1|2|3|4|5>] [--talk <npc>] [--job <id>] [--hit | --skill <id> [--weak] [--flyms <ms> [--recast <ms>]] [--standoff <px>] | --drop | --mark <1|2|3> | --drain <0..5> | --hurt [--hurtblink | --hurtmiss] | --hurtpre | --teleport <left|right|up|down> --at <x>[,<y>] [--hold <ms>] [--teleportpre] [--teleportfrom <rope|swing>] | --manawave <boost|air|float|release|timeout> --at <x>[,<y>] [--hold <ms>]] [--dmg <n>] [--dmgskin <id>] [--crit] [--show] [--wear] [--wear-only <slots>] [--aiticks <n>] [--hover <x,y>]]
+// [--host | --join <ip>] [--shot <file.png> [--skin <0..5>] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|dropqty|dropqtymax|cashuserename|invscroll|stat|stat2|stat200|death|equipui|equipsetpart|decorations|damageskins|damageskinsempty|damageskinsselect|damageskinsdeleted|damageskinsask|dec|hud|fashionworn|skill|skillscroll|quest|questask|questforfeit|questpick|talk|settings|shop|shopscroll|shopnotice|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|worldmapworld|worldmapmaps|worldmaproot|keys|keyskills|quickedit|quickeditswap|quickeditnocap|menu|guide|guidecard|macro|macrohold|macrobind|macromove|party|partysearch|partyask|cashshop|cashshopfashion|cashshopfashionoutfits|cashshopreset|cashshopempty|cashshopcart|cashshopladder|cashshopbeauty|cashshopbeautygear|cashshopface|cashshopfacegear|cashshopcheckout|cashshopbuyall|cashshopnotice] [--skilltab <0|1|2|3|4|5>] [--talk <npc>] [--job <id>] [--hit | --skill <id> [--weak] [--flyms <ms> [--recast <ms>]] [--blocks <1..11>] [--standoff <px>] | --drop | --mark <1|2|3> | --drain <0..5> | --hurt [--hurtblink | --hurtmiss] | --hurtpre | --teleport <left|right|up|down> --at <x>[,<y>] [--hold <ms>] [--teleportpre] [--teleportfrom <rope|swing>] | --manawave <boost|air|float|release|timeout> --at <x>[,<y>] [--hold <ms>]] [--dmg <n>] [--dmgskin <id>] [--crit] [--show] [--wear] [--wear-only <slots>] [--aiticks <n>] [--hover <x,y>]]
 // --host runs a server plus this client; --join connects to a host. Net and
 // --shot never mix (a screenshot has no peers). No argument means menus.
 // --shot is headless: no window is ever shown, so no window takes the focus and no black window flashes (the shot is drawn
@@ -35,8 +35,10 @@ CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 // Flame Orb (2101004) judges at the action's attack frame (300 ms), so it needs --flyms 400 or more to show its numbers.
 // Meditation (2101001) is a passive: its magic attack is always on (--screen stat200 with --job 210 shows it in the stat window).
 // Explosion (2111002) judges at its action's attack frame (390 ms): it needs --flyms 500 or more to show its numbers.
-// Elemental Adaptation (2111011) is a passive: its status and elemental resistances are always on (--screen stat2 with --job 210 shows the
-// status resistance row with it).
+// Elemental Adaptation (2111011) is cast for real with --skill 2111011 --job 210 (MP, cooldown, the shield and both cast layers; --flyms <ms> shows
+// the layers mid-play and the buff bar shows its icon with 10 layers); --blocks <1..11> then blocks that many statuses (Fighter.TryBlockStatus: the
+// icon counts down, and is gone at 0). Its resistances are always on, cast or not (--screen stat2 with --job 210: the status resistance row shows
+// the share of the status duration it cuts).
 // A WZ skill (Fire/Poison, ids 20xxxxx) follows --facing: left poses the caster
 // right of the first mob, facing left. It stands 250 px from the first mob (the other poses 50), so a ball has room to fly. With --job (a game pose shot, no --screen) the demo is a fresh
 // level 200 hero of that class, so the numbers are real ones. --aiticks runs BEFORE the
@@ -150,6 +152,7 @@ int shotAiticks = 0;
 (int X, int Y)? shotHover = null;
 int shotMark = 0;
 int shotDrain = -1;
+int shotBlocks = 0;
 var rest = args.ToList();
 if (rest.Count >= 1 && rest[0] == "--host") { host = true; rest.RemoveAt(0); }
 else if (rest.Count >= 2 && rest[0] == "--join") { join = rest[1]; rest.RemoveRange(0, 2); }
@@ -195,6 +198,7 @@ if (rest.Count >= 2 && rest[0] == "--shot")
         else if (rest[i] == "--standoff") { ok = int.TryParse(rest[i + 1], out shotStandoff) && shotStandoff > 0; i += 2; }
         else if (rest[i] == "--mark") { ok = int.TryParse(rest[i + 1], out shotMark) && shotMark is >= 1 and <= 3; i += 2; }
         else if (rest[i] == "--drain") { ok = int.TryParse(rest[i + 1], out shotDrain) && shotDrain is >= 0 and <= 5; i += 2; }
+        else if (rest[i] == "--blocks") { ok = int.TryParse(rest[i + 1], out shotBlocks) && shotBlocks is >= 1 and <= 11; i += 2; }
         else if (rest[i] == "--aiticks") { ok = int.TryParse(rest[i + 1], out shotAiticks) && shotAiticks > 0; i += 2; }
         else if (rest[i] == "--action") { shotAction = rest[i + 1]; i += 2; }
         else if (rest[i] == "--skin")
@@ -225,6 +229,7 @@ if (shotTeleportPre && shotTeleport == null) ok = false; // --teleportpre is the
 if ((shotHit || shotDrop || shotHurt || shotDmg > 0 || shotAiticks > 0 || shotTeleport != null || shotManaWave != null || shotMark > 0) && shotScreen != null) ok = false; // poses and AI are plain game shots: no screens
 if (shotMark > 0 && shotJob == 0) ok = false; // --mark poses the hero beside the mob: it needs a demo character (--job)
 if (shotDrain >= 0 && shotJob == 0) ok = false; // --drain stages the mage's skill numbers: it needs a demo character (--job)
+if (shotBlocks > 0 && shotSkill != WzSkillData.ElementalAdaptation) ok = false; // --blocks asks the shield of the --skill 2111011 cast
 if (shotHurtBlink && !shotHurt) ok = false; // the blink shot is the hurt pose's second frame
 if (shotHurtPre && shotHurtBlink) ok = false; // one hurt stage per shot
 if (shotHurtMiss && (!shotHurt || shotHurtPre || shotHurtBlink)) ok = false; // the miss is the hurt pose's own hit, not the pre or blink stage
@@ -242,7 +247,7 @@ if ((shotScreen is "shop" or "shopscroll" or "shopnotice") && shotTalk == 0) ok 
 if (shotTravel != 0 && shotScreen is not (null or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter")) ok = false; // --travel needs the game, the world map or the minimap
 if (!ok)
 {
-    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--skin <0..5>] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|dropqty|dropqtymax|cashuserename|invscroll|stat|stat2|stat200|death|equipui|equipsetpart|decorations|damageskins|damageskinsempty|damageskinsselect|damageskinsdeleted|damageskinsask|dec|hud|fashionworn|skill|skillscroll|quest|questask|questforfeit|questpick|talk|settings|shop|shopscroll|shopnotice|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|worldmapworld|worldmapmaps|worldmaproot|keys|keyskills|quickedit|quickeditswap|quickeditnocap|menu|guide|guidecard|macro|macrohold|macrobind|macromove|party|partysearch|partyask|cashshop|cashshopfashion|cashshopfashionoutfits|cashshopreset|cashshopempty|cashshopcart|cashshopladder|cashshopbeauty|cashshopbeautygear|cashshopface|cashshopfacegear|cashshopcheckout|cashshopbuyall|cashshopnotice] [--skilltab <0|1|2|3|4|5>] [--talk <npc>] [--job <id>] [--hit | --skill <id> [--weak] [--flyms <ms> [--recast <ms>]] [--standoff <px>] | --drop | --mark <1|2|3> | --drain <0..5> | --hurt [--hurtblink | --hurtmiss] | --hurtpre | --teleport <left|right|up|down> --at <x>[,<y>] [--hold <ms>] [--teleportpre] [--teleportfrom <rope|swing>] | --manawave <boost|air|float|release|timeout> --at <x>[,<y>] [--hold <ms>]] [--dmg <n>] [--dmgskin <id>] [--crit] [--show] [--wear] [--wear-only <slots>] [--aiticks <n>] [--hover <x,y>]]");
+    Console.WriteLine("usage: MushTown.Client [--host | --join <ip>] | [--shot <file.png> [--skin <0..5>] [--map <id>] [--travel <id>] [--action <name>] [--frame <n 0-based>] [--facing left|right] [--screen saves|server|chars|chars2|job|job2|setup|delete|inv|use|dropqty|dropqtymax|cashuserename|invscroll|stat|stat2|stat200|death|equipui|equipsetpart|decorations|damageskins|damageskinsempty|damageskinsselect|damageskinsdeleted|damageskinsask|dec|hud|fashionworn|skill|skillscroll|quest|questask|questforfeit|questpick|talk|settings|shop|shopscroll|shopnotice|minimap|minimapbig|minimapnpc|minimapfilter|worldmap|worldmapsearch|worldmapask|worldmapcombo|worldmapworld|worldmapmaps|worldmaproot|keys|keyskills|quickedit|quickeditswap|quickeditnocap|menu|guide|guidecard|macro|macrohold|macrobind|macromove|party|partysearch|partyask|cashshop|cashshopfashion|cashshopfashionoutfits|cashshopreset|cashshopempty|cashshopcart|cashshopladder|cashshopbeauty|cashshopbeautygear|cashshopface|cashshopfacegear|cashshopcheckout|cashshopbuyall|cashshopnotice] [--skilltab <0|1|2|3|4|5>] [--talk <npc>] [--job <id>] [--hit | --skill <id> [--weak] [--flyms <ms> [--recast <ms>]] [--blocks <1..11>] [--standoff <px>] | --drop | --mark <1|2|3> | --drain <0..5> | --hurt [--hurtblink | --hurtmiss] | --hurtpre | --teleport <left|right|up|down> --at <x>[,<y>] [--hold <ms>] [--teleportpre] [--teleportfrom <rope|swing>] | --manawave <boost|air|float|release|timeout> --at <x>[,<y>] [--hold <ms>]] [--dmg <n>] [--dmgskin <id>] [--crit] [--show] [--wear] [--wear-only <slots>] [--aiticks <n>] [--hover <x,y>]]");
     Console.WriteLine("--shot is headless: no window is ever shown and the focus stays where it is. --show opens the window (full screen, shown until the shot is saved).");
     Environment.ExitCode = 1;
     return;
@@ -250,7 +255,7 @@ if (!ok)
 
 try
 {
-    using var game = new MushTownGame(shotPath, shotMap, shotTravel, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks, shotWear, shotJob, shotHover, shotSkin, shotDmg, shotWearOnly, shotHurt, shotHurtBlink, shotHurtPre, shotDmgSkin, shotHurtMiss, shotWeak, shotFlyms, shotStandoff, shotCrit, shotRecastMs, shotTeleport, shotAt, shotTeleportPre, shotHoldMs, shotManaWave, shotTeleportFrom, shotMark, shotDrain);
+    using var game = new MushTownGame(shotPath, shotMap, shotTravel, shotAction, shotFrame, shotFacingRight, host, join, shotScreen, shotTalk, shotHit, shotSkill, shotSkillTab, shotDrop, shotAiticks, shotWear, shotJob, shotHover, shotSkin, shotDmg, shotWearOnly, shotHurt, shotHurtBlink, shotHurtPre, shotDmgSkin, shotHurtMiss, shotWeak, shotFlyms, shotStandoff, shotCrit, shotRecastMs, shotTeleport, shotAt, shotTeleportPre, shotHoldMs, shotManaWave, shotTeleportFrom, shotMark, shotDrain, shotBlocks);
     if (shotPath != null && !shotShow) game.RunHidden();
     else game.Run();
 }

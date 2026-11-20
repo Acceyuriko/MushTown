@@ -4,7 +4,7 @@ using MushTown.Shared;
 namespace MushTown.Tests;
 
 // Fire/Poison 3rd job actives (211.img): Explosion (a box on the caster that every mob inside takes, judged at the body action's attack
-// frame, fire, through the hit pipeline like Flame Orb) and Elemental Adaptation (a passive here: status and elemental resistance, always on).
+// frame, fire, through the hit pipeline like Flame Orb) and Elemental Adaptation (a cast that gives a shield of 10 layers, each blocks one abnormal status; its status and elemental resistance are always on).
 // Shares the helpers of FirePoisonCombatTests.
 public partial class FirePoisonCombatTests
 {
@@ -22,6 +22,18 @@ public partial class FirePoisonCombatTests
         data.Common["mobCount"] = SkillFormula.Levels("8", 20);
         data.Vectors["lt"] = new[] { -250, -160 };
         data.Vectors["rb"] = new[] { 250, 140 };
+        return data;
+    }
+
+    // Elemental Adaptation as 211.img writes it at level 20: a buff (info type 10), MP 35, cooltime 240 s, 10 blocks (y), asrR = terR = x = 20.
+    private static WzSkillData AdaptationData()
+    {
+        var data = new WzSkillData { SkillId = Adaptation, MaxLevel = 20, Kind = SkillData.KindBuff, Name = "Elemental Adaptation (Fire, Poison)" };
+        data.Common["mpCon"] = SkillFormula.Levels("20+5*u(x/7)", 20);
+        data.Common["cooltime"] = SkillFormula.Levels("600-18*x", 20);
+        data.Common["y"] = SkillFormula.Levels("10", 20);
+        data.Common["asrR"] = SkillFormula.Levels("x", 20);
+        data.Common["terR"] = SkillFormula.Levels("x", 20);
         return data;
     }
 
@@ -113,11 +125,11 @@ public partial class FirePoisonCombatTests
         Assert.IsTrue(amplified > plain);
     }
 
-    // Elemental Adaptation is a passive: its two records come from WzSkillStats.Modifiers (Skill source, named after the skill), status resistance +20
-    // and elemental resistance +20 at max level. The status resistance is an added number of the panel; the elemental resistance cuts an element
+    // Elemental Adaptation's resistances are always on (cast or not): its two records come from WzSkillStats.Modifiers (Skill source, named after the
+    // skill), status resistance +20 and elemental resistance +20 at max level. The status resistance is an added number of the panel; the elemental resistance cuts an element
     // hit taken by half of it (10%), a plain hit is not cut.
     [TestMethod]
-    public void ElementalAdaptation_Passive_GivesStatusAndElementResistance_AlwaysOn()
+    public void ElementalAdaptation_Resistances_AlwaysOn()
     {
         var mods = WzSkillStats.Modifiers(WzSkillTests.FirePoisonPassives(), 200, 0).ToList();
         var own = mods.Where(m => m.Label == "Elemental Adaptation (Fire, Poison)").ToList();
@@ -131,6 +143,73 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(20, snap.IntValue(StatKey.ELEMENT_RESISTANCE));
         Assert.AreEqual(900, DamageChain.TakenDamage(snap, 1000, elemental: true)); // 1000 x (1 - 20 / 200)
         Assert.AreEqual(1000, DamageChain.TakenDamage(snap, 1000)); // a plain hit is not cut
+    }
+
+    // The cast pays 35 MP at once (the MP cost percent of Element Amplification does not raise it) and starts the 240 s cooldown; a second cast is
+    // refused while it runs (no MP paid), and when it is over the cast is paid again.
+    [TestMethod]
+    public void ElementalAdaptation_PaysMpAndCooldown_RefusedWhileCooling()
+    {
+        var wz = AdaptationData();
+        var chara = new CharaSlot { Mp = 100 };
+        var cost = new SkillCost(new Dictionary<int, SkillData>());
+        var cooldowns = new Dictionary<int, float>();
+        Assert.IsTrue(cost.Pay(chara, wz, wz.MaxLevel, cooldowns, mpCostPct: 50));
+        Assert.AreEqual(65, chara.Mp); // 100 - 35, the percent does not apply
+        Assert.AreEqual(240_000f, cooldowns[Adaptation]);
+        Assert.IsFalse(cost.Pay(chara, wz, wz.MaxLevel, cooldowns));
+        Assert.AreEqual(65, chara.Mp);
+        cooldowns[Adaptation] = 0; // the cooldown ran out
+        Assert.IsTrue(cost.Pay(chara, wz, wz.MaxLevel, cooldowns));
+        Assert.AreEqual(30, chara.Mp);
+    }
+
+    // The shield: the layers are WZ y (10) at max level; each block spends one (and only a block spends anything: no MP, no time); the 11th is not
+    // blocked; the shield has no timer (Fighter.Tick leaves it alone). A new cast fills it again.
+    [TestMethod]
+    public void StatusShield_TenBlocks_TheEleventhPasses_NoTimer()
+    {
+        var wz = AdaptationData();
+        var fighter = new Fighter();
+        Assert.IsFalse(fighter.TryBlockStatus()); // nothing cast yet: not blocked
+        fighter.StatusShield = (int)wz.Value("y", wz.MaxLevel);
+        Assert.AreEqual(10, fighter.StatusShield);
+        fighter.Tick(1_000_000);
+        Assert.AreEqual(10, fighter.StatusShield);
+        for (int i = 1; i <= 10; i++)
+        {
+            Assert.IsTrue(fighter.TryBlockStatus(), $"block {i}");
+            Assert.AreEqual(10 - i, fighter.StatusShield);
+        }
+        Assert.IsFalse(fighter.TryBlockStatus());
+        Assert.AreEqual(0, fighter.StatusShield);
+        fighter.StatusShield = (int)wz.Value("y", wz.MaxLevel); // the next cast
+        Assert.AreEqual(10, fighter.StatusShield);
+    }
+
+    // A new session or character starts clean: the shield, the cooldowns and the buffs are gone, so nothing is blocked.
+    [TestMethod]
+    public void Fighter_Reset_ClearsShieldCooldownsAndBuffs()
+    {
+        var fighter = new Fighter { StatusShield = 10, Orbs = 3 };
+        fighter.Cooldowns[Adaptation] = 240_000f;
+        fighter.Buffs[WzSkillData.Meditation] = 1000f;
+        fighter.Reset();
+        Assert.IsFalse(fighter.TryBlockStatus());
+        Assert.AreEqual(0, fighter.StatusShield);
+        Assert.AreEqual(0, fighter.Cooldowns.Count);
+        Assert.AreEqual(0, fighter.Buffs.Count);
+        Assert.AreEqual(0, fighter.Orbs);
+    }
+
+    // The status interface is empty and nothing implements it yet (a status will implement it and ask TryBlockStatus before it is put on).
+    // Delete this test when the first abnormal status is implemented.
+    [TestMethod]
+    public void StatusEffect_InterfaceIsEmpty_NoImplementation()
+    {
+        Assert.AreEqual(0, typeof(IStatusEffect).GetMembers().Length);
+        var implementations = typeof(IStatusEffect).Assembly.GetTypes().Where(t => t != typeof(IStatusEffect) && typeof(IStatusEffect).IsAssignableFrom(t));
+        Assert.AreEqual(0, implementations.Count());
     }
 
     // Page III of the Fire/Poison job: the five passives, then the two actives (the skill window and the quick slots read the page).
@@ -176,6 +255,34 @@ public partial class FirePoisonCombatTests
         for (int i = 0; i < 200 && !b.TryTakeFx(out _); i++) Thread.Sleep(5); // the Explosion effect of a, shown to b (drain it)
         Thread.Sleep(200);
         Assert.IsFalse(a.TryTakeMob(out _));
+        Assert.IsFalse(b.TryTakeMob(out _));
+    }
+
+    // A buff cast is only relayed: the server judges nothing (no damage line), the other client gets the cast effect message and no hit.
+    [TestMethod]
+    public void Loopback_ElementalAdaptation_OnlyRelaysTheEffect()
+    {
+        using var assets = new TempAssets();
+        assets.AddWzSkill(AdaptationData());
+        assets.AddMap(9, """[{"MobId":100000,"X":-100,"Cy":100}]""", Floor);
+        assets.AddMob(100000, 2_000_000_000, 0.1, 0, speed: 1, level: 200);
+        using var server = new GameServer(_ => { }, assets.Dir, Net.Port + 78);
+        server.Start();
+        using var a = new NetClient(_ => { });
+        using var b = new NetClient(_ => { });
+        a.Connect("127.0.0.1", Net.Port + 78);
+        b.Connect("127.0.0.1", Net.Port + 78);
+        a.SendState(9, 0, 100, Net.ActStand, 0, false);
+        b.SendState(9, 600, 100, Net.ActStand, 0, true);
+        WaitSpawn(a);
+        WaitSpawn(b);
+        a.SendBuild(Mage);
+        a.SendSkillCast(Adaptation, 0);
+        SkillFxEvent fx = default;
+        for (int i = 0; i < 200 && !b.TryTakeFx(out fx); i++) Thread.Sleep(5);
+        Assert.AreEqual(Adaptation, fx.Skill);
+        Thread.Sleep(600);
+        Assert.IsFalse(a.TryTakeMob(out _)); // no hit for anyone
         Assert.IsFalse(b.TryTakeMob(out _));
     }
 }

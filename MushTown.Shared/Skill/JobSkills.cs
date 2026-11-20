@@ -16,7 +16,7 @@ public static class JobSkills
 
     // Fire/Poison: the 1st job (200.img, the visible ones: Elemental Weakness is invisible in WZ) and the 2nd job
     // (210.img: the passives, then Meditation, Flame Orb and Poison Breath; Ignite follows with its own ticket) and the 3rd job
-    // (211.img: the passives, then Explosion and Elemental Adaptation; the other 3rd job actives follow with their own tickets).
+    // (211.img: the passives, then the actives Explosion and Elemental Adaptation; the other 3rd job actives follow with their own tickets).
     // Pages IV and V follow with their own jobs' tickets.
     private static readonly int[][] FirePoison =
     {

@@ -193,7 +193,7 @@ public partial class MushTownGame
             //   worldmap poses the world map window: worldmapsearch with the search window, worldmapask the confirm box,
             //     worldmapcombo the open area list, worldmapworld the open world list, worldmapmaps the open map list,
             //     worldmaproot the Arcane River root page after Arcane River is picked in the first list.
-            //   keyskills is the key window with Slash Blast, Meditation, Flame Orb, Poison Breath, Explosion and Elemental Adaptation on the keys 2 to 7 (the strip shows them too; Meditation and Elemental Adaptation are passives that an old save may keep on a key):
+            //   keyskills is the key window with Slash Blast, Meditation, Flame Orb, Poison Breath, Explosion and Elemental Adaptation on the keys 2 to 7 (the strip shows them too; Meditation is a passive that an old save may keep on a key):
             //     park --hover on a key of the keyboard or a cell of the strip to see the skill tooltip.
             //   keys poses the key window: quickedit has the Quick Slots button clicked and the Q cell picked, quickeditswap
             //     has W pressed on the Q cell (two cells swap keys), quickeditnocap has Backspace, CapsLock, right Shift,
@@ -304,7 +304,7 @@ public partial class MushTownGame
                 table["D4"] = $"Skill:{WzSkillData.FlameOrb}";
                 table["D5"] = $"Skill:{WzSkillData.PoisonBreath}";
                 table["D6"] = $"Skill:{WzSkillData.Explosion}";
-                table["D7"] = $"Skill:{WzSkillData.ElementalAdaptation}"; // a passive too
+                table["D7"] = $"Skill:{WzSkillData.ElementalAdaptation}";
                 KeyWindow?.Open();
             }
             if (shotScreen is "quickedit" or "quickeditswap" or "quickeditnocap") // the strip key editing: the Q cell picked; the swap shot has pressed W on it; the nocap shot has pressed five keys without cap art on cells 0..4
@@ -641,8 +641,15 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} has no child {WzSkillData.ManaWaveFloat} (the slow fall) with its art (special, specialAffected): run the exporter (export)");
             if (WzSkillData.UserPassives.Contains(wz.SkillId) && wz.Kind != SkillData.KindPassive)
                 throw new InvalidDataException($"skill {wz.SkillId} is not a passive: run the exporter (export)");
-            if ((wz.Common.ContainsKey("damage") || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
+            if (wz.SkillId == WzSkillData.ElementalAdaptation && (wz.Kind != SkillData.KindBuff || wz.NumberFrames.Count < (int)wz.Value("y", wz.MaxLevel)
+                || !wz.Art.TryGetValue("effect0", out var second) || second.Frames.Count == 0 || second.Frames.Count != second.Origins.Length || second.Frames.Count != second.Delays.Length))
+                throw new InvalidDataException($"skill {wz.SkillId} is not a buff, has no layer icons or has no second cast layer (effect0): run the exporter (export)");
+            if ((wz.Common.ContainsKey("damage") || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
+            if (wz.NumberOrigins.Count != wz.NumberFrames.Count)
+                throw new InvalidDataException($"skill {wz.SkillId} has number icons without their origins: run the exporter (export)");
+            if (wz.SkillId == WzSkillData.PoisonBreath && wz.Script.Count == 0)
+                throw new InvalidDataException($"skill {wz.SkillId} has no action script: run the exporter (export)");
             if (wz.SkillId == WzSkillData.EnergyBolt && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no ball or special art: run the exporter (export)");
             if ((wz.BallFrames.Count > 0 || wz.SpecialFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0)) // a ball skill has both its ball and its special (a target box with no ball, Poison Breath, has neither)
@@ -719,7 +726,7 @@ public partial class MushTownGame
             foreach (string f in wz.HitFrames) LoadTexture(f);
             foreach (string f in wz.BallFrames) LoadTexture(f);
             foreach (string f in wz.SpecialFrames) LoadTexture(f);
-            foreach (var art in wz.Children.SelectMany(c => c.Art.Values)) // the slow fall's bubble and end
+            foreach (var art in wz.Art.Values.Concat(wz.Children.SelectMany(c => c.Art.Values))) // the slow fall's bubble and end, Elemental Adaptation's second layer
                 foreach (string f in art.Frames) LoadTexture(f);
         }
         for (int i = 0; i < MacroBook.Count; i++) LoadTexture($"ui/macro_icon{i}.png"); // the keys and the quick slots draw them
@@ -1043,7 +1050,7 @@ public partial class MushTownGame
             throw;
         }
         GameLog($"{chara.Name} entered the game ({mode})");
-        _localWorld = null; ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); _fighter.Cooldowns.Clear(); _fighter.Buffs.Clear(); _fighter.Orbs = 0; _hurt.Clear(); // net: the server pushes mobs
+        _localWorld = null; ClearMobs(); ClearDrops(); DropNumbers(); DropFx(); _fighter.Reset(); _hurt.Clear(); // net: the server pushes mobs
         var kb = Keyboard.GetState(); // menu trips don't track game keys: seed edges from live state
         _input.Seed(kb);
         ReseedPortalState(); // the arrival spot, not the old one
@@ -1090,9 +1097,7 @@ public partial class MushTownGame
         _questBuilt = false; _questBuiltKey = ""; _questSel = 0; _questDetail = null; _questDragged = false; _questPos = new Point(0, 0); _showQuest = false; // the next character starts with a closed, unselected window
         for (int i = 0; i < _questGroupOpen.Length; i++) _questGroupOpen[i] = true;
         DropFx();
-        _fighter.Cooldowns.Clear();
-        _fighter.Buffs.Clear();
-        _fighter.Orbs = 0;
+        _fighter.Reset();
         ZeroCamera(); // no map behind the select screen anymore
         var kb = Keyboard.GetState(); // held Enter/Back must not fall through as a fresh press
         _enterWasDown = kb.IsKeyDown(Keys.Enter);

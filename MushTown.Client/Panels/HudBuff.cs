@@ -18,21 +18,33 @@ public partial class MushTownGame
     // The buff bar object. The HUD chain puts it in the game scene.
     private GameObject BuildBuffBar()
     {
-        if (_wzSkills.TryGetValue(WzSkillData.ElementalDrain, out var drain)) // the layer icons are drawn live: load them now
-            foreach (string f in drain.NumberFrames) LoadTexture(f);
+        foreach (int id in CountedSkills) // the layer icons are drawn live: load them now
+            if (_wzSkills.TryGetValue(id, out var counted))
+                foreach (string f in counted.NumberFrames) LoadTexture(f);
         var bar = new GameObject { NoHit = true }; // art only: the clicks go through
         bar.Add(new Rect(BuffBarRect()));
-        bar.Add(new BuffBarArt(() => LiveBuffs(), id => _skills[id].Icon,
-            () => CurrentDrainLayers(), DrainIcon));
+        bar.Add(new BuffBarArt(() => LiveBuffs(), id => _skills[id].Icon, () => CountedIcons()));
         return bar;
     }
 
-    // The Elemental Drain buff icon at this many layers: the WZ number icon (its top-right digit is the count). Empty if the
-    // art was not exported; the callers skip an empty icon.
-    private string DrainIcon(int layers)
+    // The buffs the bar shows by layers (no time): Elemental Drain and Elemental Adaptation's shield.
+    private static readonly int[] CountedSkills = { WzSkillData.ElementalDrain, WzSkillData.ElementalAdaptation };
+    private readonly List<BuffCount> _countedIcons = new();
+
+    // The layered buffs that hold layers now, in CountedSkills order: the skill icon and the WZ number icon of the layer count over it.
+    // A buff with no exported number art is skipped.
+    private List<BuffCount> CountedIcons()
     {
-        if (!_wzSkills.TryGetValue(WzSkillData.ElementalDrain, out var wz) || wz.NumberFrames.Count == 0) return "";
-        return wz.NumberFrames[layers - 1];
+        _countedIcons.Clear();
+        AddCounted(WzSkillData.ElementalDrain, CurrentDrainLayers());
+        AddCounted(WzSkillData.ElementalAdaptation, _fighter.StatusShield);
+        return _countedIcons;
+    }
+
+    private void AddCounted(int id, int layers)
+    {
+        if (layers > 0 && _wzSkills.TryGetValue(id, out var wz) && wz.NumberFrames.Count >= layers)
+            _countedIcons.Add(new BuffCount(wz.Icon, wz.NumberFrames[layers - 1], wz.NumberOrigins[layers - 1][0], wz.NumberOrigins[layers - 1][1]));
     }
 
     // The live buffs of this frame: the fighter holds the real times.
@@ -55,26 +67,29 @@ public partial class MushTownGame
     }
 }
 
-// The buff bar art: the live buff icons (the skill icon of each buff) with the time left on the icon. Elemental Drain rides in
-// front as its WZ number icon (the layer count is drawn on the icon; no time).
+// A layered buff on the bar: the skill icon, the number icon of the layer count, and the WZ origin of the number icon (the point of it that sits
+// on the skill icon's bottom left corner; Elemental Drain's number icon is the whole icon, origin 0,32: it is drawn over the skill icon and
+// covers it, on purpose).
+public readonly record struct BuffCount(string Icon, string Number, int OriginX, int OriginY);
+
+// The buff bar art: the live buff icons (the skill icon of each buff) with the time left on the icon. The layered buffs (Elemental
+// Drain, Elemental Adaptation) ride in front as their WZ number icons (the layer count is drawn on the icon; no time).
 public sealed class BuffBarArt : Component, IDrawable
 {
     private readonly Func<List<(int id, float ms)>> _buffs;
     private readonly Func<int, string> _icon;
-    private readonly Func<int> _drainLayers;
-    private readonly Func<int, string> _drainIcon;
-    public BuffBarArt(Func<List<(int id, float ms)>> buffs, Func<int, string> icon, Func<int> drainLayers, Func<int, string> drainIcon)
+    private readonly Func<List<BuffCount>> _counted;
+    public BuffBarArt(Func<List<(int id, float ms)>> buffs, Func<int, string> icon, Func<List<BuffCount>> counted)
     {
-        _buffs = buffs; _icon = icon; _drainLayers = drainLayers; _drainIcon = drainIcon;
+        _buffs = buffs; _icon = icon; _counted = counted;
     }
 
     public void Draw(UiGfx gfx)
     {
         var lay = MushTownGame._buffLay;
-        var entries = new List<(string image, string? time)>();
-        int layers = _drainLayers();
-        if (layers > 0) { var img = _drainIcon(layers); if (img.Length > 0) entries.Add((img, null)); } // Elemental Drain first: no time left, the count is on the icon
-        foreach (var b in _buffs()) entries.Add((_icon(b.id), BuffTimeText(b.ms)));
+        var entries = new List<(string image, string? time, BuffCount? count)>();
+        foreach (var c in _counted()) entries.Add((c.Icon, null, c)); // the layered buffs first: no time left, the count is drawn over the icon
+        foreach (var b in _buffs()) entries.Add((_icon(b.id), BuffTimeText(b.ms), null));
         if (entries.Count == 0) return; // no buff, no bar
         var box = Owner.Get<Rect>()!.Screen;
         int size = MushTownGame.BuffIconSize; // the skill icon is 32x32
@@ -85,6 +100,8 @@ public sealed class BuffBarArt : Component, IDrawable
             int ix = x + i * pitch;
             if (entries[i].image != "")
                 gfx.Sb.Draw(gfx.Tex(entries[i].image), new Vector2(ix, box.Y), Color.White);
+            if (entries[i].count is { } count) // the origin lands on the icon's bottom left corner
+                gfx.Sb.Draw(gfx.Tex(count.Number), new Vector2(ix - count.OriginX, box.Y + size - count.OriginY), Color.White);
             if (entries[i].time is not { } time) continue;
             var t = gfx.Ui.GetSmall(time);
             int tx = ix + size - t.Width - lay.Get("timeRight", 1);

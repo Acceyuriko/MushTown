@@ -17,7 +17,7 @@ namespace MushTown.Shared;
 // to the magic skills: the hidden keys MP_COST_PCT and MAGIC_DAMAGE_PCT, read by SkillCost.Pay and by the Build. Burning Magic adds
 // the DoT time (x) and the final damage on a hit against a mob with a DoT (z): the hidden keys DOT_TIME_PCT and DOT_FINAL_PCT, read by
 // the Build. Teleport Boost adds distance to Teleport (TeleportReach).
-// Elemental Adaptation (a passive here) adds status resistance (asrR) and elemental resistance (terR).
+// Elemental Adaptation adds status resistance (asrR) and elemental resistance (terR), always on.
 public static class WzSkillStats
 {
     // Magic Guard at max level: the share of a touch, in percent, that MP pays (WZ x = 15 + 7 * level).
@@ -91,8 +91,8 @@ public static class WzSkillStats
         // Meditation is a passive (the user's decision): magic attack (WZ indieMad = 10 + x) at max level, always on. The WZ cast, duration and party part are not used.
         var meditation = skills[WzSkillData.Meditation];
         yield return new(StatKey.MATT, StatValueType.FLAT, meditation.Value("indieMad", meditation.MaxLevel), StatSource.Skill, meditation.Name);
-        // Elemental Adaptation is a passive (the user's decision): status resistance (WZ asrR) and elemental resistance (WZ terR) at max level, always on.
-        // The WZ barrier that blocks a status is not done (the player has no status).
+        // Elemental Adaptation: status resistance (WZ asrR) and elemental resistance (WZ terR) at max level, always on (WZ: Passive Effect); the cast and
+        // its shield of layers are not stats (Fighter.StatusShield).
         var adaptation = skills[WzSkillData.ElementalAdaptation];
         yield return new(StatKey.STATUS_RESISTANCE, StatValueType.FLAT, adaptation.Value("asrR", adaptation.MaxLevel), StatSource.Skill, adaptation.Name);
         yield return new(StatKey.ELEMENT_RESISTANCE, StatValueType.FLAT, adaptation.Value("terR", adaptation.MaxLevel), StatSource.Skill, adaptation.Name);

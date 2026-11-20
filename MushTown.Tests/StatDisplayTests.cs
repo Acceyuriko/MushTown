@@ -72,6 +72,20 @@ public class StatDisplayTests
         Assert.AreEqual("100%", StatDisplay.Text(s, 31));
     }
 
+    // The status resistance row shows the share of the duration the number cuts (107 resistance: 57%), not the number; the hover keeps the
+    // source lines with their own numbers (Skill 20% and so on) and adds no total.
+    [TestMethod]
+    public void StatusResistanceRow_ShowsTheReduction_SourcesKeepTheirNumbers()
+    {
+        var s = Snap(M(StatKey.STATUS_RESISTANCE, StatValueType.FLAT, 87, StatSource.Base),
+            M(StatKey.STATUS_RESISTANCE, StatValueType.FLAT, 20, StatSource.Skill, "Elemental Adaptation (Fire, Poison)"));
+        Assert.AreEqual("57%", StatDisplay.Text(s, StatDisplay.StatusResistanceRow));
+        Assert.AreEqual("55%", StatDisplay.Text(Snap(M(StatKey.STATUS_RESISTANCE, StatValueType.FLAT, 87, StatSource.Base)), StatDisplay.StatusResistanceRow));
+        Assert.AreEqual("0%", StatDisplay.Text(Snap(), StatDisplay.StatusResistanceRow));
+        var skill = StatDisplay.Sources(s, StatDisplay.StatusResistanceRow).Single();
+        Assert.AreEqual("20%", StatDisplay.LineText(StatDisplay.StatusResistanceRow, skill));
+    }
+
     [TestMethod]
     public void StatusResistance_CutsTheDurationByTheOfficialFormula()
     {

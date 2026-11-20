@@ -78,6 +78,21 @@ public partial class MushTownGame
             SnapCamera();
             return;
         }
+        if (wzSkill && _wzSkills[_shotSkill].Kind == SkillData.KindBuff)
+        {
+            // Elemental Adaptation runs the real path: pay, cast (shield, both effect layers); --blocks <n> then blocks that many statuses through
+            // TryBlockStatus, and --flyms <ms> ages the effects, so the cast is shown mid-play. The demo must be a Fire/Poison hero (--job 210).
+            _save ??= new SaveData();
+            _save.Slots[_slot] ??= DemoChara();
+            var buff = _wzSkills[_shotSkill];
+            if (!TryPayWzSkill(buff))
+                throw new InvalidDataException($"--skill {_shotSkill} cannot cast: the demo needs the job (--job 210) and {(int)buff.Value("mpCon", buff.MaxLevel)} MP");
+            CastShield(buff);
+            for (int i = 0; i < _shotBlocks; i++) _fighter.TryBlockStatus();
+            RunShotFly(_shotFlyms);
+            SnapCamera();
+            return;
+        }
         if (_shotTeleport != null)
         {
             PoseTeleport();
@@ -150,6 +165,13 @@ public partial class MushTownGame
             _frame = 1;
             if (wzSkill)
             {
+                var script = _wzSkills[_shotSkill].Script;
+                if (script.Count > 0) // an action script is posed at the step --frame names (0-based; default the first)
+                {
+                    var step = script[Math.Min(_shotFrame, script.Count - 1)];
+                    _mover.Action = step.Action;
+                    _frame = step.Frame;
+                }
                 PoseWzSkill(world, _wzSkills[_shotSkill]);
                 SnapCamera();
                 return;

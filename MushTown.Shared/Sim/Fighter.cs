@@ -15,6 +15,7 @@ public sealed class Fighter : Component
     public Dictionary<int, float> Cooldowns = new(); // ms left per cooling skill (clamped, never removed)
     public Dictionary<int, float> Buffs = new(); // ms left per live buff (removed on expiry)
     public int Orbs; // combo orbs held (Combo Attack live only)
+    public int StatusShield; // Elemental Adaptation's layers left: each blocks one abnormal status (no timer, only the cast gives them)
 
     // Outputs, fresh every tick: the Client drains them right after.
     public List<int> ExpiredBuffs = new(); // buffs that ran out: EndBuff each, in order
@@ -27,6 +28,24 @@ public sealed class Fighter : Component
     {
         AttackLock = baseMs * scale;
         AttackScale = scale;
+    }
+
+    // A new session or character: no cooldown, no buff, no orb, no shield layer.
+    public void Reset()
+    {
+        Cooldowns.Clear();
+        Buffs.Clear();
+        Orbs = 0;
+        StatusShield = 0;
+    }
+
+    // The entry a status asks before it is put on the player: a layer left is spent and the status is blocked (true); no layer, not blocked.
+    // No caller yet: no status exists (see IStatusEffect).
+    public bool TryBlockStatus()
+    {
+        if (StatusShield <= 0) return false;
+        StatusShield--;
+        return true;
     }
 
     public void Tick(float dtMs)

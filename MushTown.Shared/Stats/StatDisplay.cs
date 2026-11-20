@@ -26,7 +26,7 @@ public static class StatDisplay
     public const int CooldownRow = 16;
     public const int FinalDamageRow = 8;
     public const int IedRow = 10;
-    public const int StatusResistanceRow = 29;
+    public const int StatusResistanceRow = 29; // its number is the reduction in percent (StatusReductionPct), not the resistance
 
     private readonly record struct Row(StatFormat Format, StatKey[] Keys);
 
@@ -75,6 +75,7 @@ public static class StatDisplay
     {
         FinalDamageRow => (DamageChain.FinalDamageMultiplier(s) - 1.0) * 100.0,
         IedRow => (1.0 - DamageChain.IedMultiplier(s)) * 100.0,
+        StatusResistanceRow => StatusReductionPct(s.Additive(StatKey.STATUS_RESISTANCE)), // the panel shows the share of the duration it cuts (the hover keeps the sources)
         12 => DamageChain.TotalAttack(s),
         14 => DamageChain.TotalAttack(s, magic: true),
         30 => s.SpeedPercent,

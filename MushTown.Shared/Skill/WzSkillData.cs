@@ -4,8 +4,8 @@ namespace MushTown.Shared;
 // (the common formulas, already worked out), the rectangles, the flags, and the tooltip text at max
 // level. This is a table of its own: the warrior SkillData is a hand-made feel table and is not
 // extended. Energy Bolt is cast (the ball flies, the rectangle and the segments judge on arrival, the art); Flame Orb and Explosion are cast (no ball:
-// the rectangle judges at the body action's attack frame); Meditation is a passive (MATT, always on); Elemental Adaptation is a passive (status and
-// elemental resistance, always on); Teleport is cast (TeleportRules);
+// the rectangle judges at the body action's attack frame); Meditation is a passive (MATT, always on); Elemental Adaptation is cast (a shield of
+// StatusShield layers, Fighter.TryBlockStatus; its status and elemental resistance are always on, WzSkillStats.Modifiers); Teleport is cast (TeleportRules);
 // Magic Guard, Elemental Weakness, Magic Armor and MP Boost take effect; Mana Wave is cast.
 // The frame meta of one art: per frame, the origin (x, y: the point of the png that sits on the anchor) and the delay in ms.
 public sealed class WzArt
@@ -38,11 +38,11 @@ public sealed class WzSkillData
     public const int MagicCritical = 2110009;
     public const int ElementalDecrease = 2110015;
     public const int TeleportBoost = 2110016;
-    // 211 Mage (Fire/Poison): the 3rd job active Explosion and the passive Elemental Adaptation (WZ has it as a buff).
+    // 211 Mage (Fire/Poison): the 3rd job actives.
     public const int Explosion = 2111002;
     public const int ElementalAdaptation = 2111011;
-    // WZ has these as buffs, the user made them passives (always on, no cast): the exporter forces their Kind, the client start checks it.
-    public static readonly IReadOnlySet<int> UserPassives = new HashSet<int> { Meditation, ElementalAdaptation };
+    // WZ has Meditation as a buff, the user made it a passive (always on, no cast): the exporter forces its Kind, the client start checks it.
+    public static readonly IReadOnlySet<int> UserPassives = new HashSet<int> { Meditation };
     public const int MagicGuard = 2000002;
     public const int MagicArmor = 2000010;
     public const int MpBoost = 2000006;
@@ -62,12 +62,14 @@ public sealed class WzSkillData
     public List<string> Desc { get; set; } = new();   // String.wz desc
     public List<string> Effect { get; set; } = new(); // String.wz h, the numbers filled at max level
     public List<string> Actions { get; set; } = new(); // action/0.. names; the first names the body action for AttackDelayMs
+    public List<ActionStep> Script { get; set; } = new(); // the body action as steps, only for a skill whose action is played as a script (Poison Breath); empty: a plain swing
     public int AttackDelayMs { get; set; } // from the action start to its attack frame, from Character.wz (ms)
     public List<string> CastFrames { get; set; } = new(); // the cast effect art (png paths), only for a damage skill
     public List<string> HitFrames { get; set; } = new();  // the hit spark art (hit/0), only for a damage skill
     public List<string> BallFrames { get; set; } = new(); // the flying ball art (ball), only for a skill that throws one (Energy Bolt)
     public List<string> SpecialFrames { get; set; } = new(); // the landing explosion art (special), only for a skill that has one (Energy Bolt)
-    public List<string> NumberFrames { get; set; } = new(); // the number icons (WZ number/icon1..N) with the count drawn in, for the buff bar (Elemental Drain)
+    public List<string> NumberFrames { get; set; } = new(); // the number icons (WZ number/icon1..N) for the buff bar: Elemental Drain's with the count drawn in the whole icon, Elemental Adaptation's the digits only
+    public List<int[]> NumberOrigins { get; set; } = new(); // the WZ origin of each number icon: the point of the png that sits on the skill icon's origin (its bottom left)
     // The WZ origin and delay of every frame of the art that is drawn the WZ way: "effect", "hit", "ball", "special"
     // (the same order as the frame lists). The cast effect uses both its WZ delay and its WZ origin.
     public Dictionary<string, WzArt> Art { get; set; } = new();

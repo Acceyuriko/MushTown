@@ -54,7 +54,7 @@ public class WzSkillTests
         [WzSkillData.MagicCritical] = Skill(WzSkillData.MagicCritical, 10, ("cr", "10+2*x"), ("criticaldamage", "3+x")),
         [WzSkillData.ElementalDecrease] = Skill(WzSkillData.ElementalDecrease, 9, ("mdR", "4*x+4"), ("u", "x+1")),
         [WzSkillData.TeleportBoost] = Skill(WzSkillData.TeleportBoost, 1, ("x", "65"), ("y", "25")),
-        [WzSkillData.ElementalAdaptation] = Skill(WzSkillData.ElementalAdaptation, 20, ("asrR", "x"), ("terR", "x")), // a passive here: always-on resistances
+        [WzSkillData.ElementalAdaptation] = Skill(WzSkillData.ElementalAdaptation, 20, ("asrR", "x"), ("terR", "x")), // always-on resistances (the cast shield is not a stat)
     };
 
     // psdWT/37/cr = 5 in 200.img: the wand (item family 137, weapon code 37) gives 5 crit rate.
