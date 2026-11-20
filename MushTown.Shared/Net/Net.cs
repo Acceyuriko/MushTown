@@ -49,7 +49,7 @@ public static class Net
     public const byte Ball = 39; // server -> client: int skill, int map, float fromX, fromY, toX, toY, int delayMs (the attack-frame delay before the ball; its damage comes as MobHit when it arrives)
     public const byte MarkStack = 40; // server -> client (the owner only): int uid, int stacks (Empirical Knowledge on that mob; 0 = gone)
     public const byte DrainStacks = 41; // server -> client (the owner only): byte layers (Elemental Drain layers near the player; 0 = none)
-    public const byte Zone = 42; // server -> client: int uid, int skill, int map, float left, float right, float y, int lifeMs, int delayMs, byte gone (a ground zone appears: lifeMs of it left after delayMs of waiting; gone 1 = take it away now)
+    public const byte Zone = 42; // server -> client: int uid, int skill, int map, float left, float right, float y (the caster's feet), int lifeMs, int delayMs, byte gone (a ground zone appears: lifeMs of it left after delayMs of waiting; gone 1 = take it away now)
 
     // A meso drop rides DropItem with tab 4: itemId holds the high 32 bits and
     // count the low 32, so the amount stays one long without a new command.
@@ -235,7 +235,7 @@ public readonly record struct SkillFxEvent(int Attacker, int Skill, int Map, flo
 // Projectile.FlightMs of the four numbers.
 public readonly record struct BallEvent(int Skill, int Map, float FromX, float FromY, float ToX, float ToY, int DelayMs = 0);
 
-// One ground zone (Poison Mist): Skill's art covers Left..Right on the ground line Y of Map for LifeMs after DelayMs (the body action's attack frame;
+// One ground zone (Poison Mist): Skill's art rings the point (middle of Left..Right, Y) of Map (the caster's feet at the cast) for LifeMs after DelayMs (the body action's attack frame;
 // a client that enters later gets the time that is left). Gone: the caster left, take the zone away now. Every client on the map gets it, the caster too.
 public readonly record struct ZoneEvent(int Uid, int Skill, int Map, float Left, float Right, float Y, int LifeMs, int DelayMs, bool Gone = false);
 

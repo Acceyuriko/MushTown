@@ -397,6 +397,7 @@ public partial class MushTownGame
         RunShotFly(_shotFlyms);
         if (_shotRecastMs > 0) // --recast: the same cast again at the same mobs, never a crit, while the numbers of the first are still up
         {
+            if (wz.IsGroundZone) { _mover.X += _mover.FacingRight ? 400 : -400; SnapCamera(); } // a zone rings its caster: step aside so the two clouds stand apart
             foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { CritPct = 0 }, wz.SkillId, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
             foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);

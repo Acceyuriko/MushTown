@@ -33,8 +33,8 @@ namespace MushTown.Exporter;
 // Art["effect0"] with its png paths), no affected loop and no hit (its text is the WZ text: it says the same as the design). The layer count of the buff bar is drawn by the client (the WZ number icons are not exported).
 // Its special (the barrier flash, played once per blocked status) goes to Art["block"] the same way (png under 2111011/block/); its special0
 // (a faint back column with a floor ring, z -2) is not used. Re-run `export` after pulling this: an old export has no block art.
-// Poison Mist (211.img) is a ground zone (a damage skill with a time and no mob count): besides effect (the cast) and hit it keeps effect1 (a second cast layer, played with
-// the first) and tile/0..8 (nine looping puffs of 8 pictures, the look of the zone) as Art["effect1"], Art["tile0"]..Art["tile8"] (png under 2111003/effect1/ and 2111003/tile<i>/).
+// Poison Mist (211.img) is a ground zone (WzSkillData.GroundZones): besides effect (the cast) and hit it keeps effect1 (a second cast layer, played with
+// the first) and tile/0..8 (nine looping puffs of 8 pictures, set in a ring round the caster by the client) as Art["effect1"], Art["tile0"]..Art["tile8"] (png under 2111003/effect1/ and 2111003/tile<i>/).
 // Re-run `export` after pulling this: an old export has none of them and the client refuses to start (Menu.cs).
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.

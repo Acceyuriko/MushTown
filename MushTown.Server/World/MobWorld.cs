@@ -324,7 +324,7 @@ public sealed class MobWorld
         {
             var z = _zones[i].Zone;
             if (z.Attacker != attacker) continue;
-            _zoneEvents.Add(new ZoneEvent(z.Uid, _zones[i].Cast.Wz.SkillId, z.Map, z.Left, z.Right, z.GroundY, 0, 0, true));
+            _zoneEvents.Add(new ZoneEvent(z.Uid, _zones[i].Cast.Wz.SkillId, z.Map, z.Left, z.Right, z.OriginY, 0, 0, true));
             _zones.RemoveAt(i);
         }
     }
@@ -335,7 +335,7 @@ public sealed class MobWorld
         var list = new List<ZoneEvent>();
         foreach (var z in _zones)
             if (z.Zone.Map == map)
-                list.Add(new ZoneEvent(z.Zone.Uid, z.Cast.Wz.SkillId, map, z.Zone.Left, z.Zone.Right, z.Zone.GroundY, z.Zone.MsLeft, z.Zone.WaitMs));
+                list.Add(new ZoneEvent(z.Zone.Uid, z.Cast.Wz.SkillId, map, z.Zone.Left, z.Zone.Right, z.Zone.OriginY, z.Zone.MsLeft, z.Zone.WaitMs));
         return list;
     }
 
@@ -666,16 +666,14 @@ public sealed class MobWorld
             CasterY = casterY,
         });
 
-    // A ground zone cast at the caster's feet (x, y): the WZ box lt..rb (mirrored by facing, like every box) stands on the ground below
-    // for `time` seconds at max level, starting at the body action's attack frame (the first tick after it, like a ball's landing). The
-    // box is flat: the foothold slope is ignored. It goes off every dotInterval (the WZ has no period of its own for the zone, 未核实): each time every
-    // mob inside takes one hit of the skill (damage %, one segment, no mob cap: WZ has no mobCount) and the DoT (a DoT of the same skill only refreshes).
-    // The clients get the zone as one event.
+    // A ground zone cast at the caster's feet (x, y): the WZ box lt..rb (mirrored by facing, like every box) with its origin on the caster's feet (not
+    // on the ground below: a caster in the air has the box around him), fixed there for `time` seconds at max level, starting at the body action's attack
+    // frame (the first tick after it, like a ball's landing). It goes off every dotInterval (the WZ has no period of its own for the zone, 未核实):
+    // see ZoneHits for what a period does. The clients get the zone as one event.
     private void StartZone(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, AttackElement element, int pct, int attacker, Dot? dot)
     {
         var lt = wz.Vectors["lt"];
         var rb = wz.Vectors["rb"];
-        float ground = LandY(_maps[map].Footholds, x, y);
         var zone = new GroundZone
         {
             Uid = _nextZone++,
@@ -683,9 +681,9 @@ public sealed class MobWorld
             Attacker = attacker,
             Left = facingRight ? x - rb[0] : x + lt[0],
             Right = facingRight ? x - lt[0] : x + rb[0],
-            Top = ground + lt[1],
-            Bottom = ground + rb[1],
-            GroundY = ground,
+            Top = y + lt[1],
+            Bottom = y + rb[1],
+            OriginY = y,
             PeriodMs = (int)(wz.Value("dotInterval", wz.MaxLevel) * 1000),
             LifeMs = (int)(wz.Value("time", wz.MaxLevel) * 1000),
             WaitMs = wz.AttackDelayMs + TickMs,
@@ -695,16 +693,22 @@ public sealed class MobWorld
             Zone = zone,
             Cast = new Pending { Wz = wz, Rng = rng, Build = build, Element = element, Pct = pct, Attacker = attacker, Dot = dot, CasterX = x, CasterY = y, Map = map },
         });
-        _zoneEvents.Add(new ZoneEvent(zone.Uid, wz.SkillId, map, zone.Left, zone.Right, ground, zone.LifeMs, zone.WaitMs));
+        _zoneEvents.Add(new ZoneEvent(zone.Uid, wz.SkillId, map, zone.Left, zone.Right, y, zone.LifeMs, zone.WaitMs));
     }
 
-    // One period of a zone: every mob in the box takes the cast's hit.
+    // One period of a zone. A mob in the box that has no DoT of this skill from this caster takes the cast's hit (damage %, one segment, no mob cap: WZ has no
+    // mobCount) and the DoT with it. A mob that already has it takes no hit: only its DoT is refreshed (its time starts again, the beat of its ticks stays).
+    // So many zones of one caster, cast one after another, hit a mob once between them; a DoT of another skill or of another caster does not count.
     private List<Hit> ZoneHits(LiveZone z)
     {
         var c = z.Cast;
         var targets = new List<Mob>();
         foreach (var m in _lives)
-            if (m.Map == z.Zone.Map && z.Zone.Contains(m.X, m.Y, m.BodyH)) targets.Add(m);
+        {
+            if (m.Map != z.Zone.Map || !z.Zone.Contains(m.X, m.Y, m.BodyH)) continue;
+            if (c.Dot != null && m.Statuses.HasDot(c.Attacker, c.Wz.SkillId)) m.Statuses.AddDot(c.Dot.Clone());
+            else targets.Add(m);
+        }
         return ResolveWz(targets, c.Map, c.Rng, c.Build, c.Wz, c.Element, 1, c.Pct, c.Attacker, c.Dot, c.CasterX, c.CasterY);
     }
 

@@ -1,6 +1,6 @@
 namespace MushTown.Shared;
 
-// A box on the ground that lives for a while and goes off once each period for what stands in it (Poison Mist). It knows no skill
+// A box fixed in the world (its origin is where it was cast) that lives for a while and goes off once each period for what stands in it (Poison Mist). It knows no skill
 // and no damage: the world asks Step how many periods came due and judges the mobs in the box for each one. The first period
 // goes off the moment the zone starts, the next ones every PeriodMs after, and none at or after the end. WaitMs is the time before
 // the zone starts (the body action's attack frame). Held directly by MobWorld, never added to an object (like Mob).
@@ -13,7 +13,7 @@ public sealed class GroundZone : Component
     public float Right;
     public float Top;
     public float Bottom;
-    public float GroundY; // the ground line the art stands on
+    public float OriginY; // the feet of the caster at the cast: the origin of the box
     public int PeriodMs;
     public int LifeMs; // the whole time it stays, once started
     public int WaitMs; // time left before it starts

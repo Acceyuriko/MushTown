@@ -1034,7 +1034,7 @@ public partial class MushTownGame : Game
             else
             {
                 var (mx, my) = ShotMouse();
-                if (mx >= 0) { _uiScene.Layout(); _uiScene.Hover(mx, my); } // shots never run Update: the tips read the hover here
+                if (mx >= 0) { _buffCells?.Sync(); _uiScene.Layout(); _uiScene.Hover(mx, my); } // shots never run Update: the tips read the hover here (the buff cells are set now)
                 DrawHud(mx, my, false); // no hand: clean art
                 if (mx >= 0) DrawShotCursor(mx, my); // the OS cursor is outside the shot: draw its art here
             }

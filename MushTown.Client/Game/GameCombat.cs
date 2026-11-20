@@ -63,14 +63,14 @@ public partial class MushTownGame
         _zones.Add(z);
     }
 
-    // The tiles of every zone that has started: each is a looping WZ frame with its origin on the ground line.
+    // The tiles of every zone that has started: each is a looping WZ frame with its origin on its place of the ring.
     private void DrawZones()
     {
         foreach (var z in _zones)
         {
             if (!z.Started) continue;
             for (int i = 0; i < z.Tiles.Length; i++)
-                DrawFxFrame(z.Tiles[i]!.Frames[z.Frame[i]], z.Tiles[i]!.Origins[z.Frame[i]], z.TileX[i], z.Y, false);
+                DrawFxFrame(z.Tiles[i]!.Frames[z.Frame[i]], z.Tiles[i]!.Origins[z.Frame[i]], z.TileX[i], z.TileY[i], false);
         }
     }
 
