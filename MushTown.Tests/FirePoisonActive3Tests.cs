@@ -249,13 +249,13 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(0, implementations.Count());
     }
 
-    // Page III of the Fire/Poison job: the five passives, then the three actives (the skill window and the quick slots read the page).
+    // Page III of the Fire/Poison job: the five passives, then the three actives and Teleport Mastery (the skill window and the quick slots read the page).
     [TestMethod]
     public void FirePoison_PageThree_HasTheThreeActives()
     {
         var page = JobSkills.Pages(StatTables.FirePoisonMage)[2];
         CollectionAssert.AreEqual(new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease,
-            WzSkillData.TeleportBoost, Blast, Mist, Adaptation }, page);
+            WzSkillData.TeleportBoost, Blast, Mist, Adaptation, WzSkillData.TeleportMastery }, page);
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, Blast));
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, Mist));
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, Adaptation));

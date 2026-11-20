@@ -156,6 +156,7 @@ public sealed class NetClient : IDisposable
             w.Write(build.MagicDmgPct);
             w.Write(build.DotTimePct);
             w.Write(build.DotFinalPct);
+            w.Write(build.IgniteProp);
         }));
     }
 

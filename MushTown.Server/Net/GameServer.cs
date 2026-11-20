@@ -107,6 +107,7 @@ public sealed partial class GameServer : IDisposable
                     var ev = _mobs.Tick(TickMs, players);
                     foreach (var s in ev.Strikes) // the balls that arrived: their damage lands now
                         BroadcastHit(s.hit, s.attacker);
+                    BroadcastZones(); // a hit that landed now may have started Ignite's wall
                     BroadcastFreshDrops();
                     BroadcastMarkChanges();
                     BroadcastDotChanges();
@@ -334,7 +335,7 @@ public sealed partial class GameServer : IDisposable
             OnSkill(id, BitConverter.ToInt32(payload, 1), BitConverter.ToInt32(payload, 5));
             return;
         }
-        if (payload[0] == Net.Build && payload.Length == 113)
+        if (payload[0] == Net.Build && payload.Length == 117)
         {
             lock (_mobLock)
                 _builds[id] = new Build(
@@ -362,7 +363,8 @@ public sealed partial class GameServer : IDisposable
                     BitConverter.ToInt32(payload, 97),
                     BitConverter.ToInt32(payload, 101),
                     BitConverter.ToInt32(payload, 105),
-                    BitConverter.ToInt32(payload, 109));
+                    BitConverter.ToInt32(payload, 109),
+                    BitConverter.ToInt32(payload, 113));
             return;
         }
         if (payload[0] != Net.State || payload.Length != 20)

@@ -340,6 +340,7 @@ public static class Progression
 // IgnoreElemPct is the share of an enemy's elemental resistance our hits ignore (Elemental Decrease, Insight): it shrinks the damage cut
 // of a resist or immune mob. MagicDmgPct is Element Amplification: damage % added to a magic skill hit (not a basic swing).
 // DotTimePct is Burning Magic: longer DoT time; DotFinalPct is its final damage % on a hit against a mob that has a DoT.
+// IgniteProp is Ignite: the chance, in percent, that a fire skill we cast starts a wall of fire (0 = not learned).
 public readonly record struct Build(
     long Str,
     long Dex,
@@ -365,4 +366,5 @@ public readonly record struct Build(
     int IgnoreElemPct = 0,
     int MagicDmgPct = 0,
     int DotTimePct = 0,
-    int DotFinalPct = 0);
+    int DotFinalPct = 0,
+    int IgniteProp = 0);

@@ -15,6 +15,7 @@ public sealed class MobArt : Component
     public float X;
     public float Y;
     public bool FacingRight; // AI poses face along (raw art faces left)
+    public int StillMoves; // how many Moves in a row came with no change of place (GameMobs.ApplyMove)
     public long Hp;
     public long MaxHp;
     public string Action { get; private set; } = ""; // stand, move, hit1, die1

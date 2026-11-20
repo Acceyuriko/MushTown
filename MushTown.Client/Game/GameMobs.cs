@@ -252,7 +252,7 @@ public partial class MushTownGame
         // Another WZ skill plants its hit art on each mob.
         _wzSkills.TryGetValue(skill, out var wz);
         var hitArt = skill == 0 ? null : wz == null ? _skills[skill].Hit : ArtFrames(wz, "hit");
-        if (hitArt is { Count: > 0 } && firstOfMob && !dot)
+        if (hitArt is { Count: > 0 } && firstOfMob && (!dot || skill == WzSkillData.Ignite)) // a DoT tick plants no spark, but the fire wall's hit does (its WZ hit art)
         {
             var spark = TakeFx();
             if (wz != null) UseArt(spark, wz, "hit");
@@ -277,11 +277,15 @@ public partial class MushTownGame
     private void ApplyMove(int uid, float x, float y, bool facingRight)
     {
         if (!_mobs.TryGetValue(uid, out var m)) return;
+        // A stunned mob stays where it is, so its Moves repeat one place: two of them in a row put it to its idle, and the next Move that goes somewhere puts it back to
+        // move. One Move at the same place is not enough (a mob that turns at a wall stands still for one beat and must not flash its idle).
+        m.StillMoves = x == m.X && y == m.Y ? m.StillMoves + 1 : 0;
         m.X = x;
         m.Y = y;
         if (m.Action == "hit1" || m.Action == "die1") return; // flinch/death own the pose
         m.FacingRight = facingRight;
-        if (m.Action != "move") m.SetAction("move");
+        string? pose = m.StillMoves >= 2 ? m.Idle : m.StillMoves == 0 ? "move" : null;
+        if (pose != null && m.Action != pose) m.SetAction(pose);
     }
 
     // Respawn arrivals for this view (other maps' graves tick too, but their

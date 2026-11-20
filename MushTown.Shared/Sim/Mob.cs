@@ -38,7 +38,7 @@ public sealed class Mob : Component
     public bool Boss;
     public readonly MobStatuses Statuses = new(); // marks and DoTs from skills: they run out on the AI steps
 
-    // One AI step: run the statuses down, cool the touch down, then walk the line or fall off it.
+    // One AI step: run the statuses down, cool the touch down, then walk the line or fall off it. A stunned mob does not walk (it still falls off the line).
     public void Step(int ms, MapData map, List<(int id, int map, float x, float y)> players)
     {
         Statuses.Step(ms);
@@ -46,15 +46,15 @@ public sealed class Mob : Component
         float dt = ms / 1000f;
         if (SceneMath.StepTo(map.Footholds, (int)Math.Floor(X), (int)Math.Floor(Y)) == null)
             Fall(map, dt); // off the line (pushed off, spawn offset): fall
-        else
+        else if (!Statuses.Has(MobStatusKind.Stun))
             Walk(map, players, dt);
     }
 
     // Touch test for one player: inside the box and cooled down. Sets the
-    // cooldown on a hit; the caller builds the Hurt event.
+    // cooldown on a hit; the caller builds the Hurt event. A stunned mob does not attack.
     public bool TryTouch(float px, float py)
     {
-        if (TouchMs > 0) return false;
+        if (TouchMs > 0 || Statuses.Has(MobStatusKind.Stun)) return false;
         int tx = Boss ? BossTouchX : TouchX, ty = Boss ? BossTouchY : TouchY;
         if (Math.Abs(px - X) > tx || Math.Abs(py - Y) > ty) return false;
         TouchMs = TouchCdMs;

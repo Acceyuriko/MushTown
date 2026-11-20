@@ -262,11 +262,13 @@ public sealed class NetTests
     {
         foreach (string name in Net.Actions)
             Assert.AreEqual(name, Net.ActionName(Net.ActionCode(name)));
-        for (byte code = 0; code <= Net.ActFly; code++)
+        for (byte code = 0; code <= Net.ActStabO2; code++)
             Assert.AreEqual(code, Net.ActionCode(Net.ActionName(code)));
         Assert.AreEqual("fly", Net.ActionName(Net.ActFly)); // the floating pose of Mana Wave's slow fall: peers see it
         Assert.AreEqual(Net.ActFly, Net.ActionCode("fly"));
-        Assert.AreEqual(Net.Actions.Length - 1, Net.ActFly);
+        Assert.AreEqual("stabO2", Net.ActionName(Net.ActStabO2)); // the stab of the Flame Orb and Explosion scripts
+        Assert.AreEqual(Net.ActStabO2, Net.ActionCode("stabO2"));
+        Assert.AreEqual(Net.Actions.Length - 1, Net.ActStabO2);
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionCode("xxx"));
         Assert.ThrowsException<InvalidDataException>(() => Net.ActionName(99));
     }

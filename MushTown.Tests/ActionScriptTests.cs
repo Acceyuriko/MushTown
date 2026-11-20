@@ -3,10 +3,24 @@ using MushTown.Shared;
 namespace MushTown.Tests;
 
 // The body action scripts (WZ Character 00002000.img/<action>): Poison Breath (poisonBreath: alert 2 for 180 ms, swingO2 0 for 240 ms, swingO2 2 for 360 ms), and the three
-// of the actions ticket T-20261120212041: Energy Bolt, Poison Mist and Elemental Adaptation (the numbers below are the WZ steps; a negative WZ delay is before the attack frame).
+// of the actions ticket T-20261120212041: Energy Bolt, Poison Mist and Elemental Adaptation, and Flame Orb and Explosion of T-20261119195811 (the numbers below are the WZ steps; a negative WZ delay is before the attack frame).
 [TestClass]
 public class ActionScriptTests
 {
+    // Every step of every body script is an action the game knows: the avatar art is loaded per Net.Actions and the net sends the code (Net.ActionCode), so a step
+    // with an action missing from Net.Actions would throw at the cast (Flame Orb and Explosion use stabO2). The Client checks the exported steps at start (Menu).
+    [TestMethod]
+    public void EveryScriptStep_IsAKnownAction()
+    {
+        var scripts = new[] { PoisonBreath, EnergyBolt, PoisonMist, ElementalAdaptation, FlameOrb, Explosion };
+        foreach (var step in scripts.SelectMany(script => script))
+        {
+            Assert.IsTrue(Net.Actions.Contains(step.Action), step.Action);
+            Assert.AreEqual(step.Action, Net.ActionName(Net.ActionCode(step.Action)));
+        }
+        Assert.AreEqual(WzSkillData.ActionScripts.Count, scripts.Length);
+    }
+
     private static readonly List<ActionStep> PoisonBreath = new()
     {
         new() { Action = "alert", Frame = 2, DelayMs = 180 },
@@ -96,6 +110,60 @@ public class ActionScriptTests
         new() { Action = "swingO1", Frame = 2, DelayMs = 360 },
         new() { Action = "alert", Frame = 2, DelayMs = 90 },
     };
+
+    // Flame Orb (flameOrb) and Explosion (explosion): the WZ steps of ticket T-20261119195811. The judge time is the time of the steps before the attack frame (the first positive WZ delay).
+    private static readonly List<ActionStep> FlameOrb = new()
+    {
+        new() { Action = "alert", Frame = 2, DelayMs = 90 },
+        new() { Action = "swingO2", Frame = 0, DelayMs = 210 },
+        new() { Action = "stabO2", Frame = 1, DelayMs = 420 },
+    };
+
+    private static readonly List<ActionStep> Explosion = new()
+    {
+        new() { Action = "alert", Frame = 2, DelayMs = 30 },
+        new() { Action = "swingO2", Frame = 1, DelayMs = 60 },
+        new() { Action = "swingO2", Frame = 0, DelayMs = 270 },
+        new() { Action = "stabO2", Frame = 1, DelayMs = 30 },
+        new() { Action = "stabO2", Frame = 1, DelayMs = 480 },
+    };
+
+    // The scripts do not move the damage: Flame Orb judges at 300 ms (90 + 210), Explosion at 390 ms (30 + 60 + 270 + 30), the same times WzSkillData.AttackDelayFrom gave
+    // for their actions before the scripts; the whole cast is 720 and 870 ms.
+    [TestMethod]
+    public void FlameOrb_And_Explosion_TotalsAndAttackFrames()
+    {
+        Assert.AreEqual(300, WzSkillData.AttackDelayFrom(new int?[] { -90, -210, 420 }));
+        Assert.AreEqual(300, FlameOrb.Take(2).Sum(s => s.DelayMs));
+        Assert.AreEqual(720, FlameOrb.Sum(s => s.DelayMs));
+        Assert.AreEqual(390, WzSkillData.AttackDelayFrom(new int?[] { -30, -60, -270, -30, 480 }));
+        Assert.AreEqual(390, Explosion.Take(4).Sum(s => s.DelayMs));
+        Assert.AreEqual(870, Explosion.Sum(s => s.DelayMs));
+    }
+
+    [TestMethod]
+    public void FlameOrb_And_Explosion_FollowTheirClocks()
+    {
+        var script = new ActionScript();
+        void At(List<ActionStep> steps, float ms, string action, int frame)
+        {
+            script.Start(steps);
+            script.Tick(ms);
+            Assert.AreEqual((action, frame), (script.Current.Action, script.Current.Frame), $"at {ms} ms");
+        }
+        At(FlameOrb, 89, "alert", 2);
+        At(FlameOrb, 90, "swingO2", 0);
+        At(FlameOrb, 299, "swingO2", 0);
+        At(FlameOrb, 300, "stabO2", 1); // the attack frame
+        At(FlameOrb, 5000, "stabO2", 1);
+        At(Explosion, 0, "alert", 2);
+        At(Explosion, 30, "swingO2", 1);
+        At(Explosion, 90, "swingO2", 0);
+        At(Explosion, 360, "stabO2", 1);
+        At(Explosion, 389, "stabO2", 1);
+        At(Explosion, 390, "stabO2", 1); // the attack frame is the second stabO2 step: the pose is the same frame as the step before
+        At(Explosion, 5000, "stabO2", 1);
+    }
 
     // Each script follows its clock like Poison Breath's, its total is the cast lock, and the attack frame (the first positive WZ delay: the time of the steps before it) is
     // where the exporter and the judge already put it (WzSkillData.AttackDelayFrom): Energy Bolt's ball flies at 390 ms, Poison Mist's zone starts at 480 ms.

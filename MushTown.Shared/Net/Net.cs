@@ -76,19 +76,22 @@ public static class Net
     public const byte ActSwingO2 = 14;
     public const byte ActSwingO3 = 15;
     public const byte ActFly = 16; // the floating pose (Mana Wave's slow fall: WZ manaWaveFloat is fly, frame 0)
+    public const byte ActStabO2 = 17; // the last step of the Flame Orb and Explosion scripts (WZ stabO2: two frames); a State with this action byte is dropped whole by a client without it
 
     // Every character action, in load order. Exporter and client init reuse
     // this so a new action needs one list edit (plus its code switch arms).
-    // 17 actions: the six body poses (stand1 to prone), the six attack
+    // 18 actions: the six body poses (stand1 to prone), the six attack
     // motions (swingO1, swingT1, swingP1, stabO1, stabT1, shoot1), alert (the
     // hit pose), ghoststand (the dead character), swingO2 and swingO3
     // (the other two swings of the wand and staff pool), then fly (the pose
-    // of a float). The code of each action is its index here.
+    // of a float), then stabO2 (the stab of the Flame Orb and Explosion body scripts). The code of each action is its index here.
+    // A new action is a new State action byte value: NetClient.Enqueue only queues a State whose action byte is below Actions.Length, so a client without the new action
+    // silently drops that whole State (the player's place is not updated either). Host and joiners must run the same build.
     public static readonly string[] Actions =
     {
         "stand1", "walk1", "jump", "ladder", "rope", "prone",
         "swingO1", "swingT1", "swingP1", "stabO1", "stabT1", "shoot1",
-        "alert", "ghoststand", "swingO2", "swingO3", "fly",
+        "alert", "ghoststand", "swingO2", "swingO3", "fly", "stabO2",
     };
 
     // Action name <-> code. Both throw on bad input (fail loud, never guess).
@@ -111,6 +114,7 @@ public static class Net
         "swingO2" => ActSwingO2,
         "swingO3" => ActSwingO3,
         "fly" => ActFly,
+        "stabO2" => ActStabO2,
         _ => throw new InvalidDataException($"bad action name {action}"),
     };
 
@@ -133,6 +137,7 @@ public static class Net
         ActSwingO2 => "swingO2",
         ActSwingO3 => "swingO3",
         ActFly => "fly",
+        ActStabO2 => "stabO2",
         _ => throw new InvalidDataException($"bad action code {action}"),
     };
 

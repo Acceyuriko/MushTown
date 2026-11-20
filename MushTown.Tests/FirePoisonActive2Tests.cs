@@ -106,13 +106,13 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(0, StatAggregator.Aggregate(new[] { mod }).Value(StatKey.MAX_HP)); // it adds nothing else
     }
 
-    // Page II of the Fire/Poison job holds both, after the five passives (Meditation is the sixth passive, right before the actives; the skill window and the quick slots read the page).
+    // Page II of the Fire/Poison job holds both (and Poison Breath and Ignite), after the five passives (Meditation is the sixth passive, right before the actives; the skill window and the quick slots read the page).
     [TestMethod]
     public void FirePoison_PageTwo_HasMeditationAndFlameOrb()
     {
         var page = JobSkills.Pages(StatTables.FirePoisonMage)[1];
         CollectionAssert.AreEqual(new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain,
-            WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath }, page);
+            WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath, WzSkillData.Ignite }, page); // Ignite closes the page (its own ticket)
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, Orb));
         Assert.IsFalse(JobSkills.Has(StatTables.Hero, Orb));
     }

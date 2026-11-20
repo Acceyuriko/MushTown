@@ -25,8 +25,11 @@ public class JobSkillsTests
     {
         Assert.AreEqual(5, JobSkills.Pages(StatTables.FirePoisonMage).Length);
         Assert.AreEqual(6, JobSkills.Pages(StatTables.FirePoisonMage)[0].Length);
-        Assert.AreEqual(8, JobSkills.Pages(StatTables.FirePoisonMage)[1].Length); // the 2nd job: five passives, Meditation, Flame Orb, Poison Breath
-        Assert.AreEqual(8, JobSkills.Pages(StatTables.FirePoisonMage)[2].Length); // the 3rd job: five passives, Explosion, Poison Mist, Elemental Adaptation
+        Assert.AreEqual(9, JobSkills.Pages(StatTables.FirePoisonMage)[1].Length); // the 2nd job: five passives, Meditation, Flame Orb, Poison Breath, Ignite
+        Assert.AreEqual(9, JobSkills.Pages(StatTables.FirePoisonMage)[2].Length); // the 3rd job: five passives, Explosion, Poison Mist, Elemental Adaptation, Teleport Mastery
+        Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.Ignite)); // Ignite is on page II, Teleport Mastery on page III
+        Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage)[1].Contains(WzSkillData.Ignite));
+        Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage)[2].Contains(WzSkillData.TeleportMastery));
         Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage).Skip(3).All(p => p.Length == 0));
         foreach (int id in JobSkills.Pages(StatTables.Hero).SelectMany(p => p))
             Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, id), $"Fire/Poison owns {id}");

@@ -218,7 +218,7 @@ public class WzSkillTests
         Assert.AreEqual(0.9375, StatTables.DelayScale(5));
     }
 
-    // The window shows the 1st job page, the 2nd job page and the 3rd job page (passives, then Explosion and Elemental Adaptation); the other pages wait for their jobs.
+    // The window shows the 1st job page, the 2nd job page and the 3rd job page (passives, then Explosion, Poison Mist, Elemental Adaptation and Teleport Mastery); the other pages wait for their jobs.
     [TestMethod]
     public void FirstThreePages_HaveTheirSkills_OthersEmpty()
     {
@@ -228,10 +228,10 @@ public class WzSkillTests
             new[] { WzSkillData.EnergyBolt, WzSkillData.Teleport, WzSkillData.ManaWave, WzSkillData.MagicGuard, WzSkillData.MagicArmor, WzSkillData.MpBoost },
             pages[0]);
         CollectionAssert.AreEqual(
-            new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath },
+            new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath, WzSkillData.Ignite },
             pages[1]);
         CollectionAssert.AreEqual(
-            new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation },
+            new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation, WzSkillData.TeleportMastery },
             pages[2]);
         Assert.IsTrue(pages.Skip(3).All(p => p.Length == 0));
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.ElementalWeakness)); // invisible in WZ

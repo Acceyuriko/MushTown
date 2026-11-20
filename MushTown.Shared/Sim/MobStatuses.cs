@@ -6,8 +6,8 @@ public enum MobStatusKind
 {
     ElementalWeakness, // value = the extra magic damage taken, in percent
     Dot, // damage over time: kept in the DoT list (Dot, AddDot), never in the kind list; here so Has(Dot) answers like the others
-    Stun, // no skill puts these four on a mob yet: the names are here so Burning Magic already counts them (WZ: stun, freeze, darkness, paralysis)
-    Freeze,
+    Stun, // value = the skill that stunned the mob (its head icon): the mob stands still and does not touch (Mob.Step, Mob.TryTouch)
+    Freeze, // no skill puts these three on a mob yet: the names are here so Burning Magic already counts them (WZ: freeze, darkness, paralysis)
     Darkness,
     Paralysis,
 }
@@ -23,6 +23,7 @@ public sealed class Dot
     public int Attacker;
     public Build Build;
     public int Pct; // the damage % of one tick (WZ dot)
+    public int Segments = 1; // how many separate hits one tick makes (Ignite's wall: WZ attackCount 3; the other DoTs hit once)
     public AttackElement Element;
     public Random Rng = null!;
     public int IntervalMs;
@@ -59,7 +60,21 @@ public sealed class MobStatuses
 
     private readonly List<(int skill, bool on)> _dotChanges = new(); // DoT skills that came on the mob or left it entirely, to report to everyone
 
-    public void Add(MobStatusKind kind, double value, int ms) => _list[kind] = (value, ms);
+    // A stun takes the skill id as its value and shows that skill's head icon (IconOn, like a DoT skill); the others keep their number.
+    public void Add(MobStatusKind kind, double value, int ms)
+    {
+        if (kind != MobStatusKind.Stun)
+        {
+            _list[kind] = (value, ms);
+            return;
+        }
+        int skill = (int)value;
+        bool shown = IconOn(skill);
+        int old = (int)Value(MobStatusKind.Stun); // 0 when not stunned
+        _list[kind] = (value, ms);
+        if (old != 0 && old != skill && !IconOn(old)) _dotChanges.Add((old, false)); // a new stun from another skill takes over the head icon
+        if (!shown) _dotChanges.Add((skill, true));
+    }
 
     // The first tick comes one interval after the cast. A refresh (the same source's same skill is on the mob already) takes the new
     // numbers and time but keeps the beat of the next tick: a skill cast more often than its interval must not push the tick away for ever.
@@ -73,20 +88,26 @@ public sealed class MobStatuses
             return;
         }
         dot.NextMs = dot.IntervalMs;
-        if (!DotSkillOn(dot.Skill)) _dotChanges.Add((dot.Skill, true));
+        if (!IconOn(dot.Skill)) _dotChanges.Add((dot.Skill, true));
         _dots[key] = dot;
     }
 
     // Starts the time of an existing DoT again (the zone does this every tick for a mob it already poisoned: no new copy of the numbers, only the time).
     public void RefreshDot(int attacker, int skill, int ms) => _dots[(attacker, skill)].MsLeft = ms;
 
-    // Whether any source has a DoT of this skill on the mob (the head icon of a skill is shown once, whoever the sources are).
-    private bool DotSkillOn(int skill) => _dots.Keys.Any(k => k.Skill == skill);
+    // Whether the skill shows its head icon on the mob: any source has a DoT of this skill on it, or this skill's stun is on it (the icon is shown once, whoever the sources are).
+    private bool IconOn(int skill) => _dots.Keys.Any(k => k.Skill == skill) || (_list.TryGetValue(MobStatusKind.Stun, out var stun) && (int)stun.value == skill);
 
-    // The skills that have a DoT on the mob now, one entry each (the head icons, and what a map entry tells a newcomer).
-    public IReadOnlyList<int> DotSkills() => _dots.Count == 0 ? Array.Empty<int>() : _dots.Keys.Select(k => k.Skill).Distinct().ToList(); // most mobs have none: no allocation per drawn frame
+    // The skills that show a head icon on the mob now, one entry each: the DoT skills, then the stun skill if it is new (what a map entry tells a newcomer).
+    public IReadOnlyList<int> DotSkills()
+    {
+        if (_dots.Count == 0 && !_list.ContainsKey(MobStatusKind.Stun)) return Array.Empty<int>(); // most mobs have none: no allocation per drawn frame
+        var skills = _dots.Keys.Select(k => k.Skill).Distinct().ToList();
+        if (_list.TryGetValue(MobStatusKind.Stun, out var stun) && !skills.Contains((int)stun.value)) skills.Add((int)stun.value);
+        return skills;
+    }
 
-    // The DoT skills that came on the mob (true) or left it (false) since the last call, to tell every client (it draws one head icon per skill).
+    // The head icon skills (DoT skills and the stun skill) that came on the mob (true) or left it (false) since the last call, to tell every client (it draws one head icon per skill).
     public IReadOnlyList<(int skill, bool on)> TakeDotChanges()
     {
         if (_dotChanges.Count == 0) return Array.Empty<(int, bool)>(); // most steps change no DoT
@@ -95,11 +116,11 @@ public sealed class MobStatuses
         return changes;
     }
 
-    // Takes a DoT off the list; when it was the last one of its skill, the skill leaves the mob.
+    // Takes a DoT off the list; when it was the last thing that showed its skill's icon, the skill leaves the mob.
     private void RemoveDot((int Attacker, int Skill) key)
     {
         _dots.Remove(key);
-        if (!DotSkillOn(key.Skill)) _dotChanges.Add((key.Skill, false));
+        if (!IconOn(key.Skill)) _dotChanges.Add((key.Skill, false));
     }
 
     // How many DoTs of this source are on the mob (one per skill), for Elemental Drain.
@@ -234,8 +255,14 @@ public sealed class MobStatuses
         foreach (var kind in _list.Keys.ToList())
         {
             int left = _list[kind].msLeft - ms;
-            if (left <= 0) _list.Remove(kind);
-            else _list[kind] = (_list[kind].value, left);
+            if (left > 0)
+            {
+                _list[kind] = (_list[kind].value, left);
+                continue;
+            }
+            int skill = (int)_list[kind].value;
+            _list.Remove(kind);
+            if (kind == MobStatusKind.Stun && !IconOn(skill)) _dotChanges.Add((skill, false)); // the stun ran out: its icon goes unless a DoT of the same skill still shows it
         }
     }
 }

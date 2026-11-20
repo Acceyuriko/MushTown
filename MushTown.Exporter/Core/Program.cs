@@ -25,6 +25,7 @@ using MushTown.Exporter;
 //             set number in the equip json; the ui/etip_*.png art; `panel stat` exports the etip art too).
 //           - the swing actions changed (body, hair, face and all exported gear got swingO2 and swingO3).
 //           - the fly action was added (body, hair, face and all exported gear got fly: the floating pose of Mana Wave's slow fall).
+//           - the stabO2 action was added (body, hair, face and all exported gear got stabO2: the last step of the Flame Orb and Explosion scripts; the State action byte 17 is new, so host and joiners must run the same build).
 //           - Mana Wave's slow fall art was added (assets/skill/wz/2001011.json child 2001012: Art special0..2 and specialAffected0..2
 //             with their frames under assets/skill/wz/2001012/).
 //           - the Fire/Poison 1st-job skills changed (new assets/skill/wz/<id>.json and icons; the numbers come from the WZ
@@ -69,6 +70,12 @@ using MushTown.Exporter;
 //             cast layer) and tile0..tile8 (the looping puffs of the ground zone), all in Art with origins and delays). The skill window's page III lists it;
 //             an old export makes the client stop at start (no wz def for the page III id, or no effect1 / tile art: Menu.cs refuses it): run `export`.
 //           - Poison Mist got its head icon (Art["mob"], 12 pictures under assets/skill/wz/2111003/mob/): the icon over a mob that has its DoT. An old json has no mob art and Menu.cs refuses it: run `export`.
+//           - Flame Orb (2101004) and Explosion (2111002) got a body action script (assets/skill/wz/2101004.json and 2111002.json have Script: the steps of Character
+//             00002000.img/flameOrb and explosion, like Poison Breath's). An old json has none and Menu.cs refuses it: run `export`.
+//           - Ignite (2101010, skill window page II) and Teleport Mastery (2111007, page III) were added (assets/skill/wz/2101010.json and 2111007.json, their icons and
+//             their art: Ignite has tile0..tile2 (the three flame loops of its fire wall, WZ node 2100010) and hit under assets/skill/wz/2101010/; Teleport Mastery has
+//             effect, effect0, hit and mob under assets/skill/wz/2111007/). An old export makes the client stop at start (no wz def for the page II / III ids, or no wall
+//             or stun art: Menu.cs refuses it): run `export`.
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of
 //             each map and the login theme.
 //   panel   - exports one panel's art only.

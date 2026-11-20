@@ -288,7 +288,7 @@ public sealed class MobWorld
             FlushDots(m); // the DoT skills that came on (the zones above) or ran out (the steps above) tell everyone
             foreach (var dot in m.Statuses.TakeDue())
             {
-                strikes.Add((DotTick(m, dot), dot.Attacker));
+                foreach (var h in DotTick(m, dot)) strikes.Add((h, dot.Attacker)); // one hit for each segment of the tick
                 if (m.Hp == 0) break; // the dead mob takes no more ticks
             }
             if (m.Hp > 0) i++;
@@ -517,7 +517,8 @@ public sealed class MobWorld
         return st.kind == SkillData.KindActive && st.dmgLo > 0;
     }
 
-    private static bool IsWzDamage(WzSkillData wz) => wz.Kind == SkillData.KindActive && wz.Common.ContainsKey("damage");
+    // Teleport Mastery is a passive that the client casts at the Teleport landing: the server judges it like an active.
+    private static bool IsWzDamage(WzSkillData wz) => (wz.Kind == SkillData.KindActive || wz.SkillId == WzSkillData.TeleportMastery) && wz.Common.ContainsKey("damage");
 
     private string WzPath(int skill) => Path.Combine(_assetsDir, "skill", "wz", $"{skill}.json");
 
@@ -539,6 +540,7 @@ public sealed class MobWorld
     {
         IsDamageSkill(skill); // loads and caches (a buff id here is a caller bug, caught below)
         _pipeline.Prepare(build); // the status numbers are read now, in the cast (a ball lands later, in the tick loop)
+        if (build.IgniteProp > 0) Wz(WzSkillData.Ignite); // the wall numbers too: the hit that starts it may land in the tick loop, which must not read files
         if (_wzSkills.TryGetValue(skill, out var wz)) return WzStrike(map, x, y, facingRight, rng, build, wz, pct, attacker);
         var st = _skills[skill];
         if (st.mobCount <= 0 || st.range <= 0)
@@ -600,11 +602,11 @@ public sealed class MobWorld
         };
         if (wz.IsGroundZone)
         {
-            StartZone(map, x, y, facingRight, rng, build, wz, element, pct, attacker, dot);
+            StartZone(map, x, y, facingRight, rng, build, wz, element, pct, attacker, dot, (int)(wz.Value("time", wz.MaxLevel) * 1000), wz.AttackDelayMs + TickMs, 0);
             return new List<Hit>();
         }
         int mobCount = (int)wz.Value("mobCount", wz.MaxLevel);
-        int segments = (int)wz.Value("attackCount", wz.MaxLevel);
+        int segments = wz.Common.ContainsKey("attackCount") ? (int)wz.Value("attackCount", wz.MaxLevel) : 1; // no attackCount: one hit (Teleport Mastery)
         bool ball = wz.BallFrames.Count > 0;
         int attackDelay = wz.AttackDelayMs; // the ball appears when the body action reaches its attack frame
         // A skill with no ball judges with the full lt..rb box on the caster (Flame Orb, Poison Breath), on both sides: the
@@ -681,9 +683,12 @@ public sealed class MobWorld
     }
 
     // One WZ cast on the chosen mobs: one attack of the hit pipeline (a skill hit and, with a dot, the DoT put on the mobs it leaves alive).
+    // Teleport Mastery also stuns each mob (WZ subProp: the chance, time: the seconds, at max level). A fire hit may start Ignite's wall (StartIgnite).
     private List<Hit> ResolveWz(List<Mob> targets, int map, Random rng, Build build, WzSkillData wz, AttackElement element, int segments, int pct,
-        int attacker, Dot? dot, float casterX, float casterY) =>
-        _pipeline.Resolve(targets, new HitPipeline.Attack
+        int attacker, Dot? dot, float casterX, float casterY)
+    {
+        bool stuns = wz.SkillId == WzSkillData.TeleportMastery;
+        var hits = _pipeline.Resolve(targets, new HitPipeline.Attack
         {
             Build = build,
             Rng = rng,
@@ -694,15 +699,51 @@ public sealed class MobWorld
             Segments = segments,
             Magic = true,
             Dot = dot,
+            StunProp = stuns ? (int)wz.Value("subProp", wz.MaxLevel) : 0,
+            StunMs = stuns ? (int)(wz.Value("time", wz.MaxLevel) * 1000) : 0,
             Map = map,
             CasterX = casterX,
             CasterY = casterY,
         });
+        if (element == AttackElement.Fire && build.IgniteProp > 0 && targets.Count > 0 && rng.NextDouble() * 100 < build.IgniteProp)
+            StartIgnite(targets[0], rng, build, attacker, casterX, casterY);
+        return hits;
+    }
+
+    // Ignite: a fire hit started a wall of fire at its first target (one roll for the whole cast, WZ: "when casting Fire magic"). The wall is a ground zone
+    // (WZ lt..rb round the target feet, `x` seconds at max level) that puts a DoT of Ignite on every mob in its box: damage % (WZ damage), attackCount hits
+    // each time, one time every subTime ms (the interval: the developer's reading of subTime, 未核实), at most mobCount mobs (the nearest). The zone refreshes
+    // the DoT every tick and the DoT lasts one interval after the last refresh, so a mob that leaves the wall is hit at most once more. The element is
+    // fire (WZ elemAttr), the numbers are the caster's at the cast (the Build). The wall is up after one tick (no body action).
+    private void StartIgnite(Mob target, Random rng, Build build, int attacker, float casterX, float casterY)
+    {
+        var wz = Wz(WzSkillData.Ignite); // loaded in the cast (SkillStrike)
+        int interval = (int)wz.Value("subTime", wz.MaxLevel);
+        var dot = new Dot
+        {
+            Skill = wz.SkillId,
+            Attacker = attacker,
+            Build = build,
+            Pct = (int)wz.Value("damage", wz.MaxLevel),
+            Segments = (int)wz.Value("attackCount", wz.MaxLevel),
+            Element = AttackElement.Fire,
+            Rng = rng,
+            Map = target.Map,
+            CasterX = casterX,
+            CasterY = casterY,
+            IntervalMs = interval,
+            MsLeft = interval,
+        };
+        // facingRight (true here) does not matter: the wall box (lt/rb) is symmetric left and right
+        StartZone(target.Map, target.X, target.Y, true, rng, build, wz, AttackElement.Fire, 0, attacker, dot, (int)(wz.Value("x", wz.MaxLevel) * 1000), TickMs, (int)wz.Value("mobCount", wz.MaxLevel));
+    }
 
     // A ground zone cast at the caster's feet (x, y): the WZ box lt..rb (mirrored by facing, like every box) with its origin on the caster's feet (not
     // on the ground below: a caster in the air has the box around him), fixed there for `time` seconds at max level, starting at the body action's attack
     // frame (the first tick after it, like a ball's landing). It is judged every tick: see ZoneTick. The clients get the zone as one event.
-    private void StartZone(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, AttackElement element, int pct, int attacker, Dot? dot)
+    // lifeMs is how long it stays and waitMs the time before it starts; mobCount caps the mobs it works on (0 = no cap).
+    private void StartZone(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, AttackElement element, int pct, int attacker, Dot? dot,
+        int lifeMs, int waitMs, int mobCount)
     {
         var lt = wz.Vectors["lt"];
         var rb = wz.Vectors["rb"];
@@ -716,13 +757,13 @@ public sealed class MobWorld
             Top = y + lt[1],
             Bottom = y + rb[1],
             OriginY = y,
-            LifeMs = (int)(wz.Value("time", wz.MaxLevel) * 1000),
-            WaitMs = wz.AttackDelayMs + TickMs,
+            LifeMs = lifeMs,
+            WaitMs = waitMs,
         };
         _zones.Add(new LiveZone
         {
             Zone = zone,
-            Cast = new Pending { Wz = wz, Rng = rng, Build = build, Element = element, Pct = pct, Attacker = attacker, Dot = dot, CasterX = x, CasterY = y, Map = map },
+            Cast = new Pending { Wz = wz, Rng = rng, Build = build, Element = element, Pct = pct, Attacker = attacker, Dot = dot, MobCount = mobCount, CasterX = x, CasterY = y, Map = map },
         });
         _zoneEvents.Add(new ZoneEvent(zone.Uid, wz.SkillId, map, zone.Left, zone.Right, y, zone.LifeMs, zone.WaitMs));
     }
@@ -731,25 +772,30 @@ public sealed class MobWorld
     // gets it refreshed (its time starts again, the beat of its ticks stays). So a mob that walks in is poisoned in that very tick, and many zones of one caster
     // give a mob one DoT between them; a DoT of another skill or of another caster does not count. In the tick the zone starts, the cast also hits every mob in the box
     // once (the cast's damage %, one segment, no mob cap: WZ has no mobCount); the mist itself does no damage, only its poison does, through the pipeline in DotTick.
+    // A zone with a mob cap (Ignite's wall, which has no cast hit) works on the nearest mobs of its box only.
     private List<Hit> ZoneTick(LiveZone z)
     {
         var c = z.Cast;
-        var inBox = new List<Mob>();
-        foreach (var m in _lives)
+        var inBox = _lives.Where(m => m.Map == z.Zone.Map && z.Zone.Contains(m.X, m.Y, m.BodyH)).ToList();
+        if (c.MobCount > 0 && inBox.Count > c.MobCount)
         {
-            if (m.Map != z.Zone.Map || !z.Zone.Contains(m.X, m.Y, m.BodyH)) continue;
+            float middle = (z.Zone.Left + z.Zone.Right) / 2;
+            inBox = inBox.OrderBy(m => Math.Abs(m.X - middle)).Take(c.MobCount).ToList();
+        }
+        foreach (var m in inBox)
+        {
+            if (MobElemAttr.Multiplier(m.ElemAttr, c.Dot!.Element) <= 0) continue; // immune to the element of the DoT: it is neither put on nor refreshed (as in HitPipeline.Collect)
             if (m.Statuses.HasDot(c.Attacker, c.Wz.SkillId)) m.Statuses.RefreshDot(c.Attacker, c.Wz.SkillId, c.Dot!.MsLeft);
             else m.Statuses.AddDot(c.Dot!.Clone());
-            inBox.Add(m);
         }
-        return z.Zone.JustStarted ? ResolveWz(inBox, c.Map, c.Rng, c.Build, c.Wz, c.Element, 1, c.Pct, c.Attacker, null, c.CasterX, c.CasterY) : new List<Hit>();
+        return z.Zone.JustStarted && c.Wz.IsGroundZone ? ResolveWz(inBox, c.Map, c.Rng, c.Build, c.Wz, c.Element, 1, c.Pct, c.Attacker, null, c.CasterX, c.CasterY) : new List<Hit>();
     }
 
     // One tick of a DoT: one attack of the hit pipeline with the caster's snapshot (Build), the DoT's damage % and element (the mob already has
-    // the DoT, so Burning Magic counts; a tick takes every bonus a hit takes, Elemental Drain read around the place where the DoT was cast). The tick is a settled hit flagged Dot: HP and death are set, the client skips the flinch and the spark.
+    // the DoT, so Burning Magic counts; a tick takes every bonus a hit takes, Elemental Drain read around the place where the DoT was cast). The tick is one hit per segment of the DoT (Ignite: 3), the first settled, all flagged Dot: HP and death are set, the client skips the flinch and the spark (Ignite's hit art excepted).
     // A kill buries the mob and its statuses go with it, and the kill is credited to the DoT's own source (Attacker). A DoT is removed when its
     // source disconnects or leaves the map (CancelDoTs), so a tick never belongs to a source that is gone.
-    private Hit DotTick(Mob m, Dot dot) =>
+    private List<Hit> DotTick(Mob m, Dot dot) =>
         _pipeline.Resolve(new[] { m }, new HitPipeline.Attack
         {
             Build = dot.Build,
@@ -759,11 +805,12 @@ public sealed class MobWorld
             Pct = dot.Pct,
             Element = dot.Element,
             Magic = true,
+            Segments = dot.Segments,
             Tick = true,
             Map = dot.Map,
             CasterX = dot.CasterX,
             CasterY = dot.CasterY,
-        })[0];
+        });
 
     // One mob's DoT skill changes gathered into the broadcast queue (everyone draws the icons).
     private void FlushDots(Mob m)

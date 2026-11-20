@@ -32,6 +32,9 @@ public sealed class WzSkillData
     public const int Meditation = 2101001;
     public const int FlameOrb = 2101004;
     public const int PoisonBreath = 2101005;
+    public const int Ignite = 2101010; // a passive that may start a fire wall at a fire hit; the wall's own node in WZ is IgniteWall (its art)
+    public const int IgniteWall = 2100010;
+    public const int WallTiles = 3; // the fire wall's looping art: Art["tile0"]..Art["tile2"]
     // 211 Mage (Fire/Poison): the 3rd job passives.
     public const int BurningMagic = 2110000;
     public const int ElementAmplification = 2110001;
@@ -43,6 +46,7 @@ public sealed class WzSkillData
     public const int PoisonMist = 2111003;
     public const int ZoneTiles = 9; // a ground zone's looping art: Art["tile0"]..Art["tile8"]
     public const int ElementalAdaptation = 2111011;
+    public const int TeleportMastery = 2111007; // a passive that strikes at the Teleport landing (a trigger: no key, no body action)
     // WZ has Meditation as a buff, the user made it a passive (always on, no cast): the exporter forces its Kind, the client start checks it.
     public static readonly IReadOnlySet<int> UserPassives = new HashSet<int> { Meditation };
     public const int MagicGuard = 2000002;
@@ -91,7 +95,7 @@ public sealed class WzSkillData
     public static readonly IReadOnlySet<int> GroundZones = new HashSet<int> { PoisonMist };
 
     // The skills whose WZ action is played as a script (steps of other actions, see ActionScript): the exporter reads their steps into Script. The other skills still play a plain swing.
-    public static readonly IReadOnlySet<int> ActionScripts = new HashSet<int> { EnergyBolt, PoisonBreath, PoisonMist, ElementalAdaptation };
+    public static readonly IReadOnlySet<int> ActionScripts = new HashSet<int> { EnergyBolt, FlameOrb, PoisonBreath, Explosion, PoisonMist, ElementalAdaptation };
 
     public bool IsGroundZone => GroundZones.Contains(SkillId);
 

@@ -72,7 +72,7 @@ public partial class MushTownGame
             for (int i = 0; i < z.Count; i++)
             {
                 var o = z.Arts[i]!.Origins[z.Frame[i]];
-                _spriteBatch.Draw(_textures[z.Arts[i]!.Frames[z.Frame[i]]], new Vector2(MathF.Round(z.X[i] - _camera.X), MathF.Round(z.Y[i] - _camera.Y)), null, Color.White * GroundZoneFx.Alpha, 0, new Vector2(o[0], o[1]), 1, SpriteEffects.None, 0);
+                _spriteBatch.Draw(_textures[z.Arts[i]!.Frames[z.Frame[i]]], new Vector2(MathF.Round(z.X[i] - _camera.X), MathF.Round(z.Y[i] - _camera.Y)), null, Color.White * z.Opacity, 0, new Vector2(o[0], o[1]), 1, SpriteEffects.None, 0);
             }
         }
     }
@@ -465,6 +465,7 @@ public partial class MushTownGame
     // holds the pose) and on a ladder or rope: the landing is the same, and the feet leave the ladder (PlayerMover.Land).
     // The feet move at once and the pose stays as it was (WZ has no action node). The cooldown (teleportCooltime, 480 ms) is checked by TryPayWzSkill: while it runs nothing moves,
     // nothing is paid and no effect plays. The server learns the new place first, so the others see the effect where we land.
+    // Teleport Mastery (a passive, always on) strikes at the landing: see CastTeleportMastery.
     private void CastTeleport(WzSkillData wz)
     {
         var (horizontal, vertical) = WzSkillStats.TeleportReach(_wzSkills); // Teleport's distances plus Teleport Boost's
@@ -473,9 +474,29 @@ public partial class MushTownGame
         if (_mover.Climb != null && !_upNow && !_downNow) _mover.FacingRight = _dirNow > 0; // the facing does not follow the keys on a ladder: turn to the cast
         _mover.Land(to.X, to.Y, to.Ground);
         SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
-        if (_net == null || !_net.Connected) return;
-        _net.SendState(_mapId, _mover.X, _mover.Y, Net.ActionCode(_mover.Action), (byte)_frame, _mover.FacingRight);
-        _net.SendSkillCast(wz.SkillId, 0);
+        if (_net != null && _net.Connected)
+        {
+            _net.SendState(_mapId, _mover.X, _mover.Y, Net.ActionCode(_mover.Action), (byte)_frame, _mover.FacingRight);
+            _net.SendSkillCast(wz.SkillId, 0);
+        }
+        if (WzLv(_wzSkills[WzSkillData.TeleportMastery]) > 0) CastTeleportMastery();
+    }
+
+    // Teleport Mastery (WZ 2111007): at the landing, the mobs in its box take its damage, are stunned (WZ subProp, time) and get its DoT. It is a trigger of
+    // Teleport: no key, no body pose, no MP of its own (the WZ text says "instead of consuming extra MP"; the extra y MP of its numbers line is not charged, 未核实), no cooldown.
+    // The judge is the server (it learns the cast after the new State) or the local world, like every cast. Its cast effect plays at the feet.
+    private void CastTeleportMastery()
+    {
+        var wz = _wzSkills[WzSkillData.TeleportMastery];
+        SpawnCastFx(wz.SkillId, _mover.X, _mover.Y, _mover.FacingRight);
+        int pct = (int)wz.Value("damage", wz.MaxLevel);
+        if (_net != null && _net.Connected) _net.SendSkillCast(wz.SkillId, pct);
+        else if (_localWorld != null)
+        {
+            foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), wz.SkillId, pct))
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
+            DrainDrops(_localWorld);
+        }
     }
 
     // Mana Wave (WZ 2001011) has no key of its own: Jump pressed with Up held boosts (mpCon MP), on the ground (instead of

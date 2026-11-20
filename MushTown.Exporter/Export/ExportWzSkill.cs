@@ -36,9 +36,15 @@ namespace MushTown.Exporter;
 // Poison Mist (211.img) is a ground zone (WzSkillData.GroundZones): besides effect (the cast) and hit it keeps effect1 (a second cast layer, played with
 // the first) and tile/0..8 (nine looping puffs of 8 pictures; the client lays them out, see GroundZoneFx) as Art["effect1"], Art["tile0"]..Art["tile8"] (png under 2111003/effect1/ and 2111003/tile<i>/).
 // A skill with a dot and a flat mob node (a loop of pictures with origins; Poison Mist has one, Poison Breath none) also keeps it as Art["mob"] (png under <id>/mob/): the icon that
-// shows over a mob that has the skill's DoT. (Empirical Knowledge's mob node is three loops and goes through SaveMarkArt; Elemental Weakness, Teleport Mastery, Paralyze and Flame Haze
+// shows over a mob that has the skill's DoT. (Empirical Knowledge's mob node is three loops and goes through SaveMarkArt; Elemental Weakness, Paralyze and Flame Haze
 // have mob nodes too but are not DoTs or not made yet.) The node also has pos = 2 and repeat = 1: neither is used (pos 未核实).
 // Re-run `export` after pulling this: an old export has none of them and the client refuses to start (Menu.cs).
+// Teleport Mastery (211.img, a passive that strikes at the Teleport landing) keeps effect, effect0 (a back layer, played like Elemental Adaptation's), hit and its mob node
+// (Art["mob"]: it has a dot; the loop that shows over a mob that is stunned or has its DoT); it has no action of its own to pose (its WZ action alert2 has no attack frame, so AttackDelayMs stays 0).
+// Ignite (210.img, a passive) has no art of its own: its fire wall is the node 2100010 (WZ has no link between them, WzSkillData.IgniteWall), whose tile/0..2 (16 looping pictures each)
+// go to Art["tile0"]..Art["tile2"] and hit/0 (the spark on each mob the wall hits) to HitFrames and Art["hit"], all under 2101010/ (see GroundZoneFx.StartWall).
+// The text of both ends with "Can be toggled On/Off": they are always on here (the user's rule for always-on Buffs), so that line is left out.
+// Flame Orb and Explosion also keep their action as steps (Script, see WzSkillData.ActionScripts), like the other skills of that set.
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export
@@ -69,6 +75,7 @@ public static partial class Export
             var values = WzSkillValues(baseRoot, id);
             data.Desc = Lines(Fill(Text(strNode.Nodes["desc"]), values, data.MaxLevel));
             data.Effect = Lines(Fill(Text(strNode.Nodes["h"]), values, data.MaxLevel));
+            if (id is WzSkillData.Ignite or WzSkillData.TeleportMastery) data.Desc = data.Desc.Where(l => !l.StartsWith("Can be toggled")).ToList(); // always on: no switch
             if (id == WzSkillData.Meditation) // our own lines, not the WZ text (which has the MP cost, the party and the duration: none of them is true for a passive)
             {
                 data.Effect = new() { $"Magic ATT: +{(int)data.Value("indieMad", data.MaxLevel)}" };
@@ -79,7 +86,8 @@ public static partial class Export
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
-            if ((data.Common.ContainsKey("damage") || id is WzSkillData.Teleport or WzSkillData.ManaWave or WzSkillData.ElementalAdaptation) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
+            if (id == WzSkillData.Ignite ? !SaveWallArt(baseRoot, skill, data, outDir, saved)
+                : (data.Common.ContainsKey("damage") || id is WzSkillData.Teleport or WzSkillData.ManaWave or WzSkillData.ElementalAdaptation) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
             if (id == WzSkillData.EmpiricalKnowledge && !SaveMarkArt(baseRoot, id, data, outDir, saved)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child))
             {
@@ -116,8 +124,8 @@ public static partial class Export
         var meta = WzSkillNode(baseRoot, id);
         data.Art["effect"] = ReadWzArt(teleport ? meta.Nodes["effect"]!.Nodes["0"]! : meta.Nodes["effect"]!);
         if (!SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)) return false;
-        if (id == WzSkillData.ElementalAdaptation // the cast's back layer, and the block art (special): kept apart from the generic ball/special art
-            && (!SaveLayer(node!, meta, id, data, outDir, saved, "effect0", "effect0") || !SaveLayer(node!, meta, id, data, outDir, saved, "special", "block"))) return false;
+        if (id is WzSkillData.ElementalAdaptation or WzSkillData.TeleportMastery && !SaveLayer(node!, meta, id, data, outDir, saved, "effect0", "effect0")) return false; // the cast's back layer
+        if (id == WzSkillData.ElementalAdaptation && !SaveLayer(node!, meta, id, data, outDir, saved, "special", "block")) return false; // the block art (special): kept apart from the generic ball/special art
         if (id == WzSkillData.PoisonMist) // the ground zone: effect1 (a second cast layer) and the 9 looping tile variants, each 8 frames, kept as Art["effect1"], Art["tile0".."tile8"]
         {
             if (!SaveLayer(node!, meta, id, data, outDir, saved, "effect1", "effect1")) return false;
@@ -138,6 +146,24 @@ public static partial class Export
             data.Art[name] = ReadWzArt(meta.Nodes[name]!);
         }
         return true;
+    }
+
+    // Ignite's art, read from its wall node 2100010: the three flame loops tile/0..2 (Art["tile0"]..Art["tile2"]) and the spark on each mob hit (hit/0: HitFrames, Art["hit"]).
+    // The pngs go under the skill's own folder (skill/wz/2101010/), so the client finds all of Ignite's art in one skill.
+    private static bool SaveWallArt(WzRoot baseRoot, WzRoot skill, WzSkillData data, string outDir, HashSet<string> saved)
+    {
+        int id = data.SkillId, wall = WzSkillData.IgniteWall;
+        var canvas = skill.Find($@"_Canvas\{wall / 10000}.img\skill\{wall}");
+        var meta = WzSkillNode(baseRoot, wall);
+        if (canvas?.Nodes["tile"] == null || canvas.Nodes["hit"]?.Nodes["0"] == null)
+        {
+            Console.WriteLine($"skill {wall} has no tile or hit 0");
+            return false;
+        }
+        for (int i = 0; i < WzSkillData.WallTiles; i++)
+            if (!SaveLayer(canvas.Nodes["tile"]!, meta.Nodes["tile"]!, id, data, outDir, saved, i.ToString(), $"tile{i}")) return false;
+        data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);
+        return SaveSkillFrames(canvas.Nodes["hit"]!.Nodes["0"]!, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id);
     }
 
     // One more art layer of Elemental Adaptation, WZ node wzName kept in Art[key] with its png paths in Frames, so the three lists have the
@@ -262,7 +288,7 @@ public static partial class Export
         foreach (Wz_Node v in node.Nodes["info"]!.Nodes) data.Info[v.Text] = Text(v);
         if (node.Nodes["action"] is { } action)
             foreach (Wz_Node v in action.Nodes) data.Actions.Add(Text(v));
-        if (data.Actions.Count > 0) data.AttackDelayMs = ReadAttackDelay(chara, data.Actions[0]);
+        if (data.Actions.Count > 0 && id != WzSkillData.TeleportMastery) data.AttackDelayMs = ReadAttackDelay(chara, data.Actions[0]); // Teleport Mastery strikes at once: its alert2 has no attack frame
         if (WzSkillData.ActionScripts.Contains(id)) data.Script = ReadActionScript(chara, data.Actions[0]); // the other skills still play a plain swing
         data.ElemAttr = Text(node.Nodes["elemAttr"]);
         data.Invisible = node.Nodes["invisible"] != null;
@@ -277,6 +303,7 @@ public static partial class Export
     // A body action written as steps: Character.wz/00002000.img/<action>/<n> holds the action name, the frame and the delay of each step.
     // The time of a step is the absolute delay (the sign marks the attack frame, see ReadAttackDelay); missing or zero counts as 100 ms.
     // Poison Breath is alert 2 -180, swingO2 0 -240, swingO2 2 360 (780 ms); Energy Bolt alert 2 -60, swingO3 0 -330, swingO3 1 270 (660 ms);
+    // Flame Orb is alert 2 -90, swingO2 0 -210, stabO2 1 420 (720 ms, attack frame at 300 ms); Explosion alert 2 -30, swingO2 1 -60, swingO2 0 -270, stabO2 1 -30, stabO2 1 480 (870 ms, attack frame at 390 ms);
     // Poison Mist alert 2 -60, alert 1 -60, alert 0 -360, swingO1 2 180 (660 ms); Elemental Adaptation alert 2 -120, 1 -120, 0 -300, swingO1 2 360, alert 2 90 (990 ms). The WZ move (a shift of a pixel or so) is not used.
     private static List<ActionStep> ReadActionScript(WzRoot chara, string action)
     {

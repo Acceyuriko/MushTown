@@ -245,7 +245,7 @@ public partial class FirePoisonCombatTests
         b.SendState(9, 600, 100, Net.ActStand, 0, true);
         WaitSpawn(a);
         WaitSpawn(b);
-        a.SendBuild(Mage with { SkillMasteryPct = 50, MpEaterProp = 100, MpEaterPct = 5, MpEaterBossPct = 3, DrainPct = 3, DrainMax = 5 }); // the 113-byte Build; every cast procs
+        a.SendBuild(Mage with { SkillMasteryPct = 50, MpEaterProp = 100, MpEaterPct = 5, MpEaterBossPct = 3, DrainPct = 3, DrainMax = 5 }); // the 117-byte Build; every cast procs
         a.SendSkillCast(Bolt, 78);
         var hits = Enumerable.Range(0, 4).Select(_ => WaitHit(a)).ToList();
         CollectionAssert.AreEqual(new[] { 50, 0, 0, 0 }, hits.Select(h => h.MpGain).ToArray());

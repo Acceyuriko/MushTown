@@ -42,6 +42,14 @@ public static class WzSkillStats
         return (int)mark.Value("prop", mark.MaxLevel);
     }
 
+    // Ignite: the chance, in percent, that a fire skill we cast starts a wall of fire (WZ prop). The other numbers (the wall's box, time, damage, interval,
+    // hits) are read by the server's MobWorld from the same skill node.
+    public static int IgniteProp(IReadOnlyDictionary<int, WzSkillData> skills)
+    {
+        var ignite = skills[WzSkillData.Ignite];
+        return (int)ignite.Value("prop", ignite.MaxLevel);
+    }
+
     // MP Eater at max level: the chance (WZ prop), the share of the mob's max MP absorbed from a normal mob (WZ x) and from a boss
     // (WZ y), in percent; the amount absorbed goes to the caster.
     public static (int prop, int pct, int bossPct) MpEater(IReadOnlyDictionary<int, WzSkillData> skills)

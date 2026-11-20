@@ -6,7 +6,7 @@ namespace MushTown.Server;
 // Resolve; nobody orders the steps for himself. The user's rule: a skill puts its bad status on the mob FIRST and the damage is
 // calculated after, so the first hit already carries the status. The five steps, in order, for all the targets of one attack:
 //   1. Collect the statuses of each target, the ones this attack is about to add included: the status rolls (Elemental Weakness mark,
-//      Empirical Knowledge stack) are drawn here, a DoT is checked against the mob's element immunity. A tick of a DoT counts as a mob that has the DoT
+//      Empirical Knowledge stack, the stun) are drawn here, a DoT is checked against the mob's element immunity. A tick of a DoT counts as a mob that has the DoT
 //      (a tick rolls nothing and adds nothing, but reads the statuses already there, the marks of its source included).
 //   2. Collect the bonuses: the damage % (additive bucket: Weakness, Element Amplification, the mark's damage) and the final damage (own
 //      zone: Elemental Drain and Burning Magic multiply), plus the DEF ignored by the mark. The numbers of the build (panel and skill)
@@ -31,6 +31,8 @@ public sealed class HitPipeline
         public int Segments = 1;
         public bool Magic; // a magic skill: Elemental Weakness and Element Amplification add damage %, MP Eater may absorb MP
         public Dot? Dot; // the DoT this attack puts on each target (a copy for each mob), built by the caster
+        public int StunProp; // the chance, in percent, that each target is stunned for StunMs (0 = this attack stuns nobody); the stun carries Skill as its head icon
+        public int StunMs;
         public bool Tick; // a DoT tick: it takes every bonus a hit takes (the user's rule: a tick is no special case) except these four: it never crits, rolls no status (no Weakness or mark roll),
         // takes no MP Eater, and adds no new status; the hit is flagged Dot
         public int Map; // where the caster stands (Elemental Drain counts around him; a tick reads the place where its DoT was cast)
@@ -45,6 +47,7 @@ public sealed class HitPipeline
         public bool Weaken; // the mark rolled: Elemental Weakness lands (on a mob that lives)
         public bool MarkProc; // the stack rolled: Empirical Knowledge adds one (on a mob that lives)
         public bool DotLands;
+        public bool StunLands; // the stun rolled: it lands (on a mob that lives)
         public bool CountsDot; // the DoT skill of this attack is on the mob after step 1 (it lands now, or a tick's own DoT): one layer for Elemental Drain
         public bool Burning; // a status Burning Magic counts is on the mob, or lands now
         public double WeaknessPct; // the damage % of Elemental Weakness this hit has (the mark on the mob, or the one rolled now)
@@ -198,14 +201,15 @@ public sealed class HitPipeline
             f.CountsDot = true;
             return f;
         }
+        f.StunLands = a.StunProp > 0 && a.Rng.NextDouble() * 100 < a.StunProp; // no random number is spent when the attack stuns nobody
         f.DotLands = a.Dot != null && MobElemAttr.Multiplier(m.ElemAttr, a.Element) > 0;
         f.CountsDot = f.DotLands;
-        f.Burning = f.DotLands || m.Statuses.HasBurningTarget;
+        f.Burning = f.DotLands || f.StunLands || m.Statuses.HasBurningTarget; // a stun that lands now counts for Burning Magic like one already there
         return f;
     }
 
     // Step 5, the statuses land on a mob that lives: the Weakness mark (it refreshes), the mark stacks (a proc adds, any hit refreshes the time;
-    // the owner's client is told) and the DoT (the same source's same skill refreshes).
+    // the owner's client is told), the stun (a stun again restarts its time) and the DoT (the same source's same skill refreshes).
     private void Land(Frame f, Attack a)
     {
         var m = f.M;
@@ -215,6 +219,7 @@ public sealed class HitPipeline
             m.Statuses.HitMark(a.Attacker, _markMaxStacks, _markTimeMs, f.MarkProc);
             _flushMarks(m);
         }
+        if (f.StunLands) m.Statuses.Add(MobStatusKind.Stun, a.Skill, a.StunMs);
         if (f.DotLands) m.Statuses.AddDot(a.Dot!.Clone());
     }
 }

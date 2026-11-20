@@ -47,6 +47,7 @@ public partial class MushTownGame : Game
     private readonly int? _shotDmgSkin; // --dmgskin <id>: that number's skin
     private readonly bool _shotHurt; // --hurt: the player takes one posed hit
     private readonly bool _shotWeak; // --weak: the --skill cast lands on mobs already marked by Elemental Weakness
+    private readonly bool _shotIgnite; // --ignite: the --skill cast has Ignite's chance 100% (the wall starts)
     private readonly int _shotStandoff; // --standoff <px>: how far from the first mob a WZ --skill caster stands (0 = the default 250)
     private readonly string? _shotTeleport; // --teleport <left|right|up|down>: cast Teleport that way from --at
     private readonly (int X, int? Y)? _shotAt; // --at <x>[,<y>]: the feet x (and height) of the --teleport pose
@@ -155,7 +156,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null, int shotMark = 0, int shotDrain = -1, int shotBlocks = 0, int shotTimers = -1)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, bool shotIgnite = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null, int shotMark = 0, int shotDrain = -1, int shotBlocks = 0, int shotTimers = -1)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -185,6 +186,7 @@ public partial class MushTownGame : Game
         _shotHurtPre = shotHurtPre;
         _shotHurtMiss = shotHurtMiss;
         _shotWeak = shotWeak;
+        _shotIgnite = shotIgnite;
         _shotFlyms = shotFlyms;
         _shotMark = shotMark;
         _shotDrain = shotDrain;

@@ -638,8 +638,14 @@ public partial class MushTownGame
         foreach (string f in Directory.GetFiles(wzDir, "*.json"))
         {
             var wz = LoadJson<WzSkillData>(f);
-            if (wz.Common.ContainsKey("damage") && (wz.CastFrames.Count == 0 || wz.HitFrames.Count == 0))
+            bool wall = wz.SkillId == WzSkillData.Ignite; // a passive whose art is the fire wall (tile0..tile2 and hit), not a cast effect
+            if (wz.Common.ContainsKey("damage") && !wall && (wz.CastFrames.Count == 0 || wz.HitFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
+            if (wall && (wz.HitFrames.Count == 0 || !wz.Art.TryGetValue("hit", out var wallHit) || wallHit.Origins.Length != wz.HitFrames.Count || wallHit.Delays.Length != wz.HitFrames.Count
+                || !Enumerable.Range(0, WzSkillData.WallTiles).All(i => wz.Art.TryGetValue($"tile{i}", out var tile) && ArtComplete(tile))))
+                throw new InvalidDataException($"skill {wz.SkillId} has no fire wall art (tile0..tile{WzSkillData.WallTiles - 1}, hit): run the exporter (export)");
+            if (wz.SkillId == WzSkillData.TeleportMastery && !(wz.Art.TryGetValue("effect0", out var back) && ArtComplete(back) && wz.Art.TryGetValue("mob", out var stunIcon) && ArtComplete(stunIcon)))
+                throw new InvalidDataException($"skill {wz.SkillId} has no back cast layer (effect0) or head icon (mob): run the exporter (export)");
             if (wz.SkillId == WzSkillData.ManaWave && !wz.Children.Any(c => c.SkillId == WzSkillData.ManaWaveFloat && c.HasFloatArt))
                 throw new InvalidDataException($"skill {wz.SkillId} has no child {WzSkillData.ManaWaveFloat} (the slow fall) with its art (special, specialAffected): run the exporter (export)");
             if (WzSkillData.UserPassives.Contains(wz.SkillId) && wz.Kind != SkillData.KindPassive)
@@ -650,10 +656,12 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} is not a buff, has no second cast layer (effect0) or no block art (block): run the exporter (export)");
             if (wz.IsGroundZone && !(wz.Art.TryGetValue("mob", out var icon) && ArtComplete(icon) && wz.Art.TryGetValue("effect1", out var front) && ArtComplete(front) && Enumerable.Range(0, WzSkillData.ZoneTiles).All(i => wz.Art.TryGetValue($"tile{i}", out var tile) && ArtComplete(tile))))
                 throw new InvalidDataException($"skill {wz.SkillId} is a ground zone but has no head icon (mob), second cast layer (effect1) or tile0..tile{WzSkillData.ZoneTiles - 1} art: run the exporter (export)");
-            if ((wz.Common.ContainsKey("damage") || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
+            if ((wz.Common.ContainsKey("damage") && !wall || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
             if (WzSkillData.ActionScripts.Contains(wz.SkillId) && wz.Script.Count == 0)
                 throw new InvalidDataException($"skill {wz.SkillId} has no action script: run the exporter (export)");
+            if (wz.Script.Any(step => !Net.Actions.Contains(step.Action)))
+                throw new InvalidDataException($"skill {wz.SkillId} has an action script step with an unknown action");
             if (wz.SkillId == WzSkillData.EnergyBolt && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no ball or special art: run the exporter (export)");
             if ((wz.BallFrames.Count > 0 || wz.SpecialFrames.Count > 0) && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0)) // a ball skill has both its ball and its special (a target box with no ball, Poison Breath, has neither)

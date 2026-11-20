@@ -286,6 +286,7 @@ public partial class MushTownGame
         {
             CastTeleport(_wzSkills[WzSkillData.Teleport]);
             foreach (var f in _fx) f.Frame = 3;
+            if (_shotFlyms > 0) RunShotFly(_shotFlyms); // the world runs on: Teleport Mastery's numbers and the stun icon age
         }
         if (_shotTeleportFrom != null) // one step: the pose of the new place (a swing keeps its pose, a rope hero stands now)
         {
@@ -379,6 +380,7 @@ public partial class MushTownGame
         RunShotAi();
         int pct = (int)wz.Value("damage", wz.MaxLevel);
         var build = ShotBuild() with { WeaknessProp = 0 };
+        if (_shotIgnite) build = build with { IgniteProp = 100 };
         if (_shotWeak)
         {
             world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { WeaknessProp = 100 }, wz.SkillId, pct);
@@ -489,6 +491,7 @@ public partial class MushTownGame
             foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpGain, s.hit.Dot);
             DrainDrops(world, animate: false);
         }
+        foreach (var z in world.TakeZones()) ApplyZone(z); // a hit that landed in this step may have started Ignite's wall
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
         ApplySpawns(ev.Spawns);
         foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);
