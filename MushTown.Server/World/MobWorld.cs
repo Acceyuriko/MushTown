@@ -336,6 +336,12 @@ public sealed class MobWorld
     private double DrainBonus(int map, float x, float y, Build build) =>
         build.DrainPct > 0 ? build.DrainPct * DrainLayers(map, x, y, build.DrainMax) : 0;
 
+    // Burning Magic's final damage percent for one hit on this mob: DotFinalPct while the mob has a DoT (0 = not learned or no DoT).
+    private static double BurningBonus(Mob m, Build build) => m.Statuses.HasDot ? build.DotFinalPct : 0;
+
+    // Final damage sources multiply (Elemental Drain, Burning Magic): the percent of their product.
+    private static double FinalBonus(double a, double b) => ((1 + a / 100) * (1 + b / 100) - 1) * 100;
+
     // The Empirical Knowledge stacks one attacker has on one mob (0 = none), for the client's own view and the shot staging.
     public int MarkStacks(int uid, int attacker)
     {
@@ -431,7 +437,7 @@ public sealed class MobWorld
             TryMark(m, build, rng, attacker);
             var (markDmg, markIed) = MarkBonus(m, build, attacker);
             var result = Damage.CalcResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, m.Level, m.ElemAttr,
-                AttackElement.Physical, m.Boss, markDmg, drain, markIed);
+                AttackElement.Physical, m.Boss, markDmg, FinalBonus(drain, BurningBonus(m, build)), markIed);
             long damage = result.TotalDamage;
             m.Hp = Math.Max(0, m.Hp - damage);
             hits.Add(new Hit(m.Uid, m.Map, damage, m.Hp, m.Exp, 0, m.MobId, result.CritMultiplier > 1.0));
@@ -547,7 +553,7 @@ public sealed class MobWorld
             Element = element,
             Rng = rng,
             IntervalMs = (int)(wz.Value("dotInterval", wz.MaxLevel) * 1000),
-            MsLeft = (int)(wz.Value("dotTime", wz.MaxLevel) * 1000),
+            MsLeft = (int)(wz.Value("dotTime", wz.MaxLevel) * 1000 * (100 + build.DotTimePct) / 100), // Burning Magic: a longer DoT
         };
         bool ball = wz.BallFrames.Count > 0;
         int attackDelay = wz.AttackDelayMs; // the ball appears when the body action reaches its attack frame
@@ -614,6 +620,8 @@ public sealed class MobWorld
     // Elemental Drain adds final damage for each DoT on the mobs near the caster (a circle of WZ range 800 around the caster's feet,
     // counted by distinct DoT skill, at most DrainMax); MP Eater may absorb MP from each mob once (Hit.MpGain on its first hit:
     // the server rolls and takes it from the mob, the attacker's client adds it).
+    // Element Amplification adds its damage % to every segment (and to the DoT ticks: they are magic skill damage). Burning Magic adds final
+    // damage to a hit (a basic swing too, not a DoT tick) on a mob that has a DoT, and makes the DoT this cast adds last longer.
     // The WZ fields u, x and w of Energy Bolt are not read (their meaning is not known).
     private List<Hit> WzHits(int map, float ox, float oy, bool facingRight, Random rng, Build build, WzSkillData wz,
         AttackElement element, int mobCount, int segments, int pct, int attacker, Dot? dot, float casterX, float casterY)
@@ -633,11 +641,12 @@ public sealed class MobWorld
             TryWeaken(m, build, rng);
             TryMark(m, build, rng, attacker); // Empirical Knowledge: this attacker's own stacks (a proc adds one, else refresh)
             var (markDmg, markIed) = MarkBonus(m, build, attacker);
+            double final = FinalBonus(drain, BurningBonus(m, build)); // read before the segments: the DoT this cast adds comes after them
             var rolls = new List<(long damage, bool crit)>();
             for (int i = 0; i < segments; i++)
             {
                 var result = Damage.SkillResult(rng.NextDouble(), rng.NextDouble(), m.Def, build, pct,
-                    m.Level, m.ElemAttr, element, m.Boss, m.Statuses.MagicExtraDamagePct + markDmg, drain, markIed);
+                    m.Level, m.ElemAttr, element, m.Boss, m.Statuses.MagicExtraDamagePct + markDmg + build.MagicDmgPct, final, markIed);
                 rolls.Add((result.TotalDamage, result.CritMultiplier > 1.0));
             }
             // MP Eater: one roll for each mob hit by the cast (0 = not learned, no random number is spent). A proc absorbs
@@ -672,7 +681,7 @@ public sealed class MobWorld
     // so a tick never belongs to a source that is gone.
     private Hit DotTick(Mob m, Dot dot)
     {
-        var result = Damage.SkillResult(dot.Rng.NextDouble(), 1.0, m.Def, dot.Build, dot.Pct, m.Level, m.ElemAttr, dot.Element, m.Boss, m.Statuses.MagicExtraDamagePct);
+        var result = Damage.SkillResult(dot.Rng.NextDouble(), 1.0, m.Def, dot.Build, dot.Pct, m.Level, m.ElemAttr, dot.Element, m.Boss, m.Statuses.MagicExtraDamagePct + dot.Build.MagicDmgPct);
         m.Hp = Math.Max(0, m.Hp - result.TotalDamage);
         if (m.Hp == 0)
         {

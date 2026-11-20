@@ -28,6 +28,25 @@ public class TeleportTests
         Assert.AreEqual(-190f, TeleportRules.Horizontal(map, 0, 100, -1, 190)!.Value.X);
     }
 
+    // Teleport Boost adds 65 to the horizontal and 25 to the vertical distance (WZ x 65, y 25): Teleport 5 is 190 and 295, with the boost 255 and 320.
+    // The landing rules are the same: the farther cast lands farther, a floor 310 below is out of the plain reach (295) and inside the boosted one (320).
+    [TestMethod]
+    public void TeleportBoost_AddsToTheDistances_RulesUnchanged()
+    {
+        var (horizontal, vertical) = WzSkillStats.TeleportReach(WzSkillTests.FirePoisonPassives());
+        Assert.AreEqual(255, horizontal);
+        Assert.AreEqual(320, vertical);
+        var flat = Map(-1000, 1000, Fh(-500, 100, 500, 100));
+        Assert.AreEqual(190f, TeleportRules.Horizontal(flat, 0, 100, 1, 190)!.Value.X);
+        Assert.AreEqual(255f, TeleportRules.Horizontal(flat, 0, 100, 1, horizontal)!.Value.X);
+        Assert.AreEqual(-255f, TeleportRules.Horizontal(flat, 0, 100, -1, horizontal)!.Value.X);
+        Assert.AreEqual(230f, TeleportRules.Horizontal(Step(100), 100, 215, 1, horizontal)!.Value.X); // the wall still stops it just before it
+        var tower = Map(-1000, 1000, Fh(-500, 0, 500, 0), Fh(-500, 310, 500, 310));
+        Assert.IsNull(TeleportRules.Vertical(tower, 0, 0, 1, 295));
+        Assert.AreEqual(310, TeleportRules.Vertical(tower, 0, 0, 1, vertical)!.Value.Y);
+        Assert.AreEqual(310, TeleportRules.ForKeys(tower, 0, 0, false, true, 0, horizontal, vertical)!.Value.Y);
+    }
+
     // The wall rule: a wall that rises above the reach (75) over the feet stops the cast just before it, even though the
     // platform on top of it would be a landing: the wall is checked first.
     [TestMethod]

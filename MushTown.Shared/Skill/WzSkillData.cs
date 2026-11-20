@@ -31,6 +31,12 @@ public sealed class WzSkillData
     public const int Meditation = 2101001;
     public const int FlameOrb = 2101004;
     public const int PoisonBreath = 2101005;
+    // 211 Mage (Fire/Poison): the 3rd job passives.
+    public const int BurningMagic = 2110000;
+    public const int ElementAmplification = 2110001;
+    public const int MagicCritical = 2110009;
+    public const int ElementalDecrease = 2110015;
+    public const int TeleportBoost = 2110016;
     public const int MagicGuard = 2000002;
     public const int MagicArmor = 2000010;
     public const int MpBoost = 2000006;

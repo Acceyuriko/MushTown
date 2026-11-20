@@ -63,6 +63,9 @@ public sealed class MobStatuses
     // How many distinct DoT skills are on the mob (one layer per skill, whatever the number of sources), for Elemental Drain.
     public int DotCount => _dots.Keys.Select(k => k.Skill).Distinct().Count();
 
+    // Whether any DoT is on the mob (from any source), for Burning Magic's final damage.
+    public bool HasDot => _dots.Count > 0;
+
     // The DoTs of one source leave with it (its disconnect, map change or cash-shop entry): no tick of a source
     // that is no longer here. Nothing else changes.
     public void RemoveDotsOf(int attacker)

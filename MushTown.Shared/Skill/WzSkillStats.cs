@@ -11,6 +11,12 @@ namespace MushTown.Shared;
 // psdWeaponBooster actionSpeed -2 = stage +2, exported as boosterActionSpeed); Spell Mastery adds magic attack (x), crit rate
 // (cr) and mastery (WZ mastery, percent points on top of the weapon's own mastery: unverified, WZ does not say whether it adds
 // or replaces). MP Eater and Elemental Drain add no stat: the hit judge reads their numbers (MpEater, ElementalDrain).
+// The 3rd job passives (211.img): Magic Critical adds crit rate (cr) and crit damage (criticaldamage). Elemental Decrease adds final
+// damage (mdR: a MULTIPLIER on FINAL_DAMAGE_PCT) and takes u percent points off the enemy's elemental resistance (WZ: "Enemy Elemental
+// Resistance: -u%"; the same stat as ignore elemental resistance). Element Amplification adds MP cost (costmpR) and damage % (damR)
+// to the magic skills: the hidden keys MP_COST_PCT and MAGIC_DAMAGE_PCT, read by SkillCost.Pay and by the Build. Burning Magic adds
+// the DoT time (x) and the final damage on a hit against a mob with a DoT (z): the hidden keys DOT_TIME_PCT and DOT_FINAL_PCT, read by
+// the Build. Teleport Boost adds distance to Teleport (TeleportReach).
 public static class WzSkillStats
 {
     // Magic Guard at max level: the share of a touch, in percent, that MP pays (WZ x = 15 + 7 * level).
@@ -60,6 +66,15 @@ public static class WzSkillStats
         return new(StatKey.MATT, StatValueType.FLAT, meditation.Value("indieMad", meditation.MaxLevel), StatSource.Buff, meditation.Name);
     }
 
+    // Teleport's horizontal and vertical distance at max level, with Teleport Boost's added (WZ x and y of both).
+    public static (int horizontal, int vertical) TeleportReach(IReadOnlyDictionary<int, WzSkillData> skills)
+    {
+        var teleport = skills[WzSkillData.Teleport];
+        var boost = skills[WzSkillData.TeleportBoost];
+        return ((int)(teleport.Value("x", teleport.MaxLevel) + boost.Value("x", boost.MaxLevel)),
+            (int)(teleport.Value("y", teleport.MaxLevel) + boost.Value("y", boost.MaxLevel)));
+    }
+
     public static IEnumerable<StatModifier> Modifiers(IReadOnlyDictionary<int, WzSkillData> skills, int level, int weaponItemId)
     {
         var armor = skills[WzSkillData.MagicArmor];
@@ -80,6 +95,18 @@ public static class WzSkillStats
         yield return new(StatKey.MATT, StatValueType.FLAT, spell.Value("x", spell.MaxLevel), StatSource.Skill, spell.Name);
         yield return new(StatKey.CRIT_RATE, StatValueType.FLAT, spell.Value("cr", spell.MaxLevel), StatSource.Skill, spell.Name);
         yield return new(StatKey.MASTERY, StatValueType.FLAT, spell.Value("mastery", spell.MaxLevel), StatSource.Skill, spell.Name);
+        var critical = skills[WzSkillData.MagicCritical];
+        yield return new(StatKey.CRIT_RATE, StatValueType.FLAT, critical.Value("cr", critical.MaxLevel), StatSource.Skill, critical.Name);
+        yield return new(StatKey.CRIT_DAMAGE, StatValueType.FLAT, critical.Value("criticaldamage", critical.MaxLevel), StatSource.Skill, critical.Name);
+        var decrease = skills[WzSkillData.ElementalDecrease];
+        yield return new(StatKey.FINAL_DAMAGE_PCT, StatValueType.MULTIPLIER, 1.0 + decrease.Value("mdR", decrease.MaxLevel) / 100.0, StatSource.Skill, decrease.Name);
+        yield return new(StatKey.IGNORE_ELEMENT_RESISTANCE_PCT, StatValueType.FLAT, decrease.Value("u", decrease.MaxLevel), StatSource.Skill, decrease.Name);
+        var amplify = skills[WzSkillData.ElementAmplification];
+        yield return new(StatKey.MP_COST_PCT, StatValueType.FLAT, amplify.Value("costmpR", amplify.MaxLevel), StatSource.Skill, amplify.Name);
+        yield return new(StatKey.MAGIC_DAMAGE_PCT, StatValueType.FLAT, amplify.Value("damR", amplify.MaxLevel), StatSource.Skill, amplify.Name);
+        var burning = skills[WzSkillData.BurningMagic];
+        yield return new(StatKey.DOT_TIME_PCT, StatValueType.FLAT, burning.Value("x", burning.MaxLevel), StatSource.Skill, burning.Name);
+        yield return new(StatKey.DOT_FINAL_PCT, StatValueType.FLAT, burning.Value("z", burning.MaxLevel), StatSource.Skill, burning.Name);
         if (boost.WeaponBonus.TryGetValue(weaponItemId / 10000 - 100, out var bonus))
             yield return new(StatKey.CRIT_RATE, StatValueType.FLAT, bonus["cr"][boost.MaxLevel - 1], StatSource.Skill, boost.Name);
     }

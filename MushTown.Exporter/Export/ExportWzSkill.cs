@@ -27,6 +27,8 @@ namespace MushTown.Exporter;
 // WZ frame of affected has only a delay of 270 ms and no picture, it is left out like Mana Wave's blank lead-in).
 // Poison Breath (210.img) is a damage skill with no ball and no special: its effect is the breath at the caster, hit/0 the poison on each mob; its
 // Common also keeps dot, dotInterval and dotTime (the damage-over-time numbers), and there is no ball, so its box is centred on the target mob.
+// The 3rd job passives (211.img: Burning Magic, Element Amplification, Magic Critical, Elemental Decrease, Teleport Boost) have no art but their
+// icons: the generic path above (formulas, text, icon and disabled icon) is all they need.
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
 public static partial class Export

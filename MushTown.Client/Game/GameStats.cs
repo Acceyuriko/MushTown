@@ -186,7 +186,11 @@ public partial class MushTownGame
             (int)_stats.IntValue(StatKey.MASTERY),
             mpEater.prop, mpEater.pct, mpEater.bossPct, // MP Eater
             drain.pct, drain.max, // Elemental Drain
-            markProp); // Empirical Knowledge
+            markProp, // Empirical Knowledge
+            (int)_stats.IntValue(StatKey.IGNORE_ELEMENT_RESISTANCE_PCT), // Elemental Decrease, Insight
+            (int)_stats.IntValue(StatKey.MAGIC_DAMAGE_PCT), // Element Amplification
+            (int)_stats.IntValue(StatKey.DOT_TIME_PCT), // Burning Magic
+            (int)_stats.IntValue(StatKey.DOT_FINAL_PCT));
     }
 
     private void ClampPoolsToMax()

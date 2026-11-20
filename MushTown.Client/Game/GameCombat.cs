@@ -325,7 +325,7 @@ public partial class MushTownGame
     {
         var chara = _save?.Slots[_slot];
         int lv = chara != null && JobSkills.Has(chara.Job, wz.SkillId) ? wz.MaxLevel : 0;
-        return _skillCost.Pay(chara, wz, lv, _fighter.Cooldowns);
+        return _skillCost.Pay(chara, wz, lv, _fighter.Cooldowns, (int)_stats.IntValue(StatKey.MP_COST_PCT));
     }
 
     // Every skill of the character's own job stands at its max level (no skill points); a skill of
@@ -428,7 +428,8 @@ public partial class MushTownGame
     // nothing is paid and no effect plays. The server learns the new place first, so the others see the effect where we land.
     private void CastTeleport(WzSkillData wz)
     {
-        var land = TeleportRules.ForKeys(_map, _mover.X, _mover.Y, _upNow, _downNow, _dirNow, (int)wz.Value("x", wz.MaxLevel), (int)wz.Value("y", wz.MaxLevel));
+        var (horizontal, vertical) = WzSkillStats.TeleportReach(_wzSkills); // Teleport's distances plus Teleport Boost's
+        var land = TeleportRules.ForKeys(_map, _mover.X, _mover.Y, _upNow, _downNow, _dirNow, horizontal, vertical);
         if (land is not { } to || !TryPayWzSkill(wz)) return;
         if (_mover.Climb != null && !_upNow && !_downNow) _mover.FacingRight = _dirNow > 0; // the facing does not follow the keys on a ladder: turn to the cast
         _mover.Land(to.X, to.Y, to.Ground);

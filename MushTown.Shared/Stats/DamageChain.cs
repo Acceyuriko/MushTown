@@ -214,10 +214,10 @@ public static class DamageChain
     // damage % and normal/boss %, not on top of the final damage. extraFinalPct is final damage the target gives this hit
     // (Elemental Drain: a share for each DoT on it): it multiplies with the build's own final damage, like another source.
     // extraIedPct is enemy DEF ignored that only this hit gets (Empirical Knowledge stacks): it joins the build's own IED as
-    // one more source (1 - ied) x (1 - extraIed), never changing the global IED.
+    // one more source (1 - ied) x (1 - extraIed), never changing the global IED. The enemy's elemental resistance is cut by the build's IgnoreElemPct.
     public static DamageResult Calculate(Build build, double roll01, double crit01, double mobDef,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
-        int skillPct = 100, bool boss = false, double ignoreElemPct = 0, double extraDmgPct = 0, double extraFinalPct = 0,
+        int skillPct = 100, bool boss = false, double extraDmgPct = 0, double extraFinalPct = 0,
         double extraIedPct = 0)
     {
         var weapon = StatTables.Weapon((WeaponType)build.WeaponType);
@@ -234,7 +234,7 @@ public static class DamageChain
         double critMult = CritMultiplier(crit, build.CritDamage);
         double defense = DefenseMultiplier(mobDef * 100.0, (1.0 - build.IedPct / 100.0) * (1.0 - extraIedPct / 100.0));
         double level = mobLevel <= 0 ? 1.0 : LevelMultiplier(build.Level, mobLevel);
-        double elemMult = string.IsNullOrEmpty(mobElemAttr) ? 1.0 : MobElemAttr.Multiplier(mobElemAttr, element, ignoreElemPct);
+        double elemMult = string.IsNullOrEmpty(mobElemAttr) ? 1.0 : MobElemAttr.Multiplier(mobElemAttr, element, build.IgnoreElemPct);
         double after = actual * critMult * defense * elemMult * level;
         long perHit = Math.Max(1L, (long)Math.Floor(after));
         return new DamageResult(statValue, minActual, maxActual,

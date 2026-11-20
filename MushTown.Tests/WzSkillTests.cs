@@ -21,6 +21,11 @@ public class WzSkillTests
                 WzSkillData.SpellMastery => "Spell Mastery",
                 WzSkillData.MpEater => "MP Eater",
                 WzSkillData.ElementalDrain => "Elemental Drain",
+                WzSkillData.BurningMagic => "Burning Magic",
+                WzSkillData.ElementAmplification => "Element Amplification",
+                WzSkillData.MagicCritical => "Magic Critical",
+                WzSkillData.ElementalDecrease => "Elemental Decrease",
+                WzSkillData.TeleportBoost => "Teleport Boost",
                 _ => "Magic Armor",
             }
         };
@@ -33,13 +38,19 @@ public class WzSkillTests
     {
         [WzSkillData.MagicArmor] = Skill(WzSkillData.MagicArmor, 9, ("pddX", "10*x")),
         [WzSkillData.MpBoost] = BoostWithWandCrit(),
-        [WzSkillData.Teleport] = Skill(WzSkillData.Teleport, 5, ("psdSpeed", "2+4*x"), ("speedMax", "4*x")),
+        [WzSkillData.Teleport] = Skill(WzSkillData.Teleport, 5, ("psdSpeed", "2+4*x"), ("speedMax", "4*x"), ("x", "115+15*x"), ("y", "270+5*x")),
         // The 2nd job passives with the formulas of 210.img (common; Agile Magic's psdWeaponBooster/actionSpeed is boosterActionSpeed).
         [WzSkillData.HighWisdom] = Skill(WzSkillData.HighWisdom, 5, ("intX", "8*x")),
         [WzSkillData.AgileMagic] = Skill(WzSkillData.AgileMagic, 10, ("intX", "2*x"), ("boosterActionSpeed", "-2")),
         [WzSkillData.SpellMastery] = Skill(WzSkillData.SpellMastery, 10, ("mastery", "10+4*x"), ("x", "x"), ("cr", "u(x/2)")),
         [WzSkillData.MpEater] = Skill(WzSkillData.MpEater, 9, ("prop", "3*x+3"), ("x", "d(x/2)+1"), ("y", "d(x/3)")),
         [WzSkillData.ElementalDrain] = Skill(WzSkillData.ElementalDrain, 1, ("x", "3"), ("y", "5"), ("range", "800")),
+        // The 3rd job passives with the formulas of 211.img (common).
+        [WzSkillData.BurningMagic] = Skill(WzSkillData.BurningMagic, 10, ("x", "50+5*x"), ("z", "5+x")),
+        [WzSkillData.ElementAmplification] = Skill(WzSkillData.ElementAmplification, 10, ("costmpR", "5*x"), ("damR", "5*x")),
+        [WzSkillData.MagicCritical] = Skill(WzSkillData.MagicCritical, 10, ("cr", "10+2*x"), ("criticaldamage", "3+x")),
+        [WzSkillData.ElementalDecrease] = Skill(WzSkillData.ElementalDecrease, 9, ("mdR", "4*x+4"), ("u", "x+1")),
+        [WzSkillData.TeleportBoost] = Skill(WzSkillData.TeleportBoost, 1, ("x", "65"), ("y", "25")),
     };
 
     // psdWT/37/cr = 5 in 200.img: the wand (item family 137, weapon code 37) gives 5 crit rate.
@@ -172,7 +183,7 @@ public class WzSkillTests
         Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Staff).Any(m => m.Key == StatKey.CRIT_RATE && m.Label == "MP Boost"));
         Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 0).Any(m => m.Key == StatKey.CRIT_RATE && m.Label == "MP Boost"));
         Assert.IsFalse(WzSkillStats.Modifiers(FirePoisonPassives(), 200, 1302000).Any(m => m.Key == StatKey.CRIT_RATE && m.Label == "MP Boost")); // a sword
-        Assert.AreEqual(10.0, StatAggregator.Aggregate(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Wand)).Value(StatKey.CRIT_RATE)); // the wand's 5 and Spell Mastery's 5
+        Assert.AreEqual(40.0, StatAggregator.Aggregate(WzSkillStats.Modifiers(FirePoisonPassives(), 200, Wand)).Value(StatKey.CRIT_RATE)); // the wand's 5, Spell Mastery's 5 and Magic Critical's 30
     }
 
     // The max MP of an existing Fire/Poison save must not change: the old hard-coded rule was
@@ -203,9 +214,9 @@ public class WzSkillTests
         Assert.AreEqual(0.9375, StatTables.DelayScale(5));
     }
 
-    // The window shows the 1st job page and the 2nd job passives; the other pages wait for their jobs.
+    // The window shows the 1st job page, the 2nd job page and the 3rd job passives; the other pages wait for their jobs.
     [TestMethod]
-    public void FirstTwoPages_HaveTheirSkills_OthersEmpty()
+    public void FirstThreePages_HaveTheirSkills_OthersEmpty()
     {
         var pages = JobSkills.Pages(StatTables.FirePoisonMage);
         Assert.AreEqual(5, pages.Length);
@@ -215,7 +226,10 @@ public class WzSkillTests
         CollectionAssert.AreEqual(
             new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath },
             pages[1]);
-        Assert.IsTrue(pages.Skip(2).All(p => p.Length == 0));
+        CollectionAssert.AreEqual(
+            new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost },
+            pages[2]);
+        Assert.IsTrue(pages.Skip(3).All(p => p.Length == 0));
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.ElementalWeakness)); // invisible in WZ
     }
 }

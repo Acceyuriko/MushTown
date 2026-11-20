@@ -150,6 +150,10 @@ public sealed class NetClient : IDisposable
             w.Write(build.DrainPct);
             w.Write(build.DrainMax);
             w.Write(build.MarkProp);
+            w.Write(build.IgnoreElemPct);
+            w.Write(build.MagicDmgPct);
+            w.Write(build.DotTimePct);
+            w.Write(build.DotFinalPct);
         }));
     }
 

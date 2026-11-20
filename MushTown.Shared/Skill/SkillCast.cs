@@ -21,11 +21,14 @@ public sealed class SkillCost : Component
 
     // The same for a WZ skill at the level lv (0 = not learned): mpCon of the level, and the cooltime
     // when the skill has one: WZ cooltime is seconds, Teleport's teleportCooltime is milliseconds (480; the user decided).
-    public bool Pay(CharaSlot? chara, WzSkillData skill, int lv, IDictionary<int, float> cooldowns)
+    // mpCostPct (Element Amplification, percent points) raises the MP of a damage skill only (a buff, Teleport and Mana Wave cost what
+    // they cost); the raised cost is rounded down (unverified).
+    public bool Pay(CharaSlot? chara, WzSkillData skill, int lv, IDictionary<int, float> cooldowns, int mpCostPct = 0)
     {
         if (chara == null || lv <= 0) return false;
         cooldowns.TryGetValue(skill.SkillId, out float left);
         int mp = (int)skill.Value("mpCon", lv);
+        if (skill.Common.ContainsKey("damage")) mp = mp * (100 + mpCostPct) / 100;
         if (chara.Mp < mp || left > 0) return false;
         chara.Mp -= mp;
         cooldowns[skill.SkillId] = skill.Common.ContainsKey("cooltime") ? (float)skill.Value("cooltime", lv) * 1000f

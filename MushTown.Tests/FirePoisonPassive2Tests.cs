@@ -28,7 +28,7 @@ public partial class FirePoisonCombatTests
     {
         var snap = StatAggregator.Aggregate(SecondJobMods());
         Assert.AreEqual(10, snap.IntValue(StatKey.MATT));
-        Assert.AreEqual(5, snap.IntValue(StatKey.CRIT_RATE)); // no wand worn: the skill's 5 only
+        Assert.AreEqual(35, snap.IntValue(StatKey.CRIT_RATE)); // no wand worn: the skill's 5 and Magic Critical's 30
         Assert.AreEqual(50, snap.IntValue(StatKey.MASTERY));
     }
 
@@ -245,7 +245,7 @@ public partial class FirePoisonCombatTests
         b.SendState(9, 600, 100, Net.ActStand, 0, true);
         WaitSpawn(a);
         WaitSpawn(b);
-        a.SendBuild(Mage with { SkillMasteryPct = 50, MpEaterProp = 100, MpEaterPct = 5, MpEaterBossPct = 3, DrainPct = 3, DrainMax = 5 }); // the 97-byte Build; every cast procs
+        a.SendBuild(Mage with { SkillMasteryPct = 50, MpEaterProp = 100, MpEaterPct = 5, MpEaterBossPct = 3, DrainPct = 3, DrainMax = 5 }); // the 113-byte Build; every cast procs
         a.SendSkillCast(Bolt, 78);
         var hits = Enumerable.Range(0, 4).Select(_ => WaitHit(a)).ToList();
         CollectionAssert.AreEqual(new[] { 50, 0, 0, 0 }, hits.Select(h => h.MpGain).ToArray());

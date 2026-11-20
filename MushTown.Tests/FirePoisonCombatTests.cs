@@ -732,7 +732,7 @@ public partial class FirePoisonCombatTests
         WaitSpawn(a);
         WaitSpawn(b);
         WaitSpawn(b);
-        a.SendBuild(Mage with { WeaknessProp = 100 }); // the 97-byte Build; every cast marks
+        a.SendBuild(Mage with { WeaknessProp = 100 }); // the 113-byte Build; every cast marks
         var thrown = System.Diagnostics.Stopwatch.StartNew();
         a.SendSkillCast(Bolt, 78);
         var ballA = WaitBall(a); // the caster gets its own ball from the server

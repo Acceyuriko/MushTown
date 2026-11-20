@@ -45,6 +45,9 @@ using MushTown.Exporter;
 //           - the monster MP was added (the mob json got MaxMp from WZ info/maxMP; MP Eater absorbs it) and Elemental Drain's layer
 //             icons were added (assets/skill/wz/2100009/number/icon1..N from the WZ number node, kept in the json's NumberFrames, the
 //             buff-bar art). Rerun export after either change; an old mob json has MaxMp 0 and an old 2100009.json has no number icons.
+//           - the Fire/Poison 3rd-job passives were added (assets/skill/wz/2110000, 2110001, 2110009, 2110015, 2110016 .json and their
+//             icons). The skill window's page III shows them; an old export makes the client stop at start (no exported wz def for the
+//             page III ids).
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of
 //             each map and the login theme.
 //   panel   - exports one panel's art only.

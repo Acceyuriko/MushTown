@@ -14,7 +14,7 @@ public static class Damage
     public static DamageResult CalcResult(double roll01, double crit01, double def, Build build, int mobLevel,
         string mobElemAttr = "", AttackElement element = AttackElement.Physical, bool boss = false,
         double extraDmgPct = 0, double extraFinalPct = 0, double extraIedPct = 0) =>
-        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, 100, boss, 0, extraDmgPct, extraFinalPct, extraIedPct);
+        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, 100, boss, extraDmgPct, extraFinalPct, extraIedPct);
 
     public static long Calc(double roll01, double crit01, double def, Build build, int mobLevel,
         string mobElemAttr = "", AttackElement element = AttackElement.Physical, bool boss = false,
@@ -27,7 +27,7 @@ public static class Damage
     public static DamageResult SkillResult(double roll01, double crit01, double def, Build build, int pct,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
         bool boss = false, double extraDmgPct = 0, double extraFinalPct = 0, double extraIedPct = 0) =>
-        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, pct, boss, 0, extraDmgPct, extraFinalPct, extraIedPct);
+        DamageChain.Calculate(build, roll01, crit01, def, mobLevel, mobElemAttr, element, pct, boss, extraDmgPct, extraFinalPct, extraIedPct);
 
     public static long SkillCalc(double roll01, double crit01, double def, Build build, int pct,
         int mobLevel, string mobElemAttr = "", AttackElement element = AttackElement.Physical,
