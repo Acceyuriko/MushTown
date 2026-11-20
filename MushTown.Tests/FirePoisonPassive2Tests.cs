@@ -26,8 +26,8 @@ public partial class FirePoisonCombatTests
     [TestMethod]
     public void SpellMastery_AddsMagicAttackCritAndMastery()
     {
+        Assert.IsTrue(SecondJobMods().Contains(new(StatKey.MATT, StatValueType.FLAT, 10, StatSource.Skill, "Spell Mastery")));
         var snap = StatAggregator.Aggregate(SecondJobMods());
-        Assert.AreEqual(10, snap.IntValue(StatKey.MATT));
         Assert.AreEqual(35, snap.IntValue(StatKey.CRIT_RATE)); // no wand worn: the skill's 5 and Magic Critical's 30
         Assert.AreEqual(50, snap.IntValue(StatKey.MASTERY));
     }

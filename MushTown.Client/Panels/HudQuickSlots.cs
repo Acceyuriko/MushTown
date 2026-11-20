@@ -66,6 +66,7 @@ public partial class MushTownGame
             _cells[slot] = cell;
             cell.Add(new Rect(QslotCell(slot)));
             cell.Add(new ItemTip(() => ItemOn(slot))); // the tooltip of the bound item
+            cell.Add(new SkillTip(() => SkillViewOn(SlotTarget(slot)))); // the skill window's tooltip of the bound skill
             cell.Add(new QuickCell(() => SlotName(slot), () => IconOn(slot), LoadArt));
             cell.Add(new Button { Kind = ButtonKind.Silent, OnClick = () => PickSlot(slot) }); // the drop is taken before the click chain; PickSlot plays the click
             cell.Add(new Grab(() => Pickable(slot)));

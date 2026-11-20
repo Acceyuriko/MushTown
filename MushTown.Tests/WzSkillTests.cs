@@ -26,6 +26,7 @@ public class WzSkillTests
                 WzSkillData.MagicCritical => "Magic Critical",
                 WzSkillData.ElementalDecrease => "Elemental Decrease",
                 WzSkillData.TeleportBoost => "Teleport Boost",
+                WzSkillData.Meditation => "Meditation",
                 _ => "Magic Armor",
             }
         };
@@ -45,6 +46,7 @@ public class WzSkillTests
         [WzSkillData.SpellMastery] = Skill(WzSkillData.SpellMastery, 10, ("mastery", "10+4*x"), ("x", "x"), ("cr", "u(x/2)")),
         [WzSkillData.MpEater] = Skill(WzSkillData.MpEater, 9, ("prop", "3*x+3"), ("x", "d(x/2)+1"), ("y", "d(x/3)")),
         [WzSkillData.ElementalDrain] = Skill(WzSkillData.ElementalDrain, 1, ("x", "3"), ("y", "5"), ("range", "800")),
+        [WzSkillData.Meditation] = Skill(WzSkillData.Meditation, 20, ("indieMad", "10+x")), // a passive here: always-on magic attack
         // The 3rd job passives with the formulas of 211.img (common).
         [WzSkillData.BurningMagic] = Skill(WzSkillData.BurningMagic, 10, ("x", "50+5*x"), ("z", "5+x")),
         [WzSkillData.ElementAmplification] = Skill(WzSkillData.ElementAmplification, 10, ("costmpR", "5*x"), ("damR", "5*x")),

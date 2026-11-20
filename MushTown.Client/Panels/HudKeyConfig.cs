@@ -268,6 +268,7 @@ public sealed class KeyConfigWindow : UiWindow
             o.Add(new Rect(KeyRect(spot)));
             o.Add(new KeyCap(this, spot));
             int code = spot.Code;
+            o.Add(new SkillTip(() => _game.SkillViewOn(DraftOn(KeyName(code))))); // the skill window's tooltip of the bound skill
             o.Add(new Button { Kind = ButtonKind.Click, OnClick = () => PickKey(code) });
             o.Add(new Grab(() => DraftOn(KeyName(code)) != null));
             root.AddChild(o);

@@ -7,11 +7,7 @@ public partial class MushTownGame
 {
     private void ClearPeers()
     {
-        foreach (var r in _remotes.Values)
-        {
-            SkillFx.StripLoops(_fx, _world, _fxPool, 0, r);
-            _world.RemoveChild(r.Owner);
-        }
+        foreach (var r in _remotes.Values) _world.RemoveChild(r.Owner);
         _remotes.Clear();
         _appearances.Clear();
     }
@@ -21,7 +17,6 @@ public partial class MushTownGame
     private void RemovePeer(int id)
     {
         if (!_remotes.Remove(id, out var gone)) return;
-        SkillFx.StripLoops(_fx, _world, _fxPool, 0, gone); // its buff loops leave with it
         _world.RemoveChild(gone.Owner);
     }
 

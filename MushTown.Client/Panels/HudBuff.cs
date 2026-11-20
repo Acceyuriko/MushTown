@@ -3,38 +3,26 @@ using MushTown.Shared;
 
 namespace MushTown.Client;
 
-// The buff bar at the top right of the HUD: the official favoriteBuff frame
-// (UI/StatusBar3.img/BuffSetting) around the live buff icons. Each icon is
-// the icon of the buffed skill, with the time left on it.
+// The buff bar at the top right of the HUD: the live buff icons side by side, no frame and no padding.
+// Each icon is the icon of the buffed skill, with the time left on it.
 public partial class MushTownGame
 {
     // Every number of the bar lives in layouts/panel-buff.json.
     internal static readonly PanelLayout _buffLay = PanelLayout.Load(Path.Combine(MushTownGame.LayoutsDir, "panel-buff.json"));
 
-    // The frame art (MushTown.Exporter ExportBuffUi). Missing files fail loud.
-    private static readonly string[] BuffFrameFiles = new[]
-    {
-        "buff_frame_nw.png", "buff_frame_n.png", "buff_frame_ne.png",
-        "buff_frame_sw.png", "buff_frame_s.png", "buff_frame_se.png",
-        "buff_frame_w.png", "buff_frame_c.png", "buff_frame_e.png",
-    };
-
-    // The art sizes: the skill icon is 32x32, the frame border is 5px.
+    // The art size: the skill icon is 32x32.
     public const int BuffIconSize = 32;
-    public const int BuffFramePad = 5;
-    private const int BuffFrameHeight = BuffFramePad * 2 + BuffIconSize;
     // The live buffs: the skill id and the milliseconds left, in id order.
     private readonly List<(int id, float ms)> _liveBuffs = new();
 
     // The buff bar object. The HUD chain puts it in the game scene.
     private GameObject BuildBuffBar()
     {
-        foreach (string f in BuffFrameFiles) LoadTexture("ui/" + f);
         if (_wzSkills.TryGetValue(WzSkillData.ElementalDrain, out var drain)) // the layer icons are drawn live: load them now
             foreach (string f in drain.NumberFrames) LoadTexture(f);
         var bar = new GameObject { NoHit = true }; // art only: the clicks go through
         bar.Add(new Rect(BuffBarRect()));
-        bar.Add(new BuffBarArt(() => LiveBuffs(), id => _wzSkills.TryGetValue(id, out var wz) ? wz.Icon : _skills[id].Icon,
+        bar.Add(new BuffBarArt(() => LiveBuffs(), id => _skills[id].Icon,
             () => CurrentDrainLayers(), DrainIcon));
         return bar;
     }
@@ -56,19 +44,18 @@ public partial class MushTownGame
         return _liveBuffs;
     }
 
-    // The bar box: the right edge is fixed, the frame grows to the left.
+    // The bar box: the right edge is fixed, the icons grow to the left.
     // The width is the widest the bar gets (the official max count).
     private Rectangle BuffBarRect()
     {
-        int right = _buffLay.Get("right", 1362);
-        int top = _buffLay.Get("top", 0);
-        int w = _buffLay.Get("iconPitch", 39) * _buffLay.Get("maxCount", 10);
-        return new Rectangle(right - w, top, w, BuffFrameHeight);
+        int right = _buffLay.Get("right", 1357);
+        int top = _buffLay.Get("top", 5);
+        int w = _buffLay.Get("iconPitch", 32) * _buffLay.Get("maxCount", 10);
+        return new Rectangle(right - w, top, w, BuffIconSize);
     }
 }
 
-// The buff bar art: the official frame around the live buff icons (the skill
-// icon of each buff) with the time left on the icon. Elemental Drain rides in
+// The buff bar art: the live buff icons (the skill icon of each buff) with the time left on the icon. Elemental Drain rides in
 // front as its WZ number icon (the layer count is drawn on the icon; no time).
 public sealed class BuffBarArt : Component, IDrawable
 {
@@ -90,21 +77,18 @@ public sealed class BuffBarArt : Component, IDrawable
         foreach (var b in _buffs()) entries.Add((_icon(b.id), BuffTimeText(b.ms)));
         if (entries.Count == 0) return; // no buff, no bar
         var box = Owner.Get<Rect>()!.Screen;
-        int pad = MushTownGame.BuffFramePad; // the border of the frame art
         int size = MushTownGame.BuffIconSize; // the skill icon is 32x32
-        int pitch = lay.Get("iconPitch", 39);
-        int width = pad * 2 + size + (entries.Count - 1) * pitch;
-        int x = box.Right - width;
-        NineSlice.Draw(gfx, "buff_frame", new Rectangle(x, box.Y, width, pad * 2 + size));
+        int pitch = lay.Get("iconPitch", 32);
+        int x = box.Right - size - (entries.Count - 1) * pitch;
         for (int i = 0; i < entries.Count; i++)
         {
-            int ix = x + pad + i * pitch;
+            int ix = x + i * pitch;
             if (entries[i].image != "")
-                gfx.Sb.Draw(gfx.Tex(entries[i].image), new Vector2(ix, box.Y + pad), Color.White);
+                gfx.Sb.Draw(gfx.Tex(entries[i].image), new Vector2(ix, box.Y), Color.White);
             if (entries[i].time is not { } time) continue;
             var t = gfx.Ui.GetSmall(time);
             int tx = ix + size - t.Width - lay.Get("timeRight", 1);
-            int ty = box.Y + pad + size - t.Height - lay.Get("timeBottom", 1);
+            int ty = box.Y + size - t.Height - lay.Get("timeBottom", 1);
             int sh = lay.Get("shadow", 1);
             gfx.Sb.Draw(t, new Vector2(tx - sh, ty), new Color(0, 0, 0, 200));
             gfx.Sb.Draw(t, new Vector2(tx + sh, ty), new Color(0, 0, 0, 200));

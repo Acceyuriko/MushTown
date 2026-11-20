@@ -113,8 +113,6 @@ public partial class MushTownGame
             mods.Add(new(StatKey.ATT_PCT, StatValueType.PERCENT,
                 _skills[SkillData.SpiritBlade].AtkPct * SkillLv(SkillData.SpiritBlade), StatSource.Buff));
 
-        if (_fighter.Buffs.ContainsKey(WzSkillData.Meditation)) mods.Add(WzSkillStats.Meditation(_wzSkills)); // Meditation: magic attack while it runs
-
         // The stat part of Defense reads the final STR, DEX and LUK, so it is added after a first pass.
         var total = StatAggregator.Aggregate(mods);
         mods.Add(new(StatKey.DEF, StatValueType.FLAT,

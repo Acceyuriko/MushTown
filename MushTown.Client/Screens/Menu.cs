@@ -193,6 +193,8 @@ public partial class MushTownGame
             //   worldmap poses the world map window: worldmapsearch with the search window, worldmapask the confirm box,
             //     worldmapcombo the open area list, worldmapworld the open world list, worldmapmaps the open map list,
             //     worldmaproot the Arcane River root page after Arcane River is picked in the first list.
+            //   keyskills is the key window with Slash Blast, Meditation, Flame Orb and Poison Breath on the keys 2 to 5 (the strip shows them too):
+            //     park --hover on a key of the keyboard or a cell of the strip to see the skill tooltip.
             //   keys poses the key window: quickedit has the Quick Slots button clicked and the Q cell picked, quickeditswap
             //     has W pressed on the Q cell (two cells swap keys), quickeditnocap has Backspace, CapsLock, right Shift,
             //     numpad 0 and the Windows key pressed on the first five cells (keys with no cap art: the cell draws the key name).
@@ -218,7 +220,7 @@ public partial class MushTownGame
                 "chars" or "chars2" or "delete" => Screen.Chars,
                 "job" or "job2" => Screen.Job,
                 "setup" => Screen.Setup,
-                "inv" or "use" or "cashuserename" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "equipsetpart" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "keys" or "quickedit" or "quickeditswap" or "quickeditnocap" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
+                "inv" or "use" or "cashuserename" or "invscroll" or "stat" or "stat2" or "stat200" or "death" or "equipui" or "equipsetpart" or "decorations" or "damageskins" or "damageskinsempty" or "damageskinsselect" or "damageskinsdeleted" or "damageskinsask" or "dec" or "dropqty" or "dropqtymax" or "hud" or "fashionworn" or "skill" or "skillscroll" or "quest" or "questask" or "questforfeit" or "questpick" or "talk" or "settings" or "shop" or "shopscroll" or "shopnotice" or "minimap" or "minimapbig" or "minimapnpc" or "minimapfilter" or "worldmap" or "worldmapsearch" or "worldmapask" or "worldmapcombo" or "worldmapworld" or "worldmapmaps" or "worldmaproot" or "keys" or "keyskills" or "quickedit" or "quickeditswap" or "quickeditnocap" or "menu" or "guide" or "guidecard" or "macro" or "macrohold" or "macrobind" or "macromove" or "party" or "partysearch" or "partyask" or "cashshop" or "cashshopfashion" or "cashshopfashionoutfits" or "cashshopreset" or "cashshopempty" or "cashshopcart" or "cashshopladder" or "cashshopbeauty" or "cashshopbeautygear" or "cashshopface" or "cashshopfacegear" or "cashshopcheckout" or "cashshopbuyall" or "cashshopnotice" => Screen.Game,
                 _ => Screen.Saves,
             };
             _slot = _screen == Screen.Job || _screen == Screen.Setup ? 1 : 0; // job/setup target the empty slot
@@ -292,6 +294,17 @@ public partial class MushTownGame
             if (shotScreen == "worldmapmaps") _worldMapWindow.PoseCombo(2);
             if (shotScreen == "worldmaproot") _worldMapWindow.PoseWorld(1);
             if (shotScreen == "keys") KeyWindow?.Open();
+            if (shotScreen == "keyskills") // the key window with four skills on keys 2 to 5 (the same keys sit on the strip): --hover on a key or a strip cell shows the skill tooltip
+            {
+                var chara = _save!.Slots[_slot]!;
+                KeyBindings.Ensure(chara);
+                var table = chara.KeyPresets![chara.ActivePreset];
+                table["D2"] = $"Skill:{SkillData.SlashBlast}";
+                table["D3"] = $"Skill:{WzSkillData.Meditation}"; // a passive (an old save may keep it on a key)
+                table["D4"] = $"Skill:{WzSkillData.FlameOrb}";
+                table["D5"] = $"Skill:{WzSkillData.PoisonBreath}";
+                KeyWindow?.Open();
+            }
             if (shotScreen is "quickedit" or "quickeditswap" or "quickeditnocap") // the strip key editing: the Q cell picked; the swap shot has pressed W on it; the nocap shot has pressed five keys without cap art on cells 0..4
             {
                 KeyWindow!.Open();
@@ -624,9 +637,9 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect or hit art: run the exporter (export)");
             if (wz.SkillId == WzSkillData.ManaWave && !wz.Children.Any(c => c.SkillId == WzSkillData.ManaWaveFloat && c.HasFloatArt))
                 throw new InvalidDataException($"skill {wz.SkillId} has no child {WzSkillData.ManaWaveFloat} (the slow fall) with its art (special, specialAffected): run the exporter (export)");
-            if (wz.SkillId == WzSkillData.Meditation && (wz.AffectedFrames.Count == 0 || !wz.Art.TryGetValue("affected", out var affected) || affected.Origins.Length != wz.AffectedFrames.Count))
-                throw new InvalidDataException($"skill {wz.SkillId} has no affected loop art: run the exporter (export)");
-            if ((wz.Common.ContainsKey("damage") || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
+            if (wz.SkillId == WzSkillData.Meditation && wz.Kind != SkillData.KindPassive)
+                throw new InvalidDataException($"skill {wz.SkillId} is not a passive: run the exporter (export)");
+            if ((wz.Common.ContainsKey("damage") || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
             if (wz.SkillId == WzSkillData.EnergyBolt && (wz.BallFrames.Count == 0 || wz.SpecialFrames.Count == 0))
                 throw new InvalidDataException($"skill {wz.SkillId} has no ball or special art: run the exporter (export)");
@@ -704,7 +717,6 @@ public partial class MushTownGame
             foreach (string f in wz.HitFrames) LoadTexture(f);
             foreach (string f in wz.BallFrames) LoadTexture(f);
             foreach (string f in wz.SpecialFrames) LoadTexture(f);
-            foreach (string f in wz.AffectedFrames) LoadTexture(f);
             foreach (var art in wz.Children.SelectMany(c => c.Art.Values)) // the slow fall's bubble and end
                 foreach (string f in art.Frames) LoadTexture(f);
         }

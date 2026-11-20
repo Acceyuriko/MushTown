@@ -78,20 +78,6 @@ public partial class MushTownGame
             SnapCamera();
             return;
         }
-        if (wzSkill && _wzSkills[_shotSkill].Kind == SkillData.KindBuff)
-        {
-            // a WZ buff (Meditation) runs the real path too: pay, cast (timer, loop, the stats); --flyms <ms> then ages the effects, so
-            // the cast effect and the affected loop are shown mid-play. The demo must be a Fire/Poison hero (--job 210).
-            _save ??= new SaveData();
-            _save.Slots[_slot] ??= DemoChara();
-            var buff = _wzSkills[_shotSkill];
-            if (!TryPayWzSkill(buff))
-                throw new InvalidDataException($"--skill {_shotSkill} cannot cast: the demo needs the job (--job 210) and {(int)buff.Value("mpCon", buff.MaxLevel)} MP");
-            CastBuff(_shotSkill);
-            RunShotFly(_shotFlyms);
-            SnapCamera();
-            return;
-        }
         if (_shotTeleport != null)
         {
             PoseTeleport();

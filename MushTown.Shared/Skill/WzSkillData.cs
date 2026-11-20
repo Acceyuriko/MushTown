@@ -4,7 +4,7 @@ namespace MushTown.Shared;
 // (the common formulas, already worked out), the rectangles, the flags, and the tooltip text at max
 // level. This is a table of its own: the warrior SkillData is a hand-made feel table and is not
 // extended. Energy Bolt is cast (the ball flies, the rectangle and the segments judge on arrival, the art); Flame Orb is cast (no ball:
-// the rectangle judges at the body action's attack frame); Meditation is a buff (MATT, effect and the affected loop); Teleport is cast (TeleportRules);
+// the rectangle judges at the body action's attack frame); Meditation is a passive (MATT, always on); Teleport is cast (TeleportRules);
 // Magic Guard, Elemental Weakness, Magic Armor and MP Boost take effect; Mana Wave is cast.
 // The frame meta of one art: per frame, the origin (x, y: the point of the png that sits on the anchor) and the delay in ms.
 public sealed class WzArt
@@ -61,7 +61,6 @@ public sealed class WzSkillData
     public List<string> HitFrames { get; set; } = new();  // the hit spark art (hit/0), only for a damage skill
     public List<string> BallFrames { get; set; } = new(); // the flying ball art (ball), only for a skill that throws one (Energy Bolt)
     public List<string> SpecialFrames { get; set; } = new(); // the landing explosion art (special), only for a skill that has one (Energy Bolt)
-    public List<string> AffectedFrames { get; set; } = new(); // the loop on the buffed player (affected), only for a buff that has one (Meditation)
     public List<string> NumberFrames { get; set; } = new(); // the number icons (WZ number/icon1..N) with the count drawn in, for the buff bar (Elemental Drain)
     // The WZ origin and delay of every frame of the art that is drawn the WZ way: "effect", "hit", "ball", "special"
     // (the same order as the frame lists). The cast effect uses both its WZ delay and its WZ origin.

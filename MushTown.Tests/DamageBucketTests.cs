@@ -47,6 +47,7 @@ public partial class FirePoisonCombatTests
             ["High Wisdom"] = new[] { (StatKey.INT, StatValueType.FLAT) }, // "Permanently increase INT"
             ["Agile Magic"] = new[] { (StatKey.INT, StatValueType.FLAT), (StatKey.ATTACK_SPEED, StatValueType.FLAT) },
             ["Spell Mastery"] = new[] { (StatKey.MATT, StatValueType.FLAT), (StatKey.CRIT_RATE, StatValueType.FLAT), (StatKey.MASTERY, StatValueType.FLAT) },
+            ["Meditation"] = new[] { (StatKey.MATT, StatValueType.FLAT) }, // a passive now: magic attack, no damage bucket
             ["Magic Critical"] = new[] { (StatKey.CRIT_RATE, StatValueType.FLAT), (StatKey.CRIT_DAMAGE, StatValueType.FLAT) },
             ["Elemental Decrease"] = new[] { (StatKey.FINAL_DAMAGE_PCT, StatValueType.MULTIPLIER), (StatKey.IGNORE_ELEMENT_RESISTANCE_PCT, StatValueType.FLAT) },
             ["Element Amplification"] = new[] { (StatKey.MP_COST_PCT, StatValueType.FLAT), (StatKey.MAGIC_DAMAGE_PCT, StatValueType.FLAT) }, // "Damage: +50%"

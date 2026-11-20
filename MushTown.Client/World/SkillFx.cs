@@ -21,8 +21,6 @@ public sealed class SkillFx : Component
     public float X;
     public float Y;
     public PlayerMover? Rider; // a buff loop rides the player; one-shots leave it null
-    public PeerArt? Peer; // a buff loop of another player rides that peer (its feet, WZ origin); null for ours and for one-shots
-    public float LifeMs; // a peer's loop (Peer set) has no timer of its own: it ends after this many ms, so it must be set (0 ends it at once); other loops ignore it and live until stripped
     public int[][]? Origins; // the WZ origin of each frame (cast effect, ball, special, hit); null: the frame is centered
     public int[]? Delays;    // the WZ delay of each frame; null: the shared Delay
     // A ball sits where its projectile is (the same node holds both); the rest leave it null. The Projectile must be
@@ -32,12 +30,11 @@ public sealed class SkillFx : Component
     // The buff ended: drop the loop of that skill, and only that one. A cast
     // effect of the same skill keeps playing. The node must leave the tree, or
     // the next spawn adds it a second time and it ticks twice per frame.
-    // peer: the loops of that peer (skill id 0 = every skill of it); null: ours.
-    public static void StripLoops(List<SkillFx> live, GameObject world, Stack<SkillFx> pool, int id, PeerArt? peer = null)
+    public static void StripLoops(List<SkillFx> live, GameObject world, Stack<SkillFx> pool, int id)
     {
         for (int i = live.Count - 1; i >= 0; i--)
         {
-            if (!live[i].Loop || live[i].Peer != peer || (id != 0 && live[i].Skill != id)) continue;
+            if (!live[i].Loop || live[i].Skill != id) continue;
             world.RemoveChild(live[i].Owner);
             pool.Push(live[i]);
             live.RemoveAt(i);
@@ -50,8 +47,6 @@ public sealed class SkillFx : Component
     {
         Loop = false;
         Rider = null;
-        Peer = null;
-        LifeMs = 0;
         Origins = null;
         Delays = null;
         Frames = null!;
@@ -70,18 +65,6 @@ public sealed class SkillFx : Component
             {
                 Y = Rider.Y;
                 FacingRight = Rider.FacingRight;
-            }
-        }
-        if (Peer != null) // the loop of another player: its feet and facing
-        {
-            X = Peer.X;
-            Y = Peer.Y;
-            FacingRight = Peer.FacingRight;
-            LifeMs -= dt * 1000f;
-            if (LifeMs <= 0)
-            {
-                Owner.Dead = true;
-                return;
             }
         }
         if (Flight != null) // a ball follows its projectile (added before this component, so it moved already)

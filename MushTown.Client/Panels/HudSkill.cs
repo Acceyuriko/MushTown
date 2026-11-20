@@ -66,13 +66,21 @@ public partial class MushTownGame
     // The cells of one page: the default passives or the skills of the job.
     private List<SkillView> SkillPageOf(int tab) => tab == SkillTabBeginner
         ? _passives.Rows.Select(r => new SkillView(r.Name, r.Icon, r.Icon, r.MaxLevel, r.Desc, r.Effect, 0, true)).ToList()
-        : JobSkills.Pages(SkillJob)[tab - 1].Select(id =>
-        {
-            if (_wzSkills.TryGetValue(id, out var wz))
-                return new SkillView(wz.Name, wz.Icon, wz.Disabled, wz.MaxLevel, wz.Desc, wz.Effect, id, wz.Kind == SkillData.KindPassive);
-            var s = _skills[id];
-            return new SkillView(s.Name, s.Icon, s.Disabled, s.MaxLevel, s.Desc, new[] { SkillText.Effect(s, s.MaxLevel) }, id, s.Kind == SkillData.KindPassive);
-        }).ToList();
+        : JobSkills.Pages(SkillJob)[tab - 1].Select(id => SkillViewOf(id)!).ToList();
+
+    // One skill as the cell and the tooltip show it: the skill window, the key window and the quick slots all read it from here.
+    // Null for an id with no skill (an old save may bind one that is gone).
+    internal SkillView? SkillViewOf(int id)
+    {
+        if (_wzSkills.TryGetValue(id, out var wz))
+            return new SkillView(wz.Name, wz.Icon, wz.Disabled, wz.MaxLevel, wz.Desc, wz.Effect, id, wz.Kind == SkillData.KindPassive);
+        if (!_skills.TryGetValue(id, out var s)) return null;
+        return new SkillView(s.Name, s.Icon, s.Disabled, s.MaxLevel, s.Desc, new[] { SkillText.Effect(s, s.MaxLevel) }, id, s.Kind == SkillData.KindPassive);
+    }
+
+    // The skill a key or a quick slot binds: its view, null when the cell binds no skill.
+    internal SkillView? SkillViewOn(BindTarget? target) =>
+        target is { Kind: BindKind.Skill } skill ? SkillViewOf(skill.Id) : null;
 
     private void BuildSkillScene()
     {

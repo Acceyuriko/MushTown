@@ -22,10 +22,6 @@ public sealed class Fighter : Component
 
     private float _regenMs = RegenTickMs; // ms to the next Self Recovery tick
 
-    // A buff with a timed recast (Meditation) may be cast when it is not running, or again on a fresh key press (that refreshes it);
-    // a key held down is not fresh after its first frame, so it never recasts a running buff (no MP, no message, no effect again).
-    public bool CanCastBuff(int id, bool fresh) => fresh || !Buffs.ContainsKey(id);
-
     // Starts a swing or a cast: the lock is the base time x the scale (stage 4 = 1.0).
     public void StartAttack(float baseMs, float scale)
     {

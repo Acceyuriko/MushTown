@@ -58,14 +58,6 @@ public static class WzSkillStats
         return ((int)drain.Value("x", drain.MaxLevel), (int)drain.Value("y", drain.MaxLevel));
     }
 
-    // Meditation while its buff runs: magic attack (WZ indieMad = 10 + x) at max level, a Buff record. The buff lasts time seconds
-    // (WZ time = 40 + 10 * x, read by the caster). The party part (lt/rb) is not used: the buff is for the caster only.
-    public static StatModifier Meditation(IReadOnlyDictionary<int, WzSkillData> skills)
-    {
-        var meditation = skills[WzSkillData.Meditation];
-        return new(StatKey.MATT, StatValueType.FLAT, meditation.Value("indieMad", meditation.MaxLevel), StatSource.Buff, meditation.Name);
-    }
-
     // Teleport's horizontal and vertical distance at max level, with Teleport Boost's added (WZ x and y of both).
     public static (int horizontal, int vertical) TeleportReach(IReadOnlyDictionary<int, WzSkillData> skills)
     {
@@ -95,6 +87,9 @@ public static class WzSkillStats
         yield return new(StatKey.MATT, StatValueType.FLAT, spell.Value("x", spell.MaxLevel), StatSource.Skill, spell.Name);
         yield return new(StatKey.CRIT_RATE, StatValueType.FLAT, spell.Value("cr", spell.MaxLevel), StatSource.Skill, spell.Name);
         yield return new(StatKey.MASTERY, StatValueType.FLAT, spell.Value("mastery", spell.MaxLevel), StatSource.Skill, spell.Name);
+        // Meditation is a passive (the user's decision): magic attack (WZ indieMad = 10 + x) at max level, always on. The WZ cast, duration and party part are not used.
+        var meditation = skills[WzSkillData.Meditation];
+        yield return new(StatKey.MATT, StatValueType.FLAT, meditation.Value("indieMad", meditation.MaxLevel), StatSource.Skill, meditation.Name);
         var critical = skills[WzSkillData.MagicCritical];
         yield return new(StatKey.CRIT_RATE, StatValueType.FLAT, critical.Value("cr", critical.MaxLevel), StatSource.Skill, critical.Name);
         yield return new(StatKey.CRIT_DAMAGE, StatValueType.FLAT, critical.Value("criticaldamage", critical.MaxLevel), StatSource.Skill, critical.Name);

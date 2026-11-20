@@ -22,9 +22,8 @@ namespace MushTown.Exporter;
 // starts with a blank 1x1 frame of 120 ms (no origin, no picture in the canvas); it is left out, so the effect starts at once
 // (CastFrames, Art.Origins and Art.Delays keep the same count). Its child 2001012 (the slow fall) gets the art of its special and specialAffected (SaveWzFloatArt).
 // The 2nd job actives (210.img): Flame Orb is a damage skill with no ball and no special: its effect (14 pictures, origins
-// walking from 172 to 583 along x) is the orb and its blast, and hit/0 is the spark on each mob. Meditation is a buff (info type 10):
-// its cast effect (effect, 19 pictures) and its loop on the buffed player (affected, AffectedFrames and Art["affected"]; the first
-// WZ frame of affected has only a delay of 270 ms and no picture, it is left out like Mana Wave's blank lead-in).
+// walking from 172 to 583 along x) is the orb and its blast, and hit/0 is the spark on each mob. Meditation is a buff in WZ (info type 10),
+// but the user made it a passive: it is exported as a passive (no effect and no affected art), and its Effect line is "Magic ATT: +<indieMad>".
 // Poison Breath (210.img) is a damage skill with no ball and no special: its effect is the breath at the caster, hit/0 the poison on each mob; its
 // Common also keeps dot, dotInterval and dotTime (the damage-over-time numbers), and there is no ball, so its box is centred on the target mob.
 // The 3rd job passives (211.img: Burning Magic, Element Amplification, Magic Critical, Elemental Decrease, Teleport Boost) have no art but their
@@ -59,12 +58,14 @@ public static partial class Export
             var values = WzSkillValues(baseRoot, id);
             data.Desc = Lines(Fill(Text(strNode.Nodes["desc"]), values, data.MaxLevel));
             data.Effect = Lines(Fill(Text(strNode.Nodes["h"]), values, data.MaxLevel));
+            if (id == WzSkillData.Meditation) data.Effect = new() { $"Magic ATT: +{(int)data.Value("indieMad", data.MaxLevel)}" }; // the WZ line has the MP cost, the party and the duration: none of them is true for a passive
+            if (id == WzSkillData.Meditation) data.Desc = new() { "Permanently enhances your Magic ATT." }; // our own line, not the WZ text (which says temporary and party)
             data.Icon = $"skill/wz/{id}/icon.png";
             data.Disabled = $"skill/wz/{id}/dis.png";
             if (!SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Icon))
                 || !SavePassiveIcon(baseRoot, skill, id, Path.Combine(outDir, data.Disabled), "iconDisabled"))
                 return false;
-            if ((data.Common.ContainsKey("damage") || data.Kind == SkillData.KindBuff || id is WzSkillData.Teleport or WzSkillData.ManaWave) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
+            if ((data.Common.ContainsKey("damage") || id is WzSkillData.Teleport or WzSkillData.ManaWave) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
             if (id == WzSkillData.EmpiricalKnowledge && !SaveMarkArt(baseRoot, id, data, outDir, saved)) return false;
             if (id == WzSkillData.ElementalDrain && !SaveNumberArt(baseRoot, skill, id, data, outDir)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child))
@@ -91,7 +92,7 @@ public static partial class Export
     {
         var node = skill.Find($@"_Canvas\{id / 10000}.img\skill\{id}");
         bool teleport = id == WzSkillData.Teleport; // effect/0: the blue one, see the header
-        bool noHit = id is WzSkillData.Teleport or WzSkillData.ManaWave || data.Kind == SkillData.KindBuff; // a cast effect only (a buff also has its affected loop)
+        bool noHit = id is WzSkillData.Teleport or WzSkillData.ManaWave; // a cast effect only
         var effect = teleport ? node?.Nodes["effect"]?.Nodes["0"] : node?.Nodes["effect"];
         var hit = node?.Nodes["hit"]?.Nodes["0"];
         if (effect == null || (hit == null && !noHit))
@@ -107,7 +108,7 @@ public static partial class Export
             data.Art["hit"] = ReadWzArt(meta.Nodes["hit"]!.Nodes["0"]!);
             if (!SaveSkillFrames(hit, $"skill/wz/{id}/hit", data.HitFrames, outDir, saved, id)) return false;
         }
-        foreach ((string name, List<string> into) in new[] { ("ball", data.BallFrames), ("special", data.SpecialFrames), ("affected", data.AffectedFrames) })
+        foreach ((string name, List<string> into) in new[] { ("ball", data.BallFrames), ("special", data.SpecialFrames) })
         {
             if (node!.Nodes[name] is not { } frames) continue;
             if (!SaveSkillFrames(frames, $"skill/wz/{id}/{name}", into, outDir, saved, id)) return false;
@@ -263,7 +264,8 @@ public static partial class Export
         data.ElemAttr = Text(node.Nodes["elemAttr"]);
         data.Invisible = node.Nodes["invisible"] != null;
         // No mpCon: always on (passive). info.type 10: a timed self effect (buff). Else cast for an effect.
-        data.Kind = !data.Common.ContainsKey("mpCon") ? SkillData.KindPassive
+        // Meditation is the exception: WZ has it as a buff, the user made it a passive (always-on magic attack, no cast).
+        data.Kind = !data.Common.ContainsKey("mpCon") || id == WzSkillData.Meditation ? SkillData.KindPassive
             : data.Info.GetValueOrDefault("type") == "10" ? SkillData.KindBuff
             : SkillData.KindActive;
         return data;

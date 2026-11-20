@@ -35,6 +35,8 @@ using MushTown.Exporter;
 //           - the Fire/Poison 2nd-job actives were added (assets/skill/wz/2101001.json Meditation and 2101004.json Flame Orb, their icons
 //             and their art under assets/skill/wz/<id>/: effect, hit for Flame Orb, effect and affected for Meditation; the json has
 //             AffectedFrames and Art["affected"]). An old export makes the client stop at start.
+//           - Meditation became a passive (assets/skill/wz/2101001.json: Kind passive, Effect "Magic ATT: +30", no effect or affected
+//             art; the old json is a buff and the client stops at start). The buff bar frame art (ui/buff_frame_*.png) is no longer drawn.
 //           - Poison Breath was added (assets/skill/wz/2101005.json, its icons and its art under assets/skill/wz/2101005/: effect and hit; the
 //             json has the dot, dotInterval and dotTime formulas in Common). The skill window's page II lists it; an old export makes the
 //             client stop at start (no exported wz def for the page II ids).
