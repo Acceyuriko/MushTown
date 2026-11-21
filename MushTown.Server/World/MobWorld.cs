@@ -707,7 +707,7 @@ public sealed class MobWorld
         }
         if (wz.IsSummon)
         {
-            StartSummon(map, x, y, facingRight, rng, build, wz, element, pct, attacker, dot);
+            StartSummon(map, x, y, facingRight, rng, build, wz, element, attacker, dot);
             return new List<Hit>();
         }
         int mobCount = (int)wz.Value("mobCount", wz.MaxLevel);
@@ -808,7 +808,6 @@ public sealed class MobWorld
             Dot = dot,
             StunProp = stuns ? (int)wz.Value("subProp", wz.MaxLevel) : 0,
             StunMs = stuns ? (int)(wz.Value("time", wz.MaxLevel) * 1000) : 0,
-            NormalPct = NormalPctOf(wz),
             Map = map,
             CasterX = casterX,
             CasterY = casterY,
@@ -945,9 +944,9 @@ public sealed class MobWorld
     // frame (the first tick after it, like a ball's landing). It is judged every tick: see ZoneTick. The clients get the zone as one event.
     // lifeMs is how long it stays and waitMs the time before it starts; mobCount caps the mobs it works on (0 = no cap).
     // A zone that spreads (stepMs > 0) starts as a line at x and widens to its box in steps (GroundZone.Spread: the caller sets StepPx and FirstMs); clipLeft and clipRight cut that box (the edges of a platform).
-    // segments is the number of hits of the cast hit a zone does when it starts. Returns the uid of the zone.
+    // Returns the uid of the zone.
     private int StartZone(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, AttackElement element, int pct, int attacker, Dot? dot,
-        int lifeMs, int waitMs, int mobCount, int segments = 1, float clipLeft = float.NegativeInfinity, float clipRight = float.PositiveInfinity, int stepMs = 0, float reach = 0)
+        int lifeMs, int waitMs, int mobCount, float clipLeft = float.NegativeInfinity, float clipRight = float.PositiveInfinity, int stepMs = 0, float reach = 0)
     {
         var lt = wz.Vectors["lt"];
         var rb = wz.Vectors["rb"];
@@ -972,7 +971,7 @@ public sealed class MobWorld
         _zones.Add(new LiveZone
         {
             Zone = zone,
-            Cast = new Pending { Wz = wz, Rng = rng, Build = build, Element = element, Pct = pct, Attacker = attacker, Dot = dot, MobCount = mobCount, Segments = segments, CasterX = x, CasterY = y, Map = map },
+            Cast = new Pending { Wz = wz, Rng = rng, Build = build, Element = element, Pct = pct, Attacker = attacker, Dot = dot, MobCount = mobCount, CasterX = x, CasterY = y, Map = map },
         });
         _zoneEvents.Add(new ZoneEvent(zone.Uid, wz.SkillId, map, zone.FullLeft, zone.FullRight, y, zone.LifeMs, zone.WaitMs, false, x, stepMs, 0));
         return zone.Uid;
@@ -981,11 +980,11 @@ public sealed class MobWorld
     // Creeping Toxin: the totem (a summon, SummonUnit) stands on the floor ToxinFrontPx in front of the caster for `time` seconds, and its pool (a spreading ground zone with the same
     // wait and life) widens from the totem to both sides in steps (GroundZone.Spread: the first at WzSkillData.ToxinFirstPoolMs, then WZ u px every WZ subTime ms, all 未核实 readings) as far as
     // ToxinPoolLayout.Reach and no further than the platform goes (SceneMath.PlatformSpan). The totem never blows up and the pool keeps its poison to the end. The pool does the work of a zone:
-    // the cast hit (damage %, attackCount hits, at most mobCount mobs, only those in the WZ cast box round the totem) once when it starts, then the DoT on every mob in it (no mob cap).
+    // no direct hit when it starts (the user, 2026-11-21) and no mob cap: its damage is the DoT on every mob in it and the blasts.
     // The pool keeps its poison when pools blow up (未核实: the user has not said). The pool is cut into pools (ToxinPoolLayout) that a fire hit blows
     // up (DetonatePool): a pool is there when the spreading reaches its middle (Born, ms of the zone's age). A caster has one totem of a skill: a new one takes the old one away (未核实).
     // No floor under the totem: nothing is made (the client does not cast then and pays nothing).
-    private void StartSummon(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, AttackElement element, int pct, int attacker, Dot? dot)
+    private void StartSummon(int map, float x, float y, bool facingRight, Random rng, Build build, WzSkillData wz, AttackElement element, int attacker, Dot? dot)
     {
         var footholds = _maps[map].Footholds;
         x = ToxinPoolLayout.TotemX(x, facingRight);
@@ -997,8 +996,8 @@ public sealed class MobWorld
         int life = (int)(wz.Value("time", wz.MaxLevel) * 1000), wait = wz.AttackDelayMs + TickMs, step = (int)wz.Value("subTime", wz.MaxLevel), stepPx = ToxinPoolLayout.StepPx(wz);
         int reach = ToxinPoolLayout.Reach(wz);
         var (edgeLeft, edgeRight) = SceneMath.PlatformSpan(footholds, (int)x, gy, reach);
-        int zoneUid = StartZone(map, x, gy, true, rng, build, wz, element, pct, attacker, dot, life, wait, (int)wz.Value("mobCount", wz.MaxLevel),
-            (int)wz.Value("attackCount", wz.MaxLevel), edgeLeft, edgeRight, step, reach);
+        int zoneUid = StartZone(map, x, gy, true, rng, build, wz, element, 0, attacker, dot, life, wait, 0,
+            clipLeft: edgeLeft, clipRight: edgeRight, stepMs: step, reach: reach); // mobCount 0: no cap, the poison reaches every mob in the pool (WZ mobCount, attackCount and damage of Creeping Toxin are its blast's: see ExplodePool)
         var zone = _zones.Find(z => z.Zone.Uid == zoneUid)!.Zone;
         zone.StepPx = stepPx;
         zone.FirstMs = WzSkillData.ToxinFirstPoolMs;
@@ -1014,29 +1013,20 @@ public sealed class MobWorld
     // gets it refreshed (its time starts again, the beat of its ticks stays). So a mob that walks in is poisoned in that very tick, and many zones of one caster
     // give a mob one DoT between them; a DoT of another skill or of another caster does not count. In the tick the zone starts, the cast also hits every mob in the box
     // once (the cast's damage %, one segment, no mob cap: WZ has no mobCount); the mist itself does no damage, only its poison does, through the pipeline in DotTick.
-    // A zone with a mob cap (Ignite's wall, which has no cast hit) works on the nearest mobs of its box only. A spreading pool (Creeping Toxin) poisons every mob in it (no cap);
-    // its mobCount caps only the cast hit.
+    // A zone with a mob cap (Ignite's wall, which has no cast hit) works on the nearest mobs of its box only. The pool of Creeping Toxin has no cast hit and no mob cap: it poisons every mob in it.
     private List<Hit> ZoneTick(LiveZone z)
     {
         var c = z.Cast;
-        List<Mob> Pick(bool castBox)
-        {
-            float ltX = c.Wz.Vectors["lt"][0], rbX = c.Wz.Vectors["rb"][0];
-            var mobs = _lives.Where(m => m.Map == z.Zone.Map && (castBox ? z.Zone.ContainsCastBox(m.X, m.Y, m.BodyH, ltX, rbX) : z.Zone.Contains(m.X, m.Y, m.BodyH))).ToList();
-            if (c.MobCount <= 0 || mobs.Count <= c.MobCount || (!castBox && z.Zone.StepMs > 0)) return mobs; // the poison of a spreading pool (Creeping Toxin) has no mob cap: mobCount is for the cast hit only
-            float middle = z.Zone.StepMs > 0 ? z.Zone.OriginX : (z.Zone.Left + z.Zone.Right) / 2; // the nearest to the middle of the box (or to the totem of a spreading pool)
-            return mobs.OrderBy(m => Math.Abs(m.X - middle)).Take(c.MobCount).ToList();
-        }
-        var inBox = Pick(false);
+        var mobs = _lives.Where(m => m.Map == z.Zone.Map && z.Zone.Contains(m.X, m.Y, m.BodyH)).ToList();
+        var inBox = c.MobCount <= 0 || mobs.Count <= c.MobCount ? mobs : mobs.OrderBy(m => Math.Abs(m.X - (z.Zone.Left + z.Zone.Right) / 2)).Take(c.MobCount).ToList(); // the nearest to the middle of the box
         foreach (var m in inBox)
         {
             if (MobElemAttr.Multiplier(m.ElemAttr, c.Dot!.Element) <= 0) continue; // immune to the element of the DoT: it is neither put on nor refreshed (as in HitPipeline.Collect)
             if (m.Statuses.HasDot(c.Attacker, c.Wz.SkillId)) m.Statuses.RefreshDot(c.Attacker, c.Wz.SkillId, c.Dot!.MsLeft);
             else m.Statuses.AddDot(c.Dot!.Clone());
         }
-        if (!z.Zone.JustStarted || !(c.Wz.IsGroundZone || c.Wz.IsSummon)) return new List<Hit>();
-        var struck = z.Zone.StepMs > 0 ? Pick(true) : inBox; // a spreading pool (Creeping Toxin) hits the mobs in the WZ cast box round its totem at the start, not the whole pool: the pool comes up in steps
-        return ResolveWz(struck, c.Map, c.Rng, c.Build, c.Wz, c.Element, Math.Max(1, c.Segments), c.Pct, c.Attacker, null, c.CasterX, c.CasterY);
+        if (!z.Zone.JustStarted || !c.Wz.IsGroundZone) return new List<Hit>(); // the pool of a summon (Creeping Toxin) has no cast hit: its damage is its poison and its blasts
+        return ResolveWz(inBox, c.Map, c.Rng, c.Build, c.Wz, c.Element, 1, c.Pct, c.Attacker, null, c.CasterX, c.CasterY);
     }
 
     // One tick of a DoT: one attack of the hit pipeline with the caster's snapshot (Build), the DoT's damage % and element (the mob already has

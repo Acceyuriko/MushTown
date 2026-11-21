@@ -39,7 +39,7 @@ CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 // mist is random tiles over an ellipse round the hero (see GroundZoneFx; the judged box is 500 x 400) and stays 15 s (--flyms 16000 or more shows it gone). The cast hits the mobs in the box once; the mist only poisons
 // (the poison icon over the head, then one tick a second); a mob that walks in later is poisoned and takes no direct hit.
 // --recast <ms> with it steps the hero 400 px forward and casts a second zone there (two clouds apart).
-// Creeping Toxin (2111013, a summon: a totem and a spreading pool, 60 s) judges at once; the totem stands 100 px in front of the hero (it needs floor there: no floor, no cast, no MP) and
+// Creeping Toxin (2111013, a summon: a totem and a spreading pool, 60 s) makes no direct hit (its damage is the poison of the pool and the blasts); it judges at once; the totem stands 100 px in front of the hero (it needs floor there: no floor, no cast, no MP) and
 // comes up after one tick. The first pool comes up 1.1 s later, then the pool grows 200 px to each side every 0.9 s, 4 times (--flyms 1500 shows the totem and the first pool, 2200 the first
 // steps, 5500 the whole pool of 9 pools; on map 450001010, with mobs standing on one platform, the pool stops at the platform edge); --flyms 61000 shows both gone. --recast <ms> with it casts a
 // Explosion (a fire hit, its own cast art not drawn) at the same place after the --flyms run (use --flyms 6500 so every pool is ripe): every pool its box touches blows up at once (the blast art plays, the MP is paid

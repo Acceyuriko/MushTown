@@ -34,9 +34,6 @@ public sealed class GroundZone : Component
     // same as WzSkillData.BodyOverlapsY.
     public bool Contains(float x, float y, int bodyH) => x >= Left && x <= Right && y >= Top && y - bodyH <= Bottom;
 
-    // The same test on the box of the cast hit of a spreading zone (Creeping Toxin): the WZ box lt..rb (only its x edges are given) round OriginX, where the totem stands, at the same height.
-    public bool ContainsCastBox(float x, float y, int bodyH, float ltX, float rbX) => x >= OriginX + ltX && x <= OriginX + rbX && y >= Top && y - bodyH <= Bottom;
-
     // One edge of a spreading zone after ageMs, in steps (the server and the clients draw the same widening): it stays at the origin until firstMs, then it is stepPx from the origin,
     // and stepPx further after every stepMs, until it is at the full edge.
     public static float Spread(float origin, float full, int ageMs, int firstMs, int stepMs, int stepPx)

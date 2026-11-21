@@ -163,20 +163,16 @@ public partial class FirePoisonCombatTests
 
     // The pool comes up in steps: nothing before ToxinFirstPoolMs (1100 ms) after the totem, then 200 px (u) to each side, and 200 px further every subTime (900 ms) until the full reach.
     // The mob 60 px from the totem is poisoned after the first step, the one 150 px away too (the edge is at 200 px), the one 700 px away only when the edge has got past it (the 4th
-    // step: 800 px), not at the 3rd (600 px). The cast hit (4 hits of the skill, once) lands when the totem comes up on the mobs in the WZ cast box round the totem (lt/rb: 100 px to each
-    // side): the mob at 60 takes it, the ones at 150 and 700 take none (the pool is not there yet, and the poison does the rest).
+    // step: 800 px), not at the 3rd (600 px). The cast makes no direct hit (the user, 2026-11-21): the mob at 60 inside the WZ cast box (lt/rb: 100 px) takes none either, only the poison.
     [TestMethod]
-    public void CreepingToxin_PoolSpreadsInSteps_FarMobIsPoisonedLater_CastHitOnlyInTheCastBox()
+    public void CreepingToxin_PoolSpreadsInSteps_FarMobIsPoisonedLater_NoDirectHitAtTheCast()
     {
         using var assets = new TempAssets();
         assets.AddWzSkill(ToxinData());
         var world = ToxinWorld(assets, Floor, (60, 100), (150, 100), (700, 100));
-        int near = world.MobsOn(7).Single(m => m.X < 100).Uid;
-        world.SkillStrike(7, -100, 100, true, new Random(1), Mage, Toxin, 200); // the totem at 0
+        Assert.AreEqual(0, world.SkillStrike(7, -100, 100, true, new Random(1), Mage, Toxin, 200).Count, "the cast hits no one"); // the totem at 0
         var hits = ZoneRun(world, 1100); // 1000 ms after the totem is up
-        var cast = hits.Where(h => !h.Dot && h.Skill == Toxin).ToList();
-        Assert.AreEqual(4, cast.Count, "the cast hit: 4 hits, on one mob only");
-        CollectionAssert.AreEqual(new[] { near }, cast.Select(h => h.Uid).Distinct().ToArray(), "the mob in the cast box takes it, the far ones do not");
+        Assert.AreEqual(0, hits.Count, "no direct hit when the totem comes up, also on the mob in the cast box");
         Assert.AreEqual(0, world.DotsOn(7).Count, "the first pool is not up yet");
         ZoneRun(world, 200); // 1200 ms: the first step
         Assert.AreEqual(2, world.DotsOn(7).Count(d => d.skill == Toxin));
@@ -232,6 +228,7 @@ public partial class FirePoisonCombatTests
         var hits = ZoneRun(world, 20000);
         int ticks = hits.Count(h => h.Dot && h.Skill == Toxin);
         Assert.IsTrue(ticks >= 17, $"one hit a second for about 19 s ({ticks})");
+        Assert.AreEqual(0, hits.Count(h => !h.Dot), "no direct hit at any time");
         Assert.AreEqual(1, world.SummonsOn(7).Count);
         Assert.AreEqual(1, world.ZonesOn(7).Count);
         ZoneRun(world, 39000); // 59 s: still standing
@@ -562,41 +559,20 @@ public partial class FirePoisonCombatTests
         Assert.AreEqual(1, world.ZonesOn(7).Count);
     }
 
-    // +50% against mobs that are not bosses (WZ nbdR, "Normal Enemy Damage"): the same cast does more damage to a normal mob with nbdR than without it, and the same to a boss.
+    // The poison of the pool has no mob cap (mobCount 10 is the blast's): 11 mobs in the cast box and the pool are all poisoned, and the cast hits none of them.
     [TestMethod]
-    public void CreepingToxin_NormalEnemyDamage_AppliesToNormalMobsOnly()
-    {
-        long Cast(bool normal, bool boss)
-        {
-            using var assets = new TempAssets();
-            assets.AddWzSkill(ToxinData(normal));
-            assets.AddMap(7, """[{"MobId":100000,"X":50,"Cy":100}]""", Floor);
-            assets.AddMob(100000, 1_000_000_000, 0.1, 0, speed: 1, level: 200, boss: boss);
-            var world = new MobWorld(assets.Dir);
-            world.EnterMap(7);
-            world.SkillStrike(7, 0, 100, true, new MiddleRandom(), Mage with { CritPct = 0 }, Toxin, 200);
-            return ZoneRun(world, 300).First(h => !h.Dot && h.Skill == Toxin).Damage;
-        }
-        Assert.IsTrue(Cast(true, false) > Cast(false, false));
-        Assert.AreEqual(Cast(false, true), Cast(true, true));
-    }
-
-    // The poison of the pool has no mob cap (mobCount 10 is for the cast hit only): 11 mobs in the cast box and the pool are all poisoned, and the cast hit lands on the 10 nearest to the totem only.
-    [TestMethod]
-    public void CreepingToxin_PoolPoisonsElevenMobs_CastHitOnlyTen()
+    public void CreepingToxin_PoolPoisonsElevenMobs_NoDirectHit()
     {
         using var assets = new TempAssets();
         assets.AddWzSkill(ToxinData());
         var world = ToxinWorld(assets, Floor, Enumerable.Range(0, 11).Select(i => (10 + i * 8, 100)).ToArray()); // 10..90: inside the cast box (100 px) and the first pool
         world.SkillStrike(7, -100, 100, true, new Random(1), Mage, Toxin, 200); // the totem at 0
         var hits = ZoneRun(world, 1300);
-        var cast = hits.Where(h => !h.Dot && h.Skill == Toxin).ToList();
-        Assert.AreEqual(40, cast.Count, "the cast hit: 4 hits on each of 10 mobs");
-        Assert.AreEqual(10, cast.Select(h => h.Uid).Distinct().Count());
+        Assert.AreEqual(0, hits.Count(h => !h.Dot), "no direct hit");
         Assert.AreEqual(11, world.DotsOn(7).Count(d => d.skill == Toxin), "all 11 are poisoned");
     }
 
-    // +50% against normal mobs (nbdR) also counts in the poison ticks and in the blasts, not only in the cast hit: with nbdR both do more to a normal mob, the same to a boss.
+    // +50% against normal mobs (nbdR) also counts in the poison ticks and in the blasts, with nbdR both do more to a normal mob, the same to a boss.
     [TestMethod]
     public void CreepingToxin_NormalEnemyDamage_AlsoInPoisonTicksAndBlasts()
     {
