@@ -187,7 +187,7 @@ public partial class MushTownGame
             case 8:
                 {
                     // Final damage with the Elemental Drain layers on top: the build's final multiplier times the Drain multiplier.
-                    double mult = DamageChain.FinalDamageMultiplier(_stats) * (1.0 + CurrentDrainLayers() * DrainPctNow() / 100.0);
+                    double mult = DamageChain.FinalDamageMultiplier(_stats) * (1.0 + CurrentDrainLayers() * DrainPerLayerNow() / 100.0);
                     return StatDisplay.Format(StatFormat.Pct2, (mult - 1.0) * 100.0);
                 }
             default: return StatDisplay.Text(_stats, index); // the format and the rounding of every other row live in Shared
@@ -210,7 +210,11 @@ public partial class MushTownGame
             ? new List<(string, string)>()
             : StatDisplay.Sources(_stats, row).Select(l => (l.Label, StatDisplay.LineText(row, l))).ToList();
         if (row == StatDisplay.FinalDamageRow && CurrentDrainLayers() > 0) // the final damage row also carries the Drain multiplier
+        {
             sources.Add(("Elemental Drain", StatDisplay.Format(StatFormat.Pct2, CurrentDrainLayers() * DrainPctNow())));
+            if (FerventPctNow() > 0)
+                sources.Add(("Fervent Drain", StatDisplay.Format(StatFormat.Pct2, CurrentDrainLayers() * FerventPctNow())));
+        }
         return new StatTipView(desc.Title, lines, sources);
     }
 
@@ -219,7 +223,7 @@ public partial class MushTownGame
     private string DamageRange()
     {
         var (lo, hi) = DamageChain.PanelRange(_stats, CurrentJob());
-        double factor = 1.0 + CurrentDrainLayers() * DrainPctNow() / 100.0;
+        double factor = 1.0 + CurrentDrainLayers() * DrainPerLayerNow() / 100.0;
         return $"{(long)Math.Floor(lo * factor):#,##0}~{(long)Math.Floor(hi * factor):#,##0}";
     }
 

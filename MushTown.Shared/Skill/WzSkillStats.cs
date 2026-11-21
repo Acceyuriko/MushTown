@@ -67,6 +67,30 @@ public static class WzSkillStats
         return ((int)drain.Value("x", drain.MaxLevel), (int)drain.Value("y", drain.MaxLevel));
     }
 
+    // Infinity (2120004) at max level: the percent of each pool a recovery restores (WZ s). The final damage (mdR) is always on (Modifiers);
+    // the 5 s clock is the Client's.
+    public static int Infinity(IReadOnlyDictionary<int, WzSkillData> skills)
+    {
+        var inf = skills[WzSkillData.Infinity];
+        return (int)inf.Value("s", inf.MaxLevel);
+    }
+
+    // Arcane Aim (2120010) at max level: the chance (prop) of a stack on a hit, the damage percent each stack adds (x) and the most
+    // stacks (y). The ignore-defense part (ignoreMobpdpR) is always on (Modifiers).
+    public static (int prop, int perStack, int maxStacks) ArcaneAim(IReadOnlyDictionary<int, WzSkillData> skills)
+    {
+        var aim = skills[WzSkillData.ArcaneAim];
+        return ((int)aim.Value("prop", aim.MaxLevel), (int)aim.Value("x", aim.MaxLevel), (int)aim.Value("y", aim.MaxLevel));
+    }
+
+    // Fervent Drain (2120014) at max level: the final damage percent each DoT on the mob adds (WZ x). It goes through the same
+    // Elemental Drain entry: the Client sends DrainPct + this per layer to the server.
+    public static int FerventDrainPct(IReadOnlyDictionary<int, WzSkillData> skills)
+    {
+        var fervent = skills[WzSkillData.FerventDrain];
+        return (int)fervent.Value("x", fervent.MaxLevel);
+    }
+
     // Teleport's horizontal and vertical distance at max level, with Teleport Boost's added (WZ x and y of both).
     public static (int horizontal, int vertical) TeleportReach(IReadOnlyDictionary<int, WzSkillData> skills)
     {
@@ -116,6 +140,22 @@ public static class WzSkillStats
         var burning = skills[WzSkillData.BurningMagic];
         yield return new(StatKey.DOT_TIME_PCT, StatValueType.FLAT, burning.Value("x", burning.MaxLevel), StatSource.Skill, burning.Name);
         yield return new(StatKey.DOT_FINAL_PCT, StatValueType.FLAT, burning.Value("z", burning.MaxLevel), StatSource.Skill, burning.Name);
+        // The 4th job passives (212.img), always on. Infinity: final damage (mdR) as a multiplier; Arcane Aim: the share of the
+        // enemy's DEF ignored (ignoreMobpdpR) as an ignore-defense multiplier; Buff Mastery: magic attack, buff time and knockback
+        // resistance; Teleport Mastery: knockback resistance (stanceProp). A table without one of them (a test subset) adds nothing:
+        // the client refuses to start when a page skill has no exported file, so the real game always has them.
+        if (skills.TryGetValue(WzSkillData.Infinity, out var infinity))
+            yield return new(StatKey.FINAL_DAMAGE_PCT, StatValueType.MULTIPLIER, 1.0 + infinity.Value("mdR", infinity.MaxLevel) / 100.0, StatSource.Skill, infinity.Name);
+        if (skills.TryGetValue(WzSkillData.ArcaneAim, out var arcane))
+            yield return new(StatKey.IED_PCT, StatValueType.MULTIPLIER, 1.0 - arcane.Value("ignoreMobpdpR", arcane.MaxLevel) / 100.0, StatSource.Skill, arcane.Name);
+        if (skills.TryGetValue(WzSkillData.BuffMastery, out var buffMastery))
+        {
+            yield return new(StatKey.MATT, StatValueType.FLAT, buffMastery.Value("madX", buffMastery.MaxLevel), StatSource.Skill, buffMastery.Name);
+            yield return new(StatKey.BUFF_DURATION_PCT, StatValueType.FLAT, buffMastery.Value("bufftimeR", buffMastery.MaxLevel), StatSource.Skill, buffMastery.Name);
+            yield return new(StatKey.KNOCKBACK_RESISTANCE, StatValueType.FLAT, buffMastery.Value("stanceProp", buffMastery.MaxLevel), StatSource.Skill, buffMastery.Name);
+        }
+        if (skills.TryGetValue(WzSkillData.TeleportMastery, out var teleMastery))
+            yield return new(StatKey.KNOCKBACK_RESISTANCE, StatValueType.FLAT, teleMastery.Value("stanceProp", teleMastery.MaxLevel), StatSource.Skill, teleMastery.Name);
         if (boost.WeaponBonus.TryGetValue(weaponItemId / 10000 - 100, out var bonus))
             yield return new(StatKey.CRIT_RATE, StatValueType.FLAT, bonus["cr"][boost.MaxLevel - 1], StatSource.Skill, boost.Name);
     }

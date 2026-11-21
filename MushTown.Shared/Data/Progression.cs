@@ -42,6 +42,13 @@ public static class Progression
         chara.Mp = Math.Min(chara.Mp, maxMp);
     }
 
+    // Infinity's recovery: pct percent of each pool's max, added and capped (the 5 s clock lives in Fighter, the Client pays).
+    public static void RestorePercent(CharaSlot chara, long maxHp, long maxMp, int pct)
+    {
+        chara.Hp = Math.Min(chara.Hp + maxHp * pct / 100, maxHp);
+        chara.Mp = Math.Min(chara.Mp + maxMp * pct / 100, maxMp);
+    }
+
     // The base vitals of a job grow per level (the numbers are on the JobProfile); a level-up refills both
     // pools (official does too). A job without a row of its own gets the Hero's.
     public static long MaxHp(int level, int jobId = StatTables.Hero)
@@ -341,6 +348,8 @@ public static class Progression
 // of a resist or immune mob. MagicDmgPct is Element Amplification: damage % added to a magic skill hit (not a basic swing).
 // DotTimePct is Burning Magic: longer DoT time; DotFinalPct is its final damage % on a hit against a mob that has a DoT.
 // IgniteProp is Ignite: the chance, in percent, that a fire skill we cast starts a wall of fire (0 = not learned).
+// FerventPct is Fervent Drain: the final damage percent each DoT on the mob adds; it goes into the same Elemental Drain sum
+// (DrainPct + FerventPct per layer).
 public readonly record struct Build(
     long Str,
     long Dex,
@@ -367,4 +376,5 @@ public readonly record struct Build(
     int MagicDmgPct = 0,
     int DotTimePct = 0,
     int DotFinalPct = 0,
-    int IgniteProp = 0);
+    int IgniteProp = 0,
+    int FerventPct = 0);

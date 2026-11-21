@@ -713,6 +713,8 @@ public partial class MushTownGame : Game
         _death.Tick(dtMs);
         foreach (int id in _fighter.ExpiredBuffs) EndBuff(id); // same spot, same order (ticks run first now, ends after)
         if (_fighter.RegenDue && !_death.Dead) PayoutRegen(); // the dead do not heal
+        if (_fighter.InfinityDue && !_death.Dead) PayoutInfinity(); // Infinity's 5 s recovery
+        SyncArcaneBuild(); // Arcane Aim stacks changed: refresh the snapshot and the Build
         ClampPoolsToMax(); // learn/expire shrinks the pool, a new hero's full pool lands here: clamp, never heal
         SendPartyHpIfChanged();
 

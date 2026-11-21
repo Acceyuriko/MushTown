@@ -17,13 +17,13 @@ public static class JobSkills
     // Fire/Poison: the 1st job (200.img, the visible ones: Elemental Weakness is invisible in WZ) and the 2nd job
     // (210.img: the passives, then Meditation, Flame Orb, Poison Breath and Ignite) and the 3rd job
     // (211.img: the passives, then the actives Explosion, Poison Mist and Elemental Adaptation, then Teleport Mastery; the other 3rd job actives follow with their own tickets).
-    // Pages IV and V follow with their own jobs' tickets.
+    // Page IV has the 4th job passives; page V follows with its own ticket.
     private static readonly int[][] FirePoison =
     {
         new[] { WzSkillData.EnergyBolt, WzSkillData.Teleport, WzSkillData.ManaWave, WzSkillData.MagicGuard, WzSkillData.MagicArmor, WzSkillData.MpBoost },
         new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath, WzSkillData.Ignite },
         new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation, WzSkillData.TeleportMastery, WzSkillData.CreepingToxin },
-        Array.Empty<int>(), // IV
+        new[] { WzSkillData.Infinity, WzSkillData.ArcaneAim, WzSkillData.BuffMastery, WzSkillData.FerventDrain }, // IV: the 4th job passives
         Array.Empty<int>(), // V
     };
 

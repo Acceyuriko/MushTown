@@ -736,6 +736,14 @@ public partial class MushTownGame
         chara.Mp = Math.Min(chara.Mp + _skills[SkillData.SelfRecovery].RegenMp * lv, MaxMpNow());
     }
 
+    // Infinity's 5 s tick: restore WZ s percent of each pool (only a Fire/Poison Mage with the skill has it).
+    private void PayoutInfinity()
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || chara.Job != StatTables.FirePoisonMage || !_wzSkills.ContainsKey(WzSkillData.Infinity)) return;
+        Progression.RestorePercent(chara, MaxHpNow(), MaxMpNow(), WzSkillStats.Infinity(_wzSkills));
+    }
+
     // Our own cast or a peer's echo: a WZ effect anchors its WZ origin at the caster's feet; an old bare effect
     // keeps the centered torso rule. Casts without art (Iron Body, Combo Attack) skip silently.
     private void SpawnCastFx(int skill, float x, float y, bool facingRight, int actor = SkillFx.HeroActor)

@@ -21,16 +21,18 @@ public class JobSkillsTests
     }
 
     [TestMethod]
-    public void FirePoison_OwnsTheFirstTwoPages_NotEndureNorAnyWarriorSkill()
+    public void FirePoison_OwnsTheFirstFourPages_NotEndureNorAnyWarriorSkill()
     {
         Assert.AreEqual(5, JobSkills.Pages(StatTables.FirePoisonMage).Length);
         Assert.AreEqual(6, JobSkills.Pages(StatTables.FirePoisonMage)[0].Length);
         Assert.AreEqual(9, JobSkills.Pages(StatTables.FirePoisonMage)[1].Length); // the 2nd job: five passives, Meditation, Flame Orb, Poison Breath, Ignite
         Assert.AreEqual(10, JobSkills.Pages(StatTables.FirePoisonMage)[2].Length); // the 3rd job: five passives, Explosion, Poison Mist, Elemental Adaptation, Teleport Mastery, Creeping Toxin
+        Assert.AreEqual(4, JobSkills.Pages(StatTables.FirePoisonMage)[3].Length); // the 4th job: Infinity, Arcane Aim, Buff Mastery, Fervent Drain
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.Ignite)); // Ignite is on page II, Teleport Mastery on page III
         Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage)[1].Contains(WzSkillData.Ignite));
         Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage)[2].Contains(WzSkillData.TeleportMastery));
-        Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage).Skip(3).All(p => p.Length == 0));
+        Assert.IsTrue(JobSkills.Pages(StatTables.FirePoisonMage)[3].Contains(WzSkillData.Infinity));
+        Assert.AreEqual(0, JobSkills.Pages(StatTables.FirePoisonMage)[4].Length); // page V: no skills yet
         foreach (int id in JobSkills.Pages(StatTables.Hero).SelectMany(p => p))
             Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, id), $"Fire/Poison owns {id}");
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, SkillData.Endure));

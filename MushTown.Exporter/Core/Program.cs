@@ -79,6 +79,10 @@ using MushTown.Exporter;
 //           - Creeping Toxin (2111013, skill window page III) was added (assets/skill/wz/2111013.json, its icons and its art under assets/skill/wz/2111013/: effect, effect0,
 //             hit, the summon lists summoned, stand and die, the pool tiles tile<0..3>_<start|loop|end|end2>_<0|1>, and blast, the effect of its child skill 2111014, whose numbers
 //             are in the json's Children). An old export makes the client stop at start (no wz def for the page III id, or no summon art: Menu.cs refuses it): run `export`.
+//           - the Fire/Poison 4th-job passives were added (assets/skill/wz/2120004, 2120010, 2120012, 2120014 .json and their icons; the
+//             numbers are the WZ common formulas: Infinity mdR/x/s, Arcane Aim prop/x/y/ignoreMobpdpR/time, Buff Mastery madX/bufftimeR/
+//             stanceProp, Fervent Drain x). The skill window's page IV shows them; an old export makes the client stop at start (no exported
+//             wz def for the page IV ids): run `export`.
 //   sound   - once after the decoder changed (every wav is encoded again). It exports only the sounds: the effects, the bgm of
 //             each map and the login theme.
 //   panel   - exports one panel's art only.

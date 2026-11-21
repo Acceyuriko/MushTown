@@ -70,6 +70,13 @@ public sealed class WzSkillData
     public static readonly string[] ToxinPhases = { "start", "loop", "end", "end2" };
     public static string ToxinTile(int kind, string phase, int layer) => $"tile{kind}_{phase}_{layer}";
     public const int TeleportMastery = 2111007; // a passive that strikes at the Teleport landing (a trigger: no key, no body action)
+    // 212 Arch Mage (Fire/Poison): the 4th job passives. Infinity and Arcane Aim add final damage / DEF ignored and a clock;
+    // Buff Mastery adds magic attack, buff time and knockback resistance; Fervent Drain adds final damage for each DoT (the
+    // same entry as Elemental Drain).
+    public const int Infinity = 2120004;
+    public const int ArcaneAim = 2120010;
+    public const int BuffMastery = 2120012;
+    public const int FerventDrain = 2120014;
     // WZ has Meditation as a buff, the user made it a passive (always on, no cast): the exporter forces its Kind, the client start checks it.
     public static readonly IReadOnlySet<int> UserPassives = new HashSet<int> { Meditation };
     public const int MagicGuard = 2000002;

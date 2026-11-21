@@ -9,6 +9,7 @@ public partial class MushTownGame
 {
     private StatSnapshot _stats = StatSnapshot.Empty;
     private bool _hasWeapon = true; // a worn weapon; the default passives give ATT too, so the snapshot cannot tell
+    private int _arcaneStacksSeen; // the Arcane Aim stack count the last Build carried
 
     // CLI sessions have no saved character: the old beginner values, but
     // movement must still work (`--host` / `--join` never load a save).
@@ -58,6 +59,9 @@ public partial class MushTownGame
         mods.Add(new(StatKey.LUK, StatValueType.FLAT, chara.Luk, StatSource.Base));
         mods.AddRange(StatTables.Vitals(chara.Job, chara.Level)); // base vitals and the job skills that scale with the level
         if (chara.Job == StatTables.FirePoisonMage) mods.AddRange(WzSkillStats.Modifiers(_wzSkills, chara.Level, WornWeapon(chara)?.ItemId ?? 0)); // Magic Armor, MP Boost (and its wand crit)
+        // Arcane Aim: each stack on the player adds damage % (the stack clock lives in Fighter; the panel and Build read it here).
+        if (chara.Job == StatTables.FirePoisonMage && _fighter.ArcaneStacks > 0 && _wzSkills.ContainsKey(WzSkillData.ArcaneAim))
+            mods.Add(new(StatKey.DAMAGE_PCT, StatValueType.FLAT, _fighter.ArcaneStacks * WzSkillStats.ArcaneAim(_wzSkills).perStack, StatSource.Buff, "Arcane Aim"));
 
         var worn = ItemData.EquipBonus(chara.Equips, _items);
         _hasWeapon = worn.weapon > 0;
@@ -163,6 +167,7 @@ public partial class MushTownGame
         bool mage = chara.Job == StatTables.FirePoisonMage;
         var mpEater = mage ? WzSkillStats.MpEater(_wzSkills) : default;
         var drain = mage ? WzSkillStats.ElementalDrain(_wzSkills) : default;
+        int fervent = mage && _wzSkills.ContainsKey(WzSkillData.FerventDrain) ? WzSkillStats.FerventDrainPct(_wzSkills) : 0;
         // Empirical Knowledge is a permanent default passive (every job), so its chance applies whenever the skill table has it.
         int markProp = _wzSkills.ContainsKey(WzSkillData.EmpiricalKnowledge) ? WzSkillStats.EmpiricalKnowledgeProp(_wzSkills) : 0;
         return new Build(
@@ -188,7 +193,8 @@ public partial class MushTownGame
             (int)_stats.IntValue(StatKey.MAGIC_DAMAGE_PCT), // Element Amplification
             (int)_stats.IntValue(StatKey.DOT_TIME_PCT), // Burning Magic
             (int)_stats.IntValue(StatKey.DOT_FINAL_PCT),
-            mage ? WzSkillStats.IgniteProp(_wzSkills) : 0); // Ignite
+            mage ? WzSkillStats.IgniteProp(_wzSkills) : 0, // Ignite
+            fervent); // Fervent Drain: the same Elemental Drain entry, per layer
     }
 
     private void ClampPoolsToMax()
@@ -208,5 +214,14 @@ public partial class MushTownGame
     {
         RefreshStats(); // buff edges change the snapshot outside the frame start
         _net?.SendBuild(CurrentBuild());
+    }
+
+    // Arcane Aim stacks change the damage %: refresh the snapshot and resend the Build when the count changed (the panel reads the
+    // snapshot every frame anyway; a solo session has no server, SendBuild is skipped).
+    private void SyncArcaneBuild()
+    {
+        if (_fighter.ArcaneStacks == _arcaneStacksSeen) return;
+        _arcaneStacksSeen = _fighter.ArcaneStacks;
+        PushBuild();
     }
 }

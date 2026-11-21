@@ -110,6 +110,15 @@ public partial class MushTownGame
     // Elemental Drain's numbers at max level for a Fire/Poison Mage (0 when another job, or the skill table has no file).
     private int DrainPctNow() => DrainNumber().pct;
     private int DrainMaxNow() => DrainNumber().max;
+    // Fervent Drain adds its percent to each Elemental Drain layer (the same entry, see HitPipeline); 0 when not learned.
+    private int FerventPctNow()
+    {
+        var chara = _save?.Slots[_slot];
+        if (chara == null || chara.Job != StatTables.FirePoisonMage || !_wzSkills.ContainsKey(WzSkillData.FerventDrain)) return 0;
+        return WzSkillStats.FerventDrainPct(_wzSkills);
+    }
+    // What one Elemental Drain layer is worth in the panel: Elemental Drain plus Fervent Drain.
+    private int DrainPerLayerNow() => DrainPctNow() + FerventPctNow();
     private (int pct, int max) DrainNumber()
     {
         var chara = _save?.Slots[_slot];
@@ -265,6 +274,13 @@ public partial class MushTownGame
                 + _skills[SkillData.ComboSynergy].SynChance * SkillLv(SkillData.ComboSynergy);
             if (Random.Shared.NextDouble() * 100 < chance) // visible count: rolled client-side, shown in the window
                 _fighter.Orbs = Math.Min(_fighter.Orbs + 1, _skills[SkillData.ComboAttack].OrbMax);
+        }
+        // Arcane Aim (a Fire/Poison Mage passive): a hit rolls its chance to add a stack (at most y), which boosts the damage % for 5 s.
+        // A DoT tick is not our hit (dot above), and the stacks are refreshed here at once; SyncArcaneBuild sends the new Build next frame.
+        if (settle && mine && !dot && _save?.Slots[_slot] is { Job: StatTables.FirePoisonMage } && _wzSkills.ContainsKey(WzSkillData.ArcaneAim))
+        {
+            var aim = WzSkillStats.ArcaneAim(_wzSkills);
+            if (Random.Shared.NextDouble() * 100 < aim.prop) _fighter.AddArcaneStack(aim.maxStacks);
         }
         if (settle && hpLeft == 0 && mine) { GainExp(exp); if (!QuestServer()) BumpQuestKills(m.Mob); } // net kills come back as QuestKill deltas
     }

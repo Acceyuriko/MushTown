@@ -136,9 +136,11 @@ public sealed class HitPipeline
         var build = a.Build;
         // 1. statuses (the ones to add too)
         var frames = targets.Select(m => Collect(m, a)).ToList();
-        // 2. bonuses: Elemental Drain is one number for the whole attack, read around the caster after the statuses of step 1 (the DoT it adds counts)
-        double drain = build.DrainPct <= 0 ? 0
-            : build.DrainPct * DrainLayers(a.Map, a.CasterX, a.CasterY, build.DrainMax, a.Attacker, frames, a.Tick ? a.Skill : a.Dot?.Skill ?? 0);
+        // 2. bonuses: Elemental Drain is one number for the whole attack, read around the caster after the statuses of step 1 (the DoT it adds counts).
+        // Fervent Drain goes through the same entry: each layer adds its percent on top of Elemental Drain's.
+        int drainPerLayer = build.DrainPct + build.FerventPct;
+        double drain = drainPerLayer <= 0 ? 0
+            : drainPerLayer * DrainLayers(a.Map, a.CasterX, a.CasterY, build.DrainMax, a.Attacker, frames, a.Tick ? a.Skill : a.Dot?.Skill ?? 0);
         var hits = new List<MobWorld.Hit>();
         foreach (var f in frames)
         {

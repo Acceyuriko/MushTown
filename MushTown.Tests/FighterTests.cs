@@ -79,6 +79,21 @@ public sealed class FighterTests
         Assert.IsTrue(f.RegenDue);
     }
 
+    // Infinity restores HP/MP every 5 s (its own clock, apart from Self Recovery's 10 s).
+    [TestMethod]
+    public void Infinity_FiresEveryFiveSeconds()
+    {
+        var f = new Fighter();
+        f.Tick(4999f);
+        Assert.IsFalse(f.InfinityDue);
+        f.Tick(1f);
+        Assert.IsTrue(f.InfinityDue);
+        f.Tick(4999f);
+        Assert.IsFalse(f.InfinityDue);
+        f.Tick(1f);
+        Assert.IsTrue(f.InfinityDue);
+    }
+
     // A swing of 800 ms at stage 4 (scale 1.0) and at stage 8 (scale 0.75): the lock runs 800 and 600 ms, counted in 60 Hz frames (within one frame).
     [TestMethod]
     public void StartAttack_LockFollowsTheStage_Stage4Against8()

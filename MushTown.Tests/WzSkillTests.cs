@@ -28,6 +28,11 @@ public class WzSkillTests
                 WzSkillData.TeleportBoost => "Teleport Boost",
                 WzSkillData.Meditation => "Meditation",
                 WzSkillData.ElementalAdaptation => "Elemental Adaptation (Fire, Poison)",
+                WzSkillData.Infinity => "Infinity",
+                WzSkillData.ArcaneAim => "Arcane Aim",
+                WzSkillData.BuffMastery => "Buff Mastery",
+                WzSkillData.FerventDrain => "Fervent Drain",
+                WzSkillData.TeleportMastery => "Teleport Mastery",
                 _ => "Magic Armor",
             }
         };
@@ -56,6 +61,19 @@ public class WzSkillTests
         [WzSkillData.TeleportBoost] = Skill(WzSkillData.TeleportBoost, 1, ("x", "65"), ("y", "25")),
         [WzSkillData.ElementalAdaptation] = Skill(WzSkillData.ElementalAdaptation, 20, ("asrR", "x"), ("terR", "x")), // always-on resistances (the cast shield is not a stat)
     };
+
+    // The 4th job passives (212.img) on top of the lower jobs, with the WZ formulas at max level: Infinity (mdR/x/s), Arcane Aim
+    // (prop/x/y/ignoreMobpdpR/time), Buff Mastery (madX/bufftimeR/stanceProp), Fervent Drain (x), and Teleport Mastery's stanceProp (2111007).
+    internal static Dictionary<int, WzSkillData> FourthJobPassives()
+    {
+        var all = FirePoisonPassives();
+        all[WzSkillData.TeleportMastery] = Skill(WzSkillData.TeleportMastery, 10, ("stanceProp", "4*x"));
+        all[WzSkillData.Infinity] = Skill(WzSkillData.Infinity, 30, ("mdR", "7+14*d(x/5)"), ("x", "5"), ("s", "10"));
+        all[WzSkillData.ArcaneAim] = Skill(WzSkillData.ArcaneAim, 30, ("prop", "25+5*d(x/2)"), ("x", "2+d(x/5)"), ("y", "5"), ("ignoreMobpdpR", "5+u(x/2)"), ("time", "5"));
+        all[WzSkillData.BuffMastery] = Skill(WzSkillData.BuffMastery, 10, ("madX", "3*x"), ("bufftimeR", "5*x"), ("stanceProp", "6*x"));
+        all[WzSkillData.FerventDrain] = Skill(WzSkillData.FerventDrain, 1, ("x", "5"));
+        return all;
+    }
 
     // psdWT/37/cr = 5 in 200.img: the wand (item family 137, weapon code 37) gives 5 crit rate.
     private static WzSkillData BoostWithWandCrit()
@@ -218,9 +236,9 @@ public class WzSkillTests
         Assert.AreEqual(0.9375, StatTables.DelayScale(5));
     }
 
-    // The window shows the 1st job page, the 2nd job page and the 3rd job page (passives, then Explosion, Poison Mist, Elemental Adaptation and Teleport Mastery); the other pages wait for their jobs.
+    // The window shows the 1st to 4th job pages (page IV: the four 4th job passives); page V waits for its job.
     [TestMethod]
-    public void FirstThreePages_HaveTheirSkills_OthersEmpty()
+    public void FirstFourPages_HaveTheirSkills_LastEmpty()
     {
         var pages = JobSkills.Pages(StatTables.FirePoisonMage);
         Assert.AreEqual(5, pages.Length);
@@ -233,7 +251,10 @@ public class WzSkillTests
         CollectionAssert.AreEqual(
             new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation, WzSkillData.TeleportMastery, WzSkillData.CreepingToxin },
             pages[2]);
-        Assert.IsTrue(pages.Skip(3).All(p => p.Length == 0));
+        CollectionAssert.AreEqual(
+            new[] { WzSkillData.Infinity, WzSkillData.ArcaneAim, WzSkillData.BuffMastery, WzSkillData.FerventDrain },
+            pages[3]);
+        Assert.AreEqual(0, pages[4].Length);
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.ElementalWeakness)); // invisible in WZ
     }
 }

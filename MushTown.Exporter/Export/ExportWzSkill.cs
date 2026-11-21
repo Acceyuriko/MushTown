@@ -33,6 +33,10 @@ namespace MushTown.Exporter;
 // Art["effect0"] with its png paths), no affected loop and no hit (its text is the WZ text: it says the same as the design). The layer count of the buff bar is drawn by the client (the WZ number icons are not exported).
 // Its special (the barrier flash, played once per blocked status) goes to Art["block"] the same way (png under 2111011/block/); its special0
 // (a faint back column with a floor ring, z -2) is not used. Re-run `export` after pulling this: an old export has no block art.
+// The 4th job passives (212.img: Infinity, Arcane Aim, Buff Mastery, Fervent Drain) have no art but their icons: the generic path above
+// (formulas, text, icon and disabled icon) is all they need. Their numbers are read by WzSkillStats (the always-on final damage, DEF ignored,
+// magic attack, buff time and knockback resistance) and by the Client (Infinity's clock, Arcane Aim's stacks, Fervent Drain's per-DoT final damage).
+// Re-run `export` after pulling this: an old export has no page IV json and Menu.cs refuses the page IV ids.
 // Poison Mist (211.img) is a ground zone (WzSkillData.GroundZones): besides effect (the cast) and hit it keeps effect1 (a second cast layer, played with
 // the first) and tile/0..8 (nine looping puffs of 8 pictures; the client lays them out, see GroundZoneFx) as Art["effect1"], Art["tile0"]..Art["tile8"] (png under 2111003/effect1/ and 2111003/tile<i>/).
 // A skill with a dot and a flat mob node (a loop of pictures with origins; Poison Mist has one, Poison Breath none) also keeps it as Art["mob"] (png under <id>/mob/): the icon that
