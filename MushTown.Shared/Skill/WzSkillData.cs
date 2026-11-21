@@ -46,6 +46,29 @@ public sealed class WzSkillData
     public const int PoisonMist = 2111003;
     public const int ZoneTiles = 9; // a ground zone's looping art: Art["tile0"]..Art["tile8"]
     public const int ElementalAdaptation = 2111011;
+    // Creeping Toxin: a summon (a totem) that makes a pool of poison. Its art is the summon node (Art["summoned"], Art["stand"], Art["die"]) and the pool tiles
+    // Art["tile<kind>_<phase>_<layer>"]: ToxinTileKinds kinds, each with the phases of ToxinPhases, each phase with ToxinLayers lists that play together.
+    public const int CreepingToxin = 2111013;
+    public const int CreepingToxinBlast = 2111014; // its blast: a child node of 2111013 (WZ has no link, see Export.WzSkillChildren); its effect is Art["blast"] of the parent
+    public const int ToxinTileKinds = 4;
+    // How the pool of a totem spreads (the user's decision, 2026-11-21, from the video; WZ names none of these fields, so all of it is 未核实): in steps. The first pool (the middle one, under the
+    // totem) comes up ToxinFirstPoolMs after the totem (the video: 1.1 s). Then, every subTime ms (WZ 900: the video shows a batch about every 0.9 s), the pool grows u px (WZ 200: the video's batch
+    // is about 180 px and u is the width of the 200 px puddle) to each side, ToxinSteps times (the user: "4 pools to each side"; we read it as 4 steps to each side, past the middle pool). So a
+    // pool reaches half the middle puddle plus ToxinSteps x u px to each side (ToxinPoolLayout.Reach), cut at the platform edge. The user looks at the effect and tunes it.
+    public const int ToxinSteps = 4;
+    public const int ToxinFirstPoolMs = 1100;
+    // The totem stands this far in front of the caster (the video: about 100 px, 2.7 body widths of the 37 px body in its picture; the picture's scale to the game is unknown, 未核实).
+    public const int ToxinFrontPx = 100;
+    // Two times WZ writes as bare numbers: the field y of Creeping Toxin (120) is the wait before a pool that blew up grows back, and the field y of its blast (60) is the wait between a blast and
+    // the blasts it sets off. WZ does not name them and gives no unit: we read them in 10 ms (1200 ms and 600 ms), which is what the video of the skill shows (~1.2 s, ~0.5-0.7 s) (未核实).
+    public const int ToxinWzUnitMs = 10;
+    // The width of the flat puddle (layer 0) of the four tile kinds, from the pictures: the pool is laid out in pieces of these widths (ToxinPoolLayout).
+    public static readonly int[] ToxinPoolWidths = { 88, 88, 200, 264 };
+    // Cooldowns WZ does not have and the user asked for (seconds): Creeping Toxin's totem, 30 (未核实, from the video of the skill window: "冷却时间30秒").
+    public static readonly IReadOnlyDictionary<int, int> OwnCooltimeSec = new Dictionary<int, int> { [CreepingToxin] = 30 };
+    public const int ToxinLayers = 2;
+    public static readonly string[] ToxinPhases = { "start", "loop", "end", "end2" };
+    public static string ToxinTile(int kind, string phase, int layer) => $"tile{kind}_{phase}_{layer}";
     public const int TeleportMastery = 2111007; // a passive that strikes at the Teleport landing (a trigger: no key, no body action)
     // WZ has Meditation as a buff, the user made it a passive (always on, no cast): the exporter forces its Kind, the client start checks it.
     public static readonly IReadOnlySet<int> UserPassives = new HashSet<int> { Meditation };
@@ -98,6 +121,10 @@ public sealed class WzSkillData
     public static readonly IReadOnlySet<int> ActionScripts = new HashSet<int> { EnergyBolt, FlameOrb, PoisonBreath, Explosion, PoisonMist, ElementalAdaptation };
 
     public bool IsGroundZone => GroundZones.Contains(SkillId);
+
+    // The skills that put a summon (SummonUnit) on the ground: the cast makes the totem and a pool zone that lives as long as it does.
+    public static readonly IReadOnlySet<int> Summons = new HashSet<int> { CreepingToxin };
+    public bool IsSummon => Summons.Contains(SkillId);
 
     // How far ahead a ball skill looks, in px: the WZ range at max level (or the box half-width when a file has no
     // range). Only a ball reads it; a skill with no ball judges with its full box on the caster and does not use a reach.

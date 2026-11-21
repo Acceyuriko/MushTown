@@ -656,6 +656,10 @@ public partial class MushTownGame
                 throw new InvalidDataException($"skill {wz.SkillId} is not a buff, has no second cast layer (effect0) or no block art (block): run the exporter (export)");
             if (wz.IsGroundZone && !(wz.Art.TryGetValue("mob", out var icon) && ArtComplete(icon) && wz.Art.TryGetValue("effect1", out var front) && ArtComplete(front) && Enumerable.Range(0, WzSkillData.ZoneTiles).All(i => wz.Art.TryGetValue($"tile{i}", out var tile) && ArtComplete(tile))))
                 throw new InvalidDataException($"skill {wz.SkillId} is a ground zone but has no head icon (mob), second cast layer (effect1) or tile0..tile{WzSkillData.ZoneTiles - 1} art: run the exporter (export)");
+            if (wz.IsSummon && !(new[] { "summoned", "stand", "die", "blast", "effect0" }.All(k => wz.Art.TryGetValue(k, out var summonArt) && ArtComplete(summonArt))
+                && Enumerable.Range(0, WzSkillData.ToxinTileKinds).All(k => WzSkillData.ToxinPhases.All(ph => Enumerable.Range(0, WzSkillData.ToxinLayers).All(l => wz.Art.TryGetValue(WzSkillData.ToxinTile(k, ph, l), out var tile) && ArtComplete(tile))))
+                && wz.Children.Any(c => c.SkillId == WzSkillData.CreepingToxinBlast)))
+                throw new InvalidDataException($"skill {wz.SkillId} is a summon but has no summoned, stand, die, blast or effect0 art, no pool tiles or no blast child: run the exporter (export)");
             if ((wz.Common.ContainsKey("damage") && !wall || wz.Kind == SkillData.KindBuff || wz.SkillId is WzSkillData.Teleport or WzSkillData.ManaWave) && (!wz.Art.TryGetValue("effect", out var effect) || effect.Origins.Length != wz.CastFrames.Count))
                 throw new InvalidDataException($"skill {wz.SkillId} has no effect origins: run the exporter (export)");
             if (WzSkillData.ActionScripts.Contains(wz.SkillId) && wz.Script.Count == 0)

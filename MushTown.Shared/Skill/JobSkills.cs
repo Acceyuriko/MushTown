@@ -22,7 +22,7 @@ public static class JobSkills
     {
         new[] { WzSkillData.EnergyBolt, WzSkillData.Teleport, WzSkillData.ManaWave, WzSkillData.MagicGuard, WzSkillData.MagicArmor, WzSkillData.MpBoost },
         new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath, WzSkillData.Ignite },
-        new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation, WzSkillData.TeleportMastery },
+        new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation, WzSkillData.TeleportMastery, WzSkillData.CreepingToxin },
         Array.Empty<int>(), // IV
         Array.Empty<int>(), // V
     };

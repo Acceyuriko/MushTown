@@ -231,7 +231,7 @@ public class WzSkillTests
             new[] { WzSkillData.MpEater, WzSkillData.SpellMastery, WzSkillData.HighWisdom, WzSkillData.ElementalDrain, WzSkillData.AgileMagic, WzSkillData.Meditation, WzSkillData.FlameOrb, WzSkillData.PoisonBreath, WzSkillData.Ignite },
             pages[1]);
         CollectionAssert.AreEqual(
-            new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation, WzSkillData.TeleportMastery },
+            new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease, WzSkillData.TeleportBoost, WzSkillData.Explosion, WzSkillData.PoisonMist, WzSkillData.ElementalAdaptation, WzSkillData.TeleportMastery, WzSkillData.CreepingToxin },
             pages[2]);
         Assert.IsTrue(pages.Skip(3).All(p => p.Length == 0));
         Assert.IsFalse(JobSkills.Has(StatTables.FirePoisonMage, WzSkillData.ElementalWeakness)); // invisible in WZ

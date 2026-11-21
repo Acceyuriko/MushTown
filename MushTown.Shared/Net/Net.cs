@@ -49,7 +49,9 @@ public static class Net
     public const byte Ball = 39; // server -> client: int skill, int map, float fromX, fromY, toX, toY, int delayMs (the attack-frame delay before the ball; its damage comes as MobHit when it arrives)
     public const byte MarkStack = 40; // server -> client (the owner only): int uid, int stacks (Empirical Knowledge on that mob; 0 = gone)
     public const byte DrainStacks = 41; // server -> client (the owner only): byte layers (Elemental Drain layers near the player; 0 = none)
-    public const byte Zone = 42; // server -> client: int uid, int skill, int map, float left, float right, float y (the caster's feet), int lifeMs, int delayMs, byte gone (a ground zone appears: lifeMs of it left after delayMs of waiting; gone 1 = take it away now)
+    public const byte Zone = 42; // server -> client: int uid, int skill, int map, float left, float right, float y (the caster's feet), int lifeMs, int delayMs, byte gone, float originX, int stepMs, int ageMs (a ground zone appears: lifeMs of it left after delayMs of waiting; gone 1 = take it away now)
+    public const byte Summon = 44; // server -> client: int uid, int skill, int map, float x, float y (the feet), int lifeMs, int delayMs, byte gone (a summon stands there for lifeMs after delayMs of waiting; gone 1 = take it away now)
+    public const byte PoolBlast = 45; // server -> client: int zone, byte index, int map, int attacker, byte paid (a pool of a zone blew up, see PoolBlastEvent)
     public const byte MobDot = 43; // server -> client (everyone): int uid, int skill, byte on (a skill's DoT is on that mob = 1, or has left it = 0: the client draws that skill's own head icon)
 
     // A meso drop rides DropItem with tab 4: itemId holds the high 32 bits and
@@ -243,7 +245,17 @@ public readonly record struct BallEvent(int Skill, int Map, float FromX, float F
 
 // One ground zone (Poison Mist): Skill's art fills the box Left..Right (the vertical size is the skill's lt/rb) round Y of Map (the caster's feet at the cast) for LifeMs after DelayMs (the body action's attack frame;
 // a client that enters later gets the time that is left). Gone: the caster left, take the zone away now. Every client on the map gets it, the caster too.
-public readonly record struct ZoneEvent(int Uid, int Skill, int Map, float Left, float Right, float Y, int LifeMs, int DelayMs, bool Gone = false);
+// A zone that spreads (Creeping Toxin's pool) also carries the place it starts from (OriginX), the time between two steps of its widening (StepMs) and how long it has already
+// spread (AgeMs: not 0 for a client that enters later): the edge is GroundZone.Spread of those (the step width and the first step come from WZ and WzSkillData). A zone that does not spread has StepMs 0.
+public readonly record struct ZoneEvent(int Uid, int Skill, int Map, float Left, float Right, float Y, int LifeMs, int DelayMs, bool Gone = false, float OriginX = 0, int StepMs = 0, int AgeMs = 0);
+
+// One summon (Creeping Toxin's totem): Skill's summon art stands at X, Y (its feet) on Map for LifeMs after DelayMs; a client that enters later gets the time that is left.
+// Gone: the summon was taken away (its caster left or cast it again, or its time ran out), take it away now. Every client on the map gets it, the caster too.
+public readonly record struct SummonEvent(int Uid, int Skill, int Map, float X, float Y, int LifeMs, int DelayMs, bool Gone = false);
+
+// One pool of a zone (Creeping Toxin's pool, by the uid of the zone and the index in ToxinPoolLayout.Pieces) blew up; Attacker is the player whose cast it is and Paid says
+// that this blast is the one a fire hit started (that player pays the MP of the blast; the blasts it sets off in the pools next to it are free).
+public readonly record struct PoolBlastEvent(int Zone, int Index, int Map, int Attacker, bool Paid);
 
 // One mob step from the server: Uid now stands at X/Y facing right or left.
 // Clients drop moves for other maps and for mobs mid-flinch (hit1/die1 own

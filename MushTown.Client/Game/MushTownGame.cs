@@ -58,6 +58,7 @@ public partial class MushTownGame : Game
     private readonly int _shotRecastMs; // --recast <ms>: after --flyms the same cast again, then the world runs this long (the numbers of two casts on one mob)
     private readonly int _shotFlyms; // --flyms <ms>: the world runs this long after the --skill cast (effect, attack frame, ball, explosion, numbers)
     private readonly int _shotMark; // --mark <1..3>: pose that many Empirical Knowledge stacks on the nearest mob
+    private readonly int _shotMp; // --mp <n>: the hero's MP before a --skill cast (0: as it is)
     private readonly int _shotTimers; // --timers <0..239>: stage the countdowns (the warrior buffs live; above 0 also the shield spent and its cooldown at that many seconds left)
     private readonly int _shotBlocks; // --blocks <n>: after the --skill 2111011 cast, n statuses are blocked (the shield loses n layers)
     private readonly int _shotDrain; // --drain <0..5>: pose that many Elemental Drain layers (the buff icon and the two stat rows)
@@ -139,6 +140,8 @@ public partial class MushTownGame : Game
     private readonly Stack<SkillFx> _ballPool = new();
     private readonly List<GroundZoneFx> _zones = new(); // ground zones on this map (Poison Mist): the looks the server's zones have here
     private readonly Stack<GroundZoneFx> _zonePool = new();
+    private readonly List<SummonFx> _summonFx = new(); // summons on this map (Creeping Toxin's totem): the looks the server's summons have here
+    private readonly Stack<SummonFx> _summonPool = new();
     private readonly Dictionary<int, DmgData> _dmg = new(); // damage skins by key, loaded once each
 
     private readonly Dictionary<int, DropArt> _drops = new();
@@ -156,7 +159,7 @@ public partial class MushTownGame : Game
     private volatile int _layoutTries;  // failed tries of the current save (the watcher thread resets it)
 #endif
 
-    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, bool shotIgnite = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null, int shotMark = 0, int shotDrain = -1, int shotBlocks = 0, int shotTimers = -1)
+    public MushTownGame(string? shotPath, int shotMap, int shotTravel, string shotAction, int shotFrame, bool shotFacingRight, bool host, string? joinHost, string? shotScreen = null, int shotTalk = 0, bool shotHit = false, int shotSkill = 0, int shotSkillTab = 1, bool shotDrop = false, int shotAiticks = 0, bool shotWear = false, int shotJob = 0, (int X, int Y)? shotHover = null, int? shotSkin = null, long shotDmg = 0, string? shotWearOnly = null, bool shotHurt = false, bool shotHurtBlink = false, bool shotHurtPre = false, int? shotDmgSkin = null, bool shotHurtMiss = false, bool shotWeak = false, bool shotIgnite = false, int shotFlyms = 0, int shotStandoff = 0, bool shotCrit = false, int shotRecastMs = 0, string? shotTeleport = null, (int X, int? Y)? shotAt = null, bool shotTeleportPre = false, int shotHoldMs = 0, string? shotManaWave = null, string? shotTeleportFrom = null, int shotMark = 0, int shotDrain = -1, int shotBlocks = 0, int shotTimers = -1, int shotMp = 0)
     {
         _shotHover = shotHover;
         _shotPath = shotPath;
@@ -192,6 +195,7 @@ public partial class MushTownGame : Game
         _shotDrain = shotDrain;
         _shotBlocks = shotBlocks;
         _shotTimers = shotTimers;
+        _shotMp = shotMp;
         _shotRecastMs = shotRecastMs;
         _shotTeleport = shotTeleport;
         _shotAt = shotAt;
@@ -829,6 +833,7 @@ public partial class MushTownGame : Game
         PoolSweep.CollectDead(_fx, _world, _fxPool);
         PoolSweep.CollectDead(_balls, _world, _ballPool);
         PoolSweep.CollectDead(_zones, _world, _zonePool);
+        PoolSweep.CollectDead(_summonFx, _world, _summonPool);
         if (_mover.JumpSfx) PlaySfx("jump");
         if (_mover.Travel != null)
         {
@@ -940,6 +945,12 @@ public partial class MushTownGame : Game
                 if (z.Map != _mapId) continue; // another map's zone: not shown here
                 ApplyZone(z);
             }
+            while (_net.TryTakeSummon(out var s))
+            {
+                if (s.Map != _mapId) continue; // another map's summon: not shown here
+                ApplySummon(s);
+            }
+            while (_net.TryTakePoolBlast(out var b)) ApplyPoolBlast(b);
             if (!_net.Connected && _remotes.Count > 0)
                 ClearPeers(); // link lost: peers vanish, the local world takes over
             if (!_net.Connected && (PartyMembers.Length > 0 || PartyAsk != null || PartyPlayers.Length > 0))

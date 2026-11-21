@@ -255,7 +255,7 @@ public partial class FirePoisonCombatTests
     {
         var page = JobSkills.Pages(StatTables.FirePoisonMage)[2];
         CollectionAssert.AreEqual(new[] { WzSkillData.BurningMagic, WzSkillData.ElementAmplification, WzSkillData.MagicCritical, WzSkillData.ElementalDecrease,
-            WzSkillData.TeleportBoost, Blast, Mist, Adaptation, WzSkillData.TeleportMastery }, page);
+            WzSkillData.TeleportBoost, Blast, Mist, Adaptation, WzSkillData.TeleportMastery, WzSkillData.CreepingToxin }, page);
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, Blast));
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, Mist));
         Assert.IsTrue(JobSkills.Has(StatTables.FirePoisonMage, Adaptation));

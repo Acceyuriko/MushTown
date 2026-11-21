@@ -121,6 +121,8 @@ public partial class MushTownGame
         while (_net.TryTakeFx(out _)) { }
         while (_net.TryTakeBall(out _)) { }
         while (_net.TryTakeZone(out _)) { }
+        while (_net.TryTakeSummon(out _)) { }
+        while (_net.TryTakePoolBlast(out _)) { }
     }
 
     // The local world's one step. The shop calls it with no player: mobs keep
@@ -134,7 +136,7 @@ public partial class MushTownGame
         _localWorld.DiscardChangeQueues(); // a local world reads stacks and DoT icons from the world, so the queues are not sent anywhere
         foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpGain, s.hit.Dot); // the balls that arrived
         if (ev.Strikes.Count > 0) DrainDrops(_localWorld);
-        foreach (var z in _localWorld.TakeZones()) ApplyZone(z); // a ball that landed now may have started Ignite's wall
+        ApplyWorldFx(_localWorld); // a ball that landed now may have started Ignite's wall
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
         foreach (var h in ev.Hurts)
             if (ApplyHurt(h.Damage, h.Uid, h.Mob))

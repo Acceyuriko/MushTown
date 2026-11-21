@@ -187,6 +187,25 @@ public static class SceneMath
         return best;
     }
 
+    // The stretch of floor a walker standing at x (feet height y) can reach on both sides, at most reach px each way: the same steps a mob takes (StepTo),
+    // so a ledge, a gap or a drop of more than a pixel ends it. Used where something spreads over the floor and stops at the platform edge (Creeping Toxin's pool).
+    public static (int Left, int Right) PlatformSpan(List<FootholdItem> footholds, int x, int y, int reach)
+    {
+        int Walk(int dir)
+        {
+            int gx = x, gy = y;
+            for (int i = 0; i < reach; i++)
+            {
+                var step = StepTo(footholds, gx + dir, gy);
+                if (step == null) break;
+                gx += dir;
+                gy = FootholdY(step, gx);
+            }
+            return gx;
+        }
+        return (Walk(-1), Walk(1));
+    }
+
     // A wall is a vertical foothold (WZ cuts a tall wall into pieces: the pieces that touch end to end at one x are one wall).
     // Walking or teleporting from x0 toward x1 with the feet at height y, the first wall ahead (after x0, up to and including
     // x1) whose span holds the feet height (top < y <= bottom) stops us 1 px before it; that x is returned (x1 when there is

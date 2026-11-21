@@ -108,6 +108,8 @@ public sealed partial class GameServer : IDisposable
                     foreach (var s in ev.Strikes) // the balls that arrived: their damage lands now
                         BroadcastHit(s.hit, s.attacker);
                     BroadcastZones(); // a hit that landed now may have started Ignite's wall
+                    BroadcastSummons();
+                    BroadcastPoolBlasts(); // the blasts the chain and the fire hits of this tick set off
                     BroadcastFreshDrops();
                     BroadcastMarkChanges();
                     BroadcastDotChanges();
@@ -203,8 +205,11 @@ public sealed partial class GameServer : IDisposable
             _clients.TryRemove(id, out _);
             _mobs.CancelBalls(id);
             _mobs.CancelDoTs(id);
+            _mobs.CancelSummons(id);
             _mobs.CancelZones(id);
             BroadcastZones();
+            BroadcastSummons();
+            BroadcastPoolBlasts();
             _pos.Remove(id);
             _away.Remove(id);
             _builds.Remove(id);
@@ -237,8 +242,11 @@ public sealed partial class GameServer : IDisposable
             _away.Add(id);
             _mobs.CancelBalls(id); // a cash-shop entry leaves the map (it counts as leaving): its balls, DoTs and zones go
             _mobs.CancelDoTs(id);
+            _mobs.CancelSummons(id);
             _mobs.CancelZones(id);
             BroadcastZones();
+            BroadcastSummons();
+            BroadcastPoolBlasts();
             had = _pos.Remove(id);
         }
         if (had) Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
@@ -387,8 +395,11 @@ public sealed partial class GameServer : IDisposable
             {
                 _mobs.CancelBalls(id); // the balls it threw on the old map do not land
                 _mobs.CancelDoTs(id); // and the DoTs it left there do not tick
+                _mobs.CancelSummons(id); // and so do its summons (with their pools)
                 _mobs.CancelZones(id); // and its zones there go away
                 BroadcastZones();
+                BroadcastSummons();
+                BroadcastPoolBlasts();
                 Broadcast(Net.Encode(Net.Leave, w => w.Write(id)));
             }
             if (first || switched)
@@ -672,6 +683,8 @@ public sealed partial class GameServer : IDisposable
                     w.Write(b.DelayMs);
                 }));
             BroadcastZones(); // a ground zone is started: everyone sees it, the poison comes from the tick loop
+            BroadcastSummons();
+            BroadcastPoolBlasts(); // a summon is put down: everyone sees it
             BroadcastMarkChanges();
             BroadcastFreshDrops();
         }
@@ -683,6 +696,40 @@ public sealed partial class GameServer : IDisposable
         foreach (var z in _mobs.TakeZones())
             Broadcast(ZoneFrame(z));
     }
+
+    // The summons started or taken away since the last call, to everyone (clients drop the ones of other maps). Call it under the mob lock.
+    private void BroadcastSummons()
+    {
+        foreach (var e in _mobs.TakeSummons())
+            Broadcast(SummonFrame(e));
+    }
+
+    // The pools that blew up since the last call, to everyone (clients drop the ones of other maps). Call it under the mob lock.
+    private void BroadcastPoolBlasts()
+    {
+        foreach (var e in _mobs.TakePoolBlasts())
+            Broadcast(Net.Encode(Net.PoolBlast, w =>
+            {
+                w.Write(e.Zone);
+                w.Write((byte)e.Index);
+                w.Write(e.Map);
+                w.Write(e.Attacker);
+                w.Write(e.Paid);
+            }));
+    }
+
+    private static byte[] SummonFrame(SummonEvent e) =>
+        Net.Encode(Net.Summon, w =>
+        {
+            w.Write(e.Uid);
+            w.Write(e.Skill);
+            w.Write(e.Map);
+            w.Write(e.X);
+            w.Write(e.Y);
+            w.Write(e.LifeMs);
+            w.Write(e.DelayMs);
+            w.Write(e.Gone);
+        });
 
     private static byte[] ZoneFrame(ZoneEvent z) =>
         Net.Encode(Net.Zone, w =>
@@ -696,6 +743,9 @@ public sealed partial class GameServer : IDisposable
             w.Write(z.LifeMs);
             w.Write(z.DelayMs);
             w.Write(z.Gone);
+            w.Write(z.OriginX);
+            w.Write(z.StepMs);
+            w.Write(z.AgeMs);
         });
 
     // One pickup: the drop must exist on the taker's map within reach. The
@@ -831,6 +881,8 @@ public sealed partial class GameServer : IDisposable
                 Send(client, DropSpawnFrame(d));
             foreach (var z in _mobs.ZonesOn(map))
                 Send(client, ZoneFrame(z));
+            foreach (var e in _mobs.SummonsOn(map))
+                Send(client, SummonFrame(e));
             foreach (var (uid, skill) in _mobs.DotsOn(map)) // the poisoned mobs of the map keep their head icons
                 Send(client, DotFrame(uid, skill, true));
         }

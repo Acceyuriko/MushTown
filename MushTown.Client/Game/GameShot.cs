@@ -376,6 +376,7 @@ public partial class MushTownGame
     {
         if (wz.Kind != SkillData.KindActive || !wz.Common.ContainsKey("damage"))
             throw new InvalidDataException($"--skill {wz.SkillId} is not a WZ damage skill (no pose)");
+        if (_shotMp > 0 && _save?.Slots[_slot] is { } hero) hero.Mp = _shotMp;
         TryPayWzSkill(wz); // best-effort, like the window shots: the demo has no one to fail
         RunShotAi();
         int pct = (int)wz.Value("damage", wz.MaxLevel);
@@ -386,6 +387,7 @@ public partial class MushTownGame
             world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { WeaknessProp = 100 }, wz.SkillId, pct);
             world.TakeLaunches(); // unseen: the ball is not drawn
             world.TakeZones(); // and so is the zone
+            world.TakeSummons();
             for (int i = 0; i < 30; i++)
                 if (ShotTick(100, showStrikes: false).Count > 0) break;
         }
@@ -394,16 +396,24 @@ public partial class MushTownGame
         foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(0), build, wz.SkillId, pct))
             ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
         foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
-        foreach (var z in world.TakeZones()) ApplyZone(z);
+        ApplyWorldFx(world);
         DrainDrops(world, animate: false);
         RunShotFly(_shotFlyms);
-        if (_shotRecastMs > 0) // --recast: the same cast again at the same mobs, never a crit, while the numbers of the first are still up
+        if (_shotRecastMs > 0 && wz.IsSummon) // --recast with a summon: an Explosion (a fire hit, without its cast art) at the same place, which blows up the pools its box touches (the chain and the growing back follow)
+        {
+            var orb = _wzSkills[WzSkillData.Explosion]; // its cast art is not drawn: it would cover the pools, and only its box matters here
+            foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { CritPct = 0 }, orb.SkillId, (int)orb.Value("damage", orb.MaxLevel)))
+                ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
+            ApplyWorldFx(world);
+            RunShotFly(_shotRecastMs);
+        }
+        else if (_shotRecastMs > 0) // --recast: the same cast again at the same mobs, never a crit, while the numbers of the first are still up
         {
             if (wz.IsGroundZone) { _mover.X += _mover.FacingRight ? 400 : -400; SnapCamera(); } // a zone rings its caster: step aside so the two clouds stand apart
             foreach (var h in world.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, new Random(1), build with { CritPct = 0 }, wz.SkillId, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
             foreach (var l in world.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
-            foreach (var z in world.TakeZones()) ApplyZone(z);
+            ApplyWorldFx(world);
             DrainDrops(world, animate: false);
             RunShotFly(_shotRecastMs);
         }
@@ -440,11 +450,13 @@ public partial class MushTownGame
             foreach (var f in _fx) TreeUpdate.UpdateObject(f.Owner, ms / 1000f);
             foreach (var n in _numbers) TreeUpdate.UpdateObject(n.Owner, ms / 1000f);
             foreach (var z in _zones) TreeUpdate.UpdateObject(z.Owner, ms / 1000f);
+            foreach (var s in _summonFx) TreeUpdate.UpdateObject(s.Owner, ms / 1000f);
             SpawnImpacts();
             PoolSweep.CollectDead(_balls, _world, _ballPool);
             PoolSweep.CollectDead(_fx, _world, _fxPool);
             PoolSweep.CollectDead(_numbers, _world, _numberPool);
             PoolSweep.CollectDead(_zones, _world, _zonePool);
+            PoolSweep.CollectDead(_summonFx, _world, _summonPool);
             ShotTick(ms);
         }
     }
@@ -491,7 +503,7 @@ public partial class MushTownGame
             foreach (var s in ev.Strikes) ApplyHit(s.hit.Uid, s.hit.Damage, s.hit.HpLeft, true, s.hit.Exp, s.hit.Skill, s.hit.Crit, s.hit.Settle, s.hit.MpGain, s.hit.Dot);
             DrainDrops(world, animate: false);
         }
-        foreach (var z in world.TakeZones()) ApplyZone(z); // a hit that landed in this step may have started Ignite's wall
+        ApplyWorldFx(world); // a hit that landed in this step may have started Ignite's wall or armed a blast
         foreach (var mv in ev.Moves) ApplyMove(mv.Uid, mv.X, mv.Y, mv.FacingRight);
         ApplySpawns(ev.Spawns);
         foreach (var t in ev.Takes) if (_drops.Remove(t.uid, out var gone)) _world.RemoveChild(gone.Owner);

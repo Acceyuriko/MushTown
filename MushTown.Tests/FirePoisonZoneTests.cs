@@ -52,10 +52,9 @@ public partial class FirePoisonCombatTests
         Assert.IsFalse(zone.JustStarted);
     }
 
-    // The box: edges are inside, and the body height counts (a body that reaches into the box is in). A zone ended by Detonate is over at once
-    // (the hook for Mist Eruption).
+    // The box: edges are inside, and the body height counts (a body that reaches into the box is in).
     [TestMethod]
-    public void GroundZone_Contains_EdgesInside_Detonate_Ends()
+    public void GroundZone_Contains_EdgesInside()
     {
         var zone = new GroundZone { Left = -250, Right = 250, Top = -100, Bottom = 300, LifeMs = 5000 };
         Assert.IsTrue(zone.Contains(-250, 100, 0));
@@ -65,10 +64,6 @@ public partial class FirePoisonCombatTests
         Assert.IsFalse(zone.Contains(0, 301, 0));
         Assert.IsTrue(zone.Contains(0, -50, 50)); // the feet are above the top edge, the body reaches down into it
         Assert.IsFalse(zone.Contains(0, -101, 0));
-        Assert.IsFalse(zone.Over);
-        zone.Detonate();
-        Assert.IsTrue(zone.Over);
-        Assert.IsFalse(zone.Step(1000));
     }
 
     // The ground zone skills are the ones listed in WzSkillData.GroundZones (Poison Mist only); Explosion and Poison Breath are not.

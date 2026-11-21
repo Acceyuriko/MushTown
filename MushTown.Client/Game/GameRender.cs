@@ -66,6 +66,8 @@ public partial class MushTownGame
         }
         foreach (var a in _npcArts)
             draws.Add((a.Spawn.Cy, () => DrawNpc(a)));
+        foreach (var s in _summonFx)
+            draws.Add(((int)s.Y, () => DrawSummon(s)));
         foreach ((int _, Action draw) in draws.OrderBy(d => d.y))
             draw();
 

@@ -44,6 +44,9 @@ namespace MushTown.Exporter;
 // Ignite (210.img, a passive) has no art of its own: its fire wall is the node 2100010 (WZ has no link between them, WzSkillData.IgniteWall), whose tile/0..2 (16 looping pictures each)
 // go to Art["tile0"]..Art["tile2"] and hit/0 (the spark on each mob the wall hits) to HitFrames and Art["hit"], all under 2101010/ (see GroundZoneFx.StartWall).
 // The text of both ends with "Can be toggled On/Off": they are always on here (the user's rule for always-on Buffs), so that line is left out.
+// Creeping Toxin (211.img, a summon: a totem and a pool) keeps effect, effect0 (a back layer) and hit like the other damage skills, and its summon nodes summoned, stand and die and its
+// pool tiles tile/0..3/<start|loop|end|end2>/<0|1> (SaveSummonArt; the client lays the pool out, see GroundZoneFx). It is also the first skill of WzSkillData.Summons.
+// Its blast, the child node 2111014 (WzSkillData.CreepingToxinBlast), is kept as a child skill (the numbers and the box) and its effect as Art["blast"] of Creeping Toxin.
 // Flame Orb and Explosion also keep their action as steps (Script, see WzSkillData.ActionScripts), like the other skills of that set.
 // After pulling a change to this export run `export` again (dotnet run --project MushTown.Exporter -- export): an old
 // json with no frames makes the client fail at start (Menu.cs), and a missing png makes it fail too.
@@ -55,7 +58,7 @@ public static partial class Export
         .Append(WzSkillData.ElementalWeakness).Append(WzSkillData.EmpiricalKnowledge).ToArray();
 
     // A skill node that another skill owns (WZ has no link between them): parent -> child.
-    private static readonly Dictionary<int, int> WzSkillChildren = new() { [WzSkillData.ManaWave] = 2001012 }; // Mana Wave -> its held fall
+    private static readonly Dictionary<int, int> WzSkillChildren = new() { [WzSkillData.ManaWave] = 2001012, [WzSkillData.CreepingToxin] = WzSkillData.CreepingToxinBlast }; // Mana Wave -> its held fall; Creeping Toxin -> its blast
 
     // baseRoot must carry the Packs (the skill nodes live there), chara is the Character category (the action
     // frames), skill is the Skill category (the icon pngs), str the String category.
@@ -88,6 +91,7 @@ public static partial class Export
                 return false;
             if (id == WzSkillData.Ignite ? !SaveWallArt(baseRoot, skill, data, outDir, saved)
                 : (data.Common.ContainsKey("damage") || id is WzSkillData.Teleport or WzSkillData.ManaWave or WzSkillData.ElementalAdaptation) && !SaveWzSkillArt(baseRoot, skill, id, data, outDir, saved)) return false;
+            if (id == WzSkillData.CreepingToxin && !SaveSummonArt(baseRoot, id, data, outDir, saved)) return false;
             if (id == WzSkillData.EmpiricalKnowledge && !SaveMarkArt(baseRoot, id, data, outDir, saved)) return false;
             if (WzSkillChildren.TryGetValue(id, out int child))
             {
@@ -124,7 +128,7 @@ public static partial class Export
         var meta = WzSkillNode(baseRoot, id);
         data.Art["effect"] = ReadWzArt(teleport ? meta.Nodes["effect"]!.Nodes["0"]! : meta.Nodes["effect"]!);
         if (!SaveSkillFrames(effect, $"skill/wz/{id}/effect", data.CastFrames, outDir, saved, id)) return false;
-        if (id is WzSkillData.ElementalAdaptation or WzSkillData.TeleportMastery && !SaveLayer(node!, meta, id, data, outDir, saved, "effect0", "effect0")) return false; // the cast's back layer
+        if (id is WzSkillData.ElementalAdaptation or WzSkillData.TeleportMastery or WzSkillData.CreepingToxin && !SaveLayer(node!, meta, id, data, outDir, saved, "effect0", "effect0")) return false; // the cast's back layer
         if (id == WzSkillData.ElementalAdaptation && !SaveLayer(node!, meta, id, data, outDir, saved, "special", "block")) return false; // the block art (special): kept apart from the generic ball/special art
         if (id == WzSkillData.PoisonMist) // the ground zone: effect1 (a second cast layer) and the 9 looping tile variants, each 8 frames, kept as Art["effect1"], Art["tile0".."tile8"]
         {
@@ -209,6 +213,60 @@ public static partial class Export
                 }
                 data.Art[name + list.Text] = art;
             }
+        }
+        return true;
+    }
+
+    // One list of frames (WZ nodes 0, 1, 2...) kept as Art[key]: the frames that have an origin, each followed through its _outlink to its picture (png under <id>/<key>/).
+    private static bool SaveLinkedList(WzRoot baseRoot, Wz_Node list, int id, string key, WzSkillData data, string outDir, HashSet<string> saved)
+    {
+        var art = ReadWzArt(list);
+        foreach (Wz_Node f in list.Nodes.Where(f => int.TryParse(f.Text, out _) && f.Nodes["origin"] != null).OrderBy(f => int.Parse(f.Text, CultureInfo.InvariantCulture)))
+        {
+            if (WzNodeUtil.ReadCanvas(baseRoot, f).png is not { } png)
+            {
+                Console.WriteLine($"skill {id} {key} frame {f.Text}: no picture");
+                return false;
+            }
+            string path = $"skill/wz/{id}/{key}/{art.Frames.Count}.png";
+            SaveOnce(png, Path.Combine(outDir, path), saved);
+            art.Frames.Add(path);
+        }
+        if (art.Frames.Count == 0)
+        {
+            Console.WriteLine($"skill {id} {key}: no frames");
+            return false;
+        }
+        data.Art[key] = art;
+        return true;
+    }
+
+    // Creeping Toxin's summon art: summon/summoned (the totem comes up), summon/stand (it waits, loops) and summon/die (it goes), and the pool tiles
+    // tile/<kind 0..3>/<phase start|loop|end|end2>/<layer 0|1> (Art["tile<kind>_<phase>_<layer>"], see WzSkillData.ToxinTile). The two layers of a phase play together.
+    private static bool SaveSummonArt(WzRoot baseRoot, int id, WzSkillData data, string outDir, HashSet<string> saved)
+    {
+        var meta = WzSkillNode(baseRoot, id);
+        var summon = meta.Nodes["summon"] ?? throw new InvalidDataException($"skill {id} has no summon node");
+        foreach (string name in new[] { "summoned", "stand", "die" })
+            if (summon.Nodes[name] is not { } list || !SaveLinkedList(baseRoot, list, id, name, data, outDir, saved))
+            {
+                Console.WriteLine($"skill {id} summon/{name} failed");
+                return false;
+            }
+        var tiles = meta.Nodes["tile"] ?? throw new InvalidDataException($"skill {id} has no tile node");
+        for (int k = 0; k < WzSkillData.ToxinTileKinds; k++)
+            foreach (string phase in WzSkillData.ToxinPhases)
+                for (int layer = 0; layer < WzSkillData.ToxinLayers; layer++)
+                    if (tiles.Nodes[k.ToString(CultureInfo.InvariantCulture)]?.Nodes[phase]?.Nodes[layer.ToString(CultureInfo.InvariantCulture)] is not { } list
+                        || !SaveLinkedList(baseRoot, list, id, WzSkillData.ToxinTile(k, phase, layer), data, outDir, saved))
+                    {
+                        Console.WriteLine($"skill {id} tile {k} {phase} {layer} failed");
+                        return false;
+                    }
+        if (WzSkillNode(baseRoot, WzSkillData.CreepingToxinBlast).Nodes["effect"] is not { } blast || !SaveLinkedList(baseRoot, blast, id, "blast", data, outDir, saved))
+        {
+            Console.WriteLine($"skill {id} blast effect failed");
+            return false;
         }
         return true;
     }

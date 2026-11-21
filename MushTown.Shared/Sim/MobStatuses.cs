@@ -23,6 +23,7 @@ public sealed class Dot
     public int Attacker;
     public Build Build;
     public int Pct; // the damage % of one tick (WZ dot)
+    public int NormalPct; // the damage % this DoT adds against a mob that is not a boss (WZ nbdR of Creeping Toxin; 0 for the others)
     public int Segments = 1; // how many separate hits one tick makes (Ignite's wall: WZ attackCount 3; the other DoTs hit once)
     public AttackElement Element;
     public Random Rng = null!;

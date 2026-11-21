@@ -35,10 +35,16 @@ public sealed class SkillCost : Component
         return true;
     }
 
+    // The MP of a pool blast of Creeping Toxin (the child skill, level lv): mpCon of the level, raised by the MP percent of the damage skills (Element Amplification) and rounded down,
+    // the same as Pay. Not enough MP does not stop a blast: the caster pays what he has (the MP goes to 0 at the least; the user agreed).
+    public static int BlastMp(WzSkillData child, int lv, int mpCostPct) => (int)child.Value("mpCon", lv) * (100 + mpCostPct) / 100;
+
     // WZ cooltime is seconds, Teleport's teleportCooltime is milliseconds; no cooldown is 0.
+    // A skill WZ gives no cooldown but the user wants one has its own (WzSkillData.OwnCooltimeSec).
     public static float CooldownMs(WzSkillData skill, int lv) =>
         skill.Common.ContainsKey("cooltime") ? (float)skill.Value("cooltime", lv) * 1000f
-        : skill.Common.ContainsKey("teleportCooltime") ? (float)skill.Value("teleportCooltime", lv) : 0f;
+        : skill.Common.ContainsKey("teleportCooltime") ? (float)skill.Value("teleportCooltime", lv)
+        : WzSkillData.OwnCooltimeSec.TryGetValue(skill.SkillId, out int sec) ? sec * 1000f : 0f;
 }
 
 public sealed class SkillDamage : Component

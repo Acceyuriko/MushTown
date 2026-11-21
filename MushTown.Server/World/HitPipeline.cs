@@ -33,6 +33,8 @@ public sealed class HitPipeline
         public Dot? Dot; // the DoT this attack puts on each target (a copy for each mob), built by the caster
         public int StunProp; // the chance, in percent, that each target is stunned for StunMs (0 = this attack stuns nobody); the stun carries Skill as its head icon
         public int StunMs;
+        public int NormalPct; // damage % against a mob that is not a boss (Creeping Toxin's WZ nbdR), in the same sum as the other damage %
+        public Func<Mob, double>? FinalPctOf; // final damage % this attack has against one mob (Creeping Toxin's blast on a mob a blast hit a moment ago: negative); null: none
         public bool Tick; // a DoT tick: it takes every bonus a hit takes (the user's rule: a tick is no special case) except these four: it never crits, rolls no status (no Weakness or mark roll),
         // takes no MP Eater, and adds no new status; the hit is flagged Dot
         public int Map; // where the caster stands (Elemental Drain counts around him; a tick reads the place where its DoT was cast)
@@ -141,8 +143,8 @@ public sealed class HitPipeline
         foreach (var f in frames)
         {
             var m = f.M;
-            double extraDmg = (a.Magic ? f.WeaknessPct + build.MagicDmgPct : 0) + f.MarkDmg;
-            double extraFinal = FinalBonus(drain, f.Burning ? build.DotFinalPct : 0);
+            double extraDmg = (a.Magic ? f.WeaknessPct + build.MagicDmgPct : 0) + f.MarkDmg + (m.Boss ? 0 : a.NormalPct);
+            double extraFinal = FinalBonus(FinalBonus(drain, f.Burning ? build.DotFinalPct : 0), a.FinalPctOf?.Invoke(m) ?? 0);
             var step2 = DamageChain.Prepare(build, m.Def, m.Level, m.ElemAttr, a.Element, a.Pct, m.Boss, extraDmg, extraFinal, f.MarkIed);
             Step2Count++;
             // 3. each segment: the dice only (a tick has no crit roll: 1.0 never crits)

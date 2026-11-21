@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using MushTown.Server;
 using MushTown.Shared;
 
 namespace MushTown.Client;
@@ -43,6 +44,66 @@ public partial class MushTownGame
         PoolSweep.DropAll(_fx, _world, _fxPool);
         PoolSweep.DropAll(_balls, _world, _ballPool);
         PoolSweep.DropAll(_zones, _world, _zonePool);
+        PoolSweep.DropAll(_summonFx, _world, _summonPool);
+    }
+
+    // One summon event of this map: a new summon (or the rest of one that runs, listed on entry) gets its look; a gone one takes the look away.
+    // Only call this outside the tree step (it adds nodes).
+    private void ApplySummon(SummonEvent e)
+    {
+        for (int i = _summonFx.Count - 1; i >= 0; i--)
+        {
+            if (_summonFx[i].Uid != e.Uid) continue;
+            _world.RemoveChild(_summonFx[i].Owner);
+            _summonPool.Push(_summonFx[i]);
+            _summonFx.RemoveAt(i);
+        }
+        if (e.Gone) return;
+        var s = _summonPool.TryPop(out var p) ? p : new GameObject().Add(new SummonFx());
+        s.Start(e, _wzSkills[e.Skill]);
+        _world.AddChild(s.Owner);
+        _summonFx.Add(s);
+    }
+
+    // The zones, the summons and the pool blasts a world has started or taken away since the last call (a pool and its totem come from one cast).
+    private void ApplyWorldFx(MobWorld world)
+    {
+        foreach (var z in world.TakeZones()) ApplyZone(z);
+        foreach (var s in world.TakeSummons()) ApplySummon(s);
+        foreach (var b in world.TakePoolBlasts()) ApplyPoolBlast(b);
+    }
+
+    // One pool of a zone blew up: the pool plays its end2 art, the blast art (Art["blast"], the effect of the child skill 2111014 of Creeping Toxin) plays once where it stood, and the
+    // player whose cast it is pays the MP of the blast when this blast is the one his fire hit started (the ones it sets off next to it are free; the MP never goes below 0).
+    private void ApplyPoolBlast(PoolBlastEvent e)
+    {
+        var wz = _wzSkills[WzSkillData.CreepingToxin];
+        int me = _net != null && _net.Connected ? _net.PlayerId : 0;
+        if (e.Paid && e.Attacker == me && _save?.Slots[_slot] is { } chara) // first, whatever the zone looks like here: the blast was paid for
+        {
+            var child = wz.Children.Single(c => c.SkillId == WzSkillData.CreepingToxinBlast);
+            // The level of the hero (WzLv: a skill of his own job stands at its max level, no skill points). Not enough MP: the blast still happens and the MP goes to 0 (the user agreed).
+            chara.Mp = Math.Max(0, chara.Mp - SkillCost.BlastMp(child, WzLv(wz), (int)_stats.IntValue(StatKey.MP_COST_PCT)));
+        }
+        if (e.Map != _mapId) return;
+        var zone = _zones.Find(z => z.Uid == e.Zone);
+        if (zone == null) return;
+        zone.Explode(e.Index);
+        var art = wz.Art["blast"];
+        var (x, y) = zone.PieceAt(e.Index); // the blast art stands on the middle of the pool, at its feet (the developer's choice, 未核实: WZ gives no place)
+        var fx = TakeFx();
+        fx.Frames = art.Frames;
+        fx.Origins = art.Origins;
+        fx.Delays = art.Delays;
+        fx.X = x; fx.Y = y; fx.FacingRight = true;
+    }
+
+    // One summon: the frame of its list that plays, on its WZ origin at the feet.
+    private void DrawSummon(SummonFx s)
+    {
+        if (!s.Started) return;
+        var o = s.Now.Origins[s.Frame];
+        _spriteBatch.Draw(_textures[s.Now.Frames[s.Frame]], new Vector2(MathF.Round(s.X - _camera.X), MathF.Round(s.Y - _camera.Y)), null, Color.White, 0, new Vector2(o[0], o[1]), 1, SpriteEffects.None, 0);
     }
 
     // One zone event of this map: a new zone (or the rest of one that runs, listed on entry) gets its look; a gone one takes the look away.
@@ -71,6 +132,7 @@ public partial class MushTownGame
             if (!z.Started) continue;
             for (int i = 0; i < z.Count; i++)
             {
+                if (!z.Shown[i]) continue;
                 var o = z.Arts[i]!.Origins[z.Frame[i]];
                 _spriteBatch.Draw(_textures[z.Arts[i]!.Frames[z.Frame[i]]], new Vector2(MathF.Round(z.X[i] - _camera.X), MathF.Round(z.Y[i] - _camera.Y)), null, Color.White * z.Opacity, 0, new Vector2(o[0], o[1]), 1, SpriteEffects.None, 0);
             }
@@ -434,7 +496,7 @@ public partial class MushTownGame
                     // A damage skill casts, the buff (Elemental Adaptation) casts its shield (the layers left, or the cooldown after them, keep a held key from recasting it);
                     // a passive (a bound Meditation of an old save too) and the move Mana Wave are ignored.
                     if (wz.Kind == SkillData.KindActive && wz.Common.ContainsKey("damage") && _mover.Climb == null
-                        && _fighter.AttackLock <= 0 && HasJudge() && TryPayWzSkill(wz))
+                        && _fighter.AttackLock <= 0 && HasJudge() && (!wz.IsSummon || SceneMath.GroundBelow(_map.Footholds, (int)ToxinPoolLayout.TotemX(_mover.X, _mover.FacingRight), (int)_mover.Y) != null) && TryPayWzSkill(wz)) // a summon needs floor under the totem, in front of the caster (the server puts it there): no floor, no cast and no MP
                         CastWzActive(wz);
                     else if (wz.Kind == SkillData.KindBuff && _mover.Climb == null && _fighter.AttackLock <= 0)
                         CastShield(wz);
@@ -567,7 +629,7 @@ public partial class MushTownGame
             foreach (var h in _localWorld.SkillStrike(_mapId, _mover.X, _mover.Y, _mover.FacingRight, Random.Shared, CurrentBuild(), wz.SkillId, pct))
                 ApplyHit(h.Uid, h.Damage, h.HpLeft, true, h.Exp, h.Skill, h.Crit, h.Settle, h.MpGain);
             foreach (var l in _localWorld.TakeLaunches()) SpawnBall(l.Skill, l.FromX, l.FromY, l.ToX, l.ToY, l.DelayMs);
-            foreach (var z in _localWorld.TakeZones()) ApplyZone(z);
+            ApplyWorldFx(_localWorld);
             DrainDrops(_localWorld);
         }
     }

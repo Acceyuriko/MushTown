@@ -11,6 +11,15 @@ namespace MushTown.Client;
 // It waits WaitMs first (the body action's attack frame), shows for LifeMs and then ends its own life.
 //
 // Ignite's wall (StartWall): the three flame loops of WZ stacked on the middle of its box (see WallSideDx), at full alpha. WZ gives no layout, so it is our fit (未核实).
+//
+// Creeping Toxin's pool (StartPool): WZ gives four tile kinds (tile0..tile3), each with the phases start, loop, end and end2 (end2: the pool blew up), each phase with two
+// lists that play together (layer 0: the flat puddle, layer 1: the bubbles and mist over it), and no layout. The pool is cut into pools by ToxinPoolLayout (our fit, 未核实: the same
+// code the server uses, so the index of a pool means the same on both sides); the pool widens from the totem in steps (the same widening as the server's box, GroundZone.Spread) and
+// a pool comes up (its start phase, then its loop) at its Born (ms of the zone's age: the first pool ToxinFirstPoolMs after the totem, the others one step each, the server's own numbers
+// from ToxinPoolLayout). A pool that blows up (Explode, on the server's PoolBlast event) plays end2 once and is gone, then comes up again at a new Born (the wait of WZ y and the steps from
+// the totem, the same time as the server's). In the last ms of the zone every pool plays its end phase, so the pool is gone with the zone. The box is already cut at the platform edge by
+// the server (a pool never goes over it). Known limit (已知限制): a client that enters later gets the zone with its age only, so it draws every pool that is due by then, also one that
+// blew up a moment ago and is growing back (a display difference of a few seconds; the server's pools are right).
 public sealed class GroundZoneFx : Component
 {
     public const float Alpha = 0.9f; // the whole mist is drawn at this alpha (the wall is drawn at full alpha)
@@ -20,6 +29,10 @@ public sealed class GroundZoneFx : Component
     private const float Jitter = 0.25f; // a place moves by up to this much of the step
     private const int WallSideDx = 22; // the wall: the middle flame's step to the left, the small one's to the right
     private const int MaxElems = 64; // the elements this fills for the box of Poison Mist (53)
+    private const int PhaseStart = 0;
+    private const int PhaseLoop = 1;
+    private const int PhaseEnd = 2;
+    private const int PhaseBlast = 3; // the end2 art of a tile: the pool blew up
 
     public int Uid;
     public int Skill;
@@ -33,6 +46,18 @@ public sealed class GroundZoneFx : Component
     public readonly float[] Y = new float[MaxElems];
     public readonly int[] Frame = new int[MaxElems];
     public readonly float[] Timer = new float[MaxElems];
+    // The pool only (see StartPool): the other zones show every element from the start.
+    public readonly bool[] Shown = new bool[MaxElems];
+    public readonly int[] Piece = new int[MaxElems]; // the index of the pool (ToxinPoolLayout.Pieces) the element belongs to
+    public readonly int[] Kind = new int[MaxElems];
+    public readonly int[] Layer = new int[MaxElems];
+    public readonly int[] Phase = new int[MaxElems];
+    public readonly float[] Born = new float[MaxElems]; // the zone age (ms) the piece comes up at (infinity: never again)
+    private bool _pool;
+    private WzSkillData _wz = null!;
+    private float _originX;
+    private int _stepMs;
+    private float _ageMs;
 
     // A pooled node comes back clean. Each element starts on its own frame, so the puffs do not move together.
     public void Start(ZoneEvent e, WzSkillData wz)
@@ -42,9 +67,99 @@ public sealed class GroundZoneFx : Component
         WaitMs = e.DelayMs;
         LifeMs = e.LifeMs;
         Opacity = Alpha;
-        if (wz.SkillId == WzSkillData.Ignite) StartWall(e, wz);
+        _pool = wz.SkillId == WzSkillData.CreepingToxin;
+        if (_pool) StartPool(e, wz);
+        else if (wz.SkillId == WzSkillData.Ignite) StartWall(e, wz);
         else StartMist(e, wz);
+        if (!_pool) Array.Fill(Shown, true);
         Owner.Dead = false;
+    }
+
+    private void StartPool(ZoneEvent e, WzSkillData wz)
+    {
+        _wz = wz;
+        _originX = e.OriginX;
+        _stepMs = e.StepMs;
+        _ageMs = e.AgeMs;
+        Opacity = 1;
+        Count = 0;
+        var pieces = ToxinPoolLayout.Pieces(e.OriginX, e.Left, e.Right); // the same pools the server blows up, by index
+        for (int layer = 0; layer < WzSkillData.ToxinLayers; layer++) // the puddles first, the mist over them
+            for (int p = 0; p < pieces.Count; p++)
+            {
+                int i = Count++;
+                Piece[i] = p;
+                Kind[i] = pieces[p].Kind;
+                Layer[i] = layer;
+                Phase[i] = PhaseStart;
+                Born[i] = WzSkillData.ToxinFirstPoolMs + ToxinPoolLayout.SpreadMs(pieces[p].Center, e.OriginX, e.StepMs, ToxinPoolLayout.StepPx(wz));
+                Shown[i] = false;
+                X[i] = pieces[p].Center;
+                Y[i] = e.Y;
+                Frame[i] = 0;
+                Timer[i] = 0;
+                Arts[i] = _wz.Art[WzSkillData.ToxinTile(Kind[i], WzSkillData.ToxinPhases[PhaseStart], layer)];
+            }
+    }
+
+    // The middle (world x) of pool `piece`, and where its feet are: the place of its blast.
+    public (float X, float Y) PieceAt(int piece)
+    {
+        for (int i = 0; i < Count; i++)
+            if (Piece[i] == piece) return (X[i], Y[i]);
+        throw new ArgumentException("no such pool", nameof(piece));
+    }
+
+    // The pool blew up (the server's word): both layers play the end2 phase of its tile once and the pool is gone, then it comes up again at the time the server works out the same way
+    // (the wait of WZ y, then the steps from the totem).
+    public void Explode(int piece)
+    {
+        for (int i = 0; i < Count; i++)
+        {
+            if (Piece[i] != piece) continue;
+            if (Shown[i]) SetPhase(i, PhaseBlast);
+            Born[i] = _ageMs + (int)_wz.Value("y", _wz.MaxLevel) * WzSkillData.ToxinWzUnitMs + ToxinPoolLayout.SpreadMs(X[i], _originX, _stepMs, ToxinPoolLayout.StepPx(_wz));
+        }
+    }
+
+    // The widening pool: the pieces whose time has come come up, and every shown piece plays its phases (start, loop, and end for the last ms of the zone).
+    private void UpdatePool(float ms)
+    {
+        _ageMs += ms;
+        for (int i = 0; i < Count; i++)
+        {
+            if (!Shown[i])
+            {
+                if (_ageMs < Born[i]) continue;
+                Born[i] = float.PositiveInfinity;
+                SetPhase(i, PhaseStart);
+                Shown[i] = true;
+            }
+            int endMs = _wz.Art[WzSkillData.ToxinTile(Kind[i], WzSkillData.ToxinPhases[PhaseEnd], Layer[i])].Delays.Sum();
+            if (Phase[i] != PhaseEnd && Phase[i] != PhaseBlast && LifeMs <= endMs) SetPhase(i, PhaseEnd);
+            Timer[i] += ms;
+            while (Timer[i] >= Arts[i]!.Delays[Frame[i]])
+            {
+                Timer[i] -= Arts[i]!.Delays[Frame[i]];
+                if (Frame[i] + 1 < Arts[i]!.Frames.Count) Frame[i]++;
+                else if (Phase[i] == PhaseStart) SetPhase(i, PhaseLoop);
+                else if (Phase[i] == PhaseLoop) Frame[i] = 0;
+                else // the end phase is over: the piece is gone (after end2 it comes up again at its Born, after the end phase of the zone not)
+                {
+                    Shown[i] = false;
+                    if (Phase[i] == PhaseEnd) Born[i] = float.PositiveInfinity;
+                    break;
+                }
+            }
+        }
+    }
+
+    private void SetPhase(int i, int phase)
+    {
+        Phase[i] = phase;
+        Frame[i] = 0;
+        Timer[i] = 0;
+        Arts[i] = _wz.Art[WzSkillData.ToxinTile(Kind[i], WzSkillData.ToxinPhases[phase], Layer[i])];
     }
 
     private void StartMist(ZoneEvent e, WzSkillData wz)
@@ -107,6 +222,11 @@ public sealed class GroundZoneFx : Component
         if (LifeMs <= 0)
         {
             Owner.Dead = true;
+            return;
+        }
+        if (_pool)
+        {
+            UpdatePool(ms);
             return;
         }
         for (int i = 0; i < Count; i++)
